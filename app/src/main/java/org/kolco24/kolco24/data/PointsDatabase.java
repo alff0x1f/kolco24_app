@@ -11,7 +11,7 @@ import java.util.concurrent.Executors;
 
 @Database(entities = {Point.class}, version = 1, exportSchema = false)
 public abstract class PointsDatabase extends RoomDatabase {
-    public abstract PointDAO pointDAO();
+    public abstract PointDao pointDao();
 
     private static volatile PointsDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
