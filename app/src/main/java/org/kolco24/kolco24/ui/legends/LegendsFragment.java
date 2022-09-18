@@ -9,6 +9,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
@@ -24,8 +26,14 @@ public class LegendsFragment extends Fragment {
         binding = FragmentLegendsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-        final TextView textView = binding.textNotifications;
+        final TextView textView = binding.legendHeader;
         legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
+
+        RecyclerView recyclerView = binding.recyclerView;
+        final PointListAdapter adapter = new PointListAdapter(new PointListAdapter.PointDiff());
+        recyclerView.setAdapter(adapter);
+        recyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
+
         return root;
     }
 
