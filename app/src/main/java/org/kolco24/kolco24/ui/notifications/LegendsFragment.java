@@ -10,22 +10,22 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import org.kolco24.kolco24.databinding.FragmentNotificationsBinding;
+import org.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
-public class NotificationsFragment extends Fragment {
+public class LegendsFragment extends Fragment {
 
-    private FragmentNotificationsBinding binding;
+    private FragmentLegendsBinding binding;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
-        NotificationsViewModel notificationsViewModel =
-                new ViewModelProvider(this).get(NotificationsViewModel.class);
+        LegendsViewModel legendsViewModel =
+                new ViewModelProvider(this).get(LegendsViewModel.class);
 
-        binding = FragmentNotificationsBinding.inflate(inflater, container, false);
+        binding = FragmentLegendsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
         final TextView textView = binding.textNotifications;
-        notificationsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
+        legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
         return root;
     }
 

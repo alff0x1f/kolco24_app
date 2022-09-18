@@ -18,8 +18,8 @@
         tools:layout="@layout/fragment_dashboard" />
 
     <fragment
-        android:id="@+id/navigation_notifications"
-        android:name="org.kolco24.kolco24.ui.notifications.NotificationsFragment"
-        android:label="@string/title_notifications"
-        tools:layout="@layout/fragment_notifications" />
+        android:id="@+id/navigation_legends"
+        android:name="org.kolco24.kolco24.ui.notifications.LegendsFragment"
+        android:label="@string/title_legends"
+        tools:layout="@layout/fragment_legends" />
 </navigation>
