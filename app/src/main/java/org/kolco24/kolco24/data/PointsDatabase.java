@@ -2,9 +2,11 @@ package org.kolco24.kolco24.data;
 
 import android.content.Context;
 
+import androidx.annotation.NonNull;
 import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
+import androidx.sqlite.db.SupportSQLiteDatabase;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,10 +26,29 @@ public abstract class PointsDatabase extends RoomDatabase {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
                                     PointsDatabase.class, "points_database")
+                            .addCallback(sRoomDatabaseCallback)
                             .build();
                 }
             }
         }
         return INSTANCE;
     }
+
+    private static RoomDatabase.Callback sRoomDatabaseCallback = new RoomDatabase.Callback() {
+
+        public void onCreate(@NonNull SupportSQLiteDatabase db) {
+            super.onCreate(db);
+
+            //create empty database
+            databaseWriteExecutor.execute(() -> {
+                PointDao dao = INSTANCE.pointDao();
+                dao.deleteAll();
+
+                Point point = new Point("01", "Описание", 1);
+                dao.insert(point);
+                point = new Point("02", "Описание 2", 2);
+                dao.insert(point);
+            });
+        }
+    };
 }
