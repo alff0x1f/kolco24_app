@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey;
 
 @Entity(tableName = "points")
 public class Point {
-    @PrimaryKey
+    @PrimaryKey(autoGenerate = true)
     public int id;
 
     @NonNull
