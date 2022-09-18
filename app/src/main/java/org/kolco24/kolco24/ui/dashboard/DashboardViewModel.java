@@ -1,19 +1,32 @@
 package org.kolco24.kolco24.ui.dashboard;
 
+import android.app.Application;
+
+import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
-import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.ViewModel;
 
-public class DashboardViewModel extends ViewModel {
+import org.kolco24.kolco24.data.Point;
+import org.kolco24.kolco24.data.PointRepository;
 
-    private final MutableLiveData<String> mText;
+import java.util.List;
 
-    public DashboardViewModel() {
-        mText = new MutableLiveData<>();
-        mText.setValue("This is dashboard fragment");
+public class DashboardViewModel extends AndroidViewModel {
+
+    private PointRepository mRepository;
+    private final LiveData<List<Point>> mAllPoints;
+
+    public DashboardViewModel(Application application) {
+        super(application);
+        mRepository = new PointRepository(application);
+        mAllPoints = mRepository.getAllPoints();
+
     }
 
-    public LiveData<String> getText() {
-        return mText;
+    LiveData<List<Point>> getAllPoints() {
+        return mAllPoints;
+    }
+
+    public void insert(Point point) {
+        mRepository.insert(point);
     }
 }
