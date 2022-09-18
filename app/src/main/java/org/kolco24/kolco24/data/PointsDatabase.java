@@ -20,6 +20,12 @@ public abstract class PointsDatabase extends RoomDatabase {
     static final ExecutorService databaseWriteExecutor =
             Executors.newFixedThreadPool(NUMBER_OF_THREADS);
 
+    /**
+     * Get the database, creating it if it does not exist.
+     *
+     * @param context the application context Singleton pattern, allows only one instance of the
+     *                database to be opened at a time.
+     */
     static PointsDatabase getDatabase(final Context context) {
         if (INSTANCE == null) {
             synchronized (PointsDatabase.class) {
