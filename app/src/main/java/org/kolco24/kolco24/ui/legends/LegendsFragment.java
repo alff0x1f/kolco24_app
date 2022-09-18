@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.notifications;
+package org.kolco24.kolco24.ui.legends;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
