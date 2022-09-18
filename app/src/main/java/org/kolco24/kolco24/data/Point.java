@@ -1,6 +1,7 @@
 package org.kolco24.kolco24.data;
 
 import androidx.annotation.NonNull;
+import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
@@ -9,17 +10,25 @@ public class Point {
     @PrimaryKey
     public int id;
 
-    public String name;
-    public String description;
-    public int cost;
+    @NonNull
+    @ColumnInfo(name = "name")
+    public String mName;
 
-    public Point(@NonNull String name, @NonNull String description, @NonNull int cost) {
-        this.name = name;
-        this.description = description;
-        this.cost = cost;
+    @NonNull
+    @ColumnInfo(name = "description")
+    public String mDescription;
+
+    @ColumnInfo(name = "image")
+    public int mCost;
+
+    /*__init__*/
+    public Point(@NonNull String name, @NonNull String description, int cost) {
+        this.mName = name;
+        this.mDescription = description;
+        this.mCost = cost;
     }
 
     public String getPoint() {
-        return this.name;
+        return this.mName;
     }
 }
