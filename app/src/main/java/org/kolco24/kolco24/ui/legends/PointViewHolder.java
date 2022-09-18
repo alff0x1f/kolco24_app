@@ -12,6 +12,7 @@ import org.kolco24.kolco24.R;
 public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
 
+    /*__init__*/
     private PointViewHolder(View itemView) {
         super(itemView);
         textView = itemView.findViewById(R.id.textView);

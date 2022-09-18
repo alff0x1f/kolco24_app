@@ -17,6 +17,7 @@ import org.kolco24.kolco24.databinding.FragmentLegendsBinding;
 public class LegendsFragment extends Fragment {
 
     private FragmentLegendsBinding binding;
+    private PointViewModel mPointViewModel;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -26,13 +27,17 @@ public class LegendsFragment extends Fragment {
         binding = FragmentLegendsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-        final TextView textView = binding.legendHeader;
-        legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
+//        final TextView textView = binding.legendHeader;
+//        legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
 
         RecyclerView recyclerView = binding.recyclerView;
         final PointListAdapter adapter = new PointListAdapter(new PointListAdapter.PointDiff());
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
+
+        // Get a new or existing ViewModel from the ViewModelProvider.
+        mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
+        mPointViewModel.getAllPoints().observe(getViewLifecycleOwner(), adapter::submitList);
 
         return root;
     }

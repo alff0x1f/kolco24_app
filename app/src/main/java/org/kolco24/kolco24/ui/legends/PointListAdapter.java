@@ -10,6 +10,7 @@ import org.kolco24.kolco24.data.Point;
 
 public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
 
+    /*__init__*/
     public PointListAdapter(@NonNull DiffUtil.ItemCallback<Point> diffCallback) {
         super(diffCallback);
     }
