@@ -11,7 +11,7 @@
         android:layout_width="38dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/activity_horizontal_margin"
-        android:layout_marginTop="@dimen/activity_horizontal_margin"
+        android:layout_marginTop="8dp"
         android:text="20"
 
         android:textColor="@color/black"
@@ -24,11 +24,13 @@
         android:layout_width="0sp"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/activity_horizontal_margin"
-        android:layout_marginTop="@dimen/activity_horizontal_margin"
-        android:layout_marginEnd="@dimen/activity_horizontal_margin"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
+        android:gravity="top"
+        android:minHeight="36dp"
         android:text="Описание очень длинное, которое должно перенестись на следующую строчку. Хм, а если их будет четыре"
         android:textSize="16sp"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toEndOf="@id/textCost"
         app:layout_constraintStart_toEndOf="@+id/textView"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -41,8 +43,16 @@
         android:text="3"
         android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:layout_editor_absoluteX="27dp"
-        tools:layout_editor_absoluteY="59dp" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ViewAnimator
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_marginStart="70dp"
+        android:layout_marginTop="8dp"
+        android:background="#ddd"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/textDescription" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
