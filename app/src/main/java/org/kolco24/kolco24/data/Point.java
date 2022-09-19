@@ -28,7 +28,8 @@ public class Point {
         this.mCost = cost;
     }
 
-    public String getPoint() {
-        return this.mName;
+    public PointInfo getPoint() {
+        PointInfo pointView = new PointInfo(this.mName, this.mDescription, this.mCost);
+        return pointView;
     }
 }

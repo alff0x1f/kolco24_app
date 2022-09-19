@@ -8,18 +8,25 @@ import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.kolco24.kolco24.R;
+import org.kolco24.kolco24.data.PointInfo;
 
 public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
+    private final TextView textDesctiption;
+    private final TextView textCost;
 
     /*__init__*/
     private PointViewHolder(View itemView) {
         super(itemView);
         textView = itemView.findViewById(R.id.textView);
+        textDesctiption = itemView.findViewById(R.id.textDescription);
+        textCost = itemView.findViewById(R.id.textCost);
     }
 
-    public void bind(String text) {
-        textView.setText(text);
+    public void bind(PointInfo point) {
+        textView.setText(point.getName());
+        textDesctiption.setText(point.getDescription());
+        textCost.setText(String.valueOf(point.getCost()));
     }
 
     /**

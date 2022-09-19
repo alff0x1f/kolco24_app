@@ -34,7 +34,7 @@ public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
 
         @Override
         public boolean areContentsTheSame(@NonNull Point oldItem, @NonNull Point newItem) {
-            return oldItem.getPoint().equals(newItem.getPoint());
+            return oldItem.getPoint().getName().equals(newItem.getPoint().getName());
         }
     }
 }
