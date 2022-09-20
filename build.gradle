@@ -4,6 +4,7 @@ buildscript {
     ext {
         appCompatVersion = '1.5.0'
         constraintLayoutVersion = '2.1.4'
+        swiperefreshlayoutVersion = '1.1.0'
         coreTestingVersion = '2.1.0'
         lifecycleVersion = '2.5.1'
         materialVersion = '1.6.1'

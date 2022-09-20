@@ -11,7 +11,9 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import org.kolco24.kolco24.data.Point;
 import org.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
 public class LegendsFragment extends Fragment {
@@ -38,6 +40,15 @@ public class LegendsFragment extends Fragment {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
         mPointViewModel.getAllPoints().observe(getViewLifecycleOwner(), adapter::submitList);
+
+        //swipe to refresh
+        SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            int random_point = (int) Math.floor(Math.random() * (100));
+            int random_cost = (int) Math.floor(Math.random() * (10));
+            mPointViewModel.insert(new Point(Integer.toString(random_point), "Дерево в лесу", random_cost));
+            swipeRefreshLayout.setRefreshing(false);
+        });
 
         return root;
     }

@@ -27,4 +27,10 @@ public class PointRepository {
             mPointDao.insert(point);
         });
     }
+
+    public void deleteAll() {
+        PointsDatabase.databaseWriteExecutor.execute(() -> {
+            mPointDao.deleteAll();
+        });
+    }
 }

@@ -61,8 +61,8 @@ public abstract class PointsDatabase extends RoomDatabase {
                     point = new Point("0" + i, "Описание " + i, i);
                     dao.insert(point);
                 }
-                for (int i = 10; i < 100; i++) {
-                    point = new Point(Integer.toString(i), "Описание " + i, i);
+                for (int i = 10; i < 50; i++) {
+                    point = new Point(Integer.toString(i), "Тестовое дерево в лесу у ручья " + i, i);
                     dao.insert(point);
                 }
             });

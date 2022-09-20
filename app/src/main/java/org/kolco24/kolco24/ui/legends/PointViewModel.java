@@ -29,4 +29,7 @@ public class PointViewModel extends AndroidViewModel {
     public void insert(Point point) {
         mRepository.insert(point);
     }
+    public void deleteAll() {
+        mRepository.deleteAll();
+    }
 }
