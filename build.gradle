@@ -10,6 +10,7 @@ buildscript {
         materialVersion = '1.6.1'
         roomVersion = '2.4.3'
         navigationVersion = '2.5.1'
+        okhttpVersion = '4.10.0'
         // testing
         junitVersion = '4.13.2'
         espressoVersion = '3.4.0'

@@ -55,6 +55,9 @@ dependencies {
     implementation "androidx.navigation:navigation-fragment:$rootProject.navigationVersion"
     implementation "androidx.navigation:navigation-ui:$rootProject.navigationVersion"
 
+    // HTTP
+    implementation "com.squareup.okhttp3:okhttp:$rootProject.okhttpVersion"
+
     // Testing
     testImplementation "junit:junit:$rootProject.junitVersion"
     androidTestImplementation "androidx.arch.core:core-testing:$rootProject.coreTestingVersion"
