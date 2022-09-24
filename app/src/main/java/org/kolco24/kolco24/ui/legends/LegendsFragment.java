@@ -15,18 +15,20 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.kolco24.kolco24.data.Point;
 import org.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
-
 import java.io.IOException;
 
+import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import okhttp3.Call;
 import okhttp3.ResponseBody;
 
 public class LegendsFragment extends Fragment {
@@ -57,28 +59,15 @@ public class LegendsFragment extends Fragment {
 
         //swipe to refresh
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
-        swipeRefreshLayout.setOnRefreshListener(() -> {
-            //http
-            try {
-                run();
-            } catch (IOException e) {
-                // TODO
-                Context context = root.getContext();
-                CharSequence text = "Hello toast!";
-                int duration = Toast.LENGTH_SHORT;
-                Toast toast = Toast.makeText(context, text, duration);
-                toast.show();
-                //
-                e.printStackTrace();
-            }
-        });
+        //http
+        swipeRefreshLayout.setOnRefreshListener(this::downloadPoints);
 
         return root;
     }
 
-    public void run() throws IOException {
+    public void downloadPoints() {
         Request request = new Request.Builder()
-                .url("http://192.168.88.5:8081")
+                .url("http://192.168.88.164:8000/api/v1/points")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
@@ -91,28 +80,20 @@ public class LegendsFragment extends Fragment {
                 swipeRefreshLayout.setRefreshing(false);
 
                 // toast
-                Context context = binding.getRoot().getContext();
-                Handler handler = new Handler(context.getMainLooper());
-                handler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        CharSequence text = "Ошибка обновления списка, нет связи с сервером";
-                        int duration = Toast.LENGTH_SHORT;
-                        Toast toast = Toast.makeText(context, text, duration);
-                        toast.show();
-                    }
-                });
+                toast("Ошибка обновления списка, нет связи с сервером");
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful())
-                        throw new IOException("Unexpected code " + response);
-
                     // turn of loader
                     SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
                     swipeRefreshLayout.setRefreshing(false);
+
+                    if (!response.isSuccessful()) {
+                        toast("Ошибка " + response.code());
+                        throw new IOException("Unexpected code " + response);
+                    }
 
                     //print headers to log
                     Headers responseHeaders = response.headers();
@@ -123,26 +104,40 @@ public class LegendsFragment extends Fragment {
                     // insert in DB
                     mPointViewModel.deleteAll();
                     String legend = responseBody.string();
-                    String legend_name = legend.substring(0, 100);
-                    for (int i = 10; i < 50; i++) {
-                        mPointViewModel.insert(new Point(Integer.toString(i), legend_name, 1));
-                    }
 
-                    // toast
-                    Context context = binding.getRoot().getContext();
-                    Handler handler = new Handler(context.getMainLooper());
-                    handler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            CharSequence text = "Список обновлен";
-                            int duration = Toast.LENGTH_LONG;
-                            Toast toast = Toast.makeText(context, text, duration);
-                            toast.show();
+                    try {
+                        JSONArray jObj = new JSONArray(legend);
+                        for (int i = 0; i < jObj.length(); i++) {
+                            JSONObject point = jObj.getJSONObject(i);
+                            Point p = new Point(
+                                    point.getString("number"),
+                                    point.getString("description"),
+                                    point.getInt("cost")
+                            );
+                            mPointViewModel.insert(p);
                         }
-                    });
+                        toast("Список обновлен");
+                    } catch (JSONException e) {
+                        toast("Ошибка декодирования JSON");
+                        e.printStackTrace();
+                        throw new IOException("Wrong JSON");
+                    }
                     // logs
                     System.out.println(legend);
                 }
+            }
+
+            public void toast(String text) {
+                Context context = binding.getRoot().getContext();
+                Handler handler = new Handler(context.getMainLooper());
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        int duration = Toast.LENGTH_SHORT;
+                        Toast toast = Toast.makeText(context, text, duration);
+                        toast.show();
+                    }
+                });
             }
         });
     }
