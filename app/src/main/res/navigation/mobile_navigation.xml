@@ -12,10 +12,10 @@
         tools:layout="@layout/fragment_home" />
 
     <fragment
-        android:id="@+id/navigation_dashboard"
-        android:name="org.kolco24.kolco24.ui.dashboard.DashboardFragment"
+        android:id="@+id/navigation_taken_points"
+        android:name="org.kolco24.kolco24.ui.taken_points.TakenPointsFragment"
         android:label="@string/title_dashboard"
-        tools:layout="@layout/fragment_dashboard" />
+        tools:layout="@layout/fragment_taken_points" />
 
     <fragment
         android:id="@+id/navigation_legends"

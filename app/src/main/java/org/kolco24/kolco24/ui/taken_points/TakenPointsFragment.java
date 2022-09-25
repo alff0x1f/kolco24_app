@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.dashboard;
+package org.kolco24.kolco24.ui.taken_points;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -10,18 +10,18 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import org.kolco24.kolco24.databinding.FragmentDashboardBinding;
+import org.kolco24.kolco24.databinding.FragmentTakenPointsBinding;
 
-public class DashboardFragment extends Fragment {
+public class TakenPointsFragment extends Fragment {
 
-    private FragmentDashboardBinding binding;
+    private FragmentTakenPointsBinding binding;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
-        DashboardViewModel dashboardViewModel =
-                new ViewModelProvider(this).get(DashboardViewModel.class);
+        TakenPointsViewModel takenPointsViewModel =
+                new ViewModelProvider(this).get(TakenPointsViewModel.class);
 
-        binding = FragmentDashboardBinding.inflate(inflater, container, false);
+        binding = FragmentTakenPointsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
         final TextView textView = binding.textDashboard;

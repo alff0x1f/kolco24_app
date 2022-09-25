@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.dashboard;
+package org.kolco24.kolco24.ui.taken_points;
 
 import android.app.Application;
 
@@ -10,12 +10,12 @@ import org.kolco24.kolco24.data.PointRepository;
 
 import java.util.List;
 
-public class DashboardViewModel extends AndroidViewModel {
+public class TakenPointsViewModel extends AndroidViewModel {
 
     private PointRepository mRepository;
     private final LiveData<List<Point>> mAllPoints;
 
-    public DashboardViewModel(Application application) {
+    public TakenPointsViewModel(Application application) {
         super(application);
         mRepository = new PointRepository(application);
         mAllPoints = mRepository.getAllPoints();
