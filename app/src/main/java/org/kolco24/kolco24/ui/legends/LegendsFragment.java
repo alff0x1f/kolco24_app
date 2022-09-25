@@ -59,6 +59,7 @@ public class LegendsFragment extends Fragment {
 
         //swipe to refresh
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
+        swipeRefreshLayout.setRefreshing(false);
         //http
         swipeRefreshLayout.setOnRefreshListener(this::downloadPoints);
 

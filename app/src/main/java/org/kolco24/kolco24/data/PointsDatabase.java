@@ -11,9 +11,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Database(entities = {Point.class}, version = 1, exportSchema = false)
+@Database(entities = {Point.class, Photo.class}, version = 1, exportSchema = false)
 public abstract class PointsDatabase extends RoomDatabase {
     public abstract PointDao pointDao();
+    public abstract PhotoDao photoPointDao();
 
     private static volatile PointsDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
@@ -48,22 +49,32 @@ public abstract class PointsDatabase extends RoomDatabase {
 
             //create empty database
             databaseWriteExecutor.execute(() -> {
-                PointDao dao = INSTANCE.pointDao();
-                dao.deleteAll();
+                PointDao photo_dao = INSTANCE.pointDao();
+                photo_dao.deleteAll();
 
                 Point point = new Point("01", "Описание", 1);
-                dao.insert(point);
+                photo_dao.insert(point);
                 point = new Point("02", "Описание 2", 2);
-                dao.insert(point);
+                photo_dao.insert(point);
                 point = new Point("03", "Описание 3", 3);
-                dao.insert(point);
+                photo_dao.insert(point);
                 for (int i = 4; i < 10; i++) {
                     point = new Point("0" + i, "Описание " + i, i);
-                    dao.insert(point);
+                    photo_dao.insert(point);
                 }
                 for (int i = 10; i < 50; i++) {
                     point = new Point(Integer.toString(i), "Тестовое дерево в лесу у ручья " + i, i);
-                    dao.insert(point);
+                    photo_dao.insert(point);
+                }
+
+                // Photo Point
+                PhotoDao photoPointDao = INSTANCE.photoPointDao();
+                photoPointDao.deleteAll();
+                Photo photo_point = new Photo(1, "Описание", "01");
+                photoPointDao.insert(photo_point);
+                for (int i = 2; i < 100; i++) {
+                    photo_point = new Photo(i, "Описание " + i, "0" + i);
+                    photoPointDao.insert(photo_point);
                 }
             });
         }

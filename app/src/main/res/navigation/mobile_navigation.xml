@@ -13,9 +13,9 @@
 
     <fragment
         android:id="@+id/navigation_taken_points"
-        android:name="org.kolco24.kolco24.ui.taken_points.TakenPointsFragment"
+        android:name="org.kolco24.kolco24.ui.photo.PhotoFragment"
         android:label="@string/title_dashboard"
-        tools:layout="@layout/fragment_taken_points" />
+        tools:layout="@layout/fragment_photos" />
 
     <fragment
         android:id="@+id/navigation_legends"
