@@ -68,13 +68,13 @@ public abstract class PointsDatabase extends RoomDatabase {
                 }
 
                 // Photo Point
-                PhotoDao photoPointDao = INSTANCE.photoPointDao();
-                photoPointDao.deleteAll();
-                Photo photo_point = new Photo(1, "Описание", "01");
-                photoPointDao.insert(photo_point);
+                PhotoDao photoDao = INSTANCE.photoPointDao();
+                photoDao.deleteAll();
+                Photo photo_point = new Photo(1, "Url", "01");
+                photoDao.insert(photo_point);
                 for (int i = 2; i < 100; i++) {
-                    photo_point = new Photo(i, "Описание " + i, "0" + i);
-                    photoPointDao.insert(photo_point);
+                    photo_point = new Photo(i, "Url " + i, "0" + i);
+                    photoDao.insert(photo_point);
                 }
             });
         }
