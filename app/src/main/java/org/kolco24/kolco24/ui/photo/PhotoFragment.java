@@ -9,10 +9,13 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.fragment.NavHostFragment;
 import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import org.kolco24.kolco24.R;
 import org.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment {
@@ -39,6 +42,11 @@ public class PhotoFragment extends Fragment {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoPointViewModel = new ViewModelProvider(this).get(PhotoPointViewModel.class);
         mPhotoPointViewModel.getAllPhotoPoints().observe(getViewLifecycleOwner(), adapter::submitList);
+        //fab
+        FloatingActionButton fab = binding.fab;
+        fab.setOnClickListener( view -> {
+            NavHostFragment.findNavController(this).navigate(R.id.action_navigation_taken_points_to_navigation_new_photo);
+        });
 
         return root;
     }

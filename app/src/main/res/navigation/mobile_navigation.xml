@@ -15,11 +15,25 @@
         android:id="@+id/navigation_taken_points"
         android:name="org.kolco24.kolco24.ui.photo.PhotoFragment"
         android:label="@string/title_dashboard"
-        tools:layout="@layout/fragment_photos" />
+        tools:layout="@layout/fragment_photos" >
+        <action
+            android:id="@+id/action_navigation_taken_points_to_navigation_new_photo"
+            app:destination="@id/navigation_new_photo" />
+    </fragment>
 
     <fragment
         android:id="@+id/navigation_legends"
         android:name="org.kolco24.kolco24.ui.legends.LegendsFragment"
         android:label="@string/title_legends"
         tools:layout="@layout/fragment_legends" />
+
+    <fragment
+        android:id="@+id/navigation_new_photo"
+        android:name="org.kolco24.kolco24.ui.photo.NewPhotoFragment"
+        android:label="Добавить КП"
+        tools:layout="@layout/fragment_new_photo" >
+        <action
+            android:id="@+id/action_navigation_new_photo_to_navigation_taken_points"
+            app:destination="@id/navigation_taken_points" />
+    </fragment>
 </navigation>
