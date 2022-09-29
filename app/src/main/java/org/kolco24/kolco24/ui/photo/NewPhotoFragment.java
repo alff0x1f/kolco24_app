@@ -1,14 +1,19 @@
 package org.kolco24.kolco24.ui.photo;
 
+import static android.app.Activity.RESULT_OK;
+
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.fragment.app.Fragment;
 
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import org.kolco24.kolco24.R;
+import org.kolco24.kolco24.databinding.FragmentNewPhotoBinding;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -21,6 +26,9 @@ public class NewPhotoFragment extends Fragment {
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
     private static final String ARG_PARAM1 = "param1";
     private static final String ARG_PARAM2 = "param2";
+    private FragmentNewPhotoBinding binding;
+    static final int REQUEST_IMAGE_GALLERY = 1;
+
 
     // TODO: Rename and change types of parameters
     private String mParam1;
@@ -60,7 +68,35 @@ public class NewPhotoFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_new_photo, container, false);
+        binding = FragmentNewPhotoBinding.inflate(inflater, container, false);
+        View root = binding.getRoot();
+
+        //gallery
+        binding.buttonLoadPicture.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dispatchTakePictureIntent();
+            }
+        });
+
+        return root;
     }
+
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+        try {
+            startActivityForResult(takePictureIntent, REQUEST_IMAGE_GALLERY);
+        } catch (ActivityNotFoundException e) {
+            // display error state to the user
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_IMAGE_GALLERY && resultCode == RESULT_OK) {
+            binding.imageView.setImageURI(data.getData());
+        }
+    }
+
 }
