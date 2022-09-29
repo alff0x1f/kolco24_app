@@ -34,8 +34,4 @@ public class Photo {
         this.point_number = point_number;
         this.status = "new";
     }
-
-    public PhotoInfo getPhotoPoint() {
-        return new PhotoInfo(this.team, this.photo_url, this.point_number, this.status);
-    }
 }

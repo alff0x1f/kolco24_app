@@ -9,7 +9,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.kolco24.kolco24.R;
-import org.kolco24.kolco24.data.PhotoInfo;
+import org.kolco24.kolco24.data.Photo;
 
 public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
@@ -19,8 +19,8 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
         textView = itemView.findViewById(R.id.textView);
     }
 
-    public void bind(PhotoInfo point) {
-        textView.setText(point.getPoint_number());
+    public void bind(Photo photo) {
+        textView.setText(photo.point_number);
     }
 
     /**

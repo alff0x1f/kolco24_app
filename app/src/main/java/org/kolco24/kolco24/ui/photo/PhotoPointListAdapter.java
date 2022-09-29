@@ -22,18 +22,18 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
 
     public void onBindViewHolder(PhotoPointViewHolder holder, int position) {
         Photo current = getItem(position);
-        holder.bind(current.getPhotoPoint());
+        holder.bind(current);
     }
 
     static class PhotoPointDiff extends DiffUtil.ItemCallback<Photo> {
         @Override
         public boolean areItemsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
-            return oldItem == newItem;
+            return oldItem.id == newItem.id;
         }
 
         @Override
         public boolean areContentsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
-            return oldItem.getPhotoPoint().getPoint_number().equals(newItem.getPhotoPoint().getPoint_number());
+            return oldItem.point_number.equals(newItem.point_number);
         }
     }
 }
