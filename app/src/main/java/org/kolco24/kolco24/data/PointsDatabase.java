@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 @Database(entities = {Point.class, Photo.class}, version = 1, exportSchema = false)
 public abstract class PointsDatabase extends RoomDatabase {
     public abstract PointDao pointDao();
-    public abstract PhotoDao photoPointDao();
+    public abstract PhotoDao photoDao();
 
     private static volatile PointsDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
@@ -68,7 +68,7 @@ public abstract class PointsDatabase extends RoomDatabase {
                 }
 
                 // Photo Point
-                PhotoDao photoDao = INSTANCE.photoPointDao();
+                PhotoDao photoDao = INSTANCE.photoDao();
                 photoDao.deleteAll();
                 Photo photo_point = new Photo(1, "Url", "01");
                 photoDao.insert(photo_point);

@@ -15,14 +15,15 @@ public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
         super(diffCallback);
     }
 
+    @NonNull
     @Override
-    public PointViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+    public PointViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         return PointViewHolder.create(parent);
     }
 
     public void onBindViewHolder(PointViewHolder holder, int position) {
         Point current = getItem(position);
-        holder.bind(current.getPoint());
+        holder.bind(current);
     }
 
     static class PointDiff extends DiffUtil.ItemCallback<Point> {
@@ -34,7 +35,7 @@ public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
 
         @Override
         public boolean areContentsTheSame(@NonNull Point oldItem, @NonNull Point newItem) {
-            return oldItem.getPoint().getName().equals(newItem.getPoint().getName());
+            return oldItem.mName.equals(newItem.mName);
         }
     }
 }

@@ -6,18 +6,18 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 
 import org.kolco24.kolco24.data.Photo;
-import org.kolco24.kolco24.data.PhotoPointRepository;
+import org.kolco24.kolco24.data.PhotoRepository;
 
 import java.util.List;
 
 public class PhotoViewModel extends AndroidViewModel {
 
-    private PhotoPointRepository mPhotoRepository;
+    private PhotoRepository mPhotoRepository;
     private final LiveData<List<Photo>> mAllPoints;
 
     public PhotoViewModel(Application application) {
         super(application);
-        mPhotoRepository = new PhotoPointRepository(application);
+        mPhotoRepository = new PhotoRepository(application);
         mAllPoints = mPhotoRepository.getAllPhotoPoints();
 
     }

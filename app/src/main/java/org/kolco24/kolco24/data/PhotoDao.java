@@ -16,7 +16,7 @@ public interface PhotoDao {
     LiveData<Photo> getPhotoPointById(int id);
 
     @Query("SELECT * FROM photo_points ORDER BY point_number")
-    LiveData<List<Photo>> getAllPhotoPoints();
+    LiveData<List<Photo>> getAllPhotos();
 
     @Query("DELETE FROM photo_points WHERE id = :id")
     void deletePhotoPointById(int id);

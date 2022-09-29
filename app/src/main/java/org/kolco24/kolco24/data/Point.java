@@ -27,9 +27,4 @@ public class Point {
         this.mDescription = description;
         this.mCost = cost;
     }
-
-    public PointInfo getPoint() {
-        PointInfo pointView = new PointInfo(this.mName, this.mDescription, this.mCost);
-        return pointView;
-    }
 }
