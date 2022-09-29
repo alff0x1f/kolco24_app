@@ -37,6 +37,12 @@ public class LegendsFragment extends Fragment {
     private PointViewModel mPointViewModel;
     private final OkHttpClient client = new OkHttpClient();
 
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        downloadPoints();
+    }
+
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
         LegendsViewModel legendsViewModel =
