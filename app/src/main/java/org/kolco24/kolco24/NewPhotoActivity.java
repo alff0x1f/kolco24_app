@@ -98,6 +98,9 @@ public class NewPhotoActivity extends AppCompatActivity {
             finish();
         });
 
+        final Button cancelButton = findViewById(R.id.button_cancel);
+        cancelButton.setOnClickListener(view_cancel -> finish());
+
         //gallery
         final Button galleryButton = findViewById(R.id.button_gallery);
         galleryButton.setOnClickListener(new View.OnClickListener() {
