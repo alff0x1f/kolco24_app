@@ -25,6 +25,10 @@ public class PhotoViewModel extends AndroidViewModel {
         return mAllPhoto;
     }
 
+    int getPhotoCount() {
+        return mPhotoRepository.getPhotoCount();
+    }
+
     public Photo getPhotoById(int id) {
         return mPhotoRepository.getPhotoById(id);
     }

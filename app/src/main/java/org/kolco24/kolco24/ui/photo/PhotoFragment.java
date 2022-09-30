@@ -2,6 +2,7 @@ package org.kolco24.kolco24.ui.photo;
 
 import android.content.Intent;
 import android.graphics.Rect;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -52,6 +53,18 @@ public class PhotoFragment extends Fragment {
         });
 
         return root;
+    }
+
+    // on update
+    @Override
+    public void onResume() {
+        super.onResume();
+        // update photo counter
+        AsyncTask.execute(() -> {
+            final TextView textView = binding.textDashboard;
+            int count = mPhotoViewModel.getPhotoCount();
+            textView.post(() -> textView.setText(String.format("Количество КП: %d", count)));
+        });
     }
 
     public static class GridSpacingItemDecoration extends RecyclerView.ItemDecoration {

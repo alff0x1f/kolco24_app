@@ -22,6 +22,9 @@ public interface PhotoDao {
     @Query("SELECT * FROM photo_points ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();
 
+    @Query("SELECT count(DISTINCT point_number) FROM photo_points")
+    int getPhotoCount();
+
     @Query("DELETE FROM photo_points WHERE id = :id")
     void deletePhotoPointById(int id);
 
