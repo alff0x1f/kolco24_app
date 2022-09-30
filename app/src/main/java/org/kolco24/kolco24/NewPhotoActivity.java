@@ -55,7 +55,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
-            if (TextUtils.isEmpty(mPointNameEditView.getText()) || imageName == null) {
+            if (!TextUtils.isEmpty(mPointNameEditView.getText()) && imageName != null) {
                 Photo photo = new Photo(
                         1,
                         imageName,
@@ -134,7 +134,10 @@ public class NewPhotoActivity extends AppCompatActivity {
     public File createImageFile() {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "img_" + timeStamp + ".png";
-        String picDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES).toString();
+        File picDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if (!picDir.exists()) {
+            picDir.mkdirs();
+        }
         return new File(picDir, imageFileName);
     }
 
