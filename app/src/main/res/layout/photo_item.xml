@@ -8,25 +8,29 @@
 
     <ImageView
         android:id="@+id/photoKP"
-        android:layout_width="fill_parent"
-        android:layout_height="200dp"
-        android:layout_marginEnd="16dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:background="@color/purple_200"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintDimensionRatio="H,1:1"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="1.0"
         tools:srcCompat="@drawable/ic_add_black_24dp" />
 
     <TextView
         android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/activity_horizontal_margin"
-        android:layout_marginTop="8dp"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginStart="@dimen/small_padding"
+        android:layout_marginTop="@dimen/small_padding"
         android:text="20"
-        android:textColor="@color/black"
-        android:textSize="28sp"
+        android:background="@drawable/rounded_corner"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:gravity="center"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 

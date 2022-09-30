@@ -3,11 +3,13 @@ package org.kolco24.kolco24.ui.photo;
 import static android.app.Activity.RESULT_OK;
 
 import android.content.Intent;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -42,7 +44,8 @@ public class PhotoFragment extends Fragment {
         RecyclerView recyclerView = binding.myPointsRecyclerView;
         final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
         recyclerView.setAdapter(adapter);
-        recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
+        recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 3));
+        recyclerView.addItemDecoration(new GridSpacingItemDecoration(3, 8, false));
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoPointViewModel = new ViewModelProvider(this).get(PhotoPointViewModel.class);
         mPhotoPointViewModel.getAllPhotoPoints().observe(getViewLifecycleOwner(), adapter::submitList);
@@ -50,7 +53,7 @@ public class PhotoFragment extends Fragment {
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
             Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
-            startActivityForResult(intent, NEW_PHOTO_ACTIVITY_REQUEST_CODE);
+            startActivity(intent);
 //            NavHostFragment.findNavController(this).navigate(R.id.action_navigation_taken_points_to_navigation_new_photo);
         });
 
@@ -60,6 +63,10 @@ public class PhotoFragment extends Fragment {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        Toast.makeText(
+                getActivity().getApplicationContext(),
+                "onActivityResult",
+                Toast.LENGTH_LONG).show();
         if (requestCode == NEW_PHOTO_ACTIVITY_REQUEST_CODE && resultCode == RESULT_OK) {
             Photo photo = new Photo(
                     1,
@@ -67,6 +74,41 @@ public class PhotoFragment extends Fragment {
                     data.getStringExtra(NewPhotoActivity.POINT_NAME)
             );
             mPhotoPointViewModel.insert(photo);
+        }
+    }
+
+    public static class GridSpacingItemDecoration extends RecyclerView.ItemDecoration {
+
+        private int spanCount;
+        private int spacing;
+        private boolean includeEdge;
+
+        public GridSpacingItemDecoration(int spanCount, int spacing, boolean includeEdge) {
+            this.spanCount = spanCount;
+            this.spacing = spacing;
+            this.includeEdge = includeEdge;
+        }
+
+        @Override
+        public void getItemOffsets(Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
+            int position = parent.getChildAdapterPosition(view); // item position
+            int column = position % spanCount; // item column
+
+            if (includeEdge) {
+                outRect.left = spacing - column * spacing / spanCount; // spacing - column * ((1f / spanCount) * spacing)
+                outRect.right = (column + 1) * spacing / spanCount; // (column + 1) * ((1f / spanCount) * spacing)
+
+                if (position < spanCount) { // top edge
+                    outRect.top = spacing;
+                }
+                outRect.bottom = spacing; // item bottom
+            } else {
+                outRect.left = column * spacing / spanCount; // column * ((1f / spanCount) * spacing)
+                outRect.right = spacing - (column + 1) * spacing / spanCount; // spacing - (column + 1) * ((1f /    spanCount) * spacing)
+                if (position >= spanCount) {
+                    outRect.top = spacing; // item top
+                }
+            }
         }
     }
 

@@ -82,11 +82,9 @@ public class LegendsFragment extends Fragment {
             public void onFailure(Call call, IOException e) {
                 System.out.println("Failure");
                 e.printStackTrace();
-
-                SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
-                swipeRefreshLayout.setRefreshing(false);
-
-                // toast
+                if (binding != null) {
+                    binding.swipeToRefresh.setRefreshing(false);
+                }
                 toast("Ошибка обновления списка, нет связи с сервером");
             }
 
@@ -135,6 +133,9 @@ public class LegendsFragment extends Fragment {
             }
 
             public void toast(String text) {
+                if (binding == null) {
+                    return;
+                }
                 Context context = binding.getRoot().getContext();
                 Handler handler = new Handler(context.getMainLooper());
                 handler.post(new Runnable() {

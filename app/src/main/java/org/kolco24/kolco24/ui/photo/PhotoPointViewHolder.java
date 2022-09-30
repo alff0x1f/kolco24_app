@@ -1,5 +1,6 @@
 package org.kolco24.kolco24.ui.photo;
 
+import android.content.Intent;
 import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,8 +11,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.kolco24.kolco24.NewPhotoActivity;
 import org.kolco24.kolco24.R;
-import org.kolco24.kolco24.data.Photo;
 
 public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
@@ -23,13 +24,16 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
         photoKP = itemView.findViewById(R.id.photoKP);
     }
 
-    public void bind(Photo photo) {
-        textView.setText(photo.point_number);
-        try {
-            photoKP.setImageURI(Uri.parse(photo.photo_url));
-        } catch (SecurityException e) {
-            e.printStackTrace();
-        }
+    public void bind(String point_number, Uri uri) {
+        textView.setText(point_number);
+        photoKP.setImageURI(uri);
+
+        itemView.setOnClickListener(v -> {
+            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+            intent.putExtra("point_number", point_number);
+            intent.putExtra("uri", uri.toString());
+            itemView.getContext().startActivity(intent);
+        });
     }
 
     /**

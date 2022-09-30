@@ -18,6 +18,9 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 
+import org.kolco24.kolco24.data.Photo;
+import org.kolco24.kolco24.ui.photo.PhotoPointViewModel;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -38,16 +41,28 @@ public class NewPhotoActivity extends AppCompatActivity {
         setContentView(R.layout.activity_new_word);
         mPointNameEditView = findViewById(R.id.edit_word);
 
+        Intent callingIntent = getIntent();
+        String pointNumber = callingIntent.getStringExtra("point_number");
+        if (pointNumber != null) {
+            mPointNameEditView.setText(pointNumber);
+        }
+        imageName = callingIntent.getStringExtra("uri");
+        if (imageName != null) {
+            Uri imageUri = Uri.parse(imageName);
+            ImageView imageView = findViewById(R.id.imageView);
+            imageView.setImageURI(imageUri);
+        }
+
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
-            Intent replyIntent = new Intent();
             if (TextUtils.isEmpty(mPointNameEditView.getText()) || imageName == null) {
-                setResult(RESULT_CANCELED, replyIntent);
-            } else {
-                String word = mPointNameEditView.getText().toString();
-                replyIntent.putExtra(POINT_NAME, word);
-                replyIntent.putExtra(PHOTO_URI, imageName);
-                setResult(RESULT_OK, replyIntent);
+                Photo photo = new Photo(
+                        1,
+                        imageName,
+                        mPointNameEditView.getText().toString()
+                );
+                PhotoPointViewModel a = new PhotoPointViewModel(getApplication());
+                a.insert(photo);
             }
             finish();
         });
@@ -80,6 +95,8 @@ public class NewPhotoActivity extends AppCompatActivity {
             Bitmap bitmap = null;
             try {
                 bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
+                bitmap = cropBitmap(bitmap);
+                bitmap = Bitmap.createScaledBitmap(bitmap, 200, 200, false);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -120,4 +137,28 @@ public class NewPhotoActivity extends AppCompatActivity {
         String picDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES).toString();
         return new File(picDir, imageFileName);
     }
+
+    public static Bitmap cropBitmap(Bitmap srcBmp) {
+        Bitmap dstBmp;
+        if (srcBmp.getWidth() >= srcBmp.getHeight()) {
+            dstBmp = Bitmap.createBitmap(
+                    srcBmp,
+                    srcBmp.getWidth() / 2 - srcBmp.getHeight() / 2,
+                    0,
+                    srcBmp.getHeight(),
+                    srcBmp.getHeight()
+            );
+
+        } else {
+            dstBmp = Bitmap.createBitmap(
+                    srcBmp,
+                    0,
+                    srcBmp.getHeight() / 2 - srcBmp.getWidth() / 2,
+                    srcBmp.getWidth(),
+                    srcBmp.getWidth()
+            );
+        }
+        return dstBmp;
+    }
+
 }
