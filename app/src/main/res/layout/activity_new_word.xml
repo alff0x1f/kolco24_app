@@ -1,0 +1,50 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/imageView"
+                android:layout_width="match_parent"
+                android:layout_height="400dp"
+                android:background="#eee"
+                android:scaleType="centerInside" />
+
+            <Button
+                android:id="@+id/button_gallery"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/big_padding"
+                android:text="@string/button_load"
+                android:textColor="@color/buttonLabel" />
+
+            <EditText
+                android:id="@+id/edit_word"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/big_padding"
+                android:fontFamily="sans-serif-light"
+                android:hint="@string/hint_word"
+                android:inputType="number"
+                android:textSize="18sp" />
+
+            <Button
+                android:id="@+id/button_save"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/big_padding"
+                android:text="@string/button_save"
+                android:textColor="@color/buttonLabel" />
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

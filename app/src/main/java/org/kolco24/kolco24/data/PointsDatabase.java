@@ -70,12 +70,6 @@ public abstract class PointsDatabase extends RoomDatabase {
                 // Photo Point
                 PhotoDao photoDao = INSTANCE.photoDao();
                 photoDao.deleteAll();
-                Photo photo_point = new Photo(1, "Url", "01");
-                photoDao.insert(photo_point);
-                for (int i = 2; i < 100; i++) {
-                    photo_point = new Photo(i, "Url " + i, "0" + i);
-                    photoDao.insert(photo_point);
-                }
             });
         }
     };

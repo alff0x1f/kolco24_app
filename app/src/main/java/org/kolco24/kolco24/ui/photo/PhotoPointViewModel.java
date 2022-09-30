@@ -25,6 +25,10 @@ public class PhotoPointViewModel extends AndroidViewModel {
         return mAllPhotoPoints;
     }
 
+    public void deleteAll(){
+        mRepository.deleteAll();
+    }
+
     public void insert(Photo photo) {
         mRepository.insert(photo);
     }
