@@ -57,7 +57,7 @@ public class NewPhotoActivity extends AppCompatActivity {
         saveButton.setOnClickListener(view -> {
             if (!TextUtils.isEmpty(mPointNameEditView.getText()) && imageName != null) {
                 Photo photo = new Photo(
-                        1,
+                        "Team 1",
                         imageName,
                         mPointNameEditView.getText().toString()
                 );

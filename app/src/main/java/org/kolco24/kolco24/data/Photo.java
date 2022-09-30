@@ -11,7 +11,7 @@ public class Photo {
     public int id;
 
     @ColumnInfo(name = "team")
-    public int team;
+    public String team;
 
     @NonNull
     @ColumnInfo(name = "photo_url")
@@ -28,7 +28,7 @@ public class Photo {
 
 
     //__init__
-    public Photo(int team, @NonNull String photo_url, @NonNull String point_number) {
+    public Photo(@NonNull String team, @NonNull String photo_url, @NonNull String point_number) {
         this.team = team;
         this.photo_url = photo_url;
         this.point_number = point_number;
