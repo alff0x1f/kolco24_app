@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 public class NewPhotoActivity extends AppCompatActivity {
     public static final String POINT_NAME = "org.kolco24.kolco24.newPhoto.pointName";
@@ -51,7 +52,11 @@ public class NewPhotoActivity extends AppCompatActivity {
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
 
         if (photoId != 0) {
-            mPointNameEditView.setText(Integer.toString(point_number));
+            Button galleryButton = findViewById(R.id.button_gallery);
+            galleryButton.setText("Выбрать другое фото");
+
+            Locale locale = getResources().getConfiguration().locale;
+            mPointNameEditView.setText(String.format(locale, "%d", point_number));
 
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
@@ -76,6 +81,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                         photo.point_number = Integer.parseInt(mPointNameEditView.getText().toString());
                         photo.photo_url = photoUri;
                         photo.photo_thumb_url = photoThumbUri;
+                        photo.status = Photo.NEW;
                         photoViewModel.update(photo);
                     });
                 }

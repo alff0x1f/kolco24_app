@@ -7,6 +7,8 @@ import androidx.room.PrimaryKey;
 
 @Entity(tableName = "photo_points")
 public class Photo {
+    public static final String NEW = "new";
+
     @PrimaryKey(autoGenerate = true)
     public int id;
 
