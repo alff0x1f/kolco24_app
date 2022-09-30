@@ -78,11 +78,20 @@ public class NewPhotoActivity extends AppCompatActivity {
                     // Update photo
                     AsyncTask.execute(() -> {
                         Photo photo = photoViewModel.getPhotoById(photoId);
-                        photo.point_number = Integer.parseInt(mPointNameEditView.getText().toString());
-                        photo.photo_url = photoUri;
-                        photo.photo_thumb_url = photoThumbUri;
-                        photo.status = Photo.NEW;
-                        photoViewModel.update(photo);
+                        Boolean isChanged = false;
+                        if (photo.point_number != Integer.parseInt(mPointNameEditView.getText().toString())) {
+                            photo.point_number = Integer.parseInt(mPointNameEditView.getText().toString());
+                            isChanged = true;
+                        }
+                        if (!photo.photo_url.equals(photoUri)) {
+                            photo.photo_url = photoUri;
+                            photo.photo_thumb_url = photoThumbUri;
+                            isChanged = true;
+                        }
+                        if (isChanged) {
+                            photo.status = Photo.NEW;
+                            photoViewModel.update(photo);
+                        }
                     });
                 }
             }
