@@ -96,7 +96,7 @@ public class NewPhotoActivity extends AppCompatActivity {
             try {
                 bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
                 bitmap = cropBitmap(bitmap);
-                bitmap = Bitmap.createScaledBitmap(bitmap, 200, 200, false);
+                bitmap = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -117,7 +117,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
     public String save_image(Bitmap bitmap) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, bytes);
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 50, bytes);
 
         File photoFile = createImageFile();
         photoFile.createNewFile();
