@@ -4,6 +4,7 @@ import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.Query;
+import androidx.room.Update;
 
 import java.util.List;
 
@@ -11,6 +12,9 @@ import java.util.List;
 public interface PhotoDao {
     @Insert
     void insert(Photo photo);
+
+    @Update
+    void update(Photo photo);
 
     @Query("SELECT * FROM photo_points WHERE id = :id")
     Photo getPhotoById(int id);

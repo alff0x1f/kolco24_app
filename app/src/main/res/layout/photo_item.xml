@@ -24,14 +24,14 @@
         android:id="@+id/textView"
         android:layout_width="30dp"
         android:layout_height="30dp"
-        android:layout_marginStart="@dimen/small_padding"
+        android:layout_marginEnd="@dimen/small_padding"
         android:layout_marginTop="@dimen/small_padding"
         android:text="20"
         android:background="@drawable/rounded_corner"
         android:textColor="@color/white"
         android:textSize="18sp"
         android:gravity="center"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

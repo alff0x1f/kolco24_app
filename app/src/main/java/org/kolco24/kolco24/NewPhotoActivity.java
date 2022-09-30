@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -44,8 +45,8 @@ public class NewPhotoActivity extends AppCompatActivity {
         mPointNameEditView = findViewById(R.id.edit_word);
 
         Intent callingIntent = getIntent();
-        photoId = callingIntent.getIntExtra("id",0);
-        point_number = callingIntent.getIntExtra("point_number",0);
+        photoId = callingIntent.getIntExtra("id", 0);
+        point_number = callingIntent.getIntExtra("point_number", 0);
         photoUri = callingIntent.getStringExtra("photo_uri");
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
 
@@ -59,14 +60,25 @@ public class NewPhotoActivity extends AppCompatActivity {
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
             if (!TextUtils.isEmpty(mPointNameEditView.getText()) && photoUri != null) {
-                Photo photo = new Photo(
-                        "Team 1",
-                        Integer.parseInt(mPointNameEditView.getText().toString()),
-                        photoUri,
-                        photoThumbUri
-                );
-                PhotoViewModel a = new PhotoViewModel(getApplication());
-                a.insert(photo);
+                PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
+                if (photoId == 0) {
+                    // Create new photo
+                    photoViewModel.insert(new Photo(
+                            "Team 1",
+                            Integer.parseInt(mPointNameEditView.getText().toString()),
+                            photoUri,
+                            photoThumbUri
+                    ));
+                } else {
+                    // Update photo
+                    AsyncTask.execute(() -> {
+                        Photo photo = photoViewModel.getPhotoById(photoId);
+                        photo.point_number = Integer.parseInt(mPointNameEditView.getText().toString());
+                        photo.photo_url = photoUri;
+                        photo.photo_thumb_url = photoThumbUri;
+                        photoViewModel.update(photo);
+                    });
+                }
             }
             finish();
         });
@@ -106,8 +118,8 @@ public class NewPhotoActivity extends AppCompatActivity {
                 bitmap.recycle();
 
                 String imageName = generateImageName();
-                photoUri = save_image(bitmapMain, imageName+".jpg");
-                photoThumbUri = save_image(bitmapThumb, imageName+"_thumb.jpg");
+                photoUri = save_image(bitmapMain, imageName + ".jpg");
+                photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
             } catch (IOException e) {
                 e.printStackTrace();
                 return;
@@ -145,7 +157,7 @@ public class NewPhotoActivity extends AppCompatActivity {
         return new File(picDir, name);
     }
 
-    public String generateImageName(){
+    public String generateImageName() {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "img_" + timeStamp;
         return imageFileName;

@@ -39,7 +39,9 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
 
         @Override
         public boolean areContentsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
-            return oldItem.point_number == newItem.point_number;
+            return (oldItem.point_number == newItem.point_number &&
+                    oldItem.photo_thumb_url.equals(newItem.photo_thumb_url)
+            );
         }
     }
 }

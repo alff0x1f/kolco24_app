@@ -28,6 +28,12 @@ public class PhotoRepository {
         });
     }
 
+    public void update(Photo photo) {
+        PointsDatabase.databaseWriteExecutor.execute(() -> {
+            mPhotoDao.update(photo);
+        });
+    }
+
     public Photo getPhotoById(int id) {
         return mPhotoDao.getPhotoById(id);
     }
