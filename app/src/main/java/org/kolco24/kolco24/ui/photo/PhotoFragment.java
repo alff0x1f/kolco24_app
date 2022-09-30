@@ -1,7 +1,5 @@
 package org.kolco24.kolco24.ui.photo;
 
-import static android.app.Activity.RESULT_OK;
-
 import android.content.Intent;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -23,7 +21,7 @@ import org.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment {
     private FragmentPhotosBinding binding;
-    private PhotoPointViewModel mPhotoPointViewModel;
+    private PhotoViewModel mPhotoViewModel;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -43,8 +41,8 @@ public class PhotoFragment extends Fragment {
         recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 3));
         recyclerView.addItemDecoration(new GridSpacingItemDecoration(3, 8, false));
         // Get a new or existing ViewModel from the ViewModelProvider.
-        mPhotoPointViewModel = new ViewModelProvider(this).get(PhotoPointViewModel.class);
-        mPhotoPointViewModel.getAllPhotoPoints().observe(getViewLifecycleOwner(), adapter::submitList);
+        mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
+        mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {

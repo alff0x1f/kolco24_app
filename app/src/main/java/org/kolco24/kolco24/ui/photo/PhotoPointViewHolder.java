@@ -24,14 +24,16 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
         photoKP = itemView.findViewById(R.id.photoKP);
     }
 
-    public void bind(String point_number, Uri uri) {
-        textView.setText(point_number);
+    public void bind(int id, int point_number, Uri uri, Uri uriThumb) {
+        textView.setText(Integer.toString(point_number));
         photoKP.setImageURI(uri);
 
         itemView.setOnClickListener(v -> {
             Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+            intent.putExtra("id", id);
             intent.putExtra("point_number", point_number);
-            intent.putExtra("uri", uri.toString());
+            intent.putExtra("photo_uri", uri.toString());
+            intent.putExtra("photo_thumb_uri", uriThumb.toString());
             itemView.getContext().startActivity(intent);
         });
     }

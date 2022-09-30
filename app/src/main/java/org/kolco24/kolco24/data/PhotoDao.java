@@ -13,7 +13,7 @@ public interface PhotoDao {
     void insert(Photo photo);
 
     @Query("SELECT * FROM photo_points WHERE id = :id")
-    LiveData<Photo> getPhotoPointById(int id);
+    Photo getPhotoById(int id);
 
     @Query("SELECT * FROM photo_points ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();

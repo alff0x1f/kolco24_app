@@ -3,10 +3,8 @@ package org.kolco24.kolco24;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.ActivityNotFoundException;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,7 +17,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 
 import org.kolco24.kolco24.data.Photo;
-import org.kolco24.kolco24.ui.photo.PhotoPointViewModel;
+import org.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -33,7 +31,11 @@ public class NewPhotoActivity extends AppCompatActivity {
     public static final String PHOTO_URI = "org.kolco24.kolco24.newPhoto.photoUri";
     static final int REQUEST_IMAGE_GALLERY = 2;
     private EditText mPointNameEditView;
-    private String imageName;
+
+    private int photoId;
+    private int point_number;
+    private String photoUri;
+    private String photoThumbUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,26 +44,28 @@ public class NewPhotoActivity extends AppCompatActivity {
         mPointNameEditView = findViewById(R.id.edit_word);
 
         Intent callingIntent = getIntent();
-        String pointNumber = callingIntent.getStringExtra("point_number");
-        if (pointNumber != null) {
-            mPointNameEditView.setText(pointNumber);
-        }
-        imageName = callingIntent.getStringExtra("uri");
-        if (imageName != null) {
-            Uri imageUri = Uri.parse(imageName);
+        photoId = callingIntent.getIntExtra("id",0);
+        point_number = callingIntent.getIntExtra("point_number",0);
+        photoUri = callingIntent.getStringExtra("photo_uri");
+        photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
+
+        if (photoId != 0) {
+            mPointNameEditView.setText(Integer.toString(point_number));
+
             ImageView imageView = findViewById(R.id.imageView);
-            imageView.setImageURI(imageUri);
+            imageView.setImageURI(Uri.parse(photoUri));
         }
 
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
-            if (!TextUtils.isEmpty(mPointNameEditView.getText()) && imageName != null) {
+            if (!TextUtils.isEmpty(mPointNameEditView.getText()) && photoUri != null) {
                 Photo photo = new Photo(
                         "Team 1",
-                        imageName,
-                        mPointNameEditView.getText().toString()
+                        Integer.parseInt(mPointNameEditView.getText().toString()),
+                        photoUri,
+                        photoThumbUri
                 );
-                PhotoPointViewModel a = new PhotoPointViewModel(getApplication());
+                PhotoViewModel a = new PhotoViewModel(getApplication());
                 a.insert(photo);
             }
             finish();
@@ -92,34 +96,36 @@ public class NewPhotoActivity extends AppCompatActivity {
         if (requestCode == REQUEST_IMAGE_GALLERY && resultCode == RESULT_OK) {
             Uri imageUri = data.getData();
 
-            Bitmap bitmap = null;
+            Bitmap bitmapMain = null;
+            Bitmap bitmapThumb = null;
             try {
-                bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
+                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
                 bitmap = cropBitmap(bitmap);
-                bitmap = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            try {
-                imageName = save_image(bitmap);
+                bitmapMain = Bitmap.createScaledBitmap(bitmap, 1200, 1200, false);
+                bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
+                bitmap.recycle();
+
+                String imageName = generateImageName();
+                photoUri = save_image(bitmapMain, imageName+".jpg");
+                photoThumbUri = save_image(bitmapThumb, imageName+"_thumb.jpg");
             } catch (IOException e) {
                 e.printStackTrace();
                 return;
             }
 
             ImageView image = findViewById(R.id.imageView);
-            image.setImageURI(Uri.parse(imageName));
+            image.setImageURI(Uri.parse(photoUri));
 
             Button galleryButton = findViewById(R.id.button_gallery);
             galleryButton.setText("Выбрать другое фото");
         }
     }
 
-    public String save_image(Bitmap bitmap) throws IOException {
+    public String save_image(Bitmap bitmap, String name) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.JPEG, 50, bytes);
 
-        File photoFile = createImageFile();
+        File photoFile = createImageFile(name);
         photoFile.createNewFile();
 
         FileOutputStream fo = new FileOutputStream(photoFile);
@@ -131,14 +137,18 @@ public class NewPhotoActivity extends AppCompatActivity {
         return photoFile.toString();
     }
 
-    public File createImageFile() {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = "img_" + timeStamp + ".png";
+    public File createImageFile(String name) {
         File picDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         if (!picDir.exists()) {
             picDir.mkdirs();
         }
-        return new File(picDir, imageFileName);
+        return new File(picDir, name);
+    }
+
+    public String generateImageName(){
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "img_" + timeStamp;
+        return imageFileName;
     }
 
     public static Bitmap cropBitmap(Bitmap srcBmp) {

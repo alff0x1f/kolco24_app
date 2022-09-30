@@ -28,6 +28,10 @@ public class PhotoRepository {
         });
     }
 
+    public Photo getPhotoById(int id) {
+        return mPhotoDao.getPhotoById(id);
+    }
+
     public void deleteAll() {
         PointsDatabase.databaseWriteExecutor.execute(() -> {
             mPhotoDao.deleteAll();

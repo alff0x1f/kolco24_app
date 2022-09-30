@@ -23,7 +23,12 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
 
     public void onBindViewHolder(PhotoPointViewHolder holder, int position) {
         Photo current = getItem(position);
-        holder.bind(current.point_number, Uri.parse(current.photo_url));
+        holder.bind(
+                current.id,
+                current.point_number,
+                Uri.parse(current.photo_url),
+                Uri.parse(current.photo_thumb_url)
+        );
     }
 
     static class PhotoPointDiff extends DiffUtil.ItemCallback<Photo> {
@@ -34,7 +39,7 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
 
         @Override
         public boolean areContentsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
-            return oldItem.point_number.equals(newItem.point_number);
+            return oldItem.point_number == newItem.point_number;
         }
     }
 }
