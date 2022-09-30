@@ -53,7 +53,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         if (photoId != 0) {
             Button galleryButton = findViewById(R.id.button_gallery);
-            galleryButton.setText("Выбрать другое фото");
+            galleryButton.setVisibility(View.GONE);
 
             Locale locale = getResources().getConfiguration().locale;
             mPointNameEditView.setText(String.format(locale, "%d", point_number));
@@ -109,6 +109,15 @@ public class NewPhotoActivity extends AppCompatActivity {
                 dispatchTakePictureIntent();
             }
         });
+
+        //editImage
+        final ImageView editIcon = findViewById(R.id.edit_icon);
+        editIcon.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dispatchTakePictureIntent();
+            }
+        });
     }
 
     private void dispatchTakePictureIntent() {
@@ -147,7 +156,7 @@ public class NewPhotoActivity extends AppCompatActivity {
             image.setImageURI(Uri.parse(photoUri));
 
             Button galleryButton = findViewById(R.id.button_gallery);
-            galleryButton.setText("Выбрать другое фото");
+            galleryButton.setVisibility(View.GONE);
         }
     }
 
