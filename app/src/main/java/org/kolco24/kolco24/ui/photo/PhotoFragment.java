@@ -48,7 +48,7 @@ public class PhotoFragment extends Fragment {
         mPhotoPointViewModel.getAllPhotoPoints().observe(getViewLifecycleOwner(), adapter::submitList);
         //fab
         FloatingActionButton fab = binding.fab;
-        fab.setOnClickListener( view -> {
+        fab.setOnClickListener(view -> {
             Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
             startActivityForResult(intent, NEW_PHOTO_ACTIVITY_REQUEST_CODE);
 //            NavHostFragment.findNavController(this).navigate(R.id.action_navigation_taken_points_to_navigation_new_photo);
@@ -72,7 +72,6 @@ public class PhotoFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        mPhotoPointViewModel.deleteAll();
         super.onDestroyView();
         binding = null;
     }
