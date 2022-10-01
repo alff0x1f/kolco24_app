@@ -1,4 +1,4 @@
-package org.kolco24.kolco24;
+package ru.kolco24.kolco24;
 
 import org.junit.Test;
 

@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.legends;
+package ru.kolco24.kolco24.ui.legends;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -7,8 +7,8 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.kolco24.kolco24.R;
-import org.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.R;
+import ru.kolco24.kolco24.data.Point;
 
 public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;

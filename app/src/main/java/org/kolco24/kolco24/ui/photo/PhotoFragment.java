@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.photo;
+package ru.kolco24.kolco24.ui.photo;
 
 import android.content.Intent;
 import android.graphics.Rect;
@@ -17,8 +17,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
-import org.kolco24.kolco24.NewPhotoActivity;
-import org.kolco24.kolco24.databinding.FragmentPhotosBinding;
+import ru.kolco24.kolco24.NewPhotoActivity;
+import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment {
     private FragmentPhotosBinding binding;

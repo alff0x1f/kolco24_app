@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.data;
+package ru.kolco24.kolco24.data;
 
 import androidx.lifecycle.LiveData;
 import androidx.room.Dao;

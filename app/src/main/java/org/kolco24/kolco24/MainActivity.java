@@ -1,4 +1,4 @@
-package org.kolco24.kolco24;
+package ru.kolco24.kolco24;
 
 import android.os.Bundle;
 
@@ -10,7 +10,7 @@ import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
-import org.kolco24.kolco24.databinding.ActivityMainBinding;
+import ru.kolco24.kolco24.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
 

@@ -1,12 +1,12 @@
-package org.kolco24.kolco24.ui.photo;
+package ru.kolco24.kolco24.ui.photo;
 
 import android.app.Application;
 
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 
-import org.kolco24.kolco24.data.Photo;
-import org.kolco24.kolco24.data.PhotoRepository;
+import ru.kolco24.kolco24.data.Photo;
+import ru.kolco24.kolco24.data.PhotoRepository;
 
 import java.util.List;
 

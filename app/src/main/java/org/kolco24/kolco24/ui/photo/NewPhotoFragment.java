@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.photo;
+package ru.kolco24.kolco24.ui.photo;
 
 import static android.app.Activity.RESULT_OK;
 
@@ -13,7 +13,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import org.kolco24.kolco24.databinding.FragmentNewPhotoBinding;
+import ru.kolco24.kolco24.databinding.FragmentNewPhotoBinding;
 
 /**
  * A simple {@link Fragment} subclass.

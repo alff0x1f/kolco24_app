@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.legends;
+package ru.kolco24.kolco24.ui.legends;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;

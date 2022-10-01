@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.data;
+package ru.kolco24.kolco24.data;
 
 import android.app.Application;
 

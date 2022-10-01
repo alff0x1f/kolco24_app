@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.legends;
+package ru.kolco24.kolco24.ui.legends;
 
 import android.view.ViewGroup;
 
@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 
-import org.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.data.Point;
 
 public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
 

@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.photo;
+package ru.kolco24.kolco24.ui.photo;
 
 import android.net.Uri;
 import android.view.ViewGroup;
@@ -7,7 +7,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 
-import org.kolco24.kolco24.data.Photo;
+import ru.kolco24.kolco24.data.Photo;
 
 
 public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHolder> {

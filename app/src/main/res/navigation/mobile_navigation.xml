@@ -7,13 +7,13 @@
 
     <fragment
         android:id="@+id/navigation_home"
-        android:name="org.kolco24.kolco24.ui.home.HomeFragment"
+        android:name="ru.kolco24.kolco24.ui.home.HomeFragment"
         android:label="@string/title_home"
         tools:layout="@layout/fragment_home" />
 
     <fragment
         android:id="@+id/navigation_taken_points"
-        android:name="org.kolco24.kolco24.ui.photo.PhotoFragment"
+        android:name="ru.kolco24.kolco24.ui.photo.PhotoFragment"
         android:label="@string/title_dashboard"
         tools:layout="@layout/fragment_photos" >
         <action
@@ -23,13 +23,13 @@
 
     <fragment
         android:id="@+id/navigation_legends"
-        android:name="org.kolco24.kolco24.ui.legends.LegendsFragment"
+        android:name="ru.kolco24.kolco24.ui.legends.LegendsFragment"
         android:label="@string/title_legends"
         tools:layout="@layout/fragment_legends" />
 
     <fragment
         android:id="@+id/navigation_new_photo"
-        android:name="org.kolco24.kolco24.ui.photo.NewPhotoFragment"
+        android:name="ru.kolco24.kolco24.ui.photo.NewPhotoFragment"
         android:label="Добавить КП"
         tools:layout="@layout/fragment_new_photo" >
         <action

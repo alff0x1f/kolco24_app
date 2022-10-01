@@ -1,4 +1,4 @@
-package org.kolco24.kolco24;
+package ru.kolco24.kolco24;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -18,8 +18,8 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
-import org.kolco24.kolco24.data.Photo;
-import org.kolco24.kolco24.ui.photo.PhotoViewModel;
+import ru.kolco24.kolco24.data.Photo;
+import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -30,8 +30,8 @@ import java.util.Date;
 import java.util.Locale;
 
 public class NewPhotoActivity extends AppCompatActivity {
-    public static final String POINT_NAME = "org.kolco24.kolco24.newPhoto.pointName";
-    public static final String PHOTO_URI = "org.kolco24.kolco24.newPhoto.photoUri";
+    public static final String POINT_NAME = "ru.kolco24.kolco24.newPhoto.pointName";
+    public static final String PHOTO_URI = "ru.kolco24.kolco24.newPhoto.photoUri";
     static final int REQUEST_IMAGE_GALLERY = 2;
     private EditText mPointNameEditView;
 

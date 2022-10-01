@@ -1,12 +1,12 @@
-package org.kolco24.kolco24.ui.legends;
+package ru.kolco24.kolco24.ui.legends;
 
 import android.app.Application;
 
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 
-import org.kolco24.kolco24.data.Point;
-import org.kolco24.kolco24.data.PointRepository;
+import ru.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.data.PointRepository;
 
 import java.util.List;
 

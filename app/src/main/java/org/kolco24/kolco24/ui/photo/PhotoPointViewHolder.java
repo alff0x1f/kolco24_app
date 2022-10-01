@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.photo;
+package ru.kolco24.kolco24.ui.photo;
 
 import android.content.Intent;
 import android.net.Uri;
@@ -11,8 +11,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.kolco24.kolco24.NewPhotoActivity;
-import org.kolco24.kolco24.R;
+import ru.kolco24.kolco24.NewPhotoActivity;
+import ru.kolco24.kolco24.R;
 
 public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;

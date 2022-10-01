@@ -1,4 +1,4 @@
-package org.kolco24.kolco24.ui.legends;
+package ru.kolco24.kolco24.ui.legends;
 
 import android.content.Context;
 import android.os.Bundle;
@@ -18,8 +18,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.kolco24.kolco24.data.Point;
-import org.kolco24.kolco24.databinding.FragmentLegendsBinding;
+import ru.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
 import java.io.IOException;
 
