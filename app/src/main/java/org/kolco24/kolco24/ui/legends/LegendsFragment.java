@@ -74,7 +74,7 @@ public class LegendsFragment extends Fragment {
 
     public void downloadPoints() {
         Request request = new Request.Builder()
-                .url("http://192.168.88.148:8000/api/v1/points")
+                .url("https://kolco24.ru/api/v1/points")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
@@ -82,9 +82,7 @@ public class LegendsFragment extends Fragment {
             public void onFailure(Call call, IOException e) {
                 System.out.println("Failure");
                 e.printStackTrace();
-                if (binding != null) {
-                    binding.swipeToRefresh.setRefreshing(false);
-                }
+                offSwipeRefreshLayout();
                 toast("Ошибка обновления списка, нет связи с сервером");
             }
 
@@ -92,8 +90,7 @@ public class LegendsFragment extends Fragment {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     // turn of loader
-                    SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
-                    swipeRefreshLayout.setRefreshing(false);
+                    offSwipeRefreshLayout();
 
                     if (!response.isSuccessful()) {
                         toast("Ошибка " + response.code());
@@ -165,6 +162,14 @@ public class LegendsFragment extends Fragment {
                         toast.show();
                     }
                 });
+            }
+
+            public void offSwipeRefreshLayout() {
+                if (binding == null) {
+                    return;
+                }
+                SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
+                swipeRefreshLayout.setRefreshing(false);
             }
         });
     }
