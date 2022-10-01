@@ -24,7 +24,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
     }
 
     public void bind(Point point) {
-        textView.setText(point.mName);
+        textView.setText(String.format("%02d", point.mNumber));
         textDescription.setText(point.mDescription);
         textCost.setText(String.valueOf(point.mCost));
     }

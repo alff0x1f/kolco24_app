@@ -16,7 +16,7 @@ public interface PointDao {
     @Query("SELECT * FROM points WHERE id = :id")
     LiveData<Point> getPointById(int id);
 
-    @Query("SELECT * FROM points ORDER BY name")
+    @Query("SELECT * FROM points ORDER BY number")
     LiveData<List<Point>> getAllPoints();
 
     @Query("DELETE FROM points WHERE id = :id")

@@ -115,7 +115,7 @@ public class LegendsFragment extends Fragment {
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject point = jObj.getJSONObject(i);
                             Point p = new Point(
-                                    point.getString("number"),
+                                    point.getInt("number"),
                                     point.getString("description"),
                                     point.getInt("cost")
                             );

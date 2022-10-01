@@ -10,9 +10,8 @@ public class Point {
     @PrimaryKey(autoGenerate = true)
     public int id;
 
-    @NonNull
-    @ColumnInfo(name = "name")
-    public String mName;
+    @ColumnInfo(name = "number")
+    public int mNumber;
 
     @NonNull
     @ColumnInfo(name = "description")
@@ -22,8 +21,8 @@ public class Point {
     public int mCost;
 
     /*__init__*/
-    public Point(@NonNull String name, @NonNull String description, int cost) {
-        this.mName = name;
+    public Point(int number, @NonNull String description, int cost) {
+        this.mNumber = number;
         this.mDescription = description;
         this.mCost = cost;
     }
