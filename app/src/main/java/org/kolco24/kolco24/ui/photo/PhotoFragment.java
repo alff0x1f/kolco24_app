@@ -73,7 +73,7 @@ public class PhotoFragment extends Fragment {
 
             final TextView textView1 = binding.textDashboard2;
             int sum = mPhotoViewModel.getCostSum();
-            textView1.post(() -> textView1.setText(String.format("Сумма КП: %d", sum)));
+            textView1.post(() -> textView1.setText(String.format("Сумма баллов: %d", sum)));
         });
     }
 
