@@ -16,6 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import org.kolco24.kolco24.data.Photo;
 import org.kolco24.kolco24.ui.photo.PhotoViewModel;
@@ -64,6 +65,14 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
+            if (TextUtils.isEmpty(mPointNameEditView.getText())){
+                Toast.makeText(getApplicationContext(), "Укажите номер КП", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (photoUri == null) {
+                Toast.makeText(getApplicationContext(), "Выберите фото", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (!TextUtils.isEmpty(mPointNameEditView.getText()) && photoUri != null) {
                 PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
                 if (photoId == 0) {
@@ -91,6 +100,13 @@ public class NewPhotoActivity extends AppCompatActivity {
                         if (isChanged) {
                             photo.status = Photo.NEW;
                             photoViewModel.update(photo);
+                        } else {
+                            runOnUiThread(new Runnable() {
+                                public void run() {
+                                    Toast.makeText(getApplicationContext(), "Изменений не было", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+
                         }
                     });
                 }
