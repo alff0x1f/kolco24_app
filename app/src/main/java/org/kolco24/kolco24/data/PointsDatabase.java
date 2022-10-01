@@ -52,21 +52,6 @@ public abstract class PointsDatabase extends RoomDatabase {
                 PointDao photo_dao = INSTANCE.pointDao();
                 photo_dao.deleteAll();
 
-                Point point = new Point(1, "Описание", 1);
-                photo_dao.insert(point);
-                point = new Point(2, "Описание 2", 2);
-                photo_dao.insert(point);
-                point = new Point(3, "Описание 3", 3);
-                photo_dao.insert(point);
-                for (int i = 4; i < 10; i++) {
-                    point = new Point(i, "Описание " + i, i);
-                    photo_dao.insert(point);
-                }
-                for (int i = 10; i < 50; i++) {
-                    point = new Point(i, "Тестовое дерево в лесу у ручья " + i, i);
-                    photo_dao.insert(point);
-                }
-
                 // Photo Point
                 PhotoDao photoDao = INSTANCE.photoDao();
                 photoDao.deleteAll();
