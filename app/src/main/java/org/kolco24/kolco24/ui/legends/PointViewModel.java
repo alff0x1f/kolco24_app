@@ -26,8 +26,18 @@ public class PointViewModel extends AndroidViewModel {
         return mAllPoints;
     }
 
+    public Point getPointById(int id) {
+        return mRepository.getPointById(id);
+    }
+    public Point getPointByNumber(int number) {
+        return mRepository.getPointByNumber(number);
+    }
+
     public void insert(Point point) {
         mRepository.insert(point);
+    }
+    public void update(Point point) {
+        mRepository.update(point);
     }
     public void deleteAll() {
         mRepository.deleteAll();

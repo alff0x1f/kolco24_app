@@ -20,11 +20,24 @@ public class PointRepository {
         return mAllPoints;
     }
 
+    public Point getPointById(int id) {
+        return mPointDao.getPointById(id);
+    }
+    public Point getPointByNumber(int number) {
+        return mPointDao.getPointByNumber(number);
+    }
+
     // You must call this on a non-UI thread or your app will throw an exception. Room ensures
     // that you're not doing any long running operations on the main thread, blocking the UI.
     public void insert(Point point) {
         PointsDatabase.databaseWriteExecutor.execute(() -> {
             mPointDao.insert(point);
+        });
+    }
+
+    public void update(Point point) {
+        PointsDatabase.databaseWriteExecutor.execute(() -> {
+            mPointDao.update(point);
         });
     }
 

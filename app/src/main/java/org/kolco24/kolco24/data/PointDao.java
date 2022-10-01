@@ -4,6 +4,7 @@ import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.Query;
+import androidx.room.Update;
 
 import java.util.List;
 
@@ -13,8 +14,14 @@ public interface PointDao {
     @Insert
     void insert(Point point);
 
+    @Update
+    void update(Point point);
+
     @Query("SELECT * FROM points WHERE id = :id")
-    LiveData<Point> getPointById(int id);
+    Point getPointById(int id);
+
+    @Query("SELECT * FROM points WHERE number = :number")
+    Point getPointByNumber(int number);
 
     @Query("SELECT * FROM points ORDER BY number")
     LiveData<List<Point>> getAllPoints();

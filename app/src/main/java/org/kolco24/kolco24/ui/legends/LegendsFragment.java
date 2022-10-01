@@ -74,7 +74,7 @@ public class LegendsFragment extends Fragment {
 
     public void downloadPoints() {
         Request request = new Request.Builder()
-                .url("http://192.168.88.164:8000/api/v1/points")
+                .url("http://192.168.88.148:8000/api/v1/points")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
@@ -107,21 +107,40 @@ public class LegendsFragment extends Fragment {
                     }
 
                     // insert in DB
-                    mPointViewModel.deleteAll();
                     String legend = responseBody.string();
 
                     try {
                         JSONArray jObj = new JSONArray(legend);
+                        Boolean isUpdated = false;
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject point = jObj.getJSONObject(i);
-                            Point p = new Point(
-                                    point.getInt("number"),
-                                    point.getString("description"),
-                                    point.getInt("cost")
-                            );
-                            mPointViewModel.insert(p);
+
+                            int number = point.getInt("number");
+                            String description = point.getString("description");
+                            int cost = point.getInt("cost");
+
+                            Point existPoint = mPointViewModel.getPointByNumber(number);
+                            if (existPoint == null) {
+                                mPointViewModel.insert(new Point(
+                                        number,
+                                        description,
+                                        cost
+                                ));
+                                isUpdated = true;
+                            } else {
+                                if (!existPoint.mDescription.equals(description) ||
+                                        existPoint.mCost != cost) {
+                                    existPoint.mDescription = description;
+                                    existPoint.mCost = cost;
+                                    mPointViewModel.update(existPoint);
+                                    isUpdated = true;
+                                }
+                            }
+
                         }
-                        toast("Список обновлен");
+                        if (isUpdated) {
+                            toast("Список обновлен");
+                        }
                     } catch (JSONException e) {
                         toast("Ошибка декодирования JSON");
                         e.printStackTrace();
