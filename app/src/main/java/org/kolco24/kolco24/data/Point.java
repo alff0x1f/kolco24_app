@@ -17,7 +17,7 @@ public class Point {
     @ColumnInfo(name = "description")
     public String mDescription;
 
-    @ColumnInfo(name = "image")
+    @ColumnInfo(name = "cost")
     public int mCost;
 
     /*__init__*/

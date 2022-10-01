@@ -29,6 +29,10 @@ public class PhotoViewModel extends AndroidViewModel {
         return mPhotoRepository.getPhotoCount();
     }
 
+    int getCostSum() {
+        return mPhotoRepository.getCostSum();
+    }
+
     public Photo getPhotoById(int id) {
         return mPhotoRepository.getPhotoById(id);
     }

@@ -32,7 +32,7 @@ public class PhotoFragment extends Fragment {
         binding = FragmentPhotosBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-        final TextView textView = binding.textDashboard;
+//        final TextView textView = binding.textDashboard;
 //        dashboardViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
 
         // recycle view
@@ -44,6 +44,8 @@ public class PhotoFragment extends Fragment {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
+        //counters
+        updateCounters();
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -59,11 +61,19 @@ public class PhotoFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        updateCounters();
+    }
+
+    public void updateCounters() {
         // update photo counter
         AsyncTask.execute(() -> {
             final TextView textView = binding.textDashboard;
             int count = mPhotoViewModel.getPhotoCount();
             textView.post(() -> textView.setText(String.format("Количество КП: %d", count)));
+
+            final TextView textView1 = binding.textDashboard2;
+            int sum = mPhotoViewModel.getCostSum();
+            textView1.post(() -> textView1.setText(String.format("Сумма КП: %d", sum)));
         });
     }
 

@@ -25,6 +25,12 @@ public interface PhotoDao {
     @Query("SELECT count(DISTINCT point_number) FROM photo_points")
     int getPhotoCount();
 
+    @Query("SELECT sum(points.cost) FROM points " +
+            "LEFT JOIN (select point_number from photo_points group by point_number) photo " +
+            "ON points.number = photo.point_number "+
+            "WHERE photo.point_number IS NOT NULL")
+    int getCostSum();
+
     @Query("DELETE FROM photo_points WHERE id = :id")
     void deletePhotoPointById(int id);
 
