@@ -16,8 +16,9 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
         super(diffCallback);
     }
 
+    @NonNull
     @Override
-    public PhotoPointViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+    public PhotoPointViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         return PhotoPointViewHolder.create(parent);
     }
 
