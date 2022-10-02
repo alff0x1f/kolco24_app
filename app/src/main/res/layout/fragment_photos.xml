@@ -38,7 +38,7 @@
                 android:layout_margin="@dimen/small_padding"
                 android:fontFamily="sans-serif-black"
                 android:text="@string/result"
-                android:textColor="@color/black"
+                android:textColor="@color/textContrast"
                 android:textSize="24sp" />
 
             <TableRow
@@ -47,7 +47,7 @@
                 android:layout_height="1dp"
                 android:layout_marginLeft="@dimen/small_padding"
                 android:layout_marginRight="@dimen/small_padding"
-                android:background="#eee" />
+                android:background="@color/divider" />
 
             <TextView
                 android:id="@+id/text_dashboard"
@@ -55,7 +55,6 @@
                 android:layout_height="wrap_content"
                 android:layout_margin="@dimen/small_padding"
                 android:text="Количество КП: 5"
-                android:textColor="@color/black"
                 android:textSize="16sp" />
 
             <TextView
@@ -64,7 +63,6 @@
                 android:layout_height="wrap_content"
                 android:layout_margin="@dimen/small_padding"
                 android:text="Баллы: 5"
-                android:textColor="@color/black"
                 android:textSize="16sp" />
 
         </LinearLayout>

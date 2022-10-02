@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="divider">#333333</color>
+    <color name="textContrast">#F5F5F5</color>
+    <color name="pointIconPlaceholder">#444444</color>
+    <color name="pointIconPlaceholderText">#111111</color>
+</resources>

@@ -8,4 +8,21 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="buttonLabel">#FFFFFF</color>
+
+    <color name="divider">#EEEEEE</color>
+    <color name="textContrast">#111111</color>
+    <color name="pointIconPlaceholder">#DDDDDD</color>
+    <color name="pointIconPlaceholderText">#FFFFFF</color>
+
+
+    <color name="level1">#AEEA00</color>
+    <color name="level2">#64DD17</color>
+    <color name="level3">#FFD600</color>
+    <color name="level4">#FF6D00</color>
+    <color name="level5">#E86523</color>
+    <color name="level6">#B41C1C</color>
+    <color name="level7">#8F1D1E</color>
+    <color name="level8">#6B1F20</color>
+    <color name="level9">#462022</color>
+    <color name="level10">#212224</color>
 </resources>
