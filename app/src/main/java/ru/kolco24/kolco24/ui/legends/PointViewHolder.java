@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.legends;
 
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
@@ -10,6 +11,7 @@ import android.widget.TextView;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
+import ru.kolco24.kolco24.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Point;
 
@@ -60,6 +62,14 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         }
         drawable.mutate().setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_ATOP);
         textCost.setBackground(drawable);
+
+        // on click listener
+        itemView.setOnClickListener(v -> {
+            itemView.setBackgroundColor(2);
+            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+            intent.putExtra("point_number", point.mNumber);
+            itemView.getContext().startActivity(intent);
+        });
     }
 
     /**

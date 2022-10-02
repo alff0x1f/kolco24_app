@@ -52,12 +52,13 @@ public class NewPhotoActivity extends AppCompatActivity {
         photoUri = callingIntent.getStringExtra("photo_uri");
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
 
+        if (point_number != 0) {
+            Locale locale = getResources().getConfiguration().locale;
+            mPointNameEditView.setText(String.format(locale, "%d", point_number));
+        }
         if (photoId != 0) {
             Button galleryButton = findViewById(R.id.button_gallery);
             galleryButton.setVisibility(View.GONE);
-
-            Locale locale = getResources().getConfiguration().locale;
-            mPointNameEditView.setText(String.format(locale, "%d", point_number));
 
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
@@ -65,7 +66,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
-            if (TextUtils.isEmpty(mPointNameEditView.getText())){
+            if (TextUtils.isEmpty(mPointNameEditView.getText())) {
                 Toast.makeText(getApplicationContext(), "Укажите номер КП", Toast.LENGTH_SHORT).show();
                 return;
             }
