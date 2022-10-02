@@ -36,7 +36,6 @@ public class NewPhotoActivity extends AppCompatActivity {
     private EditText mPointNameEditView;
 
     private int photoId;
-    private int point_number;
     private String photoUri;
     private String photoThumbUri;
 
@@ -48,7 +47,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         Intent callingIntent = getIntent();
         photoId = callingIntent.getIntExtra("id", 0);
-        point_number = callingIntent.getIntExtra("point_number", 0);
+        int point_number = callingIntent.getIntExtra("point_number", 0);
         photoUri = callingIntent.getStringExtra("photo_uri");
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
 
@@ -88,7 +87,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                     // Update photo
                     AsyncTask.execute(() -> {
                         Photo photo = photoViewModel.getPhotoById(photoId);
-                        Boolean isChanged = false;
+                        boolean isChanged = false;
                         if (photo.point_number != Integer.parseInt(mPointNameEditView.getText().toString())) {
                             photo.point_number = Integer.parseInt(mPointNameEditView.getText().toString());
                             isChanged = true;
@@ -102,11 +101,11 @@ public class NewPhotoActivity extends AppCompatActivity {
                             photo.status = Photo.NEW;
                             photoViewModel.update(photo);
                         } else {
-                            runOnUiThread(new Runnable() {
-                                public void run() {
-                                    Toast.makeText(getApplicationContext(), "Изменений не было", Toast.LENGTH_SHORT).show();
-                                }
-                            });
+                            runOnUiThread(() -> Toast.makeText(
+                                    getApplicationContext(),
+                                    "Изменений не было",
+                                    Toast.LENGTH_SHORT
+                            ).show());
 
                         }
                     });
@@ -120,24 +119,14 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         //gallery
         final Button galleryButton = findViewById(R.id.button_gallery);
-        galleryButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                dispatchTakePictureIntent();
-            }
-        });
+        galleryButton.setOnClickListener(this::openGallery);
 
         //editImage
         final ImageView editIcon = findViewById(R.id.edit_icon);
-        editIcon.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                dispatchTakePictureIntent();
-            }
-        });
+        editIcon.setOnClickListener(this::openGallery);
     }
 
-    private void dispatchTakePictureIntent() {
+    private void openGallery(View v) {
         Intent takePictureIntent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.INTERNAL_CONTENT_URI);
         try {
             startActivityForResult(takePictureIntent, REQUEST_IMAGE_GALLERY);
@@ -203,8 +192,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
     public String generateImageName() {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = "img_" + timeStamp;
-        return imageFileName;
+        return "img_" + timeStamp;
     }
 
     public static Bitmap cropBitmap(Bitmap srcBmp) {
