@@ -65,6 +65,21 @@
                 android:text="Баллы: 5"
                 android:textSize="16sp" />
 
+            <TableRow
+                android:id="@+id/hr2"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginLeft="@dimen/small_padding"
+                android:layout_marginRight="@dimen/small_padding"
+                android:background="@color/divider" />
+
+            <Button
+                android:id="@+id/button_qr"
+                android:layout_margin="@dimen/small_padding"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="QR"/>
+
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 

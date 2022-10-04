@@ -1,13 +1,21 @@
 package ru.kolco24.kolco24.ui.photo;
 
+import static android.app.Activity.RESULT_CANCELED;
+import static android.app.Activity.RESULT_OK;
+import static android.content.ContentValues.TAG;
+
 import android.content.Intent;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -17,6 +25,18 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.UnsupportedEncodingException;
+import java.net.UnknownHostException;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import ru.kolco24.kolco24.NewPhotoActivity;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
@@ -46,6 +66,23 @@ public class PhotoFragment extends Fragment {
         mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
         //counters
         updateCounters();
+        //
+        Button buttonSendPhotos = binding.buttonQr;
+        buttonSendPhotos.setOnClickListener(v -> {
+            try {
+
+                Intent intent = new Intent("com.google.zxing.client.android.SCAN");
+                intent.putExtra("SCAN_MODE", "QR_CODE_MODE"); // "PRODUCT_MODE for bar codes
+
+                startActivityForResult(intent, 0);
+
+            } catch (Exception e) {
+                Uri marketUri = Uri.parse("market://details?id=com.srowen.bs.android");
+                Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
+                startActivity(marketIntent);
+
+            }
+        });
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -55,6 +92,21 @@ public class PhotoFragment extends Fragment {
         });
 
         return root;
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 0) {
+            if (resultCode == RESULT_OK) {
+                String contents = data.getStringExtra("SCAN_RESULT");
+                Toast toast = Toast.makeText(getContext(), contents, Toast.LENGTH_LONG);
+                toast.show();
+            }
+            if(resultCode == RESULT_CANCELED){
+                //handle cancel
+            }
+        }
     }
 
     // on update
@@ -110,6 +162,41 @@ public class PhotoFragment extends Fragment {
                 }
             }
         }
+    }
+
+    public static JSONObject uploadImage(File file) {
+
+        try {
+
+            final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+
+            RequestBody body = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                    .addFormDataPart("userid", "8457851245")
+                    .addFormDataPart(
+                            "userfile",
+                            "profile.png",
+                            RequestBody.create(file, MEDIA_TYPE_PNG)
+                    )
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url("url")
+                    .post(body)
+                    .build();
+
+            OkHttpClient client = new OkHttpClient();
+            Response response = client.newCall(request).execute();
+
+            Log.d("response", "uploadImage:" + response.body().string());
+
+            return new JSONObject(response.body().string());
+
+        } catch (UnknownHostException | UnsupportedEncodingException e) {
+            Log.e(TAG, "Error: " + e.getLocalizedMessage());
+        } catch (Exception e) {
+            Log.e(TAG, "Other Error: " + e.getLocalizedMessage());
+        }
+        return null;
     }
 
     @Override
