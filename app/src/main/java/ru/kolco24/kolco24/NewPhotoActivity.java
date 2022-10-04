@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
@@ -32,8 +33,10 @@ import java.util.Locale;
 public class NewPhotoActivity extends AppCompatActivity {
     public static final String POINT_NAME = "ru.kolco24.kolco24.newPhoto.pointName";
     public static final String PHOTO_URI = "ru.kolco24.kolco24.newPhoto.photoUri";
-    static final int REQUEST_IMAGE_GALLERY = 2;
+    static final int REQUEST_IMAGE_GALLERY = 1;
+    static final int REQUEST_IMAGE_CAPTURE = 2;
     private EditText mPointNameEditView;
+    private Uri cameraPhotoUri;
 
     private int photoId;
     private String photoUri;
@@ -121,6 +124,10 @@ public class NewPhotoActivity extends AppCompatActivity {
         final Button galleryButton = findViewById(R.id.button_gallery);
         galleryButton.setOnClickListener(this::openGallery);
 
+        //camera
+        final Button cameraButton = findViewById(R.id.button_camera);
+        cameraButton.setOnClickListener(this::openCamera);
+
         //editImage
         final ImageView editIcon = findViewById(R.id.edit_icon);
         editIcon.setOnClickListener(this::openGallery);
@@ -135,24 +142,40 @@ public class NewPhotoActivity extends AppCompatActivity {
         }
     }
 
+    private void openCamera(View v) {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            String imageName = generateImageName();
+            File photoFile = createImageFile(imageName + "_orig.jpg");
+            if (photoFile != null) {
+                cameraPhotoUri = FileProvider.getUriForFile(this,
+                        "ru.kolco24.kolco24.fileprovider",
+                        photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri);
+                startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+            }
+
+        }
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_IMAGE_GALLERY && resultCode == RESULT_OK) {
             Uri imageUri = data.getData();
 
-            Bitmap bitmapMain = null;
-            Bitmap bitmapThumb = null;
             try {
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
                 bitmap = cropBitmap(bitmap);
-                bitmapMain = Bitmap.createScaledBitmap(bitmap, 1200, 1200, false);
-                bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
+                Bitmap bitmapMain = Bitmap.createScaledBitmap(bitmap, 1200, 1200, false);
+                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 150, 150, false);
                 bitmap.recycle();
 
                 String imageName = generateImageName();
                 photoUri = save_image(bitmapMain, imageName + ".jpg");
+                bitmapMain.recycle();
                 photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
+                bitmapThumb.recycle();
             } catch (IOException e) {
                 e.printStackTrace();
                 return;
@@ -163,6 +186,28 @@ public class NewPhotoActivity extends AppCompatActivity {
 
             Button galleryButton = findViewById(R.id.button_gallery);
             galleryButton.setVisibility(View.GONE);
+        }
+
+        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
+            try {
+                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), cameraPhotoUri);
+                bitmap = cropBitmap(bitmap);
+                Bitmap bitmapMain = Bitmap.createScaledBitmap(bitmap, 1200, 1200, false);
+                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 150, 150, false);
+                bitmap.recycle();
+
+                String imageName = generateImageName();
+                photoUri = save_image(bitmapMain, imageName + ".jpg");
+                bitmapMain.recycle();
+                photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
+                bitmapThumb.recycle();
+            } catch (IOException e) {
+                e.printStackTrace();
+                return;
+            }
+
+            ImageView image = findViewById(R.id.imageView);
+            image.setImageURI(Uri.parse(photoUri));
         }
     }
 
@@ -191,7 +236,10 @@ public class NewPhotoActivity extends AppCompatActivity {
     }
 
     public String generateImageName() {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String timeStamp = new SimpleDateFormat(
+                "yyyyMMdd_HHmmss",
+                Locale.US
+        ).format(new Date());
         return "img_" + timeStamp;
     }
 
