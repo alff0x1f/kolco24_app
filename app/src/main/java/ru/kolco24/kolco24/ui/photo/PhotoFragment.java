@@ -38,6 +38,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import ru.kolco24.kolco24.NewPhotoActivity;
+import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment {
@@ -66,9 +67,8 @@ public class PhotoFragment extends Fragment {
         mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
         //counters
         updateCounters();
-        //
-        Button buttonSendPhotos = binding.buttonQr;
-        buttonSendPhotos.setOnClickListener(v -> {
+        // QR code
+        binding.buttonQr.setOnClickListener(v -> {
             try {
 
                 Intent intent = new Intent("com.google.zxing.client.android.SCAN");
@@ -82,6 +82,29 @@ public class PhotoFragment extends Fragment {
                 startActivity(marketIntent);
 
             }
+        });
+        // send photos
+        binding.buttonSendPhotos.setOnClickListener(v -> {
+            AsyncTask.execute(() -> {
+                try {
+                    Photo photo = mPhotoViewModel.getPhotoById(1);
+                    OkHttpClient client = new OkHttpClient();
+                    File file = new File(photo.photo_url);
+                    RequestBody requestBody = new MultipartBody.Builder()
+                            .setType(MultipartBody.FORM)
+                            .addFormDataPart("file", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
+                            .addFormDataPart("team_id", "1")
+                            .build();
+                    Request request = new Request.Builder()
+                            .url("http://192.168.88.164:8000/api/v1/upload_photo")
+                            .post(requestBody)
+                            .build();
+                    Response response = client.newCall(request).execute();
+                    Log.d(TAG, "onCreateView: " + response.body().string());
+                } catch (Exception e) {
+                    Log.d(TAG, "onCreateView: " + e.getMessage());
+                }
+            });
         });
         //fab
         FloatingActionButton fab = binding.fab;
@@ -168,7 +191,7 @@ public class PhotoFragment extends Fragment {
 
         try {
 
-            final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+            final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/jpg");
 
             RequestBody body = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("userid", "8457851245")
