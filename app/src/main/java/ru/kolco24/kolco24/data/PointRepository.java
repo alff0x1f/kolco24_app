@@ -8,7 +8,7 @@ import java.util.List;
 
 public class PointRepository {
     private PointDao mPointDao;
-    private LiveData<List<Point>> mAllPoints;
+    private LiveData<List<Point.PointExt>> mAllPoints;
 
     public PointRepository(Application application) {
         PointsDatabase db = PointsDatabase.getDatabase(application);
@@ -16,7 +16,7 @@ public class PointRepository {
         mAllPoints = mPointDao.getAllPoints();
     }
 
-    public LiveData<List<Point>> getAllPoints() {
+    public LiveData<List<Point.PointExt>> getAllPoints() {
         return mAllPoints;
     }
 

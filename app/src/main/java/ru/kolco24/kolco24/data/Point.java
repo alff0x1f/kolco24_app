@@ -26,4 +26,26 @@ public class Point {
         this.mDescription = description;
         this.mCost = cost;
     }
+
+    public static class PointExt{
+        public int id;
+        public int number;
+        public String description;
+        public int cost;
+        public String photo_thumb_url;
+
+        public PointExt(
+                int id,
+                int number,
+                String description,
+                int cost,
+                String photo_thumb_url
+        ) {
+            this.id = id;
+            this.number = number;
+            this.description = description;
+            this.cost = cost;
+            this.photo_thumb_url = photo_thumb_url;
+        }
+    }
 }

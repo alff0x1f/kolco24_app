@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.ui.legends;
 
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -30,44 +31,56 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         textPointNumber = itemView.findViewById(R.id.pointNumber);
     }
 
-    public void bind(Point point) {
-        textView.setText(String.format("%02d", point.mNumber));
-        textPointNumber.setText(String.format("%02d", point.mNumber));
+    public void bind(Point.PointExt point) {
+        textView.setText(String.format("%02d", point.number));
+        textPointNumber.setText("14:05");
 
-        textDescription.setText(point.mDescription);
-        textCost.setText(String.format("+%d", point.mCost));
+        textDescription.setText(point.description);
+        textCost.setText(String.format("+%d", point.cost));
         Drawable drawable = ContextCompat.getDrawable(itemView.getContext(), R.drawable.cost_background);
         // set color based on cost
         int color = Color.parseColor("#000000");
-        if (point.mCost == 1) {
+        if (point.cost == 1) {
             color = itemView.getResources().getColor(R.color.level1);
-        } else if (point.mCost == 2) {
+        } else if (point.cost == 2) {
             color = itemView.getResources().getColor(R.color.level2);
-        } else if (point.mCost == 3) {
+        } else if (point.cost == 3) {
             color = itemView.getResources().getColor(R.color.level3);
-        } else if (point.mCost == 4) {
+        } else if (point.cost == 4) {
             color = itemView.getResources().getColor(R.color.level4);
-        } else if (point.mCost == 5) {
+        } else if (point.cost == 5) {
             color = itemView.getResources().getColor(R.color.level5);
-        } else if (point.mCost == 6) {
+        } else if (point.cost == 6) {
             color = itemView.getResources().getColor(R.color.level6);
-        } else if (point.mCost == 7) {
+        } else if (point.cost == 7) {
             color = itemView.getResources().getColor(R.color.level7);
-        } else if (point.mCost == 8) {
+        } else if (point.cost == 8) {
             color = itemView.getResources().getColor(R.color.level8);
-        } else if (point.mCost == 9) {
+        } else if (point.cost == 9) {
             color = itemView.getResources().getColor(R.color.level9);
         } else {
             color = itemView.getResources().getColor(R.color.level10);
         }
-        drawable.mutate().setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_ATOP);
+        if (point.photo_thumb_url != null) {
+            color = itemView.getResources().getColor(R.color.pointIconPlaceholder);
+        }
+        drawable.mutate().setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
         textCost.setBackground(drawable);
+
+        if (point.photo_thumb_url != null) {
+//            ImageView photo_thumb = itemView.findViewById(R.id.photo_thumb);
+//            photo_thumb.setImageURI(Uri.parse(point.photo_thumb_url));
+
+            textPointNumber.setTextColor(Color.parseColor("#999999"));
+
+//            itemView.findViewById(R.id.full_item).setBackgroundColor(Color.parseColor("#f0f0f0"));
+        }
 
         // on click listener
         itemView.setOnClickListener(v -> {
             itemView.setBackgroundColor(2);
             Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("point_number", point.mNumber);
+            intent.putExtra("point_number", point.number);
             itemView.getContext().startActivity(intent);
         });
     }

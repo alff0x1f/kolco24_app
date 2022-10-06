@@ -13,7 +13,7 @@ import java.util.List;
 public class PointViewModel extends AndroidViewModel {
     private PointRepository mRepository;
 
-    private final LiveData<List<Point>> mAllPoints;
+    private final LiveData<List<Point.PointExt>> mAllPoints;
 
     /*__init__*/
     public PointViewModel(Application application) {
@@ -22,7 +22,7 @@ public class PointViewModel extends AndroidViewModel {
         mAllPoints = mRepository.getAllPoints();
     }
 
-    LiveData<List<Point>> getAllPoints() {
+    LiveData<List<Point.PointExt>> getAllPoints() {
         return mAllPoints;
     }
 

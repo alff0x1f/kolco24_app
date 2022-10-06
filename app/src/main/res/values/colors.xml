@@ -11,8 +11,8 @@
 
     <color name="divider">#EEEEEE</color>
     <color name="textContrast">#111111</color>
-    <color name="pointIconPlaceholder">#DDDDDD</color>
-    <color name="pointIconPlaceholderText">#FFFFFF</color>
+    <color name="pointIconPlaceholder">#F5F5F5</color>
+    <color name="pointIconPlaceholderText">#000000</color>
 
 
     <color name="level1">#AEEA00</color>

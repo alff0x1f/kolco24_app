@@ -8,10 +8,10 @@ import androidx.recyclerview.widget.ListAdapter;
 
 import ru.kolco24.kolco24.data.Point;
 
-public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
+public class PointListAdapter extends ListAdapter<Point.PointExt, PointViewHolder> {
 
     /*__init__*/
-    public PointListAdapter(@NonNull DiffUtil.ItemCallback<Point> diffCallback) {
+    public PointListAdapter(@NonNull DiffUtil.ItemCallback<Point.PointExt> diffCallback) {
         super(diffCallback);
     }
 
@@ -22,22 +22,22 @@ public class PointListAdapter extends ListAdapter<Point, PointViewHolder> {
     }
 
     public void onBindViewHolder(PointViewHolder holder, int position) {
-        Point current = getItem(position);
+        Point.PointExt current = getItem(position);
         holder.bind(current);
     }
 
-    static class PointDiff extends DiffUtil.ItemCallback<Point> {
+    static class PointDiff extends DiffUtil.ItemCallback<Point.PointExt> {
 
         @Override
-        public boolean areItemsTheSame(@NonNull Point oldItem, @NonNull Point newItem) {
+        public boolean areItemsTheSame(@NonNull Point.PointExt oldItem, @NonNull Point.PointExt newItem) {
             return oldItem == newItem;
         }
 
         @Override
-        public boolean areContentsTheSame(@NonNull Point oldItem, @NonNull Point newItem) {
-            return oldItem.mNumber == newItem.mNumber &&
-                    oldItem.mDescription.equals(newItem.mDescription) &&
-                    oldItem.mCost == newItem.mCost;
+        public boolean areContentsTheSame(@NonNull Point.PointExt oldItem, @NonNull Point.PointExt newItem) {
+            return oldItem.number == newItem.number &&
+                    oldItem.description.equals(newItem.description) &&
+                    oldItem.cost == newItem.cost;
         }
     }
 }

@@ -23,8 +23,12 @@ public interface PointDao {
     @Query("SELECT * FROM points WHERE number = :number")
     Point getPointByNumber(int number);
 
-    @Query("SELECT * FROM points ORDER BY number")
-    LiveData<List<Point>> getAllPoints();
+    @Query("SELECT points.*, photo.photo_thumb_url " +
+            "FROM points " +
+            "LEFT JOIN (SELECT point_number, min(photo_thumb_url) AS photo_thumb_url FROM photo_points GROUP BY point_number) photo " +
+            "ON points.number == photo.point_number " +
+            "ORDER BY points.number")
+    LiveData<List<Point.PointExt>> getAllPoints();
 
     @Query("DELETE FROM points WHERE id = :id")
     void deletePointById(int id);
