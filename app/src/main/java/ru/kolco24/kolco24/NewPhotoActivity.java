@@ -45,6 +45,11 @@ public class NewPhotoActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().hide();
+        }
+
         setContentView(R.layout.activity_new_word);
         mPointNameEditView = findViewById(R.id.edit_word);
 
@@ -166,9 +171,10 @@ public class NewPhotoActivity extends AppCompatActivity {
 
             try {
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
+                Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
+
                 bitmap = cropBitmap(bitmap);
-                Bitmap bitmapMain = Bitmap.createScaledBitmap(bitmap, 1200, 1200, false);
-                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 150, 150, false);
+                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
                 bitmap.recycle();
 
                 String imageName = generateImageName();
@@ -191,9 +197,10 @@ public class NewPhotoActivity extends AppCompatActivity {
         if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
             try {
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), cameraPhotoUri);
+                Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
+
                 bitmap = cropBitmap(bitmap);
-                Bitmap bitmapMain = Bitmap.createScaledBitmap(bitmap, 1200, 1200, false);
-                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 150, 150, false);
+                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
                 bitmap.recycle();
 
                 String imageName = generateImageName();
@@ -261,6 +268,27 @@ public class NewPhotoActivity extends AppCompatActivity {
                     srcBmp.getHeight() / 2 - srcBmp.getWidth() / 2,
                     srcBmp.getWidth(),
                     srcBmp.getWidth()
+            );
+        }
+        return dstBmp;
+    }
+
+    public static Bitmap scaleBitmap(Bitmap srcBmp, int maxDimension) {
+        Bitmap dstBmp;
+        if (srcBmp.getWidth() >= srcBmp.getHeight()) {
+            dstBmp = Bitmap.createScaledBitmap(
+                    srcBmp,
+                    maxDimension,
+                    maxDimension * srcBmp.getHeight() / srcBmp.getWidth(),
+                    false
+            );
+
+        } else {
+            dstBmp = Bitmap.createScaledBitmap(
+                    srcBmp,
+                    maxDimension * srcBmp.getWidth() / srcBmp.getHeight(),
+                    maxDimension,
+                    false
             );
         }
         return dstBmp;
