@@ -7,9 +7,9 @@
 
     <fragment
         android:id="@+id/navigation_home"
-        android:name="ru.kolco24.kolco24.ui.home.HomeFragment"
+        android:name="ru.kolco24.kolco24.ui.teams.TeamsFragment"
         android:label="@string/title_home"
-        tools:layout="@layout/fragment_home" />
+        tools:layout="@layout/fragment_teams" />
 
     <fragment
         android:id="@+id/navigation_taken_points"

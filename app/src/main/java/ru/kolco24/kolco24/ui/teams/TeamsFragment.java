@@ -1,4 +1,4 @@
-package ru.kolco24.kolco24.ui.home;
+package ru.kolco24.kolco24.ui.teams;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -14,18 +14,18 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import ru.kolco24.kolco24.databinding.FragmentHomeBinding;
+import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
-public class HomeFragment extends Fragment {
-    private FragmentHomeBinding binding;
+public class TeamsFragment extends Fragment {
+    private FragmentTeamsBinding binding;
     private SharedPreferences sharedpreferences;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
-        HomeViewModel homeViewModel =
-                new ViewModelProvider(this).get(HomeViewModel.class);
+        TeamsViewModel teamsViewModel =
+                new ViewModelProvider(this).get(TeamsViewModel.class);
 
-        binding = FragmentHomeBinding.inflate(inflater, container, false);
+        binding = FragmentTeamsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
         final TextView textView = binding.textHome;
