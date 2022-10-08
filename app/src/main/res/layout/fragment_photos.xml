@@ -74,13 +74,6 @@
                 android:background="@color/divider" />
 
             <Button
-                android:id="@+id/button_qr"
-                android:layout_margin="@dimen/small_padding"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="QR"/>
-
-            <Button
                 android:id="@+id/button_send_photos"
                 android:layout_margin="@dimen/small_padding"
                 android:layout_width="wrap_content"

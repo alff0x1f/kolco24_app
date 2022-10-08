@@ -12,4 +12,5 @@
     <string name="button_camera">Сделать фото</string>
     <string name="empty_not_saved">Word not saved because it is empty.</string>
     <string name="result">Результат</string>
+    <string name="scan_qr">Сканировать QR код</string>
 </resources>

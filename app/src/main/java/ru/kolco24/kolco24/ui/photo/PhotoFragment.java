@@ -67,22 +67,6 @@ public class PhotoFragment extends Fragment {
         mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
         //counters
         updateCounters();
-        // QR code
-        binding.buttonQr.setOnClickListener(v -> {
-            try {
-
-                Intent intent = new Intent("com.google.zxing.client.android.SCAN");
-                intent.putExtra("SCAN_MODE", "QR_CODE_MODE"); // "PRODUCT_MODE for bar codes
-
-                startActivityForResult(intent, 0);
-
-            } catch (Exception e) {
-                Uri marketUri = Uri.parse("market://details?id=com.srowen.bs.android");
-                Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
-                startActivity(marketIntent);
-
-            }
-        });
         // send photos
         binding.buttonSendPhotos.setOnClickListener(v -> {
             AsyncTask.execute(() -> {
@@ -115,21 +99,6 @@ public class PhotoFragment extends Fragment {
         });
 
         return root;
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 0) {
-            if (resultCode == RESULT_OK) {
-                String contents = data.getStringExtra("SCAN_RESULT");
-                Toast toast = Toast.makeText(getContext(), contents, Toast.LENGTH_LONG);
-                toast.show();
-            }
-            if(resultCode == RESULT_CANCELED){
-                //handle cancel
-            }
-        }
     }
 
     // on update
