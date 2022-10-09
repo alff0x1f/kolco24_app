@@ -1,0 +1,30 @@
+package ru.kolco24.kolco24.data;
+
+import androidx.lifecycle.LiveData;
+import androidx.room.Dao;
+import androidx.room.Insert;
+import androidx.room.Query;
+import androidx.room.Update;
+
+import java.util.List;
+
+@Dao
+public interface TeamDao {
+     @Query("SELECT * FROM teams")
+     LiveData<List<Team>> getAllTeams();
+
+     @Query("SELECT * FROM teams WHERE id = :id")
+     Team getTeamById(int id);
+
+     @Query("SELECT * FROM teams WHERE start_number = :number")
+     Team getTeamByStartNumber(String number);
+
+     @Insert
+     void insert(Team team);
+
+     @Update
+     void update(Team team);
+
+     @Query("DELETE FROM teams")
+     void deleteAll();
+}

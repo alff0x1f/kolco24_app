@@ -12,11 +12,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Database(entities = {Point.class, Photo.class, Team.class}, version = 1, exportSchema = false)
-public abstract class PointsDatabase extends RoomDatabase {
+public abstract class AppDatabase extends RoomDatabase {
     public abstract PointDao pointDao();
+
     public abstract PhotoDao photoDao();
 
-    private static volatile PointsDatabase INSTANCE;
+    public abstract TeamDao teamDao();
+
+    private static volatile AppDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
     static final ExecutorService databaseWriteExecutor =
             Executors.newFixedThreadPool(NUMBER_OF_THREADS);
@@ -27,12 +30,12 @@ public abstract class PointsDatabase extends RoomDatabase {
      * @param context the application context Singleton pattern, allows only one instance of the
      *                database to be opened at a time.
      */
-    static PointsDatabase getDatabase(final Context context) {
+    static AppDatabase getDatabase(final Context context) {
         if (INSTANCE == null) {
-            synchronized (PointsDatabase.class) {
+            synchronized (AppDatabase.class) {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
-                                    PointsDatabase.class, "points_database")
+                                    AppDatabase.class, "points_database")
                             .addCallback(sRoomDatabaseCallback)
                             .build();
                 }

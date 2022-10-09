@@ -11,7 +11,7 @@ public class PhotoRepository {
     private LiveData<List<Photo>> mAllPhotos;
 
     public PhotoRepository(Application application) {
-        PointsDatabase db = PointsDatabase.getDatabase(application);
+        AppDatabase db = AppDatabase.getDatabase(application);
         mPhotoDao = db.photoDao();
         mAllPhotos = mPhotoDao.getAllPhotos();
     }
@@ -31,13 +31,13 @@ public class PhotoRepository {
     // You must call this on a non-UI thread or your app will throw an exception. Room ensures
     // that you're not doing any long running operations on the main thread, blocking the UI.
     public void insert(Photo photo) {
-        PointsDatabase.databaseWriteExecutor.execute(() -> {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
             mPhotoDao.insert(photo);
         });
     }
 
     public void update(Photo photo) {
-        PointsDatabase.databaseWriteExecutor.execute(() -> {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
             mPhotoDao.update(photo);
         });
     }
@@ -47,7 +47,7 @@ public class PhotoRepository {
     }
 
     public void deleteAll() {
-        PointsDatabase.databaseWriteExecutor.execute(() -> {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
             mPhotoDao.deleteAll();
         });
     }

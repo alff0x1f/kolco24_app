@@ -10,7 +10,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +21,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.Console;
 
@@ -29,6 +29,7 @@ import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
 public class TeamsFragment extends Fragment {
     private FragmentTeamsBinding binding;
+    private TeamViewModel mTeamViewModel;
     private SharedPreferences sharedpreferences;
     EditText editTeamField;
 
@@ -39,6 +40,12 @@ public class TeamsFragment extends Fragment {
 
         binding = FragmentTeamsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
+        // recycler view
+        RecyclerView recyclerTeams = binding.recyclerTeams;
+        final TeamListAdapter adapter = new TeamListAdapter(new TeamListAdapter.TeamDiff());
+        recyclerTeams.setAdapter(adapter);
+        mTeamViewModel = new ViewModelProvider(this).get(TeamViewModel.class);
+        mTeamViewModel.getAllTeams().observe(getViewLifecycleOwner(), adapter::submitList);
 
         final TextView textView = binding.textHome;
 //        homeViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);

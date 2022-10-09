@@ -11,7 +11,7 @@ public class PointRepository {
     private LiveData<List<Point.PointExt>> mAllPoints;
 
     public PointRepository(Application application) {
-        PointsDatabase db = PointsDatabase.getDatabase(application);
+        AppDatabase db = AppDatabase.getDatabase(application);
         mPointDao = db.pointDao();
         mAllPoints = mPointDao.getAllPoints();
     }
@@ -30,19 +30,19 @@ public class PointRepository {
     // You must call this on a non-UI thread or your app will throw an exception. Room ensures
     // that you're not doing any long running operations on the main thread, blocking the UI.
     public void insert(Point point) {
-        PointsDatabase.databaseWriteExecutor.execute(() -> {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
             mPointDao.insert(point);
         });
     }
 
     public void update(Point point) {
-        PointsDatabase.databaseWriteExecutor.execute(() -> {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
             mPointDao.update(point);
         });
     }
 
     public void deleteAll() {
-        PointsDatabase.databaseWriteExecutor.execute(() -> {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
             mPointDao.deleteAll();
         });
     }
