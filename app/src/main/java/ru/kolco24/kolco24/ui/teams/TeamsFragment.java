@@ -20,6 +20,8 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import java.io.Console;
+
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
 public class TeamsFragment extends Fragment {
@@ -98,7 +100,19 @@ public class TeamsFragment extends Fragment {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 0 && resultCode == RESULT_OK) {
             String contents = data.getStringExtra("SCAN_RESULT");
-            Toast toast = Toast.makeText(getContext(), contents, Toast.LENGTH_LONG);
+            String[] qr_content = contents.split(":");
+            if (qr_content.length != 3 || !qr_content[0].equals("t") || !qr_content[1].equals("2022")) {
+                Toast.makeText(getActivity(), "Неверный QR код", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String team = qr_content[2];
+            int team_number = Integer.parseInt(team);
+
+            Toast toast = Toast.makeText(
+                    getContext(),
+                    String.format("Команда %d", team_number),
+                    Toast.LENGTH_LONG
+            );
             toast.show();
         }
     }
