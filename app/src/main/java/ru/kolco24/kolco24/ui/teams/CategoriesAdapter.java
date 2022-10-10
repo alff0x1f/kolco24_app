@@ -10,7 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class CategoriesAdapter extends FragmentStateAdapter {
-    private static final List<String> caterories = Arrays.asList("6ч", "12ч", "12ч МЖ", "12ч ММ", "12ч ЖЖ", "24ч");
+    private static final List<String> categorie_name = Arrays.asList("6ч", "12ч", "12ч МЖ", "12ч ММ", "12ч ЖЖ", "24ч");
+    private static final List<String> categorie_code = Arrays.asList("6h", "12h_team", "12h_mw", "12h_mm", "12h_ww", "24h");
 
     public CategoriesAdapter(@NonNull Fragment fragment) {
         super(fragment);
@@ -22,20 +23,28 @@ public class CategoriesAdapter extends FragmentStateAdapter {
         Fragment fragment = new DemoObjectFragment();
         Bundle args = new Bundle();
         args.putString(DemoObjectFragment.ARG_PARAM1, getCategoryName(position));
+        args.putString(DemoObjectFragment.ARG_PARAM2, getCategoryCode(position));
         fragment.setArguments(args);
         return fragment;
     }
 
     @Override
     public int getItemCount() {
-        return caterories.size();
+        return categorie_name.size();
     }
 
 
     public static String getCategoryName(int position) {
-        if (position < 0 || position >= caterories.size()) {
+        if (position < 0 || position >= categorie_name.size()) {
             return "";
         }
-        return caterories.get(position);
+        return categorie_name.get(position);
+    }
+
+    public static String getCategoryCode(int position){
+        if (position < 0 || position >= categorie_code.size()) {
+            return "";
+        }
+        return categorie_code.get(position);
     }
 }

@@ -12,7 +12,8 @@ public class Team {
 
     public String owner;
     public float paid_people;
-    public String dist;
+    public String dist;  // время 6h, 12h, 24h
+    public String category; // категория 6h, 12h_mm, 12h_mw, 12h_team, 24h etc
     public String name;
     public String city;
     public String organization;
@@ -28,12 +29,13 @@ public class Team {
     public int penalty;
 
     // __init__
-    public Team(String owner, float paid_people, String dist, String name, String city,
+    public Team(String owner, float paid_people, String dist, String category, String name, String city,
                  String organization, String year, String start_number, Long start_time,
                  Long finish_time, boolean dnf, int penalty) {
         this.owner = owner;
         this.paid_people = paid_people;
         this.dist = dist;
+        this.category = category;
         this.name = name;
         this.city = city;
         this.organization = organization;

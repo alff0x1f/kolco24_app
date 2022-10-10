@@ -21,6 +21,10 @@ public class TeamRepository {
         return mAllTeams;
     }
 
+    public LiveData<List<Team>> getTeamsByCategory(String category){
+        return mTeamDao.getTeamsByCategory(category);
+    }
+
     public Team getTeamById(int id) {
         return mTeamDao.getTeamById(id);
     }

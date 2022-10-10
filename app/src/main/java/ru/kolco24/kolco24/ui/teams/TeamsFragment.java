@@ -119,8 +119,9 @@ public class TeamsFragment extends Fragment {
         binding.buttonAddTeam.setOnClickListener(view -> {
             Team team2 = new Team(
                     "owner",
-                    3F,
-                    "12h",
+                    4F,
+                    "6h",
+                    "6h",
                     "description",
                     "city",
                     "organization",
