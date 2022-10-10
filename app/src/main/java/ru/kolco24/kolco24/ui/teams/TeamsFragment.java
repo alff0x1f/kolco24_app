@@ -19,10 +19,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
+
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.tabs.TabLayoutMediator;
 
 import ru.kolco24.kolco24.data.Team;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
@@ -40,6 +45,9 @@ public class TeamsFragment extends Fragment {
 
         binding = FragmentTeamsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
+        //pager
+        ViewPager2 viewPager = binding.viewPagerTeams;
+        viewPager.setAdapter(new CategoriesAdapter(this));
         // recycler view
         RecyclerView recyclerTeams = binding.recyclerTeams;
         final TeamListAdapter adapter = new TeamListAdapter(new TeamListAdapter.TeamDiff());
@@ -143,6 +151,15 @@ public class TeamsFragment extends Fragment {
         });
 
         return root;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        TabLayout tabLayout = binding.tabTeams;
+        new TabLayoutMediator(tabLayout, binding.viewPagerTeams,
+                (tab, position) -> tab.setText("Команда " + (position + 1))
+        ).attach();
     }
 
     @Override
