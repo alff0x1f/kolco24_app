@@ -25,4 +25,8 @@ public class TeamViewModel extends AndroidViewModel {
     LiveData<List<Team>> getAllTeams() {
         return mAllTeams;
     }
+
+    public void insert(Team team) {
+        mRepository.insert(team);
+    }
 }

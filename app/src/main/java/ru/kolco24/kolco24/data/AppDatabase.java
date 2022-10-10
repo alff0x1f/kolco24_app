@@ -58,6 +58,10 @@ public abstract class AppDatabase extends RoomDatabase {
                 // Photo Point
                 PhotoDao photoDao = INSTANCE.photoDao();
                 photoDao.deleteAll();
+
+                // Team
+                TeamDao teamDao = INSTANCE.teamDao();
+                teamDao.deleteAll();
             });
         }
     };

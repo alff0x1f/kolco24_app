@@ -21,10 +21,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.io.Console;
-
+import ru.kolco24.kolco24.data.Team;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
 public class TeamsFragment extends Fragment {
@@ -44,11 +44,13 @@ public class TeamsFragment extends Fragment {
         RecyclerView recyclerTeams = binding.recyclerTeams;
         final TeamListAdapter adapter = new TeamListAdapter(new TeamListAdapter.TeamDiff());
         recyclerTeams.setAdapter(adapter);
+        recyclerTeams.setLayoutManager(new LinearLayoutManager(getContext()));
+
         mTeamViewModel = new ViewModelProvider(this).get(TeamViewModel.class);
         mTeamViewModel.getAllTeams().observe(getViewLifecycleOwner(), adapter::submitList);
 
         final TextView textView = binding.textHome;
-//        homeViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
+        teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
         final EditText editTextTeam = binding.editTextTeam;
         final Button button = binding.button;
         final TextView textViewTeam = binding.textViewTeam;
@@ -79,7 +81,7 @@ public class TeamsFragment extends Fragment {
                         @Override
                         public void onClick(DialogInterface dialogInterface, int i) {
                             String editTextInput = editTeamField.getText().toString();
-                            System.out.println("editext value is: "+ editTextInput);
+                            System.out.println("editext value is: " + editTextInput);
                         }
                     })
                     .setNegativeButton("Cancel", null)
@@ -103,6 +105,26 @@ public class TeamsFragment extends Fragment {
                 button.setText("Сохранить");
                 sp.edit().remove("team").apply();
             }
+        });
+
+        // add team button
+        binding.buttonAddTeam.setOnClickListener(view -> {
+            Team team2 = new Team(
+                    "owner",
+                    3F,
+                    "12h",
+                    "description",
+                    "city",
+                    "organization",
+                    "2022",
+                    "202",
+                    1665325248L,
+                    1665335248L,
+                    true,
+                    0
+            );
+            mTeamViewModel.insert(team2);
+            System.out.println("team added");
         });
 
         // QR code

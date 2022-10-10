@@ -26,6 +26,24 @@ public class Team {
     public Long finish_time;
     public boolean dnf;
     public int penalty;
+
+    // __init__
+    public Team(String owner, float paid_people, String dist, String name, String city,
+                 String organization, String year, String start_number, Long start_time,
+                 Long finish_time, boolean dnf, int penalty) {
+        this.owner = owner;
+        this.paid_people = paid_people;
+        this.dist = dist;
+        this.name = name;
+        this.city = city;
+        this.organization = organization;
+        this.year = year;
+        this.start_number = start_number;
+        this.start_time = start_time;
+        this.finish_time = finish_time;
+        this.dnf = dnf;
+        this.penalty = penalty;
+    }
 }
 
 

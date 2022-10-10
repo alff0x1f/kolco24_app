@@ -19,6 +19,9 @@ public interface TeamDao {
      @Query("SELECT * FROM teams WHERE start_number = :number")
      Team getTeamByStartNumber(String number);
 
+     @Query("SELECT COUNT(*) FROM teams")
+     int getTeamCount();
+
      @Insert
      void insert(Team team);
 

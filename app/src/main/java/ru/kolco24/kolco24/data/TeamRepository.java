@@ -29,6 +29,10 @@ public class TeamRepository {
         return mTeamDao.getTeamByStartNumber(number);
     }
 
+    public int getTeamCount() {
+        return mTeamDao.getTeamCount();
+    }
+
     public void insert(Team team) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             mTeamDao.insert(team);
