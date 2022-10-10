@@ -45,14 +45,6 @@ public class TeamsFragment extends Fragment {
         //pager
         ViewPager2 viewPager = binding.viewPagerTeams;
         viewPager.setAdapter(new CategoriesAdapter(this));
-        // recycler view
-        RecyclerView recyclerTeams = binding.recyclerTeams;
-        final TeamListAdapter adapter = new TeamListAdapter(new TeamListAdapter.TeamDiff());
-        recyclerTeams.setAdapter(adapter);
-        recyclerTeams.setLayoutManager(new LinearLayoutManager(getContext()));
-
-        mTeamViewModel = new ViewModelProvider(this).get(TeamViewModel.class);
-        mTeamViewModel.getAllTeams().observe(getViewLifecycleOwner(), adapter::submitList);
 
         final TextView textView = binding.textHome;
         teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
