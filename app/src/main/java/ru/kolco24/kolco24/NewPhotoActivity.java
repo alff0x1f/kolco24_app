@@ -3,7 +3,9 @@ package ru.kolco24.kolco24;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.MediaScannerConnection;
@@ -36,6 +38,7 @@ public class NewPhotoActivity extends AppCompatActivity {
     static final int REQUEST_IMAGE_GALLERY = 1;
     static final int REQUEST_IMAGE_CAPTURE = 2;
     private EditText mPointNameEditView;
+    private EditText pointNumberEditField;
     private Uri cameraPhotoUri;
 
     private int photoId;
@@ -74,7 +77,8 @@ public class NewPhotoActivity extends AppCompatActivity {
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
             if (TextUtils.isEmpty(mPointNameEditView.getText())) {
-                Toast.makeText(getApplicationContext(), "Укажите номер КП", Toast.LENGTH_SHORT).show();
+                requestNumber();
+//                Toast.makeText(getApplicationContext(), "Укажите номер КП", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (photoUri == null) {
@@ -136,6 +140,26 @@ public class NewPhotoActivity extends AppCompatActivity {
         //editImage
         final ImageView editIcon = findViewById(R.id.edit_icon);
         editIcon.setOnClickListener(this::openGallery);
+    }
+
+    private void requestNumber() {
+        pointNumberEditField = new EditText(this);
+        pointNumberEditField.setInputType(2);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Какой номер КП?")
+                .setView(pointNumberEditField)
+                .setPositiveButton("Ок", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        String editTextInput = pointNumberEditField.getText().toString();
+                        mPointNameEditView.setText(editTextInput);
+                        final Button saveButton = findViewById(R.id.button_save);
+                        saveButton.callOnClick();
+                    }
+                })
+                .setNegativeButton("Отмена", null)
+                .create();
+        dialog.show();
     }
 
     private void openGallery(View v) {

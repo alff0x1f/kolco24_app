@@ -3,9 +3,7 @@ package ru.kolco24.kolco24.ui.teams;
 import static android.app.Activity.RESULT_CANCELED;
 import static android.app.Activity.RESULT_OK;
 
-import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -36,7 +34,6 @@ public class TeamsFragment extends Fragment {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
     private SharedPreferences sharedpreferences;
-    EditText editTeamField;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -80,22 +77,6 @@ public class TeamsFragment extends Fragment {
 
 
         button.setOnClickListener(view -> {
-            editTeamField = new EditText(this.getContext());
-            AlertDialog dialog = new AlertDialog.Builder(getContext())
-                    .setTitle("Title")
-                    .setMessage("Message")
-                    .setView(editTeamField)
-                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            String editTextInput = editTeamField.getText().toString();
-                            System.out.println("editext value is: " + editTextInput);
-                        }
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .create();
-            dialog.show();
-
             SharedPreferences sp = getActivity().getSharedPreferences("team", Context.MODE_PRIVATE);
             String team2 = sp.getString("team", "");
             if (team2.isEmpty()) {
