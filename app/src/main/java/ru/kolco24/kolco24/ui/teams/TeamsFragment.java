@@ -156,8 +156,11 @@ public class TeamsFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        TabLayout tabLayout = binding.tabTeams;
-        new TabLayoutMediator(tabLayout, binding.viewPagerTeams,
+        attachTabToViewPager(binding.tabTeams, binding.viewPagerTeams);
+    }
+
+    private void attachTabToViewPager(TabLayout tabLayout, ViewPager2 viewPager) {
+        new TabLayoutMediator(tabLayout, viewPager,
                 (tab, position) -> tab.setText(CategoriesAdapter.getCategoryName(position))
         ).attach();
     }
