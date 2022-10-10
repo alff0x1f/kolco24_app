@@ -78,7 +78,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
 
         // on click listener
         itemView.setOnClickListener(v -> {
-            itemView.setBackgroundColor(2);
+            itemView.setBackgroundColor(itemView.getResources().getColor(R.color.divider));
             Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
             intent.putExtra("point_number", point.number);
             itemView.getContext().startActivity(intent);

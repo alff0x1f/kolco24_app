@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.legends;
 
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.LayoutInflater;
@@ -18,6 +19,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Point;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
@@ -172,6 +175,21 @@ public class LegendsFragment extends Fragment {
                 swipeRefreshLayout.setRefreshing(false);
             }
         });
+    }
+
+    //set background recycle items on resume
+    public void onResume() {
+        super.onResume();
+        System.out.println("onResume");
+        if (binding != null) {
+            //background each item of recycle view
+            RecyclerView recyclerView = binding.recyclerView;
+            Drawable defaultBackgroundColor = recyclerView.getBackground();
+            for (int i = 0; i < recyclerView.getChildCount(); i++) {
+                View view = recyclerView.getChildAt(i);
+                view.setBackground(defaultBackgroundColor);
+            }
+        }
     }
 
     @Override
