@@ -56,45 +56,9 @@ public class TeamsFragment extends Fragment {
 
         final TextView textView = binding.textHome;
         teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
-        final EditText editTextTeam = binding.editTextTeam;
-        final Button button = binding.button;
-        final TextView textViewTeam = binding.textViewTeam;
 
         sharedpreferences = getActivity().getSharedPreferences("team", Context.MODE_PRIVATE);
-
         String team = sharedpreferences.getString("team", "");
-        if (team.isEmpty()) {
-            editTextTeam.setVisibility(View.VISIBLE);
-            textViewTeam.setVisibility(View.GONE);
-            button.setText("Сохранить");
-        } else {
-            editTextTeam.setText(team);
-            textViewTeam.setText(team);
-            editTextTeam.setVisibility(View.GONE);
-            textViewTeam.setVisibility(View.VISIBLE);
-            button.setText("Изменить");
-        }
-
-
-        button.setOnClickListener(view -> {
-            SharedPreferences sp = getActivity().getSharedPreferences("team", Context.MODE_PRIVATE);
-            String team2 = sp.getString("team", "");
-            if (team2.isEmpty()) {
-                team2 = editTextTeam.getText().toString();
-                sp.edit().putString("team", team2).apply();
-                editTextTeam.setText(team2);
-                textViewTeam.setText(team2);
-                editTextTeam.setVisibility(View.GONE);
-                textViewTeam.setVisibility(View.VISIBLE);
-                button.setText("Изменить");
-            } else {
-                editTextTeam.setVisibility(View.VISIBLE);
-                editTextTeam.setText(team2);
-                textViewTeam.setVisibility(View.GONE);
-                button.setText("Сохранить");
-                sp.edit().remove("team").apply();
-            }
-        });
 
         // add team button
         binding.buttonAddTeam.setOnClickListener(view -> {
