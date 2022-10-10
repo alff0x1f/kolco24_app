@@ -40,14 +40,16 @@ public class TeamsFragment extends Fragment {
         TeamsViewModel teamsViewModel =
                 new ViewModelProvider(this).get(TeamsViewModel.class);
 
+        mTeamViewModel = new ViewModelProvider(this).get(TeamViewModel.class);
+
         binding = FragmentTeamsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
         //pager
         ViewPager2 viewPager = binding.viewPagerTeams;
         viewPager.setAdapter(new CategoriesAdapter(this));
 
-        final TextView textView = binding.textHome;
-        teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
+//        final TextView textView = binding.textHome;
+//        teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
 
         sharedpreferences = getActivity().getSharedPreferences("team", Context.MODE_PRIVATE);
         String team = sharedpreferences.getString("team", "");
