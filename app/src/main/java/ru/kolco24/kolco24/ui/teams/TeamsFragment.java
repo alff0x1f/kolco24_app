@@ -158,7 +158,7 @@ public class TeamsFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         TabLayout tabLayout = binding.tabTeams;
         new TabLayoutMediator(tabLayout, binding.viewPagerTeams,
-                (tab, position) -> tab.setText("Команда " + (position + 1))
+                (tab, position) -> tab.setText(CategoriesAdapter.getCategoryName(position))
         ).attach();
     }
 
