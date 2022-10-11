@@ -187,7 +187,7 @@ public class TeamsFragment extends Fragment {
                                         "",
                                         (float) team.getDouble("paid_people"),
                                         team.getString("dist"),
-                                        "6h",
+                                        team.getString("category"),
                                         team.getString("teamname"),
                                         team.getString("city"),
                                         team.getString("organization"),
@@ -203,7 +203,7 @@ public class TeamsFragment extends Fragment {
                             } else {
                                 exist_team.setPaid_people((float) team.getDouble("paid_people"));
                                 exist_team.setDist(team.getString("dist"));
-                                exist_team.setCategory("6h");
+                                exist_team.setCategory(team.getString("category"));
                                 exist_team.setTeamname(team.getString("teamname"));
                                 exist_team.setCity(team.getString("city"));
                                 exist_team.setOrganization(team.getString("organization"));
