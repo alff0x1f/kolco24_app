@@ -19,7 +19,7 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
     }
 
     public void bind() {
-        textView.setText("Team");
+        textView.setText("Какое-то незапоминающееся название");
     }
 
     public static TeamViewHolder create(ViewGroup parent) {
