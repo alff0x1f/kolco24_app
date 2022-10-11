@@ -9,24 +9,23 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
+import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Team;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
@@ -34,6 +33,11 @@ public class TeamsFragment extends Fragment {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
     private SharedPreferences sharedpreferences;
+
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+    }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -76,19 +80,7 @@ public class TeamsFragment extends Fragment {
         });
 
         // QR code
-
-        binding.fabQr.setOnClickListener(view -> {
-            try {
-                Intent intent = new Intent("com.google.zxing.client.android.SCAN");
-                intent.putExtra("SCAN_MODE", "QR_CODE_MODE"); // "PRODUCT_MODE for bar codes
-                startActivityForResult(intent, 0);
-
-            } catch (Exception e) {
-                Uri marketUri = Uri.parse("market://details?id=com.srowen.bs.android");
-                Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
-                startActivity(marketIntent);
-            }
-        });
+        binding.fabQr.setOnClickListener(this::onClick);
 
         return root;
     }
@@ -128,8 +120,34 @@ public class TeamsFragment extends Fragment {
     }
 
     @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        inflater.inflate(R.menu.team_menu, menu);
+    }
+
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_scan_qr) {
+            onClick(this.getView());
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+
+    @Override
     public void onDestroyView() {
         super.onDestroyView();
         binding = null;
+    }
+
+    private void onClick(View view) {
+        try {
+            Intent intent = new Intent("com.google.zxing.client.android.SCAN");
+            intent.putExtra("SCAN_MODE", "QR_CODE_MODE"); // "PRODUCT_MODE for bar codes
+            startActivityForResult(intent, 0);
+
+        } catch (Exception e) {
+            Uri marketUri = Uri.parse("market://details?id=com.srowen.bs.android");
+            Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
+            startActivity(marketIntent);
+        }
     }
 }
