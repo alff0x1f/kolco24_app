@@ -30,7 +30,15 @@ public class TeamViewModel extends AndroidViewModel {
         return mRepository.getTeamsByCategory(category);
     }
 
+    public Team getTeamById(int id){
+        return mRepository.getTeamById(id);
+    }
+
     public void insert(Team team) {
         mRepository.insert(team);
+    }
+
+    public void update(Team team) {
+        mRepository.update(team);
     }
 }

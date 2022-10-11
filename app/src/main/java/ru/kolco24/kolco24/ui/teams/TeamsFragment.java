@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -25,6 +26,18 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Team;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
@@ -33,6 +46,8 @@ public class TeamsFragment extends Fragment {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
     private SharedPreferences sharedpreferences;
+
+    private final OkHttpClient client = new OkHttpClient();
 
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,6 +76,7 @@ public class TeamsFragment extends Fragment {
         // add team button
         binding.buttonAddTeam.setOnClickListener(view -> {
             Team team2 = new Team(
+                    450,
                     "owner",
                     4F,
                     "6h",
@@ -70,8 +86,8 @@ public class TeamsFragment extends Fragment {
                     "organization",
                     "2022",
                     "202",
-                    1665325248L,
-                    1665335248L,
+                    0L,
+                    0L,
                     true,
                     0
             );
@@ -128,7 +144,99 @@ public class TeamsFragment extends Fragment {
         if (item.getItemId() == R.id.action_scan_qr) {
             onClick(this.getView());
         }
+        if (item.getItemId() == R.id.action_update) {
+            downloadTeams();
+        }
         return super.onOptionsItemSelected(item);
+    }
+
+    public void downloadTeams() {
+        Request request = new Request.Builder()
+                .url("http://192.168.88.148:8000/api/v1/teams")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                System.out.println("Failure");
+                e.printStackTrace();
+                toast("Ошибка обновления списка, нет связи с сервером");
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        toast("Ошибка " + response.code());
+                        throw new IOException("Unexpected code " + response);
+                    }
+                    // insert in DB
+                    String teams = responseBody.string();
+                    try {
+                        JSONArray jObj = new JSONArray(teams);
+                        Boolean isUpdated = false;
+                        for (int i = 0; i < jObj.length(); i++) {
+                            JSONObject team = jObj.getJSONObject(i);
+                            int team_id = team.getInt("id");
+                            System.out.println(team_id);
+                            Team exist_team = mTeamViewModel.getTeamById(team_id);
+
+                            if (exist_team == null) {
+                                exist_team = new Team(
+                                        team_id,
+                                        "",
+                                        (float) team.getDouble("paid_people"),
+                                        team.getString("dist"),
+                                        "6h",
+                                        team.getString("teamname"),
+                                        team.getString("city"),
+                                        team.getString("organization"),
+                                        Integer.toString(team.getInt("year")),
+                                        team.getString("start_number"),
+                                        0L,
+                                        0L,
+                                        false,
+                                        0
+                                );
+                                mTeamViewModel.insert(exist_team);
+                                isUpdated = true;
+                            } else {
+                                exist_team.setPaid_people((float) team.getDouble("paid_people"));
+                                exist_team.setDist(team.getString("dist"));
+                                exist_team.setCategory("6h");
+                                exist_team.setTeamname(team.getString("teamname"));
+                                exist_team.setCity(team.getString("city"));
+                                exist_team.setOrganization(team.getString("organization"));
+                                exist_team.setYear(Integer.toString(team.getInt("year")));
+                                exist_team.setStart_number(team.getString("start_number"));
+                                mTeamViewModel.update(exist_team);
+                                System.out.println("updated " + team_id);
+                            }
+                        }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        toast("Ошибка декодирования JSON");
+                    }
+
+                }
+            }
+
+            public void toast(String text) {
+                if (binding == null) {
+                    return;
+                }
+                Context context = binding.getRoot().getContext();
+                Handler handler = new Handler(context.getMainLooper());
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        int duration = Toast.LENGTH_SHORT;
+                        Toast toast = Toast.makeText(context, text, duration);
+                        toast.show();
+                    }
+                });
+            }
+        });
     }
 
 
