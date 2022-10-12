@@ -4,6 +4,7 @@ import static android.app.Activity.RESULT_CANCELED;
 import static android.app.Activity.RESULT_OK;
 import static android.content.ContentValues.TAG;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Rect;
 import android.net.Uri;
@@ -44,6 +45,8 @@ import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 public class PhotoFragment extends Fragment {
     private FragmentPhotosBinding binding;
     private PhotoViewModel mPhotoViewModel;
+    private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
+    private int teamId;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -55,14 +58,17 @@ public class PhotoFragment extends Fragment {
 
         // recycle view
         RecyclerView recyclerView = binding.myPointsRecyclerView;
-        final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
+//        adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 3));
         recyclerView.addItemDecoration(new GridSpacingItemDecoration(3, 8, false));
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
+//        adapter.notifyDataSetChanged();
         //counters
+        teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
+        ).getInt("team_id", 0);
         updateCounters();
         // send photos
         binding.buttonSendPhotos.setOnClickListener(v -> {
@@ -102,6 +108,12 @@ public class PhotoFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
+        ).getInt("team_id", 0);
+        if (teamId != mPhotoViewModel.getTeamId()) {
+            mPhotoViewModel.setTeamId(teamId);
+            mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
+        }
         updateCounters();
     }
 
@@ -109,11 +121,11 @@ public class PhotoFragment extends Fragment {
         // update photo counter
         AsyncTask.execute(() -> {
             final TextView textView = binding.textDashboard;
-            int count = mPhotoViewModel.getPhotoCount();
+            int count = mPhotoViewModel.getPhotoCount(teamId);
             textView.post(() -> textView.setText(String.format("Количество КП: %d", count)));
 
             final TextView textView1 = binding.textDashboard2;
-            int sum = mPhotoViewModel.getCostSum();
+            int sum = mPhotoViewModel.getCostSum(teamId);
             textView1.post(() -> textView1.setText(String.format("Сумма баллов: %d", sum)));
 
             final TextView teamName = binding.teamName;

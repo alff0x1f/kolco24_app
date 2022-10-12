@@ -15,7 +15,7 @@ import java.util.List;
 public class PhotoViewModel extends AndroidViewModel {
     private PhotoRepository mPhotoRepository;
     private TeamRepository mTeamRepository;
-    private final LiveData<List<Photo>> mAllPhoto;
+    private LiveData<List<Photo>> mAllPhoto;
     private int teamId;
 
     public PhotoViewModel(Application application) {
@@ -40,12 +40,22 @@ public class PhotoViewModel extends AndroidViewModel {
         return mAllPhoto;
     }
 
-    int getPhotoCount() {
-        return mPhotoRepository.getPhotoCount();
+    public void setTeamId(int teamId) {
+        this.teamId = teamId;
+        mPhotoRepository.setTeamId(teamId);
+        mAllPhoto = mPhotoRepository.getAllPhotoPoints();
     }
 
-    int getCostSum() {
-        return mPhotoRepository.getCostSum();
+    public int getTeamId() {
+        return teamId;
+    }
+
+    int getPhotoCount(int teamId) {
+        return mPhotoRepository.getPhotoCount(teamId);
+    }
+
+    int getCostSum(int teamId) {
+        return mPhotoRepository.getCostSum(teamId);
     }
 
     public Photo getPhotoById(int id) {

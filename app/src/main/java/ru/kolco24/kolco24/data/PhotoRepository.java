@@ -26,12 +26,17 @@ public class PhotoRepository {
         return mAllPhotos;
     }
 
-    public int getPhotoCount() {
-        return mPhotoDao.getPhotoCount();
+    public void setTeamId(int teamId) {
+        this.teamId = teamId;
+        mAllPhotos = mPhotoDao.getPhotosByTeamId(teamId);
     }
 
-    public int getCostSum() {
-        return mPhotoDao.getCostSum();
+    public int getPhotoCount(int teamId) {
+        return mPhotoDao.getPhotoCount(teamId);
+    }
+
+    public int getCostSum(int teamId) {
+        return mPhotoDao.getCostSum(teamId);
     }
 
     // You must call this on a non-UI thread or your app will throw an exception. Room ensures
