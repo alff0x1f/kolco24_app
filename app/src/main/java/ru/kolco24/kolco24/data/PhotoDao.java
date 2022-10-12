@@ -19,13 +19,18 @@ public interface PhotoDao {
     @Query("SELECT * FROM photo_points WHERE id = :id")
     Photo getPhotoById(int id);
 
-    @Query("SELECT * FROM photo_points ORDER BY point_number")
+    @Query("SELECT * FROM photo_points " +
+            "ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();
 
-    @Query("SELECT * FROM photo_points WHERE team_id = :teamId ORDER BY point_number")
+    @Query("SELECT * FROM photo_points " +
+            "WHERE team_id = :teamId " +
+            "ORDER BY point_number")
     LiveData<List<Photo>> getPhotosByTeamId(int teamId);
 
-    @Query("SELECT count(DISTINCT point_number) FROM photo_points WHERE team_id = :teamId")
+    @Query("SELECT count(DISTINCT point_number) " +
+            "FROM photo_points " +
+            "WHERE team_id = :teamId")
     int getPhotoCount(int teamId);
 
     @Query("SELECT sum(points.cost) FROM points " +
@@ -34,7 +39,8 @@ public interface PhotoDao {
             "WHERE photo.point_number IS NOT NULL AND photo.team_id = :teamId")
     int getCostSum(int teamId);
 
-    @Query("DELETE FROM photo_points WHERE id = :id")
+    @Query("DELETE FROM photo_points " +
+            "WHERE id = :id")
     void deletePhotoPointById(int id);
 
     @Query("DELETE FROM photo_points")

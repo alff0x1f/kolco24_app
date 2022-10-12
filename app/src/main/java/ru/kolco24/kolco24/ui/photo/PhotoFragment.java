@@ -56,6 +56,12 @@ public class PhotoFragment extends Fragment {
         binding = FragmentPhotosBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
+        //
+        teamId = requireContext().getSharedPreferences(
+                "team",
+                Context.MODE_PRIVATE
+        ).getInt("team_id", 0);
+
         // recycle view
         RecyclerView recyclerView = binding.myPointsRecyclerView;
 //        adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
@@ -64,11 +70,8 @@ public class PhotoFragment extends Fragment {
         recyclerView.addItemDecoration(new GridSpacingItemDecoration(3, 8, false));
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
-        mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
-//        adapter.notifyDataSetChanged();
+        mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
         //counters
-        teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
-        ).getInt("team_id", 0);
         updateCounters();
         // send photos
         binding.buttonSendPhotos.setOnClickListener(v -> {
@@ -110,10 +113,6 @@ public class PhotoFragment extends Fragment {
         super.onResume();
         teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
         ).getInt("team_id", 0);
-        if (teamId != mPhotoViewModel.getTeamId()) {
-            mPhotoViewModel.setTeamId(teamId);
-            mPhotoViewModel.getAllPhoto().observe(getViewLifecycleOwner(), adapter::submitList);
-        }
         updateCounters();
     }
 
@@ -129,7 +128,7 @@ public class PhotoFragment extends Fragment {
             textView1.post(() -> textView1.setText(String.format("Сумма баллов: %d", sum)));
 
             final TextView teamName = binding.teamName;
-            String name = mPhotoViewModel.getTeamName();
+            String name = mPhotoViewModel.getTeamName(teamId);
             teamName.post(() -> teamName.setText(String.format("Команда: %s", name)));
 
         });

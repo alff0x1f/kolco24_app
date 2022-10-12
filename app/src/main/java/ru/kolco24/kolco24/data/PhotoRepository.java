@@ -10,25 +10,19 @@ import java.util.List;
 public class PhotoRepository {
     private PhotoDao mPhotoDao;
     private LiveData<List<Photo>> mAllPhotos;
-    private int teamId;
 
     public PhotoRepository(Application application) {
         AppDatabase db = AppDatabase.getDatabase(application);
         mPhotoDao = db.photoDao();
-        teamId = application.getApplicationContext().getSharedPreferences(
-                "team", Context.MODE_PRIVATE
-        ).getInt("team_id", 0);
-
-        mAllPhotos = mPhotoDao.getPhotosByTeamId(teamId);
+        mAllPhotos = mPhotoDao.getAllPhotos();
     }
 
     public LiveData<List<Photo>> getAllPhotoPoints() {
         return mAllPhotos;
     }
 
-    public void setTeamId(int teamId) {
-        this.teamId = teamId;
-        mAllPhotos = mPhotoDao.getPhotosByTeamId(teamId);
+    public LiveData<List<Photo>> getPhotoByTeamId(int teamId) {
+        return mPhotoDao.getPhotosByTeamId(teamId);
     }
 
     public int getPhotoCount(int teamId) {

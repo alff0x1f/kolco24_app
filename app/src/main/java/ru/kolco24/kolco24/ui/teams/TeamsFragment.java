@@ -130,7 +130,7 @@ public class TeamsFragment extends Fragment {
 
     public void downloadTeams() {
         Request request = new Request.Builder()
-                .url("http://192.168.88.148:8000/api/v1/teams")
+                .url("https://kolco24.ru/api/v1/teams")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {

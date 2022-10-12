@@ -16,20 +16,15 @@ public class PhotoViewModel extends AndroidViewModel {
     private PhotoRepository mPhotoRepository;
     private TeamRepository mTeamRepository;
     private LiveData<List<Photo>> mAllPhoto;
-    private int teamId;
 
     public PhotoViewModel(Application application) {
         super(application);
         mPhotoRepository = new PhotoRepository(application);
         mTeamRepository = new TeamRepository(application);
         mAllPhoto = mPhotoRepository.getAllPhotoPoints();
-
-        teamId = application.getApplicationContext().getSharedPreferences(
-                "team", Context.MODE_PRIVATE
-        ).getInt("team_id", 0);
     }
 
-    public String getTeamName() {
+    public String getTeamName(int teamId) {
         if (teamId == 0) {
             return "";
         }
@@ -40,14 +35,8 @@ public class PhotoViewModel extends AndroidViewModel {
         return mAllPhoto;
     }
 
-    public void setTeamId(int teamId) {
-        this.teamId = teamId;
-        mPhotoRepository.setTeamId(teamId);
-        mAllPhoto = mPhotoRepository.getAllPhotoPoints();
-    }
-
-    public int getTeamId() {
-        return teamId;
+    LiveData<List<Photo>> getPhotoByTeamId(int teamId) {
+        return mPhotoRepository.getPhotoByTeamId(teamId);
     }
 
     int getPhotoCount(int teamId) {
