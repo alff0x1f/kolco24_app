@@ -73,28 +73,6 @@ public class TeamsFragment extends Fragment {
         sharedpreferences = getActivity().getSharedPreferences("team", Context.MODE_PRIVATE);
         String team = sharedpreferences.getString("team", "");
 
-        // add team button
-        binding.buttonAddTeam.setOnClickListener(view -> {
-            Team team2 = new Team(
-                    450,
-                    "owner",
-                    4F,
-                    "6h",
-                    "6h",
-                    "description",
-                    "city",
-                    "organization",
-                    "2022",
-                    "202",
-                    0L,
-                    0L,
-                    true,
-                    0
-            );
-            mTeamViewModel.insert(team2);
-            System.out.println("team added");
-        });
-
         // QR code
         binding.fabQr.setOnClickListener(this::onClick);
 
