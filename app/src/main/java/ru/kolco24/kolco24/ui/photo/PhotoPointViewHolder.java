@@ -11,7 +11,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import ru.kolco24.kolco24.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
 
 public class PhotoPointViewHolder extends RecyclerView.ViewHolder {

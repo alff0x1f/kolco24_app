@@ -1,4 +1,4 @@
-package ru.kolco24.kolco24;
+package ru.kolco24.kolco24.ui.photo;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
@@ -23,6 +23,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 

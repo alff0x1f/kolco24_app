@@ -12,7 +12,7 @@ import android.widget.TextView;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import ru.kolco24.kolco24.NewPhotoActivity;
+import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Point;
 
