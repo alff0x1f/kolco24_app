@@ -22,8 +22,8 @@ public class CategoriesAdapter extends FragmentStateAdapter {
     public Fragment createFragment(int position) {
         Fragment fragment = new DemoObjectFragment();
         Bundle args = new Bundle();
-        args.putString(DemoObjectFragment.ARG_PARAM1, getCategoryName(position));
-        args.putString(DemoObjectFragment.ARG_PARAM2, getCategoryCode(position));
+        args.putString(DemoObjectFragment.CATEGORY_NAME, getCategoryName(position));
+        args.putString(DemoObjectFragment.CATEGORY_CODE, getCategoryCode(position));
         fragment.setArguments(args);
         return fragment;
     }

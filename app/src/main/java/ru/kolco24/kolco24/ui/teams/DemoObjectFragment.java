@@ -4,6 +4,7 @@ import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -12,10 +13,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentDemoObjectBinding;
 
 /**
@@ -29,12 +28,12 @@ public class DemoObjectFragment extends Fragment {
 
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    public static final String ARG_PARAM1 = "param1";
-    public static final String ARG_PARAM2 = "param2";
+    public static final String CATEGORY_NAME = "6ч";
+    public static final String CATEGORY_CODE = "6h";
 
     // TODO: Rename and change types of parameters
-    private String mParam1;
-    private String mParam2;
+    private String categoryName;
+    private String categoryCode;
 
     public DemoObjectFragment() {
         // Required empty public constructor
@@ -52,8 +51,8 @@ public class DemoObjectFragment extends Fragment {
     public static DemoObjectFragment newInstance(String param1, String param2) {
         DemoObjectFragment fragment = new DemoObjectFragment();
         Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
+        args.putString(CATEGORY_NAME, param1);
+        args.putString(CATEGORY_CODE, param2);
         fragment.setArguments(args);
         return fragment;
     }
@@ -62,8 +61,8 @@ public class DemoObjectFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
+            categoryName = getArguments().getString(CATEGORY_NAME);
+            categoryCode = getArguments().getString(CATEGORY_CODE);
         }
     }
 
@@ -80,8 +79,8 @@ public class DemoObjectFragment extends Fragment {
         recyclerTeams.setLayoutManager(new LinearLayoutManager(getContext()));
 
         teamViewModel = new ViewModelProvider(this).get(TeamViewModel.class);
-        teamViewModel.getTeamsByCategory(mParam2).observe(getViewLifecycleOwner(), adapter::submitList);
-        teamViewModel.getTeamsByCategory(mParam2).observe(getViewLifecycleOwner(), teams -> {
+        teamViewModel.getTeamsByCategory(categoryCode).observe(getViewLifecycleOwner(), adapter::submitList);
+        teamViewModel.getTeamsByCategory(categoryCode).observe(getViewLifecycleOwner(), teams -> {
             if (teams.size() == 0) {
                 binding.textNoTeams.setVisibility(View.VISIBLE);
             } else {
@@ -111,5 +110,12 @@ public class DemoObjectFragment extends Fragment {
         teamViewModel.isLoading().observe(getViewLifecycleOwner(), aBoolean -> {
             binding.swipeToRefresh.setRefreshing(aBoolean);
         });
+        //
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        ((AppCompatActivity) getActivity()).getSupportActionBar().setTitle("Команды " + categoryName);
     }
 }
