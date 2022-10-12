@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="background">#111111</color>
+    <color name="myTeam">@color/teal_700</color>
     <color name="divider">#333333</color>
     <color name="textContrast">#F5F5F5</color>
     <color name="pointIconPlaceholder">#444444</color>

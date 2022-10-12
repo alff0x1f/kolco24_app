@@ -9,12 +9,13 @@
     <color name="white">#FFFFFFFF</color>
     <color name="buttonLabel">#FFFFFF</color>
 
+    <color name="background">#FFFFFF</color>
     <color name="divider">#EEEEEE</color>
     <color name="textContrast">#111111</color>
     <color name="pointIconPlaceholder">#F5F5F5</color>
     <color name="pointIconPlaceholderText">#000000</color>
 
-
+    <color name="myTeam">@color/teal_200</color>
     <color name="level1">#AEEA00</color>
     <color name="level2">#64DD17</color>
     <color name="level3">#FFD600</color>
