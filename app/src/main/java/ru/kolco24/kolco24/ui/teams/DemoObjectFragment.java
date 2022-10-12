@@ -13,6 +13,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentDemoObjectBinding;
@@ -80,6 +81,17 @@ public class DemoObjectFragment extends Fragment {
 
         teamViewModel = new ViewModelProvider(this).get(TeamViewModel.class);
         teamViewModel.getTeamsByCategory(mParam2).observe(getViewLifecycleOwner(), adapter::submitList);
+        teamViewModel.getTeamsByCategory(mParam2).observe(getViewLifecycleOwner(), teams -> {
+            if (teams.size() == 0) {
+                binding.textNoTeams.setVisibility(View.VISIBLE);
+            } else {
+                binding.textNoTeams.setVisibility(View.GONE);
+                binding.swipeToRefresh.setRefreshing(false);
+            }
+        });
+        binding.swipeToRefresh.setOnRefreshListener(() -> teamViewModel.downloadTeams(
+                "https://kolco24.ru/api/v1/teams"
+        ));
         return root;
     }
 
@@ -88,5 +100,16 @@ public class DemoObjectFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 //        TextView textView = view.findViewById(R.id.text);
 //        textView.setText(mParam1);
+        //toast observer
+        teamViewModel.getToastMessage().observe(getViewLifecycleOwner(), s -> {
+            System.out.println("toast message: " + s);
+            if (s != null) {
+                Toast.makeText(getContext(), s, Toast.LENGTH_SHORT).show();
+                teamViewModel.clearToastMessage();
+            }
+        });
+        teamViewModel.isLoading().observe(getViewLifecycleOwner(), aBoolean -> {
+            binding.swipeToRefresh.setRefreshing(aBoolean);
+        });
     }
 }

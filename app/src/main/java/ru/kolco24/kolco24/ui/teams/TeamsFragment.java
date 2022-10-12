@@ -83,6 +83,14 @@ public class TeamsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         attachTabToViewPager(binding.tabTeams, binding.viewPagerTeams);
+        //toast observer
+        mTeamViewModel.getToastMessage().observe(getViewLifecycleOwner(), s -> {
+            System.out.println("toast message: " + s);
+            if (s != null) {
+                Toast.makeText(getContext(), s, Toast.LENGTH_SHORT).show();
+                mTeamViewModel.clearToastMessage();
+            }
+        });
     }
 
     private void attachTabToViewPager(TabLayout tabLayout, ViewPager2 viewPager) {
@@ -123,98 +131,9 @@ public class TeamsFragment extends Fragment {
             onClick(this.getView());
         }
         if (item.getItemId() == R.id.action_update) {
-            downloadTeams();
+            mTeamViewModel.downloadTeams("https://kolco24.ru/api/v1/teams");
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    public void downloadTeams() {
-        Request request = new Request.Builder()
-                .url("https://kolco24.ru/api/v1/teams")
-                .build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                System.out.println("Failure");
-                e.printStackTrace();
-                toast("Ошибка обновления списка, нет связи с сервером");
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) {
-                        toast("Ошибка " + response.code());
-                        throw new IOException("Unexpected code " + response);
-                    }
-                    // insert in DB
-                    String teams = responseBody.string();
-                    try {
-                        JSONArray jObj = new JSONArray(teams);
-                        Boolean isUpdated = false;
-                        for (int i = 0; i < jObj.length(); i++) {
-                            JSONObject team = jObj.getJSONObject(i);
-                            int team_id = team.getInt("id");
-                            System.out.println(team_id);
-                            Team exist_team = mTeamViewModel.getTeamById(team_id);
-
-                            if (exist_team == null) {
-                                exist_team = new Team(
-                                        team_id,
-                                        "",
-                                        (float) team.getDouble("paid_people"),
-                                        team.getString("dist"),
-                                        team.getString("category"),
-                                        team.getString("teamname"),
-                                        team.getString("city"),
-                                        team.getString("organization"),
-                                        Integer.toString(team.getInt("year")),
-                                        team.getString("start_number"),
-                                        0L,
-                                        0L,
-                                        false,
-                                        0
-                                );
-                                mTeamViewModel.insert(exist_team);
-                                isUpdated = true;
-                            } else {
-                                exist_team.setPaid_people((float) team.getDouble("paid_people"));
-                                exist_team.setDist(team.getString("dist"));
-                                exist_team.setCategory(team.getString("category"));
-                                exist_team.setTeamname(team.getString("teamname"));
-                                exist_team.setCity(team.getString("city"));
-                                exist_team.setOrganization(team.getString("organization"));
-                                exist_team.setYear(Integer.toString(team.getInt("year")));
-                                exist_team.setStart_number(team.getString("start_number"));
-                                mTeamViewModel.update(exist_team);
-                                System.out.println("updated " + team_id);
-                            }
-                        }
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                        toast("Ошибка декодирования JSON");
-                    }
-
-                }
-            }
-
-            public void toast(String text) {
-                if (binding == null) {
-                    return;
-                }
-                Context context = binding.getRoot().getContext();
-                Handler handler = new Handler(context.getMainLooper());
-                handler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        int duration = Toast.LENGTH_SHORT;
-                        Toast toast = Toast.makeText(context, text, duration);
-                        toast.show();
-                    }
-                });
-            }
-        });
     }
 
 
