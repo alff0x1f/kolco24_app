@@ -11,9 +11,7 @@ public class Photo {
 
     @PrimaryKey(autoGenerate = true)
     public int id;
-
-    @ColumnInfo(name = "team")
-    public String team;
+    public int team_id;
 
     @ColumnInfo(name = "point_number")
     public int point_number;
@@ -33,9 +31,9 @@ public class Photo {
 
 
     //__init__
-    public Photo(@NonNull String team, int point_number, @NonNull String photo_url,
+    public Photo(int team_id, int point_number, @NonNull String photo_url,
                  @NonNull String photo_thumb_url) {
-        this.team = team;
+        this.team_id = team_id;
         this.point_number = point_number;
         this.photo_url = photo_url;
         this.photo_thumb_url = photo_thumb_url;

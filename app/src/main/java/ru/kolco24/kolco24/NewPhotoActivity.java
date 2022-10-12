@@ -5,6 +5,7 @@ import androidx.core.content.FileProvider;
 
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -89,8 +90,12 @@ public class NewPhotoActivity extends AppCompatActivity {
                 PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
                 if (photoId == 0) {
                     // Create new photo
+                    int teamId = getApplicationContext().getSharedPreferences(
+                            "team",
+                            Context.MODE_PRIVATE
+                    ).getInt("team_id", 0);
                     photoViewModel.insert(new Photo(
-                            "Team 1",
+                            teamId,
                             Integer.parseInt(mPointNameEditView.getText().toString()),
                             photoUri,
                             photoThumbUri

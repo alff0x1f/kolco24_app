@@ -22,12 +22,15 @@ public interface PhotoDao {
     @Query("SELECT * FROM photo_points ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();
 
+    @Query("SELECT * FROM photo_points where team_id = :teamId ORDER BY point_number")
+    LiveData<List<Photo>> getPhotosByTeamId(int teamId);
+
     @Query("SELECT count(DISTINCT point_number) FROM photo_points")
     int getPhotoCount();
 
     @Query("SELECT sum(points.cost) FROM points " +
             "LEFT JOIN (select point_number from photo_points group by point_number) photo " +
-            "ON points.number = photo.point_number "+
+            "ON points.number = photo.point_number " +
             "WHERE photo.point_number IS NOT NULL")
     int getCostSum();
 
