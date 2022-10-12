@@ -21,6 +21,16 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/team_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/small_padding"
+                android:fontFamily="sans-serif-black"
+                android:text="Команда: "
+                android:textColor="@color/textContrast"
+                android:textSize="24sp" />
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/my_points_recycler_view"
                 android:layout_width="match_parent"

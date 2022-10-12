@@ -29,6 +29,10 @@ public class TeamRepository {
         return mTeamDao.getTeamById(id);
     }
 
+    public String getTeamName(int id) {
+        return mTeamDao.getTeamName(id);
+    }
+
     public Team getTeamByStartNumber(String number) {
         return mTeamDao.getTeamByStartNumber(number);
     }

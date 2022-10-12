@@ -53,9 +53,6 @@ public class PhotoFragment extends Fragment {
         binding = FragmentPhotosBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-//        final TextView textView = binding.textDashboard;
-//        dashboardViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
-
         // recycle view
         RecyclerView recyclerView = binding.myPointsRecyclerView;
         final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
@@ -118,6 +115,11 @@ public class PhotoFragment extends Fragment {
             final TextView textView1 = binding.textDashboard2;
             int sum = mPhotoViewModel.getCostSum();
             textView1.post(() -> textView1.setText(String.format("Сумма баллов: %d", sum)));
+
+            final TextView teamName = binding.teamName;
+            String name = mPhotoViewModel.getTeamName();
+            teamName.post(() -> teamName.setText(String.format("Команда: %s", name)));
+
         });
     }
 
