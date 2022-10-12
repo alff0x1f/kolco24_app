@@ -24,10 +24,7 @@ public class PhotoViewModel extends AndroidViewModel {
         mAllPhoto = mPhotoRepository.getAllPhotoPoints();
     }
 
-    public String getTeamName(int teamId) {
-        if (teamId == 0) {
-            return "";
-        }
+    public LiveData<String> getTeamName(int teamId) {
         return mTeamRepository.getTeamName(teamId);
     }
 
@@ -39,11 +36,11 @@ public class PhotoViewModel extends AndroidViewModel {
         return mPhotoRepository.getPhotoByTeamId(teamId);
     }
 
-    int getPhotoCount(int teamId) {
+    LiveData<Integer> getPhotoCount(int teamId) {
         return mPhotoRepository.getPhotoCount(teamId);
     }
 
-    int getCostSum(int teamId) {
+    LiveData<Integer> getCostSum(int teamId) {
         return mPhotoRepository.getCostSum(teamId);
     }
 

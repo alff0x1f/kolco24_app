@@ -25,11 +25,11 @@ public class PhotoRepository {
         return mPhotoDao.getPhotosByTeamId(teamId);
     }
 
-    public int getPhotoCount(int teamId) {
+    public LiveData<Integer> getPhotoCount(int teamId) {
         return mPhotoDao.getPhotoCount(teamId);
     }
 
-    public int getCostSum(int teamId) {
+    public LiveData<Integer> getCostSum(int teamId) {
         return mPhotoDao.getCostSum(teamId);
     }
 

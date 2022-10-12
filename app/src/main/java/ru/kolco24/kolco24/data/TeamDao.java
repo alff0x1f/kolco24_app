@@ -20,7 +20,7 @@ public interface TeamDao {
      Team getTeamById(int id);
 
      @Query("SELECT teamname FROM teams WHERE id = :id")
-     String getTeamName(int id);
+     LiveData<String> getTeamName(int id);
 
      @Query("SELECT * FROM teams WHERE start_number = :number")
      Team getTeamByStartNumber(String number);

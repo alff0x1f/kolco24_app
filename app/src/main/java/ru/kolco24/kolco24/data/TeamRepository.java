@@ -29,7 +29,7 @@ public class TeamRepository {
         return mTeamDao.getTeamById(id);
     }
 
-    public String getTeamName(int id) {
+    public LiveData<String> getTeamName(int id) {
         return mTeamDao.getTeamName(id);
     }
 

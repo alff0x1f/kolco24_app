@@ -19,6 +19,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -71,8 +72,6 @@ public class PhotoFragment extends Fragment {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
-        //counters
-        updateCounters();
         // send photos
         binding.buttonSendPhotos.setOnClickListener(v -> {
             AsyncTask.execute(() -> {
@@ -107,31 +106,32 @@ public class PhotoFragment extends Fragment {
         return root;
     }
 
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        mPhotoViewModel.getPhotoCount(teamId).observe(getViewLifecycleOwner(), count -> {
+            binding.textDashboard.setText(String.format("Количество КП: %d", count));
+        });
+        mPhotoViewModel.getCostSum(teamId).observe(getViewLifecycleOwner(), sum -> {
+            if (sum == null) {
+                binding.textDashboard2.setText("Сумма баллов: 0");
+            } else {
+                binding.textDashboard2.setText(String.format("Сумма баллов: %d", sum));
+            }
+        });
+        mPhotoViewModel.getTeamName(teamId).observe(getViewLifecycleOwner(), name -> {
+            if (name != null) {
+                binding.teamName.setText(String.format("Команда: %s", name));
+            }
+        });
+    }
+
     // on update
     @Override
     public void onResume() {
         super.onResume();
         teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
         ).getInt("team_id", 0);
-        updateCounters();
-    }
-
-    public void updateCounters() {
-        // update photo counter
-        AsyncTask.execute(() -> {
-            final TextView textView = binding.textDashboard;
-            int count = mPhotoViewModel.getPhotoCount(teamId);
-            textView.post(() -> textView.setText(String.format("Количество КП: %d", count)));
-
-            final TextView textView1 = binding.textDashboard2;
-            int sum = mPhotoViewModel.getCostSum(teamId);
-            textView1.post(() -> textView1.setText(String.format("Сумма баллов: %d", sum)));
-
-            final TextView teamName = binding.teamName;
-            String name = mPhotoViewModel.getTeamName(teamId);
-            teamName.post(() -> teamName.setText(String.format("Команда: %s", name)));
-
-        });
     }
 
     public static class GridSpacingItemDecoration extends RecyclerView.ItemDecoration {

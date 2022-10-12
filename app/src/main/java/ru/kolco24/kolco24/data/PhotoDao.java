@@ -31,13 +31,13 @@ public interface PhotoDao {
     @Query("SELECT count(DISTINCT point_number) " +
             "FROM photo_points " +
             "WHERE team_id = :teamId")
-    int getPhotoCount(int teamId);
+    LiveData<Integer> getPhotoCount(int teamId);
 
     @Query("SELECT sum(points.cost) FROM points " +
             "LEFT JOIN (select point_number, team_id from photo_points group by point_number) photo " +
             "ON points.number = photo.point_number " +
             "WHERE photo.point_number IS NOT NULL AND photo.team_id = :teamId")
-    int getCostSum(int teamId);
+    LiveData<Integer> getCostSum(int teamId);
 
     @Query("DELETE FROM photo_points " +
             "WHERE id = :id")
