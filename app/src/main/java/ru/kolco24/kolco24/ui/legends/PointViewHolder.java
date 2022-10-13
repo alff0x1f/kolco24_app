@@ -61,20 +61,9 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         } else {
             color = itemView.getResources().getColor(R.color.level10);
         }
-        if (point.photo_thumb_url != null) {
-            color = itemView.getResources().getColor(R.color.pointIconPlaceholder);
-        }
+        // change color background
         drawable.mutate().setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
         textCost.setBackground(drawable);
-
-        if (point.photo_thumb_url != null) {
-//            ImageView photo_thumb = itemView.findViewById(R.id.photo_thumb);
-//            photo_thumb.setImageURI(Uri.parse(point.photo_thumb_url));
-
-            textPointNumber.setTextColor(Color.parseColor("#999999"));
-
-//            itemView.findViewById(R.id.full_item).setBackgroundColor(Color.parseColor("#f0f0f0"));
-        }
 
         // on click listener
         itemView.setOnClickListener(v -> {
