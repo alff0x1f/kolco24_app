@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -26,6 +27,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.UnknownHostException;
+import java.util.List;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -66,28 +68,7 @@ public class PhotoFragment extends Fragment {
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
         // send photos
-        binding.buttonSendPhotos.setOnClickListener(v -> {
-            AsyncTask.execute(() -> {
-                try {
-                    Photo photo = mPhotoViewModel.getPhotoById(1);
-                    OkHttpClient client = new OkHttpClient();
-                    File file = new File(photo.photo_url);
-                    RequestBody requestBody = new MultipartBody.Builder()
-                            .setType(MultipartBody.FORM)
-                            .addFormDataPart("file", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
-                            .addFormDataPart("team_id", "1")
-                            .build();
-                    Request request = new Request.Builder()
-                            .url("http://192.168.88.164:8000/api/v1/upload_photo")
-                            .post(requestBody)
-                            .build();
-                    Response response = client.newCall(request).execute();
-                    Log.d(TAG, "onCreateView: " + response.body().string());
-                } catch (Exception e) {
-                    Log.d(TAG, "onCreateView: " + e.getMessage());
-                }
-            });
-        });
+        binding.buttonSendPhotos.setOnClickListener(this::uploadPhotos);
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -125,6 +106,49 @@ public class PhotoFragment extends Fragment {
         super.onResume();
         teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
         ).getInt("team_id", 0);
+    }
+
+    private void uploadPhotos(View v) {
+        System.out.println("upload photos");
+        AsyncTask.execute(() -> {
+            try {
+                List<Photo> photos = mPhotoViewModel.getNotSyncPhoto(teamId);
+                OkHttpClient client = new OkHttpClient();
+                for (Photo photo : photos) {
+                    File file = new File(photo.photo_url);
+                    RequestBody requestBody = new MultipartBody.Builder()
+                            .setType(MultipartBody.FORM)
+                            .addFormDataPart("team_id", String.valueOf(teamId))
+                            .addFormDataPart("point_number", String.valueOf(photo.getPointNumber()))
+                            .addFormDataPart("photo", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
+                            .build();
+                    Request request = new Request.Builder()
+                            .url("http://192.168.88.164/api/v1/upload_photo")
+                            .post(requestBody)
+                            .build();
+                    Response response = client.newCall(request).execute();
+                    if (response.isSuccessful()) {
+                        try {
+                            JSONObject jsonObject = new JSONObject(response.body().string());
+                            if (jsonObject.getBoolean("success")) {
+                                photo.setSync(true);
+                                mPhotoViewModel.update(photo);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        // Ui tread
+                        String err_text = String.format("Ошибка при отправке фото КП %d", photo.point_number);
+                        getActivity().runOnUiThread(() -> {
+                            Toast.makeText(getContext(), err_text, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                Log.d(TAG, "onCreateView: " + e.getMessage());
+            }
+        });
     }
 
     public static class GridSpacingItemDecoration extends RecyclerView.ItemDecoration {

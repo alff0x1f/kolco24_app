@@ -28,6 +28,8 @@ public class Photo {
     @NonNull
     @ColumnInfo(name = "status")
     public String status;
+    public boolean sync_local;
+    public boolean sync_internet;
 
     public String photo_time;
 
@@ -41,5 +43,15 @@ public class Photo {
         this.photo_thumb_url = photo_thumb_url;
         this.status = "new";
         this.photo_time = photo_time;
+        this.sync_internet = false;
+        this.sync_local = false;
+    }
+
+    public int getPointNumber() {
+        return point_number;
+    }
+
+    public void setSync(boolean b) {
+        this.sync_internet = true;
     }
 }

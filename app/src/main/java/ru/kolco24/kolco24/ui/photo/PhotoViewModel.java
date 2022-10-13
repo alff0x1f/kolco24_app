@@ -48,6 +48,10 @@ public class PhotoViewModel extends AndroidViewModel {
         return mPhotoRepository.getPhotoById(id);
     }
 
+    public List<Photo> getNotSyncPhoto(int teamId) {
+        return mPhotoRepository.getNotSyncPhoto(teamId);
+    }
+
     public void insert(Photo photo) {
         mPhotoRepository.insert(photo);
     }

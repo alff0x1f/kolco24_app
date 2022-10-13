@@ -20,6 +20,10 @@ public interface PhotoDao {
     Photo getPhotoById(int id);
 
     @Query("SELECT * FROM photo_points " +
+            "WHERE team_id = :teamId AND sync_internet=0")
+    List<Photo> getNotSyncPhoto(int teamId);
+
+    @Query("SELECT * FROM photo_points " +
             "ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();
 
@@ -34,9 +38,11 @@ public interface PhotoDao {
     LiveData<Integer> getPhotoCount(int teamId);
 
     @Query("SELECT sum(points.cost) FROM points " +
-            "LEFT JOIN (select point_number, team_id from photo_points group by point_number) photo " +
-            "ON points.number = photo.point_number " +
-            "WHERE photo.point_number IS NOT NULL AND photo.team_id = :teamId")
+            "LEFT JOIN (SELECT point_number, team_id FROM photo_points " +
+            "  WHERE team_id= :teamId " +
+            "  GROUP BY point_number) photo " +
+            "    ON points.number = photo.point_number " +
+            "WHERE photo.point_number IS NOT NULL")
     LiveData<Integer> getCostSum(int teamId);
 
     @Query("DELETE FROM photo_points " +
