@@ -20,7 +20,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Point;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
@@ -38,6 +37,7 @@ public class LegendsFragment extends Fragment {
 
     private FragmentLegendsBinding binding;
     private PointViewModel mPointViewModel;
+    private int teamId;
     private final OkHttpClient client = new OkHttpClient();
 
     @Override
@@ -56,15 +56,24 @@ public class LegendsFragment extends Fragment {
 
 //        final TextView textView = binding.legendHeader;
 //        legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
+        teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
 
+        // Set up the RecyclerView taken points
         RecyclerView recyclerView = binding.recyclerView;
         final PointListAdapter adapter = new PointListAdapter(new PointListAdapter.PointDiff());
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
-
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
-        mPointViewModel.getAllPoints().observe(getViewLifecycleOwner(), adapter::submitList);
+        mPointViewModel.getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
+
+        // Set up the RecyclerView new points
+        RecyclerView newPointsRecyclerView = binding.newPointsRecyclerView;
+        final PointListAdapter adapter2 = new PointListAdapter(new PointListAdapter.PointDiff());
+        newPointsRecyclerView.setAdapter(adapter2);
+        newPointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
+        mPointViewModel.getNewPointsByTeam(teamId).observe(getViewLifecycleOwner(), adapter2::submitList);
+
 
         //swipe to refresh
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
@@ -180,7 +189,7 @@ public class LegendsFragment extends Fragment {
     //set background recycle items on resume
     public void onResume() {
         super.onResume();
-        System.out.println("onResume");
+        teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
         if (binding != null) {
             //background each item of recycle view
             RecyclerView recyclerView = binding.recyclerView;

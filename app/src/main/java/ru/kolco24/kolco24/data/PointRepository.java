@@ -20,6 +20,14 @@ public class PointRepository {
         return mAllPoints;
     }
 
+    public LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId) {
+        return mPointDao.getNewPointsByTeam(teamId);
+    }
+
+    public LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId) {
+        return mPointDao.getTakenPointsByTeam(teamId);
+    }
+
     public Point getPointById(int id) {
         return mPointDao.getPointById(id);
     }

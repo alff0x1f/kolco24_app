@@ -30,6 +30,32 @@ public interface PointDao {
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getAllPoints();
 
+    @Query("SELECT points.*, photo.photo_thumb_url " +
+            "FROM points " +
+            "LEFT JOIN (" +
+            "  SELECT point_number, min(photo_thumb_url) AS photo_thumb_url " +
+            "  FROM photo_points " +
+            "  WHERE team_id = :teamId " +
+            "  GROUP BY point_number" +
+            ") photo " +
+            "ON points.number == photo.point_number " +
+            "WHERE photo.point_number IS NULL " +
+            "ORDER BY points.number")
+    LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId);
+
+    @Query("SELECT points.*, photo.photo_thumb_url " +
+            "FROM points " +
+            "LEFT JOIN (" +
+            "  SELECT point_number, min(photo_thumb_url) AS photo_thumb_url " +
+            "  FROM photo_points " +
+            "  WHERE team_id = :teamId " +
+            "  GROUP BY point_number" +
+            ") photo " +
+            "ON points.number == photo.point_number " +
+            "WHERE photo.point_number IS NOT NULL " +
+            "ORDER BY points.number")
+    LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId);
+
     @Query("DELETE FROM points WHERE id = :id")
     void deletePointById(int id);
 
