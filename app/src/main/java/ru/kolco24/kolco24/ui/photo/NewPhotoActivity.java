@@ -64,8 +64,7 @@ public class NewPhotoActivity extends AppCompatActivity {
             AlertDialog dialog = new AlertDialog.Builder(this)
                     .setTitle("Не выбрана команда")
                     .setMessage("Найдите свою команду на вкладке \"Команды\" и выберите её " +
-                            "долгим нажатием"
-                    )
+                            "в качестве текущей")
                     .setPositiveButton("Ок", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialogInterface, int i) {

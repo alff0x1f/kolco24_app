@@ -1,6 +1,8 @@
 package ru.kolco24.kolco24.ui.teams;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,21 +39,35 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
             itemView.setBackgroundColor(itemView.getResources().getColor(R.color.background));
         }
 
-        itemView.setOnLongClickListener(v -> {
-            int prev_team_id = itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
-                    .getInt("team_id", 0);
+        itemView.setOnClickListener(view -> {
+            AlertDialog dialog = new AlertDialog.Builder(itemView.getContext())
+                    .setTitle(teamname)
+                    .setMessage("Эта ваша команда?")
+                    .setPositiveButton("Да", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
+                                    .edit().putInt("team_id", team_id).apply();
+                            Toast.makeText(itemView.getContext(),
+                                    "Команда \"" + teamname + "\" выбрана как ваша",
+                                    Toast.LENGTH_SHORT
+                            ).show();
+                        }
+                    }).setNegativeButton(
+                            "Нет", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialogInterface, int i) {
 
-            if (prev_team_id != team_id) {
-                itemView.setBackgroundColor(itemView.getResources().getColor(R.color.myTeam));
-                itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
-                        .edit().putInt("team_id", team_id).apply();
-                Toast.makeText(itemView.getContext(),
-                        "Команда \"" + teamname + "\" выбрана как ваша",
-                        Toast.LENGTH_SHORT
-                ).show();
-                return true;
-            }
-            return false;
+                                }
+                            }
+                    )
+                    .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                        @Override
+                        public void onCancel(DialogInterface dialogInterface) {
+
+                        }
+                    }).create();
+            dialog.show();
         });
     }
 
