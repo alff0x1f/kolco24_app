@@ -54,15 +54,6 @@
                     android:text="@string/button_load"
                     android:textColor="@color/buttonLabel" />
 
-                <Button
-                    android:id="@+id/button_camera"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="@dimen/big_padding"
-                    android:layout_weight="1"
-                    android:text="@string/button_camera"
-                    android:textColor="@color/buttonLabel" />
-
             </LinearLayout>
 
 

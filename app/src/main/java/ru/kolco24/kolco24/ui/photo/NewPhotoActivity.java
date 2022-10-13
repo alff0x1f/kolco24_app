@@ -149,10 +149,6 @@ public class NewPhotoActivity extends AppCompatActivity {
         final Button galleryButton = findViewById(R.id.button_gallery);
         galleryButton.setOnClickListener(this::openGallery);
 
-        //camera
-        final Button cameraButton = findViewById(R.id.button_camera);
-        cameraButton.setOnClickListener(this::openCamera);
-
         //editImage
         final ImageView editIcon = findViewById(R.id.edit_icon);
         editIcon.setOnClickListener(this::openGallery);
