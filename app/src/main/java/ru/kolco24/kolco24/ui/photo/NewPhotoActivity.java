@@ -17,7 +17,6 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -29,7 +28,6 @@ import android.widget.Toast;
 
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Photo;
-import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -82,62 +80,7 @@ public class NewPhotoActivity extends AppCompatActivity {
         }
 
         final Button saveButton = findViewById(R.id.button_save);
-        saveButton.setOnClickListener(view -> {
-            if (pointNumber == 0) {
-                requestNumber();
-//                Toast.makeText(getApplicationContext(), "Укажите номер КП", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (photoUri == null) {
-                Toast.makeText(getApplicationContext(), "Выберите фото", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
-            if (photoId == 0) {
-                // Create new photo
-                int teamId = getApplicationContext().getSharedPreferences(
-                        "team",
-                        Context.MODE_PRIVATE
-                ).getInt("team_id", 0);
-                photoViewModel.insert(new Photo(
-                        teamId,
-                        pointNumber,
-                        photoUri,
-                        photoThumbUri
-                ));
-            } else {
-                // Update photo
-                AsyncTask.execute(() -> {
-                    Photo photo = photoViewModel.getPhotoById(photoId);
-                    boolean isChanged = false;
-                    if (photo.point_number != pointNumber) {
-                        photo.point_number = pointNumber;
-                        isChanged = true;
-                    }
-                    if (!photo.photo_url.equals(photoUri)) {
-                        photo.photo_url = photoUri;
-                        photo.photo_thumb_url = photoThumbUri;
-                        isChanged = true;
-                    }
-                    if (isChanged) {
-                        photo.status = Photo.NEW;
-                        photoViewModel.update(photo);
-                    } else {
-                        runOnUiThread(() -> Toast.makeText(
-                                getApplicationContext(),
-                                "Изменений не было",
-                                Toast.LENGTH_SHORT
-                        ).show());
-                    }
-                });
-            }
-            finish();
-        });
-
-        //editImage
-        final ImageView editIcon = findViewById(R.id.edit_icon);
-        editIcon.setOnClickListener(this::openGallery);
+        saveButton.setOnClickListener(this::savePhoto);
     }
 
     @Override
@@ -158,6 +101,10 @@ public class NewPhotoActivity extends AppCompatActivity {
         }
         if (item.getItemId() == R.id.action_change_number) {
             requestNumber();
+            return true;
+        }
+        if (item.getItemId() == R.id.action_save || item.getItemId() == R.id.action_save2) {
+            savePhoto(null);
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -338,4 +285,55 @@ public class NewPhotoActivity extends AppCompatActivity {
         return dstBmp;
     }
 
+    private void savePhoto(View view) {
+        if (pointNumber == 0) {
+            requestNumber();
+            return;
+        }
+        if (photoUri == null) {
+            Toast.makeText(getApplicationContext(), "Выберите фото", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
+        if (photoId == 0) {
+            // Create new photo
+            int teamId = getApplicationContext().getSharedPreferences(
+                    "team",
+                    Context.MODE_PRIVATE
+            ).getInt("team_id", 0);
+            photoViewModel.insert(new Photo(
+                    teamId,
+                    pointNumber,
+                    photoUri,
+                    photoThumbUri
+            ));
+        } else {
+            // Update photo
+            AsyncTask.execute(() -> {
+                Photo photo = photoViewModel.getPhotoById(photoId);
+                boolean isChanged = false;
+                if (photo.point_number != pointNumber) {
+                    photo.point_number = pointNumber;
+                    isChanged = true;
+                }
+                if (!photo.photo_url.equals(photoUri)) {
+                    photo.photo_url = photoUri;
+                    photo.photo_thumb_url = photoThumbUri;
+                    isChanged = true;
+                }
+                if (isChanged) {
+                    photo.status = Photo.NEW;
+                    photoViewModel.update(photo);
+                } else {
+                    runOnUiThread(() -> Toast.makeText(
+                            getApplicationContext(),
+                            "Изменений не было",
+                            Toast.LENGTH_SHORT
+                    ).show());
+                }
+            });
+        }
+        finish();
+    }
 }
