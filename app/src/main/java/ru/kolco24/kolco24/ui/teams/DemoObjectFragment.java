@@ -89,7 +89,7 @@ public class DemoObjectFragment extends Fragment {
             }
         });
         binding.swipeToRefresh.setOnRefreshListener(() -> teamViewModel.downloadTeams(
-                "https://kolco24.ru/api/v1/teams"
+                "https://kolco24.ru/api/v1/teams", categoryCode
         ));
         return root;
     }
