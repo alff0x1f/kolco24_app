@@ -29,14 +29,17 @@ public class Photo {
     @ColumnInfo(name = "status")
     public String status;
 
+    public String photo_time;
+
 
     //__init__
     public Photo(int team_id, int point_number, @NonNull String photo_url,
-                 @NonNull String photo_thumb_url) {
+                 @NonNull String photo_thumb_url, @NonNull String photo_time) {
         this.team_id = team_id;
         this.point_number = point_number;
         this.photo_url = photo_url;
         this.photo_thumb_url = photo_thumb_url;
         this.status = "new";
+        this.photo_time = photo_time;
     }
 }

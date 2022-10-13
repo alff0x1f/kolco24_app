@@ -49,6 +49,7 @@ public class NewPhotoActivity extends AppCompatActivity {
     private int pointNumber;
     private String photoUri;
     private String photoThumbUri;
+    private String photoTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -180,6 +181,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                     bitmap.recycle();
 
                     String imageName = generateImageName();
+                    updatePhotoTime();
                     photoUri = save_image(bitmapMain, imageName + ".jpg");
                     bitmapMain.recycle();
                     photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
@@ -191,6 +193,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
                 ImageView image = findViewById(R.id.imageView);
                 image.setImageURI(Uri.parse(photoUri));
+                savePhoto(null);
             } else if (photoUri == null) {
                 finish();
             }
@@ -207,6 +210,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                     bitmap.recycle();
 
                     String imageName = generateImageName();
+                    updatePhotoTime();
                     photoUri = save_image(bitmapMain, imageName + ".jpg");
                     bitmapMain.recycle();
                     photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
@@ -218,6 +222,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
                 ImageView image = findViewById(R.id.imageView);
                 image.setImageURI(Uri.parse(photoUri));
+                savePhoto(null);
             } else if (photoUri == null) {
                 openGallery(null);
             }
@@ -254,6 +259,13 @@ public class NewPhotoActivity extends AppCompatActivity {
                 Locale.US
         ).format(new Date());
         return "img_" + timeStamp;
+    }
+
+    public void updatePhotoTime(){
+        photoTime = new SimpleDateFormat(
+                "dd.MM HH:mm",
+                Locale.US
+        ).format(new Date());
     }
 
     public static Bitmap cropBitmap(Bitmap srcBmp) {
@@ -321,7 +333,8 @@ public class NewPhotoActivity extends AppCompatActivity {
                     teamId,
                     pointNumber,
                     photoUri,
-                    photoThumbUri
+                    photoThumbUri,
+                    photoTime
             ));
         } else {
             // Update photo
@@ -335,6 +348,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                 if (!photo.photo_url.equals(photoUri)) {
                     photo.photo_url = photoUri;
                     photo.photo_thumb_url = photoThumbUri;
+                    photo.photo_time = photoTime;
                     isChanged = true;
                 }
                 if (isChanged) {

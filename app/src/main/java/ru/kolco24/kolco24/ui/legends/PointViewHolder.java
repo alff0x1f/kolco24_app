@@ -33,7 +33,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
 
     public void bind(Point.PointExt point) {
         textView.setText(String.format("%02d", point.number));
-        textPointNumber.setText("14:05");
+        textPointNumber.setText(point.photo_time);
 
         textDescription.setText(point.description);
         textCost.setText(String.format("+%d", point.cost));
@@ -64,6 +64,8 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         // change color background
         drawable.mutate().setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
         textCost.setBackground(drawable);
+
+
 
         // on click listener
         itemView.setOnClickListener(v -> {
