@@ -5,13 +5,21 @@
 
     <!-- Settings, should always be in the overflow -->
     <item
+        android:id="@+id/actionAddFromCamera"
+        android:title="Добавить фото с камеры"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/actionAddFromGallery"
+        android:title="Добавить фото с галереи"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_sync_internet"
-        android:title="Выгрузить фото через интернет"
+        android:title="Отправить фото через интернет"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_sync_local"
-        android:title="Выгрузить фото через wifi"
+        android:title="Отправить фото через Wi-Fi"
         app:showAsAction="never" />
 
 </menu>

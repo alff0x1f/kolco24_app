@@ -92,6 +92,7 @@ public class NewPhotoActivity extends AppCompatActivity {
         pointNumber = callingIntent.getIntExtra("point_number", 0);
         photoUri = callingIntent.getStringExtra("photo_uri");
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
+        boolean fromGallery = callingIntent.getBooleanExtra("fromGallery", false);
 
         if (photoId != 0) {
             ImageView imageView = findViewById(R.id.imageView);
@@ -104,7 +105,11 @@ public class NewPhotoActivity extends AppCompatActivity {
         }
 
         if (photoId == 0) {
-            openCamera(null);
+            if (fromGallery) {
+                openGallery(null);
+            } else {
+                openCamera(null);
+            }
         }
     }
 
@@ -258,7 +263,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                 image.setImageURI(Uri.parse(photoUri));
                 savePhoto(null);
             } else if (photoUri == null) {
-                openGallery(null);
+                finish();
             }
         }
     }

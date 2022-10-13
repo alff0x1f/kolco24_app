@@ -122,6 +122,15 @@ public class PhotoFragment extends Fragment {
         if (item.getItemId() == R.id.action_sync_local) {
             uploadPhotos(LOCAL_SYNC);
         }
+        if (item.getItemId() == R.id.actionAddFromCamera) {
+            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
+            startActivity(intent);
+        }
+        if (item.getItemId() == R.id.actionAddFromGallery) {
+            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
+            intent.putExtra("fromGallery", true);
+            startActivity(intent);
+        }
         return super.onOptionsItemSelected(item);
     }
 
