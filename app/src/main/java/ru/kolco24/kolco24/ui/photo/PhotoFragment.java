@@ -9,6 +9,9 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
@@ -35,6 +38,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
@@ -43,6 +47,11 @@ public class PhotoFragment extends Fragment {
     private PhotoViewModel mPhotoViewModel;
     private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
     private int teamId;
+
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+    }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -67,8 +76,6 @@ public class PhotoFragment extends Fragment {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
-        // send photos
-        binding.buttonSendPhotos.setOnClickListener(this::uploadPhotos);
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -98,6 +105,21 @@ public class PhotoFragment extends Fragment {
                 binding.teamName.setText(String.format("Команда: %s", name));
             }
         });
+    }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        inflater.inflate(R.menu.photos_menu, menu);
+    }
+
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_sync_internet) {
+            uploadPhotos(null); // TODO add url
+        }
+        if (item.getItemId() == R.id.action_sync_local) {
+            uploadPhotos(null); // TODO add url
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     // on update
