@@ -96,6 +96,14 @@ public class LegendsFragment extends Fragment {
         newPointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
         mPointViewModel.getNewPointsByTeam(teamId).observe(getViewLifecycleOwner(), adapter2::submitList);
 
+        mPointViewModel.getAllPoints().observe(getViewLifecycleOwner(), points -> {
+            if (points.size() == 0) {
+                binding.textNoLegends.setVisibility(View.VISIBLE);
+            } else {
+                binding.textNoLegends.setVisibility(View.GONE);
+                binding.swipeToRefresh.setRefreshing(false);
+            }
+        });
 
         //swipe to refresh
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
