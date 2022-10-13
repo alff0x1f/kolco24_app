@@ -32,11 +32,13 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 public class LegendsFragment extends Fragment {
 
     private FragmentLegendsBinding binding;
     private PointViewModel mPointViewModel;
+    private PhotoViewModel mPhotoViewModel;
     private int teamId;
     private final OkHttpClient client = new OkHttpClient();
 
@@ -57,6 +59,27 @@ public class LegendsFragment extends Fragment {
 //        final TextView textView = binding.legendHeader;
 //        legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
         teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
+        mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
+        mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
+
+        mPhotoViewModel.getCostSum(teamId).observe(getViewLifecycleOwner(), count -> {
+            if (count != null) {
+                binding.takenPointsSum.setText(String.format("Сумма баллов: %d", count));
+            } else {
+                binding.takenPointsSum.setText("Сумма баллов: 0");
+            }
+        });
+        mPhotoViewModel.getPhotoCount(teamId).observe(getViewLifecycleOwner(), count -> {
+            if (count == 0) {
+                binding.takenPointsSum.setVisibility(View.GONE);
+                binding.header1.setVisibility(View.GONE);
+                binding.header2.setVisibility(View.GONE);
+            } else {
+                binding.takenPointsSum.setVisibility(View.VISIBLE);
+                binding.header1.setVisibility(View.VISIBLE);
+                binding.header2.setVisibility(View.VISIBLE);
+            }
+        });
 
         // Set up the RecyclerView taken points
         RecyclerView recyclerView = binding.recyclerView;
@@ -64,7 +87,6 @@ public class LegendsFragment extends Fragment {
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
         // Get a new or existing ViewModel from the ViewModelProvider.
-        mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
         mPointViewModel.getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
 
         // Set up the RecyclerView new points

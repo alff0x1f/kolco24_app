@@ -36,11 +36,11 @@ public class PhotoViewModel extends AndroidViewModel {
         return mPhotoRepository.getPhotoByTeamId(teamId);
     }
 
-    LiveData<Integer> getPhotoCount(int teamId) {
+    public LiveData<Integer> getPhotoCount(int teamId) {
         return mPhotoRepository.getPhotoCount(teamId);
     }
 
-    LiveData<Integer> getCostSum(int teamId) {
+    public LiveData<Integer> getCostSum(int teamId) {
         return mPhotoRepository.getCostSum(teamId);
     }
 

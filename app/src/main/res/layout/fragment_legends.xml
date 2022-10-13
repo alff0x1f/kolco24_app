@@ -54,6 +54,13 @@
                     tools:listitem="@layout/recyclerview_item" />
 
                 <TextView
+                    android:id="@+id/taken_points_sum"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="@dimen/small_padding"
+                    android:textSize="16sp" />
+
+                <TextView
                     android:id="@+id/header2"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
