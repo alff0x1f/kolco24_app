@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.photo;
 
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
@@ -17,6 +18,9 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -52,7 +56,8 @@ public class NewPhotoActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        getSupportActionBar().setBackgroundDrawable(
+        final ActionBar actionBar = getSupportActionBar();
+        actionBar.setBackgroundDrawable(
                 new ColorDrawable(getResources().getColor(R.color.black))
         );
 
@@ -75,6 +80,13 @@ public class NewPhotoActivity extends AppCompatActivity {
 
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
+        }
+
+        //header action bar
+        if (photoId != 0) {
+            actionBar.setTitle("Редактирование фото КП");
+        } else {
+            actionBar.setTitle("Новое фото");
         }
 
         final Button saveButton = findViewById(R.id.button_save);
@@ -147,6 +159,32 @@ public class NewPhotoActivity extends AppCompatActivity {
         //editImage
         final ImageView editIcon = findViewById(R.id.edit_icon);
         editIcon.setOnClickListener(this::openGallery);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.photo_menu, menu);
+        return true;
+    }
+
+    public boolean onOptionsItemSelected(MenuItem item) {
+        return super.onOptionsItemSelected(item);
+//        switch (item.getItemId()) {
+//            case R.id.delete_photo:
+//                if (photoId != 0) {
+//                    PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
+//                    AsyncTask.execute(() -> {
+//                        Photo photo = photoViewModel.getPhotoById(photoId);
+//                        photo.status = Photo.DELETED;
+//                        photoViewModel.update(photo);
+//                        finish();
+//                    });
+//                }
+//                return true;
+//            default:
+//                return super.onOptionsItemSelected(item);
+//        }
     }
 
     private void requestNumber() {
