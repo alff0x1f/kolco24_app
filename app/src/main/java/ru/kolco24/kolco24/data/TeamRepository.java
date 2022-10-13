@@ -33,6 +33,10 @@ public class TeamRepository {
         return mTeamDao.getTeamName(id);
     }
 
+    public LiveData<Team> getTeam(int id) {
+        return mTeamDao.getTeam(id);
+    }
+
     public int getTeamNumberById(int id) {
         return mTeamDao.getTeamNumberById(id);
     }

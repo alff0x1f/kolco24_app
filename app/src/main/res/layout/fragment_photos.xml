@@ -27,7 +27,7 @@
                 android:layout_height="wrap_content"
                 android:layout_margin="@dimen/small_padding"
                 android:fontFamily="sans-serif-black"
-                android:text="Команда: "
+                android:text=""
                 android:textColor="@color/textContrast"
                 android:textSize="24sp" />
 

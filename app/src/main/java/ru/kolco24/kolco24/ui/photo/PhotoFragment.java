@@ -41,10 +41,12 @@ import okhttp3.Response;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
+import ru.kolco24.kolco24.ui.teams.TeamViewModel;
 
 public class PhotoFragment extends Fragment {
     private final int LOCAL_SYNC = 1;
     private final int INTERNET_SYNC = 2;
+    public final OkHttpClient client = new OkHttpClient();
 
     private FragmentPhotosBinding binding;
     private PhotoViewModel mPhotoViewModel;
@@ -79,6 +81,9 @@ public class PhotoFragment extends Fragment {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
+        mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), photos -> {
+            uploadPhotos(false);
+        });
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -103,13 +108,8 @@ public class PhotoFragment extends Fragment {
                 binding.textDashboard2.setText(String.format("Сумма баллов: %d", sum));
             }
         });
-        mPhotoViewModel.getTeamName(teamId).observe(getViewLifecycleOwner(), name -> {
-            if (name != null) {
-                AsyncTask.execute(() -> {
-                    int teamNumber = mPhotoViewModel.getTeamNumberById(teamId);
-                    binding.teamName.setText(String.format("%d: %s", teamNumber, name));
-                });
-            }
+        mPhotoViewModel.getTeam(teamId).observe(getViewLifecycleOwner(), team -> {
+            binding.teamName.setText(String.format("%s: %s", team.start_number, team.teamname));
         });
         mPhotoViewModel.getNonLegendPointNumbers(teamId).observe(getViewLifecycleOwner(), nums -> {
             if (nums != null && nums.size() > 0) {
@@ -135,11 +135,8 @@ public class PhotoFragment extends Fragment {
     }
 
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.action_sync_internet) {
-            uploadPhotos(INTERNET_SYNC);
-        }
-        if (item.getItemId() == R.id.action_sync_local) {
-            uploadPhotos(LOCAL_SYNC);
+        if (item.getItemId() == R.id.action_sync) {
+            uploadPhotos(true);
         }
         if (item.getItemId() == R.id.actionAddFromCamera) {
             Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
@@ -157,59 +154,93 @@ public class PhotoFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE
-        ).getInt("team_id", 0);
+        teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE).
+                getInt("team_id", 0);
     }
 
-    private void uploadPhotos(int type) {
+    public void uploadPhotos(boolean withToast) {
         AsyncTask.execute(() -> {
-            String url;
-            if (type == LOCAL_SYNC) {
-                url = "http://192.168.88.164/api/v1/upload_photo";
-            } else {
-                url = "https://kolco24.ru/api/v1/upload_photo";
-            }
-            try {
-                List<Photo> photos;
-                if (type == LOCAL_SYNC) {
-                    photos = mPhotoViewModel.getNotLocalSyncPhoto(teamId);
-                } else {
-                    photos = mPhotoViewModel.getNotSyncPhoto(teamId);
-                }
+            uploadLocalPhotos(withToast);
+            uploadInternetPhotos(withToast);
+        });
+    }
 
-                OkHttpClient client = new OkHttpClient();
-                for (Photo photo : photos) {
-                    File file = new File(photo.photo_url);
-                    RequestBody requestBody = new MultipartBody.Builder()
-                            .setType(MultipartBody.FORM)
-                            .addFormDataPart("team_id", String.valueOf(teamId))
-                            .addFormDataPart("point_number", String.valueOf(photo.getPointNumber()))
-                            .addFormDataPart("photo", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
-                            .build();
-                    Request request = new Request.Builder().url(url).post(requestBody).build();
-                    Response response = client.newCall(request).execute();
-                    if (response.isSuccessful()) {
-                        try {
-                            JSONObject jsonObject = new JSONObject(response.body().string());
-                            if (jsonObject.getBoolean("success")) {
-                                photo.setSync(true);
-                                mPhotoViewModel.update(photo);
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    } else {
-                        // Ui tread
-                        String err_text = String.format("Ошибка при отправке фото КП %d", photo.point_number);
-                        getActivity().runOnUiThread(() -> {
-                            Toast.makeText(getContext(), err_text, Toast.LENGTH_SHORT).show();
-                        });
-                    }
+    public void uploadLocalPhotos(boolean withToast) {
+        boolean localResult = true;
+        List<Photo> notLocalSync = mPhotoViewModel.getNotLocalSyncPhoto(teamId);
+        for (Photo photo : notLocalSync) {
+            boolean isSuccess = upload_photo(photo, "http://192.168.88.164/api/v1/upload_photo");
+            if (isSuccess) {
+                photo.setSyncLocal(true);
+                mPhotoViewModel.update(photo);
+            } else {
+                localResult = false;
+            }
+        }
+        if (withToast) {
+            if (localResult) {
+                getActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Фото локально отправлены", Toast.LENGTH_SHORT).show();
+                });
+            } else {
+                getActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Ошибка при локальной отправке фото", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }
+    }
+
+    public void uploadInternetPhotos(boolean withToast) {
+        boolean internetResult = true;
+        List<Photo> notSync = mPhotoViewModel.getNotSyncPhoto(teamId);
+        for (Photo photo : notSync) {
+            boolean isSuccess = upload_photo(photo, "https://kolco24.ru/api/v1/upload_photo");
+            if (isSuccess) {
+                photo.setSync(true);
+                mPhotoViewModel.update(photo);
+            } else {
+                internetResult = false;
+            }
+        }
+        if (withToast) {
+            if (internetResult) {
+                getActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Фото отправлены через интернет", Toast.LENGTH_SHORT).show();
+                });
+            } else {
+                getActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Ошибка при отправке через интернет", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }
+    }
+
+    public boolean upload_photo(Photo photo, String url) {
+        File file = new File(photo.photo_url);
+        RequestBody requestBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("team_id", String.valueOf(teamId))
+                .addFormDataPart("point_number", String.valueOf(photo.getPointNumber()))
+                .addFormDataPart("photo", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
+                .build();
+        Request request = new Request.Builder().url(url).post(requestBody).build();
+        Response response;
+        try {
+            response = client.newCall(request).execute();
+        } catch (Exception e) {
+            return false;
+        }
+        if (response.isSuccessful()) {
+            try {
+                JSONObject jsonObject = new JSONObject(response.body().string());
+                if (jsonObject.getBoolean("success")) {
+                    return true;
                 }
             } catch (Exception e) {
-                Log.d(TAG, "onCreateView: " + e.getMessage());
+                e.printStackTrace();
             }
-        });
+        }
+        return false;
     }
 
     public static class GridSpacingItemDecoration extends RecyclerView.ItemDecoration {
@@ -245,41 +276,6 @@ public class PhotoFragment extends Fragment {
                 }
             }
         }
-    }
-
-    public static JSONObject uploadImage(File file) {
-
-        try {
-
-            final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/jpg");
-
-            RequestBody body = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                    .addFormDataPart("userid", "8457851245")
-                    .addFormDataPart(
-                            "userfile",
-                            "profile.png",
-                            RequestBody.create(file, MEDIA_TYPE_PNG)
-                    )
-                    .build();
-
-            Request request = new Request.Builder()
-                    .url("url")
-                    .post(body)
-                    .build();
-
-            OkHttpClient client = new OkHttpClient();
-            Response response = client.newCall(request).execute();
-
-            Log.d("response", "uploadImage:" + response.body().string());
-
-            return new JSONObject(response.body().string());
-
-        } catch (UnknownHostException | UnsupportedEncodingException e) {
-            Log.e(TAG, "Error: " + e.getLocalizedMessage());
-        } catch (Exception e) {
-            Log.e(TAG, "Other Error: " + e.getLocalizedMessage());
-        }
-        return null;
     }
 
     @Override

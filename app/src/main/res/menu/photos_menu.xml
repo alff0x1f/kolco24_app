@@ -13,13 +13,9 @@
         android:title="Добавить фото с галереи"
         app:showAsAction="never" />
     <item
-        android:id="@+id/action_sync_internet"
-        android:title="Отправить фото через интернет"
+        android:id="@+id/action_sync"
+        android:title="Отправить фото на сервер"
         app:showAsAction="never" />
 
-    <item
-        android:id="@+id/action_sync_local"
-        android:title="Отправить фото через Wi-Fi"
-        app:showAsAction="never" />
 
 </menu>

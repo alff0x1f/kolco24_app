@@ -22,6 +22,9 @@ public interface TeamDao {
      @Query("SELECT teamname FROM teams WHERE id = :id")
      LiveData<String> getTeamName(int id);
 
+     @Query("SELECT * FROM teams WHERE id = :id")
+     LiveData<Team> getTeam(int id);
+
      @Query("SELECT start_number FROM teams WHERE id = :id")
      int getTeamNumberById(int id);
 

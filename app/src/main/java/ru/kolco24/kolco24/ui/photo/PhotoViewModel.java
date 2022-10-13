@@ -7,6 +7,7 @@ import androidx.lifecycle.LiveData;
 
 import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.data.PhotoRepository;
+import ru.kolco24.kolco24.data.Team;
 import ru.kolco24.kolco24.data.TeamRepository;
 
 import java.util.List;
@@ -25,6 +26,10 @@ public class PhotoViewModel extends AndroidViewModel {
 
     public LiveData<String> getTeamName(int teamId) {
         return mTeamRepository.getTeamName(teamId);
+    }
+
+    public LiveData<Team> getTeam(int teamId) {
+        return mTeamRepository.getTeam(teamId);
     }
 
     public int getTeamNumberById(int teamId) {
