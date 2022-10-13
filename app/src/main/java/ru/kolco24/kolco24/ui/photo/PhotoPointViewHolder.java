@@ -27,7 +27,7 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
 
     public void bind(int id, int point_number, Uri uri, Uri uriThumb,
                      Boolean sync_internet, boolean sync_local) {
-        textView.setText(Integer.toString(point_number));
+        textView.setText(String.format("%02d", point_number));
         photoKP.setImageURI(uriThumb);
 
         itemView.setOnClickListener(v -> {
