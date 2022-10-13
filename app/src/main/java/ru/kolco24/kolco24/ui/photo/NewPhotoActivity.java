@@ -71,16 +71,19 @@ public class NewPhotoActivity extends AppCompatActivity {
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
         }
-
-        //header action bar
-        if (photoId != 0) {
-            actionBar.setTitle("Редактирование фото КП");
-        } else {
-            actionBar.setTitle("Новое фото");
-        }
-
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(this::savePhoto);
+        if (photoId != 0) {
+            actionBar.setTitle("Редактирование фото КП");
+            saveButton.setText("Сохранить");
+        } else {
+            actionBar.setTitle("Новое фото");
+            saveButton.setText("Добавить");
+        }
+
+        if (photoId == 0) {
+            openCamera(null);
+        }
     }
 
     @Override
@@ -105,6 +108,10 @@ public class NewPhotoActivity extends AppCompatActivity {
         }
         if (item.getItemId() == R.id.action_save || item.getItemId() == R.id.action_save2) {
             savePhoto(null);
+            return true;
+        }
+        if (item.getItemId() == R.id.action_delete) {
+            deletePhoto(null);
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -160,52 +167,60 @@ public class NewPhotoActivity extends AppCompatActivity {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_IMAGE_GALLERY && resultCode == RESULT_OK) {
-            Uri imageUri = data.getData();
+        if (requestCode == REQUEST_IMAGE_GALLERY) {
+            if (resultCode == RESULT_OK) {
+                Uri imageUri = data.getData();
 
-            try {
-                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
-                Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
+                try {
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
+                    Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
 
-                bitmap = cropBitmap(bitmap);
-                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
-                bitmap.recycle();
+                    bitmap = cropBitmap(bitmap);
+                    Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
+                    bitmap.recycle();
 
-                String imageName = generateImageName();
-                photoUri = save_image(bitmapMain, imageName + ".jpg");
-                bitmapMain.recycle();
-                photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
-                bitmapThumb.recycle();
-            } catch (IOException e) {
-                e.printStackTrace();
-                return;
+                    String imageName = generateImageName();
+                    photoUri = save_image(bitmapMain, imageName + ".jpg");
+                    bitmapMain.recycle();
+                    photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
+                    bitmapThumb.recycle();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
+                ImageView image = findViewById(R.id.imageView);
+                image.setImageURI(Uri.parse(photoUri));
+            } else if (photoUri == null) {
+                finish();
             }
-
-            ImageView image = findViewById(R.id.imageView);
-            image.setImageURI(Uri.parse(photoUri));
         }
 
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            try {
-                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), cameraPhotoUri);
-                Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
+        if (requestCode == REQUEST_IMAGE_CAPTURE) {
+            if (resultCode == RESULT_OK) {
+                try {
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), cameraPhotoUri);
+                    Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
 
-                bitmap = cropBitmap(bitmap);
-                Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
-                bitmap.recycle();
+                    bitmap = cropBitmap(bitmap);
+                    Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
+                    bitmap.recycle();
 
-                String imageName = generateImageName();
-                photoUri = save_image(bitmapMain, imageName + ".jpg");
-                bitmapMain.recycle();
-                photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
-                bitmapThumb.recycle();
-            } catch (IOException e) {
-                e.printStackTrace();
-                return;
+                    String imageName = generateImageName();
+                    photoUri = save_image(bitmapMain, imageName + ".jpg");
+                    bitmapMain.recycle();
+                    photoThumbUri = save_image(bitmapThumb, imageName + "_thumb.jpg");
+                    bitmapThumb.recycle();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
+                ImageView image = findViewById(R.id.imageView);
+                image.setImageURI(Uri.parse(photoUri));
+            } else if (photoUri == null) {
+                openGallery(null);
             }
-
-            ImageView image = findViewById(R.id.imageView);
-            image.setImageURI(Uri.parse(photoUri));
         }
     }
 
@@ -335,5 +350,29 @@ public class NewPhotoActivity extends AppCompatActivity {
             });
         }
         finish();
+    }
+
+    private void deletePhoto(View view) {
+        if (photoId == 0) {
+            finish();
+            return;
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Удалить фото кп?")
+                .setPositiveButton("Удалить", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
+                        AsyncTask.execute(() -> {
+                            photoViewModel.deletePhotoPointById(photoId);
+                            runOnUiThread(() -> finish());
+                        });
+                    }
+                })
+                .setNegativeButton("Отмена", null)
+                .create();
+        dialog.show();
+
     }
 }

@@ -55,4 +55,8 @@ public class PhotoViewModel extends AndroidViewModel {
     public void update(Photo photo) {
         mPhotoRepository.update(photo);
     }
+
+    public void deletePhotoPointById(int photoId) {
+        mPhotoRepository.deletePhotoPointById(photoId);
+    }
 }

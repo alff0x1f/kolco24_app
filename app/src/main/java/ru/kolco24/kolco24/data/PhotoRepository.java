@@ -47,6 +47,12 @@ public class PhotoRepository {
         });
     }
 
+    public void deletePhotoPointById(int photoId) {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
+            mPhotoDao.deletePhotoPointById(photoId);
+        });
+    }
+
     public Photo getPhotoById(int id) {
         return mPhotoDao.getPhotoById(id);
     }
