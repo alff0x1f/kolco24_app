@@ -145,9 +145,6 @@ public class NewPhotoActivity extends AppCompatActivity {
             finish();
         });
 
-        final Button cancelButton = findViewById(R.id.button_cancel);
-        cancelButton.setOnClickListener(view_cancel -> finish());
-
         //gallery
         final Button galleryButton = findViewById(R.id.button_gallery);
         galleryButton.setOnClickListener(this::openGallery);
@@ -169,22 +166,19 @@ public class NewPhotoActivity extends AppCompatActivity {
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_camera) {
+            openCamera(null);
+            return true;
+        }
+        if (item.getItemId() == R.id.action_gallery) {
+            openGallery(null);
+            return true;
+        }
+        if (item.getItemId() == R.id.action_change_number) {
+            requestNumber();
+            return true;
+        }
         return super.onOptionsItemSelected(item);
-//        switch (item.getItemId()) {
-//            case R.id.delete_photo:
-//                if (photoId != 0) {
-//                    PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
-//                    AsyncTask.execute(() -> {
-//                        Photo photo = photoViewModel.getPhotoById(photoId);
-//                        photo.status = Photo.DELETED;
-//                        photoViewModel.update(photo);
-//                        finish();
-//                    });
-//                }
-//                return true;
-//            default:
-//                return super.onOptionsItemSelected(item);
-//        }
     }
 
     private void requestNumber() {

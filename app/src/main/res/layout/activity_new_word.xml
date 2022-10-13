@@ -83,25 +83,22 @@
                     android:textSize="18sp" />
 
 
-                <Button
-                    android:id="@+id/button_save"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="@dimen/big_padding"
-                    android:layout_weight="1"
-                    android:text="@string/button_save"
-                    android:textColor="@color/buttonLabel" />
-
             </LinearLayout>
 
-            <Button
-                android:id="@+id/button_cancel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_margin="@dimen/big_padding"
-                android:text="@string/button_cancel"
-                android:textColor="@color/buttonLabel" />
         </LinearLayout>
     </ScrollView>
+
+    <Button
+        android:id="@+id/button_save"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/big_padding"
+        android:layout_marginBottom="60dp"
+        android:layout_weight="1"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:text="@string/button_save"
+        android:textColor="@color/buttonLabel" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
