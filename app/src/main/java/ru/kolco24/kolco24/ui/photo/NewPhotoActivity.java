@@ -75,9 +75,6 @@ public class NewPhotoActivity extends AppCompatActivity {
             mPointNameEditView.setText(String.format(locale, "%d", point_number));
         }
         if (photoId != 0) {
-            Button galleryButton = findViewById(R.id.button_gallery);
-            galleryButton.setVisibility(View.GONE);
-
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
         }
@@ -144,10 +141,6 @@ public class NewPhotoActivity extends AppCompatActivity {
             }
             finish();
         });
-
-        //gallery
-        final Button galleryButton = findViewById(R.id.button_gallery);
-        galleryButton.setOnClickListener(this::openGallery);
 
         //editImage
         final ImageView editIcon = findViewById(R.id.edit_icon);
@@ -248,9 +241,6 @@ public class NewPhotoActivity extends AppCompatActivity {
 
             ImageView image = findViewById(R.id.imageView);
             image.setImageURI(Uri.parse(photoUri));
-
-            Button galleryButton = findViewById(R.id.button_gallery);
-            galleryButton.setVisibility(View.GONE);
         }
 
         if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
