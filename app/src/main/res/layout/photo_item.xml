@@ -10,15 +10,14 @@
         android:id="@+id/photoKP"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:background="@color/purple_200"
+        android:background="@color/black"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintDimensionRatio="H,1:1"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="1.0"
-        tools:srcCompat="@drawable/ic_add_black_24dp" />
+        app:layout_constraintVertical_bias="1.0" />
 
     <TextView
         android:id="@+id/textView"
@@ -35,13 +34,13 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <ImageView
-        android:paddingEnd="@dimen/small_padding"
-        android:paddingStart="@dimen/small_padding"
         android:id="@+id/syncLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="@dimen/small_padding"
         android:layout_marginBottom="@dimen/small_padding"
+        android:paddingStart="@dimen/small_padding"
+        android:paddingEnd="@dimen/small_padding"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@drawable/ic_baseline_cloud_done_24" />

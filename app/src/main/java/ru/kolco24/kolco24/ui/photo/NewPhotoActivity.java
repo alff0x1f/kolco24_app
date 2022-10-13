@@ -25,6 +25,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import ru.kolco24.kolco24.R;
@@ -97,6 +98,8 @@ public class NewPhotoActivity extends AppCompatActivity {
         if (photoId != 0) {
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
+            TextView pointNumberTextView = findViewById(R.id.pointNumberTextView);
+            pointNumberTextView.setText(String.format("%02d", pointNumber));
         }
         if (photoId != 0) {
             actionBar.setTitle("Редактирование фото КП");
@@ -121,14 +124,6 @@ public class NewPhotoActivity extends AppCompatActivity {
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.action_camera) {
-            openCamera(null);
-            return true;
-        }
-        if (item.getItemId() == R.id.action_gallery) {
-            openGallery(null);
-            return true;
-        }
         if (item.getItemId() == R.id.action_change_number) {
             requestNumber();
             return true;

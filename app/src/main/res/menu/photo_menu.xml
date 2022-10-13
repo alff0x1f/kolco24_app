@@ -12,14 +12,6 @@
 
     <!-- Settings, should always be in the overflow -->
     <item
-        android:id="@+id/action_camera"
-        android:title="Фото с Камеры"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/action_gallery"
-        android:title="Выбрать фото с Галереи"
-        app:showAsAction="never" />
-    <item
         android:id="@+id/action_change_number"
         android:title="Изменить номер"
         app:showAsAction="never" />

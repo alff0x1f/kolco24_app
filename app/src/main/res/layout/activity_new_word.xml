@@ -15,5 +15,35 @@
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <androidx.cardview.widget.CardView
+        android:id="@+id/point_avatar"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_marginEnd="@dimen/big_padding"
+        android:layout_marginTop="@dimen/big_padding"
+        app:cardCornerRadius="7dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/photo_thumb"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#EF5350" />
+
+        <TextView
+            android:id="@+id/pointNumberTextView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="7dp"
+            android:layout_marginBottom="7dp"
+            android:background="@color/pointIconPlaceholder"
+            android:gravity="center"
+            android:text="20"
+            android:textColor="@color/pointIconPlaceholderText"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+    </androidx.cardview.widget.CardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
