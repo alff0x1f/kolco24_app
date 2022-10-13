@@ -28,7 +28,9 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
                 current.id,
                 current.point_number,
                 Uri.parse(current.photo_url),
-                Uri.parse(current.photo_thumb_url)
+                Uri.parse(current.photo_thumb_url),
+                current.sync_internet,
+                current.sync_local
         );
     }
 
@@ -41,8 +43,9 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
         @Override
         public boolean areContentsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
             return (oldItem.point_number == newItem.point_number &&
-                    oldItem.photo_thumb_url.equals(newItem.photo_thumb_url)
-            );
+                    oldItem.photo_thumb_url.equals(newItem.photo_thumb_url) &&
+                    oldItem.sync_internet == newItem.sync_internet &&
+                    oldItem.sync_local == newItem.sync_local);
         }
     }
 }

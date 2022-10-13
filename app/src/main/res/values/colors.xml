@@ -26,4 +26,7 @@
     <color name="level8">#6B1F20</color>
     <color name="level9">#462022</color>
     <color name="level10">#212224</color>
+    <color name="colorGreen">#4CAF50</color>
+    <color name="colorBlue">#2196F3</color>
+    <color name="colorYellow">#FFC107</color>
 </resources>
