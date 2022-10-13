@@ -43,6 +43,9 @@ import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment {
+    private final int LOCAL_SYNC = 1;
+    private final int INTERNET_SYNC = 2;
+
     private FragmentPhotosBinding binding;
     private PhotoViewModel mPhotoViewModel;
     private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
@@ -114,10 +117,10 @@ public class PhotoFragment extends Fragment {
 
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.action_sync_internet) {
-            uploadPhotos(null); // TODO add url
+            uploadPhotos(INTERNET_SYNC);
         }
         if (item.getItemId() == R.id.action_sync_local) {
-            uploadPhotos(null); // TODO add url
+            uploadPhotos(LOCAL_SYNC);
         }
         return super.onOptionsItemSelected(item);
     }
@@ -130,11 +133,22 @@ public class PhotoFragment extends Fragment {
         ).getInt("team_id", 0);
     }
 
-    private void uploadPhotos(View v) {
-        System.out.println("upload photos");
+    private void uploadPhotos(int type) {
         AsyncTask.execute(() -> {
+            String url;
+            if (type == LOCAL_SYNC) {
+                url = "http://192.168.88.164/api/v1/upload_photo";
+            } else {
+                url = "https://kolco24.ru/api/v1/upload_photo";
+            }
             try {
-                List<Photo> photos = mPhotoViewModel.getNotSyncPhoto(teamId);
+                List<Photo> photos;
+                if (type == LOCAL_SYNC) {
+                    photos = mPhotoViewModel.getNotLocalSyncPhoto(teamId);
+                } else {
+                    photos = mPhotoViewModel.getNotSyncPhoto(teamId);
+                }
+
                 OkHttpClient client = new OkHttpClient();
                 for (Photo photo : photos) {
                     File file = new File(photo.photo_url);
@@ -144,10 +158,7 @@ public class PhotoFragment extends Fragment {
                             .addFormDataPart("point_number", String.valueOf(photo.getPointNumber()))
                             .addFormDataPart("photo", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
                             .build();
-                    Request request = new Request.Builder()
-                            .url("http://192.168.88.164/api/v1/upload_photo")
-                            .post(requestBody)
-                            .build();
+                    Request request = new Request.Builder().url(url).post(requestBody).build();
                     Response response = client.newCall(request).execute();
                     if (response.isSuccessful()) {
                         try {

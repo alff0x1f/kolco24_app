@@ -61,6 +61,10 @@ public class PhotoRepository {
         return mPhotoDao.getNotSyncPhoto(teamId);
     }
 
+    public List<Photo> getNotLocalSyncPhoto(int teamId) {
+        return mPhotoDao.getNotLocalSyncPhoto(teamId);
+    }
+
     public void deleteAll() {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             mPhotoDao.deleteAll();

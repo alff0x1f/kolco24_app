@@ -24,6 +24,10 @@ public interface PhotoDao {
     List<Photo> getNotSyncPhoto(int teamId);
 
     @Query("SELECT * FROM photo_points " +
+            "WHERE team_id = :teamId AND sync_local=0")
+    List<Photo> getNotLocalSyncPhoto(int teamId);
+
+    @Query("SELECT * FROM photo_points " +
             "ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();
 
