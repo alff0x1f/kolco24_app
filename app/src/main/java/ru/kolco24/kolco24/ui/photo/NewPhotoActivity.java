@@ -72,14 +72,10 @@ public class NewPhotoActivity extends AppCompatActivity {
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
         }
-        final Button saveButton = findViewById(R.id.button_save);
-        saveButton.setOnClickListener(this::savePhoto);
         if (photoId != 0) {
             actionBar.setTitle("Редактирование фото КП");
-            saveButton.setText("Сохранить");
         } else {
             actionBar.setTitle("Новое фото");
-            saveButton.setText("Добавить");
         }
 
         if (photoId == 0) {
@@ -131,8 +127,7 @@ public class NewPhotoActivity extends AppCompatActivity {
                         if (editTextInput.length() > 0) {
                             pointNumber = Integer.parseInt(editTextInput);
                         }
-                        final Button saveButton = findViewById(R.id.button_save);
-                        saveButton.callOnClick();
+                        savePhoto(null);
                     }
                 })
                 .setNegativeButton("Отмена", null)
