@@ -44,11 +44,11 @@ public class NewPhotoActivity extends AppCompatActivity {
     public static final String PHOTO_URI = "ru.kolco24.kolco24.newPhoto.photoUri";
     static final int REQUEST_IMAGE_GALLERY = 1;
     static final int REQUEST_IMAGE_CAPTURE = 2;
-    private EditText mPointNameEditView;
     private EditText pointNumberEditField;
     private Uri cameraPhotoUri;
 
     private int photoId;
+    private int pointNumber;
     private String photoUri;
     private String photoThumbUri;
 
@@ -62,18 +62,13 @@ public class NewPhotoActivity extends AppCompatActivity {
         );
 
         setContentView(R.layout.activity_new_word);
-        mPointNameEditView = findViewById(R.id.edit_word);
 
         Intent callingIntent = getIntent();
         photoId = callingIntent.getIntExtra("id", 0);
-        int point_number = callingIntent.getIntExtra("point_number", 0);
+        pointNumber = callingIntent.getIntExtra("point_number", 0);
         photoUri = callingIntent.getStringExtra("photo_uri");
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
 
-        if (point_number != 0) {
-            Locale locale = getResources().getConfiguration().locale;
-            mPointNameEditView.setText(String.format(locale, "%d", point_number));
-        }
         if (photoId != 0) {
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
@@ -88,7 +83,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         final Button saveButton = findViewById(R.id.button_save);
         saveButton.setOnClickListener(view -> {
-            if (TextUtils.isEmpty(mPointNameEditView.getText())) {
+            if (pointNumber == 0) {
                 requestNumber();
 //                Toast.makeText(getApplicationContext(), "Укажите номер КП", Toast.LENGTH_SHORT).show();
                 return;
@@ -97,47 +92,45 @@ public class NewPhotoActivity extends AppCompatActivity {
                 Toast.makeText(getApplicationContext(), "Выберите фото", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (!TextUtils.isEmpty(mPointNameEditView.getText()) && photoUri != null) {
-                PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
-                if (photoId == 0) {
-                    // Create new photo
-                    int teamId = getApplicationContext().getSharedPreferences(
-                            "team",
-                            Context.MODE_PRIVATE
-                    ).getInt("team_id", 0);
-                    photoViewModel.insert(new Photo(
-                            teamId,
-                            Integer.parseInt(mPointNameEditView.getText().toString()),
-                            photoUri,
-                            photoThumbUri
-                    ));
-                } else {
-                    // Update photo
-                    AsyncTask.execute(() -> {
-                        Photo photo = photoViewModel.getPhotoById(photoId);
-                        boolean isChanged = false;
-                        if (photo.point_number != Integer.parseInt(mPointNameEditView.getText().toString())) {
-                            photo.point_number = Integer.parseInt(mPointNameEditView.getText().toString());
-                            isChanged = true;
-                        }
-                        if (!photo.photo_url.equals(photoUri)) {
-                            photo.photo_url = photoUri;
-                            photo.photo_thumb_url = photoThumbUri;
-                            isChanged = true;
-                        }
-                        if (isChanged) {
-                            photo.status = Photo.NEW;
-                            photoViewModel.update(photo);
-                        } else {
-                            runOnUiThread(() -> Toast.makeText(
-                                    getApplicationContext(),
-                                    "Изменений не было",
-                                    Toast.LENGTH_SHORT
-                            ).show());
 
-                        }
-                    });
-                }
+            PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
+            if (photoId == 0) {
+                // Create new photo
+                int teamId = getApplicationContext().getSharedPreferences(
+                        "team",
+                        Context.MODE_PRIVATE
+                ).getInt("team_id", 0);
+                photoViewModel.insert(new Photo(
+                        teamId,
+                        pointNumber,
+                        photoUri,
+                        photoThumbUri
+                ));
+            } else {
+                // Update photo
+                AsyncTask.execute(() -> {
+                    Photo photo = photoViewModel.getPhotoById(photoId);
+                    boolean isChanged = false;
+                    if (photo.point_number != pointNumber) {
+                        photo.point_number = pointNumber;
+                        isChanged = true;
+                    }
+                    if (!photo.photo_url.equals(photoUri)) {
+                        photo.photo_url = photoUri;
+                        photo.photo_thumb_url = photoThumbUri;
+                        isChanged = true;
+                    }
+                    if (isChanged) {
+                        photo.status = Photo.NEW;
+                        photoViewModel.update(photo);
+                    } else {
+                        runOnUiThread(() -> Toast.makeText(
+                                getApplicationContext(),
+                                "Изменений не было",
+                                Toast.LENGTH_SHORT
+                        ).show());
+                    }
+                });
             }
             finish();
         });
@@ -180,7 +173,9 @@ public class NewPhotoActivity extends AppCompatActivity {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
                         String editTextInput = pointNumberEditField.getText().toString();
-                        mPointNameEditView.setText(editTextInput);
+                        if (editTextInput.length() > 0) {
+                            pointNumber = Integer.parseInt(editTextInput);
+                        }
                         final Button saveButton = findViewById(R.id.button_save);
                         saveButton.callOnClick();
                     }
