@@ -40,13 +40,12 @@
 
 
     <TextView
-        android:id="@+id/pointNumber"
+        android:id="@+id/pointTimeTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="@dimen/big_padding"
         android:layout_marginTop="@dimen/small_padding"
-        android:text="24"
-        android:textColor="@color/textContrast"
+        android:text="00:00"
         android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -78,7 +77,7 @@
         android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/point_avatar"
-        app:layout_constraintTop_toBottomOf="@id/pointNumber" />
+        app:layout_constraintTop_toBottomOf="@id/pointTimeTextView" />
 
     <ViewAnimator
         android:layout_width="0dp"

@@ -20,7 +20,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
     private final TextView textDescription;
     private final TextView textCost;
-    private final TextView textPointNumber;
+    private final TextView pointTimeTextView;
 
     /*__init__*/
     private PointViewHolder(View itemView) {
@@ -28,12 +28,22 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         textView = itemView.findViewById(R.id.textView);
         textDescription = itemView.findViewById(R.id.textDescription);
         textCost = itemView.findViewById(R.id.textCost);
-        textPointNumber = itemView.findViewById(R.id.pointNumber);
+        pointTimeTextView = itemView.findViewById(R.id.pointTimeTextView);
     }
 
     public void bind(Point.PointExt point) {
         textView.setText(String.format("%02d", point.number));
-        textPointNumber.setText(point.photo_time);
+
+        if (point.photo_time != null) {
+            String[] timeArray = point.photo_time.split(" ");
+            if (timeArray.length > 1) {
+                pointTimeTextView.setText(timeArray[1]);
+            } else {
+                pointTimeTextView.setText(point.photo_time);
+            }
+        } else {
+            pointTimeTextView.setText("");
+        }
 
         textDescription.setText(point.description);
         textCost.setText(String.format("+%d", point.cost));
@@ -64,7 +74,6 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         // change color background
         drawable.mutate().setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
         textCost.setBackground(drawable);
-
 
 
         // on click listener

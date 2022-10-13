@@ -39,7 +39,7 @@
             android:layout_marginBottom="7dp"
             android:background="@color/pointIconPlaceholder"
             android:gravity="center"
-            android:text="20"
+            android:text="00"
             android:textColor="@color/pointIconPlaceholderText"
             android:textSize="36sp"
             android:textStyle="bold" />
