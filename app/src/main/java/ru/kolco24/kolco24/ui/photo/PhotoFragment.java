@@ -129,6 +129,22 @@ public class PhotoFragment extends Fragment {
                 binding.warning.setVisibility(View.GONE);
             }
         });
+        if (teamId == 0) {
+            binding.resultHeader.setVisibility(View.GONE);
+            binding.textDashboard.setVisibility(View.GONE);
+            binding.textDashboard2.setVisibility(View.GONE);
+            binding.hr.setVisibility(View.GONE);
+            binding.hr2.setVisibility(View.GONE);
+            binding.warning.setVisibility(View.GONE);
+            binding.textNoTeamId.setVisibility(View.VISIBLE);
+        } else {
+            binding.resultHeader.setVisibility(View.VISIBLE);
+            binding.textDashboard.setVisibility(View.VISIBLE);
+            binding.textDashboard2.setVisibility(View.VISIBLE);
+            binding.hr.setVisibility(View.VISIBLE);
+            binding.hr2.setVisibility(View.VISIBLE);
+            binding.textNoTeamId.setVisibility(View.GONE);
+        }
     }
 
     @Override
