@@ -109,7 +109,9 @@ public class PhotoFragment extends Fragment {
             }
         });
         mPhotoViewModel.getTeam(teamId).observe(getViewLifecycleOwner(), team -> {
-            binding.teamName.setText(String.format("%s: %s", team.start_number, team.teamname));
+            if (team != null) {
+                binding.teamName.setText(String.format("%s: %s", team.start_number, team.teamname));
+            }
         });
         mPhotoViewModel.getNonLegendPointNumbers(teamId).observe(getViewLifecycleOwner(), nums -> {
             if (nums != null && nums.size() > 0) {

@@ -83,6 +83,7 @@ public class DemoObjectFragment extends Fragment {
         teamViewModel.getTeamsByCategory(categoryCode).observe(getViewLifecycleOwner(), teams -> {
             if (teams.size() == 0) {
                 binding.textNoTeams.setVisibility(View.VISIBLE);
+                teamViewModel.downloadTeams("https://kolco24.ru/api/v1/teams");
             } else {
                 binding.textNoTeams.setVisibility(View.GONE);
                 binding.swipeToRefresh.setRefreshing(false);
