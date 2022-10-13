@@ -69,8 +69,12 @@ public class NewPhotoActivity extends AppCompatActivity {
                         public void onClick(DialogInterface dialogInterface, int i) {
                             finish();
                         }
-                    })
-                    .create();
+                    }).setOnCancelListener(new DialogInterface.OnCancelListener() {
+                        @Override
+                        public void onCancel(DialogInterface dialogInterface) {
+                            finish();
+                        }
+                    }).create();
             dialog.show();
             return;
         }
