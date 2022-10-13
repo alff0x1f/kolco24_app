@@ -55,6 +55,26 @@ public class NewPhotoActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        int teamId = getApplicationContext()
+                .getSharedPreferences("team", Context.MODE_PRIVATE)
+                .getInt("team_id", 0);
+        if (teamId == 0) {
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle("Не выбрана команда")
+                    .setMessage("Найдите свою команду на вкладке \"Команды\" и выберите её " +
+                            "долгим нажатием"
+                    )
+                    .setPositiveButton("Ок", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            finish();
+                        }
+                    })
+                    .create();
+            dialog.show();
+            return;
+        }
+
         final ActionBar actionBar = getSupportActionBar();
         actionBar.setBackgroundDrawable(
                 new ColorDrawable(getResources().getColor(R.color.black))
@@ -256,7 +276,7 @@ public class NewPhotoActivity extends AppCompatActivity {
         return "img_" + timeStamp;
     }
 
-    public void updatePhotoTime(){
+    public void updatePhotoTime() {
         photoTime = new SimpleDateFormat(
                 "dd.MM HH:mm",
                 Locale.US

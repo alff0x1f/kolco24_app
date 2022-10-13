@@ -222,7 +222,7 @@ public class LegendsFragment extends Fragment {
         teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
         if (binding != null) {
             //background each item of recycle view
-            RecyclerView recyclerView = binding.recyclerView;
+            RecyclerView recyclerView = binding.newPointsRecyclerView;
             Drawable defaultBackgroundColor = recyclerView.getBackground();
             for (int i = 0; i < recyclerView.getChildCount(); i++) {
                 View view = recyclerView.getChildAt(i);
