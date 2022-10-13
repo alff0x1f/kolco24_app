@@ -33,6 +33,10 @@ public class TeamRepository {
         return mTeamDao.getTeamName(id);
     }
 
+    public int getTeamNumberById(int id) {
+        return mTeamDao.getTeamNumberById(id);
+    }
+
     public Team getTeamByStartNumber(String number) {
         return mTeamDao.getTeamByStartNumber(number);
     }

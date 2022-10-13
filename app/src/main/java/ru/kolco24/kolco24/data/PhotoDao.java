@@ -27,6 +27,13 @@ public interface PhotoDao {
             "WHERE team_id = :teamId AND sync_local=0")
     List<Photo> getNotLocalSyncPhoto(int teamId);
 
+    /* Фото с номерами отсутствующими в легенде */
+    @Query("SELECT photo_points.point_number FROM photo_points " +
+            "LEFT JOIN points " +
+            "ON points.number=photo_points.point_number " +
+            "WHERE photo_points.team_id = :teamId AND points.id IS NULL")
+    LiveData<List<Integer>> getNonLegendPointNumbers(int teamId);
+
     @Query("SELECT * FROM photo_points " +
             "ORDER BY point_number")
     LiveData<List<Photo>> getAllPhotos();

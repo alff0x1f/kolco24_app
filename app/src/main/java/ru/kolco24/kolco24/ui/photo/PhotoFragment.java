@@ -105,7 +105,26 @@ public class PhotoFragment extends Fragment {
         });
         mPhotoViewModel.getTeamName(teamId).observe(getViewLifecycleOwner(), name -> {
             if (name != null) {
-                binding.teamName.setText(String.format("Команда: %s", name));
+                AsyncTask.execute(() -> {
+                    int teamNumber = mPhotoViewModel.getTeamNumberById(teamId);
+                    binding.teamName.setText(String.format("%d: %s", teamNumber, name));
+                });
+            }
+        });
+        mPhotoViewModel.getNonLegendPointNumbers(teamId).observe(getViewLifecycleOwner(), nums -> {
+            if (nums != null && nums.size() > 0) {
+                binding.warning.setVisibility(View.VISIBLE);
+                StringBuilder pointsStr = new StringBuilder();
+                for (Integer photo : nums) {
+                    pointsStr.append(photo).append(", ");
+                }
+                binding.warning.setText(
+                        String.format("В легенде отсутствуют номер: %s cумма баллов подсчитана без " +
+                                        "их учета. Исправьте номера КП у фото, или обновите легенду " +
+                                        "до актуального состояния",
+                                pointsStr));
+            } else {
+                binding.warning.setVisibility(View.GONE);
             }
         });
     }

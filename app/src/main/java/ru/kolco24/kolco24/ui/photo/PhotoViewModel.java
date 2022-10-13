@@ -1,7 +1,6 @@
 package ru.kolco24.kolco24.ui.photo;
 
 import android.app.Application;
-import android.content.Context;
 
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
@@ -26,6 +25,10 @@ public class PhotoViewModel extends AndroidViewModel {
 
     public LiveData<String> getTeamName(int teamId) {
         return mTeamRepository.getTeamName(teamId);
+    }
+
+    public int getTeamNumberById(int teamId) {
+        return mTeamRepository.getTeamNumberById(teamId);
     }
 
     LiveData<List<Photo>> getAllPhoto() {
@@ -54,6 +57,11 @@ public class PhotoViewModel extends AndroidViewModel {
 
     public List<Photo> getNotLocalSyncPhoto(int teamId) {
         return mPhotoRepository.getNotLocalSyncPhoto(teamId);
+    }
+
+    /* Фото с номерами отсутствующими в легенде */
+    public LiveData<List<Integer>> getNonLegendPointNumbers(int teamId) {
+        return mPhotoRepository.getNonLegendPointNumbers(teamId);
     }
 
     public void insert(Photo photo) {

@@ -65,6 +65,10 @@ public class PhotoRepository {
         return mPhotoDao.getNotLocalSyncPhoto(teamId);
     }
 
+    public LiveData<List<Integer>> getNonLegendPointNumbers(int teamId) {
+        return mPhotoDao.getNonLegendPointNumbers(teamId);
+    }
+
     public void deleteAll() {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             mPhotoDao.deleteAll();
