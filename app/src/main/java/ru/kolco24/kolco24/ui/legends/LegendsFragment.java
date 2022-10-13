@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.legends;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -15,6 +16,8 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -32,6 +35,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 public class LegendsFragment extends Fragment {
@@ -104,7 +108,12 @@ public class LegendsFragment extends Fragment {
                 binding.swipeToRefresh.setRefreshing(false);
             }
         });
-
+        //fab
+        FloatingActionButton fab = binding.fab;
+        fab.setOnClickListener(view -> {
+            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
+            startActivity(intent);
+        });
         //swipe to refresh
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
         swipeRefreshLayout.setRefreshing(false);
