@@ -13,7 +13,7 @@ public interface TeamDao {
      @Query("SELECT * FROM teams")
      LiveData<List<Team>> getAllTeams();
 
-     @Query("SELECT * FROM teams WHERE category = :category")
+     @Query("SELECT * FROM teams WHERE category = :category ORDER BY start_number")
      LiveData<List<Team>> getTeamsByCategory(String category);
 
      @Query("SELECT * FROM teams WHERE id = :id")
