@@ -187,7 +187,7 @@ public class PhotoFragment extends Fragment {
         boolean localResult = true;
         List<Photo> notLocalSync = mPhotoViewModel.getNotLocalSyncPhoto(teamId);
         for (Photo photo : notLocalSync) {
-            boolean isSuccess = upload_photo(photo, "http://192.168.88.164/api/v1/upload_photo");
+            boolean isSuccess = upload_photo(photo, "http://192.168.0.5/api/v1/upload_photo");
             if (isSuccess) {
                 photo.setSyncLocal(true);
                 mPhotoViewModel.update(photo);
