@@ -207,7 +207,7 @@ public class NewPhotoActivity extends AppCompatActivity {
 
                 try {
                     Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
-                    Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
+                    Bitmap bitmapMain = scaleBitmap(bitmap, 2000);
 
                     bitmap = cropBitmap(bitmap);
                     Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);
@@ -236,7 +236,7 @@ public class NewPhotoActivity extends AppCompatActivity {
             if (resultCode == RESULT_OK) {
                 try {
                     Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), cameraPhotoUri);
-                    Bitmap bitmapMain = scaleBitmap(bitmap, 1200);
+                    Bitmap bitmapMain = scaleBitmap(bitmap, 2000);
 
                     bitmap = cropBitmap(bitmap);
                     Bitmap bitmapThumb = Bitmap.createScaledBitmap(bitmap, 300, 300, false);

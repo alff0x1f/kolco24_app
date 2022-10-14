@@ -16,6 +16,7 @@ import ru.kolco24.kolco24.R;
 public class TeamViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
     private final TextView teamNumber;
+    private final TextView paidPeople;
     private int team_id;
 
     /*__init__*/
@@ -23,11 +24,14 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         super(itemView);
         textView = itemView.findViewById(R.id.textView);
         teamNumber = itemView.findViewById(R.id.team_number);
+        paidPeople = itemView.findViewById(R.id.paid_people);
     }
 
-    public void bind(int id, String start_number, String teamname) {
+    public void bind(int id, String start_number, String teamname, Float paid_people) {
+//        itemView.findViewById(R.id.team_stat).setVisibility(View.GONE);
         teamNumber.setText(start_number);
         textView.setText(teamname);
+        paidPeople.setText(String.format("%.0f чел", paid_people));
         team_id = id;
         //
         int currentTeam = itemView.getContext().getSharedPreferences(

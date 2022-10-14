@@ -33,30 +33,11 @@
             app:layout_constraintTop_toTopOf="parent">
 
             <TextView
+                android:id="@+id/paid_people"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="КП: 0 шт"
+                android:text="0 чел"
                 android:textSize="14sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Баллы: 0"
-                android:textSize="14sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Штраф: 0"
-                android:textSize="14sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Итого: 0"
-                android:textColor="@color/textContrast"
-                android:textSize="14sp"
-                android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
