@@ -28,9 +28,8 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.UnsupportedEncodingException;
-import java.net.UnknownHostException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -41,12 +40,15 @@ import okhttp3.Response;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
-import ru.kolco24.kolco24.ui.teams.TeamViewModel;
 
 public class PhotoFragment extends Fragment {
     private final int LOCAL_SYNC = 1;
     private final int INTERNET_SYNC = 2;
-    public final OkHttpClient client = new OkHttpClient();
+    public final OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .build();
 
     private FragmentPhotosBinding binding;
     private PhotoViewModel mPhotoViewModel;
@@ -193,6 +195,7 @@ public class PhotoFragment extends Fragment {
                 mPhotoViewModel.update(photo);
             } else {
                 localResult = false;
+                break;
             }
         }
         if (withToast) {
@@ -218,6 +221,7 @@ public class PhotoFragment extends Fragment {
                 mPhotoViewModel.update(photo);
             } else {
                 internetResult = false;
+                break;
             }
         }
         if (withToast) {

@@ -59,6 +59,7 @@ public class TeamsFragment extends Fragment {
 
         // QR code
         binding.fabQr.setOnClickListener(this::onClick);
+        binding.fabQr.setVisibility(View.GONE);
 
         return root;
     }
@@ -111,9 +112,9 @@ public class TeamsFragment extends Fragment {
     }
 
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.action_scan_qr) {
-            onClick(this.getView());
-        }
+//        if (item.getItemId() == R.id.action_scan_qr) {
+//            onClick(this.getView());
+//        }
         if (item.getItemId() == R.id.action_update) {
             mTeamViewModel.downloadTeams("https://kolco24.ru/api/v1/teams");
         }

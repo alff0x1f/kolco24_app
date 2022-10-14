@@ -178,23 +178,28 @@ public class NewPhotoActivity extends AppCompatActivity {
         try {
             startActivityForResult(takePictureIntent, REQUEST_IMAGE_GALLERY);
         } catch (ActivityNotFoundException e) {
-            // display error state to the user
+            Toast.makeText(this, "Не удалось открыть галерею.",
+                    Toast.LENGTH_SHORT).show();
+            finish();
         }
     }
 
     private void openCamera(View v) {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            String imageName = generateImageName();
-            File photoFile = createImageFile(imageName + "_orig.jpg");
-            if (photoFile != null) {
-                cameraPhotoUri = FileProvider.getUriForFile(this,
-                        "ru.kolco24.kolco24.fileprovider",
-                        photoFile);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri);
+        String imageName = generateImageName();
+        File photoFile = createImageFile(imageName + "_orig.jpg");
+        if (photoFile != null) {
+            cameraPhotoUri = FileProvider.getUriForFile(this,
+                    "ru.kolco24.kolco24.fileprovider",
+                    photoFile);
+            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri);
+            try {
                 startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+            } catch (ActivityNotFoundException e) {
+                Toast.makeText(this, "Не удалось открыть камеру.",
+                        Toast.LENGTH_SHORT).show();
+                openGallery(null);
             }
-
         }
     }
 
