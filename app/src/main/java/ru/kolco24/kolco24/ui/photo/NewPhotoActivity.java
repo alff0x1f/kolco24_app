@@ -391,6 +391,8 @@ public class NewPhotoActivity extends AppCompatActivity {
                 }
                 if (isChanged) {
                     photo.status = Photo.NEW;
+                    photo.setSyncLocal(false);
+                    photo.setSync(false);
                     photoViewModel.update(photo);
                 } else {
                     runOnUiThread(() -> Toast.makeText(

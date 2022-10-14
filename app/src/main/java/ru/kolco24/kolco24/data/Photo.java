@@ -52,10 +52,10 @@ public class Photo {
     }
 
     public void setSync(boolean b) {
-        this.sync_internet = true;
+        this.sync_internet = b;
     }
 
     public void setSyncLocal(boolean b) {
-        this.sync_local = true;
+        this.sync_local = b;
     }
 }

@@ -124,8 +124,8 @@ public class PhotoFragment extends Fragment {
                 }
                 binding.warning.setText(
                         String.format("В легенде отсутствуют номер: %s cумма баллов подсчитана без " +
-                                        "их учета. Исправьте номера КП у фото, или обновите легенду " +
-                                        "до актуального состояния",
+                                        "их учета. До старта соревнований это нормально, если " +
+                                        "брифинг уже прошел, то обновите легенду до актуального состояния",
                                 pointsStr));
             } else {
                 binding.warning.setVisibility(View.GONE);
