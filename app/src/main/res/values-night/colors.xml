@@ -4,6 +4,6 @@
     <color name="myTeam">@color/teal_700</color>
     <color name="divider">#333333</color>
     <color name="textContrast">#F5F5F5</color>
-    <color name="pointIconPlaceholder">#444444</color>
-    <color name="pointIconPlaceholderText">#EEEEEE</color>
+    <color name="pointIconPlaceholder">#EEEEEE</color>
+    <color name="pointIconPlaceholderText">#000000</color>
 </resources>
