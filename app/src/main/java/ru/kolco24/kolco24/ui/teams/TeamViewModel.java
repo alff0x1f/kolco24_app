@@ -12,6 +12,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -27,7 +28,11 @@ import ru.kolco24.kolco24.data.TeamRepository;
 public class TeamViewModel extends AndroidViewModel {
     private TeamRepository mRepository;
     private final LiveData<List<Team>> mAllTeams;
-    private final OkHttpClient client = new OkHttpClient();
+    public final OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .build();
     private MutableLiveData<String> toastMessage = new MutableLiveData<>();
     private MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
 

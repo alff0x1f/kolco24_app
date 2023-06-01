@@ -27,6 +27,7 @@ import ru.kolco24.kolco24.data.Point;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -44,7 +45,11 @@ public class LegendsFragment extends Fragment {
     private PointViewModel mPointViewModel;
     private PhotoViewModel mPhotoViewModel;
     private int teamId;
-    private final OkHttpClient client = new OkHttpClient();
+    public final OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .build();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {

@@ -180,7 +180,7 @@ public class PhotoFragment extends Fragment {
 
     public void uploadPhotos(boolean withToast) {
         AsyncTask.execute(() -> {
-            uploadLocalPhotos(withToast);
+//            uploadLocalPhotos(withToast);
             uploadInternetPhotos(withToast);
         });
     }
