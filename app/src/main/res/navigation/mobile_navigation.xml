@@ -3,24 +3,23 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/mobile_navigation"
-    app:startDestination="@+id/navigation_legends">
+    app:startDestination="@+id/navigation_home">
 
     <fragment
         android:id="@+id/navigation_home"
-        android:name="ru.kolco24.kolco24.ui.teams.TeamsFragment"
+        android:name="ru.kolco24.kolco24.ui.home.HomeFragment"
         android:label="@string/title_home"
-        tools:layout="@layout/fragment_teams" />
+        tools:layout="@layout/fragment_home" />
 
     <fragment
-        android:id="@+id/navigation_taken_points"
-        android:name="ru.kolco24.kolco24.ui.photo.PhotoFragment"
+        android:id="@+id/navigation_dashboard"
+        android:name="ru.kolco24.kolco24.ui.dashboard.DashboardFragment"
         android:label="@string/title_dashboard"
-        tools:layout="@layout/fragment_photos" />
+        tools:layout="@layout/fragment_dashboard" />
 
     <fragment
-        android:id="@+id/navigation_legends"
-        android:name="ru.kolco24.kolco24.ui.legends.LegendsFragment"
-        android:label="@string/title_legends"
-        tools:layout="@layout/fragment_legends" />
-
+        android:id="@+id/navigation_notifications"
+        android:name="ru.kolco24.kolco24.ui.notifications.NotificationsFragment"
+        android:label="@string/title_notifications"
+        tools:layout="@layout/fragment_notifications" />
 </navigation>
