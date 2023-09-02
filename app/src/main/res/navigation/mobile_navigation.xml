@@ -22,4 +22,10 @@
         android:name="ru.kolco24.kolco24.ui.legend.NotificationsFragment"
         android:label="@string/title_legend"
         tools:layout="@layout/fragment_notifications" />
+
+    <fragment
+        android:id="@+id/navigation_profile"
+        android:name="ru.kolco24.kolco24.ui.profile.ProfileFragment"
+        android:label="@string/title_profile"
+        tools:layout="@layout/fragment_profile" />
 </navigation>
