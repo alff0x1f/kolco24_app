@@ -9,7 +9,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import ru.kolco24.kolco24.databinding.FragmentNotificationsBinding
 
-class NotificationsFragment : Fragment() {
+class LegendFragment : Fragment() {
 
     private var _binding: FragmentNotificationsBinding? = null
 
@@ -22,14 +22,14 @@ class NotificationsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val notificationsViewModel =
-            ViewModelProvider(this).get(NotificationsViewModel::class.java)
+        val legendViewModel =
+            ViewModelProvider(this).get(LegendViewModel::class.java)
 
         _binding = FragmentNotificationsBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
         val textView: TextView = binding.textNotifications
-        notificationsViewModel.text.observe(viewLifecycleOwner) {
+        legendViewModel.text.observe(viewLifecycleOwner) {
             textView.text = it
         }
         return root

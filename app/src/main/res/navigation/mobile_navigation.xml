@@ -19,7 +19,7 @@
 
     <fragment
         android:id="@+id/navigation_notifications"
-        android:name="ru.kolco24.kolco24.ui.legend.NotificationsFragment"
+        android:name="ru.kolco24.kolco24.ui.legend.LegendFragment"
         android:label="@string/title_legend"
         tools:layout="@layout/fragment_notifications" />
 
