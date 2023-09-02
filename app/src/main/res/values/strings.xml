@@ -1,16 +1,7 @@
 <resources>
-    <string name="app_name">Кольцо24</string>
-    <string name="title_home">Команды</string>
-    <string name="title_dashboard">Фото</string>
-    <string name="title_legends">Легенда</string>
-    <string name="add_point">Добавить КП</string>
-    <string name="hello_blank_fragment">Hello blank fragment</string>
-    <string name="hint_word">Номер кп...</string>
-    <string name="button_save">Сохранить</string>
-    <string name="button_cancel">Отмена</string>
-    <string name="button_load">Выбрать фото из галереи</string>
-    <string name="button_camera">Сделать фото</string>
-    <string name="empty_not_saved">Word not saved because it is empty.</string>
-    <string name="result">Результат</string>
-    <string name="scan_qr">Сканировать QR код</string>
+    <string name="app_name">Kolco24</string>
+    <string name="title_teams">Команды</string>
+    <string name="title_photo">Фото</string>
+    <string name="title_legend">Легенда</string>
+    <string name="title_profile">Профиль</string>
 </resources>
