@@ -1,10 +1,14 @@
 package ru.kolco24.kolco24;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
@@ -38,12 +42,37 @@ public class MainActivity extends AppCompatActivity {
         // Check for available NFC Adapter
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         if (nfcAdapter == null) {
-            Toast.makeText(this, "NFC is not available", Toast.LENGTH_LONG).show();
-            finish();
+            Toast.makeText(this, "NFC недоступен", Toast.LENGTH_LONG).show();
             return;
         }
+        // Check if NFC is enabled
+        if (!nfcAdapter.isEnabled()) {
+            // NFC is disabled; show a dialog or message to prompt the user to enable it
+            showNFCEnableDialog();
+            return;
+        }
+
         handleIntent(getIntent());
     }
+
+    private void showNFCEnableDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("NFC отключен");
+        builder.setMessage("Пожалуйста, включите NFC в настройках вашего телефона");
+        builder.setPositiveButton("Открыть настройки", (dialog, which) -> {
+            // Open device settings to enable NFC
+            Intent settingsIntent = new Intent(Settings.ACTION_NFC_SETTINGS);
+            startActivity(settingsIntent);
+        });
+        builder.setNegativeButton("Отмена", (dialog, which) -> {
+            // Handle cancel or provide an alternative action
+            // show a message or dialog that NFC is required to proceed
+            Toast.makeText(MainActivity.this, "Сканирование меток недоступно", Toast.LENGTH_SHORT).show();
+        });
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
 
     @Override
     protected void onNewIntent(Intent intent) {
