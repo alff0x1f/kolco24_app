@@ -30,7 +30,7 @@ public abstract class AppDatabase extends RoomDatabase {
      * @param context the application context Singleton pattern, allows only one instance of the
      *                database to be opened at a time.
      */
-    static AppDatabase getDatabase(final Context context) {
+    public static AppDatabase getDatabase(final Context context) {
         if (INSTANCE == null) {
             synchronized (AppDatabase.class) {
                 if (INSTANCE == null) {
