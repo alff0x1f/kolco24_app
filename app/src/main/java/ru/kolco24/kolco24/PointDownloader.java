@@ -28,7 +28,7 @@ import ru.kolco24.kolco24.data.PointDao;
 public class PointDownloader {
     final private PointDao mPointDao;
     final private Context mContext;
-    DownloadCallback mCallback;
+    final private DownloadCallback mCallback;
     private boolean showToasts = true;
 
     public interface DownloadCallback {
