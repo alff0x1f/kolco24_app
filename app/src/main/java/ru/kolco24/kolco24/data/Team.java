@@ -4,6 +4,9 @@ import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 import androidx.room.TypeConverters;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 
 @Entity(tableName = "teams")
 public class Team {
@@ -27,6 +30,53 @@ public class Team {
     public Long finish_time;
     public boolean dnf;
     public int penalty;
+
+    public static Team fromJson(JSONObject jsonObject) throws JSONException {
+        int id = jsonObject.getInt("id");
+        float paidPeople = (float) jsonObject.optDouble("paid_people", 0.0);
+        String dist = jsonObject.optString("dist", "");
+        String category = jsonObject.optString("category", "");
+        String teamname = jsonObject.optString("teamname", "");
+        String city = jsonObject.optString("city", "");
+        String organization = jsonObject.optString("organization", "");
+        String year = jsonObject.optString("year", "");
+        String startNumber = jsonObject.optString("start_number", "");
+
+        return new Team(id, "", paidPeople, dist, category, teamname, city, organization,
+                year, startNumber, 0L, 0L, false, 0);
+    }
+
+    /**
+     * Сравнивает две команды
+     *
+     * @param obj - объект для сравнения
+     * @return true, если команды одинаковые, иначе false
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        Team other = (Team) obj;
+
+        return (this.id == other.id
+                && Float.compare(this.paid_people, other.paid_people) == 0
+                && this.dist.equals(other.dist)
+                && this.category.equals(other.category)
+                && this.teamname.equals(other.teamname)
+                && this.city.equals(other.city)
+                && this.organization.equals(other.organization)
+                && this.year.equals(other.year)
+                && this.start_number.equals(other.start_number)
+        );
+    }
+
+    public int getId() {
+        return id;
+    }
 
     public void setPaid_people(float paid_people) {
         this.paid_people = paid_people;

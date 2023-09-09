@@ -23,7 +23,7 @@ public class TeamListAdapter extends ListAdapter<Team, TeamViewHolder> {
 
     public void onBindViewHolder(TeamViewHolder holder, int position) {
         Team current = getItem(position);
-        holder.bind(current.id, current.start_number, current.teamname, current.paid_people);
+        holder.bind(current.getId(), current.start_number, current.teamname, current.paid_people);
     }
 
     static class TeamDiff extends DiffUtil.ItemCallback<Team> {

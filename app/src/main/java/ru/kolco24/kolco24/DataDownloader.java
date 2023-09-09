@@ -40,6 +40,10 @@ public class DataDownloader {
             .readTimeout(2, TimeUnit.SECONDS)
             .build();
 
+    private static final String API_BASE_URL = "https://kolco24.ru/api/v1/";
+    private static final String TEAMS_ENDPOINT = "teams";
+    private static final String POINTS_ENDPOINT = "points";
+
     public interface DownloadCallback {
         void onDownloadComplete();
     }
@@ -58,7 +62,7 @@ public class DataDownloader {
 
     public void downloadPoints() {
         Request request = new Request.Builder()
-                .url("https://kolco24.ru/api/v1/points")
+                .url(API_BASE_URL + POINTS_ENDPOINT)
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
@@ -134,20 +138,18 @@ public class DataDownloader {
         });
     }
 
-    public void downloadTeams(String categoryCode) {
-        final String url = "https://kolco24.ru/api/v1/teams";
-        HttpUrl httpUrl = HttpUrl.parse(url);
-
-        if (httpUrl == null) {
-            showToast("Неверный URL");
-            return;
-        }
-        HttpUrl.Builder httpBuilder = httpUrl.newBuilder();
+    private HttpUrl buildTeamsUrl(String categoryCode) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(API_BASE_URL + TEAMS_ENDPOINT).newBuilder();
 
         if (categoryCode != null) {
-            httpBuilder.addQueryParameter("category", categoryCode);
+            urlBuilder.addQueryParameter("category", categoryCode);
         }
-        Request request = new Request.Builder().url(httpBuilder.build()).build();
+
+        return urlBuilder.build();
+    }
+
+    public void downloadTeams(String categoryCode) {
+        Request request = new Request.Builder().url(buildTeamsUrl(categoryCode)).build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
@@ -178,49 +180,48 @@ public class DataDownloader {
                         boolean isUpdated = false;
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject team = jObj.getJSONObject(i);
-                            int team_id = team.getInt("id");
-                            Team exist_team = mTeamDao.getTeamById(team_id);
-
-                            if (exist_team == null) {
-                                exist_team = new Team(
-                                        team_id,
-                                        "",
-                                        (float) team.getDouble("paid_people"),
-                                        team.getString("dist"),
-                                        team.getString("category"),
-                                        team.getString("teamname"),
-                                        team.getString("city"),
-                                        team.getString("organization"),
-                                        Integer.toString(team.getInt("year")),
-                                        team.getString("start_number"),
-                                        0L,
-                                        0L,
-                                        false,
-                                        0
-                                );
-                                mTeamDao.insert(exist_team);
+                            Team newTeam = Team.fromJson(team);
+                            if (updateOrInsertTeam(newTeam)) {
                                 isUpdated = true;
-                            } else {
-                                exist_team.setPaid_people((float) team.getDouble("paid_people"));
-                                exist_team.setDist(team.getString("dist"));
-                                exist_team.setCategory(team.getString("category"));
-                                exist_team.setTeamname(team.getString("teamname"));
-                                exist_team.setCity(team.getString("city"));
-                                exist_team.setOrganization(team.getString("organization"));
-                                exist_team.setYear(Integer.toString(team.getInt("year")));
-                                exist_team.setStart_number(team.getString("start_number"));
-                                mTeamDao.update(exist_team);
                             }
                         }
-                        showToast("Список команд обновлен");
+                        if (isUpdated) {
+                            showToast("Список команд обновлен");
+                        } else {
+                            showToast("Нет новых команд");
+                        }
                         executeCallback();
                     } catch (JSONException e) {
                         e.printStackTrace();
                         showToast("Ошибка декодирования JSON");
+                        executeCallback();
                     }
                 }
             }
         });
+    }
+
+    /**
+     * Обновляет или добавляет команду в БД
+     *
+     * @param team - команда
+     * @return true, если команда обновлена или добавлена, иначе false
+     */
+    private boolean updateOrInsertTeam(Team team) {
+        Team existTeam = mTeamDao.getTeamById(team.getId());
+        if (existTeam == null) {
+            // create new team
+            mTeamDao.insert(team);
+            return true;
+        }
+
+        if (!existTeam.equals(team)) {
+            // update team
+            mTeamDao.update(existTeam);
+            return true;
+        }
+
+        return false;
     }
 
 
