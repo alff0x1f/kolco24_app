@@ -15,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.databinding.FragmentDemoObjectBinding;
 
 /**
@@ -89,9 +90,13 @@ public class DemoObjectFragment extends Fragment {
                 binding.swipeToRefresh.setRefreshing(false);
             }
         });
-        binding.swipeToRefresh.setOnRefreshListener(() -> teamViewModel.downloadTeams(
-                "https://kolco24.ru/api/v1/teams", categoryCode
-        ));
+        binding.swipeToRefresh.setOnRefreshListener(() -> {
+            DataDownloader dataDownloader = new DataDownloader(
+                    requireActivity().getApplication(),
+                    () -> binding.swipeToRefresh.setRefreshing(false)
+            );
+            dataDownloader.downloadTeams(categoryCode);
+        });
         return root;
     }
 

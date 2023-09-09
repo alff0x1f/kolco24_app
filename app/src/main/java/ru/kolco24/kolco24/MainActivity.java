@@ -37,9 +37,10 @@ public class MainActivity extends AppCompatActivity {
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         NavigationUI.setupWithNavController(binding.navView, navController);
 
-        PointDownloader pointDownloader = new PointDownloader(getApplication());
-        pointDownloader.hideToasts();
-        pointDownloader.downloadPoints();
+        DataDownloader dataDownloader = new DataDownloader(getApplication());
+        dataDownloader.hideToasts();
+        dataDownloader.downloadPoints();
+        dataDownloader.downloadTeams(null);
 
         // Check for available NFC Adapter
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);

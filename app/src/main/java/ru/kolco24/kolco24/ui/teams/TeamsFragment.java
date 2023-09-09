@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.ui.teams;
 
-import static android.app.Activity.RESULT_CANCELED;
 import static android.app.Activity.RESULT_OK;
 
 import android.content.Context;
@@ -25,6 +24,7 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
+import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
@@ -116,7 +116,10 @@ public class TeamsFragment extends Fragment {
 //            onClick(this.getView());
 //        }
         if (item.getItemId() == R.id.action_update) {
-            mTeamViewModel.downloadTeams("https://kolco24.ru/api/v1/teams");
+            DataDownloader dataDownloader = new DataDownloader(
+                    requireActivity().getApplication()
+            );
+            dataDownloader.downloadTeams(null);
         }
         return super.onOptionsItemSelected(item);
     }

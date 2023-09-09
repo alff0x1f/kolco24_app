@@ -17,7 +17,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
-import ru.kolco24.kolco24.PointDownloader;
+import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
@@ -100,10 +100,10 @@ public class LegendsFragment extends Fragment {
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
         swipeRefreshLayout.setRefreshing(false);
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            PointDownloader pointDownloader = new PointDownloader(
+            DataDownloader dataDownloader = new DataDownloader(
                     requireActivity().getApplication(),
                     () -> swipeRefreshLayout.setRefreshing(false));
-            pointDownloader.downloadPoints();
+            dataDownloader.downloadPoints();
         });
 
         return root;
