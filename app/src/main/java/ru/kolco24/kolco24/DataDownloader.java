@@ -41,6 +41,8 @@ public class DataDownloader {
             .build();
 
     private static final String API_BASE_URL = "https://kolco24.ru/api/v1/";
+    private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/v1/";
+    private boolean isLocalDownload = false;
     private static final String TEAMS_ENDPOINT = "teams";
     private static final String POINTS_ENDPOINT = "points";
 
@@ -62,15 +64,14 @@ public class DataDownloader {
 
     public void downloadPoints() {
         Request request = new Request.Builder()
-                .url(API_BASE_URL + POINTS_ENDPOINT)
+                .url(getBaseUrl() + POINTS_ENDPOINT)
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
 
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                System.out.println("Failure");
-                showToast("Failure");
+                showToast("Сервер недоступен");
                 e.printStackTrace();
             }
 
@@ -138,8 +139,19 @@ public class DataDownloader {
         });
     }
 
+    public void setLocalDownload(boolean isLocal) {
+        this.isLocalDownload = isLocal;
+    }
+
+    private String getBaseUrl() {
+        if (isLocalDownload) {
+            return API_LOCAL_BASE_URL;
+        }
+        return API_BASE_URL;
+    }
+
     private HttpUrl buildTeamsUrl(String categoryCode) {
-        HttpUrl.Builder urlBuilder = HttpUrl.parse(API_BASE_URL + TEAMS_ENDPOINT).newBuilder();
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(getBaseUrl() + TEAMS_ENDPOINT).newBuilder();
 
         if (categoryCode != null) {
             urlBuilder.addQueryParameter("category", categoryCode);

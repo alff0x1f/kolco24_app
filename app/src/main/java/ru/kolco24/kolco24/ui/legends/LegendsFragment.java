@@ -5,10 +5,14 @@ import android.content.Intent;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -18,21 +22,17 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import ru.kolco24.kolco24.DataDownloader;
+import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
-public class LegendsFragment extends Fragment {
+public class LegendsFragment extends Fragment implements MenuProvider {
 
     private FragmentLegendsBinding binding;
     private PointViewModel mPointViewModel;
     private PhotoViewModel mPhotoViewModel;
     private int teamId;
-
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -106,6 +106,9 @@ public class LegendsFragment extends Fragment {
             dataDownloader.downloadPoints();
         });
 
+        // Add the MenuProvider to handle menu creation
+        requireActivity().addMenuProvider(this, getViewLifecycleOwner());
+
         return root;
     }
 
@@ -128,5 +131,31 @@ public class LegendsFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         binding = null;
+    }
+
+    @Override
+    public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
+        menu.clear();
+        menuInflater.inflate(R.menu.legend_menu, menu);
+    }
+
+    @Override
+    public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+        if (menuItem.getItemId() == R.id.action_update) {
+            DataDownloader dataDownloader = new DataDownloader(
+                    requireActivity().getApplication()
+            );
+            dataDownloader.downloadPoints();
+            return true;
+        }
+        if (menuItem.getItemId() == R.id.action_local_update) {
+            DataDownloader dataDownloader = new DataDownloader(
+                    requireActivity().getApplication()
+            );
+            dataDownloader.setLocalDownload(true);
+            dataDownloader.downloadPoints();
+            return true;
+        }
+        return false;
     }
 }

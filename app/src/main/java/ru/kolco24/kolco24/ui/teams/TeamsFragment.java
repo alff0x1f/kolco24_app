@@ -2,6 +2,8 @@ package ru.kolco24.kolco24.ui.teams;
 
 import static android.app.Activity.RESULT_OK;
 
+import android.annotation.SuppressLint;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,6 +19,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.viewpager2.widget.ViewPager2;
@@ -28,15 +31,10 @@ import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
-public class TeamsFragment extends Fragment {
+public class TeamsFragment extends Fragment implements MenuProvider {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
     private SharedPreferences sharedpreferences;
-
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
-    }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -59,7 +57,10 @@ public class TeamsFragment extends Fragment {
 
         // QR code
         binding.fabQr.setOnClickListener(this::onClick);
-        binding.fabQr.setVisibility(View.GONE);
+        binding.fabQr.setVisibility(View.VISIBLE);
+
+        // Add the MenuProvider to handle menu creation
+        requireActivity().addMenuProvider(this, getViewLifecycleOwner());
 
         return root;
     }
@@ -97,7 +98,7 @@ public class TeamsFragment extends Fragment {
             String team = qr_content[2];
             int team_number = Integer.parseInt(team);
 
-            Toast toast = Toast.makeText(
+            @SuppressLint("DefaultLocale") Toast toast = Toast.makeText(
                     getContext(),
                     String.format("Команда %d", team_number),
                     Toast.LENGTH_LONG
@@ -106,22 +107,24 @@ public class TeamsFragment extends Fragment {
         }
     }
 
+    // Implement the MenuProvider interface
     @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+    public void onCreateMenu(@NonNull Menu menu, MenuInflater inflater) {
+        menu.clear(); // Clear the menu before inflating it
         inflater.inflate(R.menu.team_menu, menu);
+
     }
 
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-//        if (item.getItemId() == R.id.action_scan_qr) {
-//            onClick(this.getView());
-//        }
-        if (item.getItemId() == R.id.action_update) {
+    @Override
+    public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+        if (menuItem.getItemId() == R.id.action_update) {
             DataDownloader dataDownloader = new DataDownloader(
                     requireActivity().getApplication()
             );
             dataDownloader.downloadTeams(null);
+            return true;
         }
-        return super.onOptionsItemSelected(item);
+        return false;
     }
 
 
@@ -138,9 +141,13 @@ public class TeamsFragment extends Fragment {
             startActivityForResult(intent, 0);
 
         } catch (Exception e) {
-            Uri marketUri = Uri.parse("market://details?id=com.srowen.bs.android");
-            Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
-            startActivity(marketIntent);
+            try {
+                Uri marketUri = Uri.parse("market://details?id=com.google.zxing.client.android");
+                Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
+                startActivity(marketIntent);
+            } catch (ActivityNotFoundException e1) {
+                Toast.makeText(getActivity(), "Сканирование QR недоступно", Toast.LENGTH_LONG).show();
+            }
         }
     }
 }

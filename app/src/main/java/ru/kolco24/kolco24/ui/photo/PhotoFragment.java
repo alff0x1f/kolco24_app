@@ -1,13 +1,11 @@
 package ru.kolco24.kolco24.ui.photo;
 
-import static android.content.ContentValues.TAG;
 
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Rect;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -18,6 +16,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -41,7 +40,7 @@ import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
-public class PhotoFragment extends Fragment {
+public class PhotoFragment extends Fragment implements MenuProvider {
     private final int LOCAL_SYNC = 1;
     private final int INTERNET_SYNC = 2;
     public final OkHttpClient client = new OkHttpClient.Builder()
@@ -54,11 +53,6 @@ public class PhotoFragment extends Fragment {
     private PhotoViewModel mPhotoViewModel;
     private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
     private int teamId;
-
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
-    }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -93,6 +87,9 @@ public class PhotoFragment extends Fragment {
             startActivity(intent);
 //            NavHostFragment.findNavController(this).navigate(R.id.action_navigation_taken_points_to_navigation_new_photo);
         });
+
+        // Add the MenuProvider to handle menu creation
+        requireActivity().addMenuProvider(this, getViewLifecycleOwner());
 
         return root;
     }
@@ -147,27 +144,6 @@ public class PhotoFragment extends Fragment {
             binding.hr2.setVisibility(View.VISIBLE);
             binding.textNoTeamId.setVisibility(View.GONE);
         }
-    }
-
-    @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        inflater.inflate(R.menu.photos_menu, menu);
-    }
-
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.action_sync) {
-            uploadPhotos(true);
-        }
-        if (item.getItemId() == R.id.actionAddFromCamera) {
-            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
-            startActivity(intent);
-        }
-        if (item.getItemId() == R.id.actionAddFromGallery) {
-            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
-            intent.putExtra("fromGallery", true);
-            startActivity(intent);
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     // on update
@@ -237,7 +213,7 @@ public class PhotoFragment extends Fragment {
         }
     }
 
-    public boolean upload_photo(Photo photo, String url) {
+    public boolean upload_photo(@NonNull Photo photo, String url) {
         File file = new File(photo.photo_url);
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -261,6 +237,30 @@ public class PhotoFragment extends Fragment {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+        return false;
+    }
+
+    // MenuProvider interface
+    @Override
+    public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
+        menu.clear(); // Clear the menu before inflating it
+        menuInflater.inflate(R.menu.photos_menu, menu);
+    }
+
+    @Override
+    public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+        if (menuItem.getItemId() == R.id.action_sync) {
+            uploadPhotos(true);
+        }
+        if (menuItem.getItemId() == R.id.actionAddFromCamera) {
+            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
+            startActivity(intent);
+        }
+        if (menuItem.getItemId() == R.id.actionAddFromGallery) {
+            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
+            intent.putExtra("fromGallery", true);
+            startActivity(intent);
         }
         return false;
     }
