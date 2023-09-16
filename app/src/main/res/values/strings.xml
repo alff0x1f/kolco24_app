@@ -5,7 +5,7 @@
     <string name="title_legends">Легенда</string>
     <string name="add_point">Добавить КП</string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
-    <string name="hint_word">Номер кп...</string>
+    <string name="hint_word">Номер кп…</string>
     <string name="button_save">Сохранить</string>
     <string name="button_cancel">Отмена</string>
     <string name="button_load">Выбрать фото из галереи</string>
@@ -15,4 +15,21 @@
     <string name="scan_qr">Сканировать QR код</string>
     <string name="update_from_internet">Обновить с интернета</string>
     <string name="update_local">Обновить с локальной сети</string>
+    <string name="title_activity_settings">Настройки</string>
+
+    <!-- Preference Titles -->
+    <string name="messages_header">Messages</string>
+    <string name="sync_header">Sync</string>
+
+    <!-- Messages Preferences -->
+    <string name="signature_title">Your signature</string>
+    <string name="reply_title">Default reply action</string>
+
+    <!-- Sync Preferences -->
+    <string name="sync_title">Sync email periodically</string>
+    <string name="attachment_title">Download incoming attachments</string>
+    <string name="attachment_summary_on">Automatically download attachments for incoming emails
+    </string>
+    <string name="attachment_summary_off">Only download attachments when manually requested</string>
+    <string name="settings">Настройки</string>
 </resources>

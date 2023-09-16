@@ -23,6 +23,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
+import ru.kolco24.kolco24.SettingsActivity;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
@@ -154,6 +155,12 @@ public class LegendsFragment extends Fragment implements MenuProvider {
             );
             dataDownloader.setLocalDownload(true);
             dataDownloader.downloadPoints();
+            return true;
+        }
+        // start SettingsActivity
+        if (menuItem.getItemId() == R.id.action_settings) {
+            Intent intent = new Intent(getActivity(), SettingsActivity.class);
+            startActivity(intent);
             return true;
         }
         return false;

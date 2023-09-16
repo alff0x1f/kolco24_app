@@ -53,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
             }
             handleIntent(getIntent());
         }
-
     }
 
     private void showNFCEnableDialog() {
@@ -106,5 +105,4 @@ public class MainActivity extends AppCompatActivity {
         }
         return hexString.toString();
     }
-
 }
