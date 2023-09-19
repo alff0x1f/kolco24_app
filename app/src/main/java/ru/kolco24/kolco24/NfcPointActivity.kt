@@ -14,14 +14,21 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
 
 class NfcPointActivity : AppCompatActivity() {
     private var nfcAdapter: NfcAdapter? = null
-    private lateinit var textView: TextView // Add this line
+    private lateinit var textView: TextView
+    private lateinit var binding: ActivityNfcPointBinding
+
+    private var pointId: String? = null
+    private var pointNumber: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_nfc_point)
+
+        binding = ActivityNfcPointBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         textView = findViewById(R.id.textView)
@@ -61,6 +68,7 @@ class NfcPointActivity : AppCompatActivity() {
             // Update the textView on the UI thread
             activity.runOnUiThread {
                 activity.textView.text = "Hex ID: $hexId $payload"
+                activity.binding.pointNumber.text = "КП $payload ($hexId)"
             }
 
         }
@@ -167,8 +175,14 @@ class NfcPointActivity : AppCompatActivity() {
                         val text = String(payload)
                         // I want show hexId in TextView, chatGPT do it here
                         textView.text = "Hex ID: $hexId, $text"
+                        if (record.toMimeType() == "kolco24/point") {
+                            pointId = hexId
+                            pointNumber = text.toInt()
+                            binding.pointNumber.text = "КП $text ($hexId)"
+                        }
                     }
                 }
+//                var a = findViewById(R.id.textView)
             }
         }
     }

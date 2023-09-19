@@ -11,13 +11,18 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Database(entities = {Point.class, Photo.class, Team.class}, version = 1, exportSchema = false)
+@Database(
+        entities = {Point.class, Photo.class, Team.class, NfcCheck.class},
+        version = 1,
+        exportSchema = false
+)
 public abstract class AppDatabase extends RoomDatabase {
     public abstract PointDao pointDao();
 
     public abstract PhotoDao photoDao();
 
     public abstract TeamDao teamDao();
+    public abstract NfcCheckDao nfcCheckDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
@@ -62,6 +67,10 @@ public abstract class AppDatabase extends RoomDatabase {
                 // Team
                 TeamDao teamDao = INSTANCE.teamDao();
                 teamDao.deleteAll();
+
+                // NfcCheck
+                NfcCheckDao nfcCheckDao = INSTANCE.nfcCheckDao();
+                nfcCheckDao.deleteAllNfcChecks();
             });
         }
     };
