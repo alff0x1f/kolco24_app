@@ -5,12 +5,13 @@ import android.content.pm.PackageManager
 import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.nfc.tech.Ndef
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
@@ -24,14 +25,74 @@ class NfcPointActivity : AppCompatActivity() {
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         textView = findViewById(R.id.textView)
+
         handleIntent(intent)
         requestPermission()
-        if (lastGalleryImageUri() != null){
-            Toast.makeText(this, lastGalleryImageUri(),  Toast.LENGTH_SHORT).show()
+        if (lastGalleryImageUri() != null) {
+            Toast.makeText(this, lastGalleryImageUri(), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "Галерея недоступна",  Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
         }
     }
+
+    class MyReaderCallback(private val activity: NfcPointActivity) : NfcAdapter.ReaderCallback {
+        override fun onTagDiscovered(tag: Tag?) {
+            // toast tag id
+            val tagId = tag?.id
+            val ndef = Ndef.get(tag)
+
+            val records = ndef.cachedNdefMessage.records
+            // Loop through the records and get their payload
+            for (record in records) {
+                // Convert the payload to a string
+                val payload = String(record.payload)
+                // Do something with the payload
+                println(payload)
+                println(record.toMimeType())
+            }
+            var payload = ""
+            if (records.isNotEmpty()) {
+                payload = String(records[0].payload)
+                println(payload)
+                println(records[0].toMimeType())
+            }
+
+            val hexId = byteArrayToHexString(tagId!!)
+            // Update the textView on the UI thread
+            activity.runOnUiThread {
+                activity.textView.text = "Hex ID: $hexId $payload"
+            }
+
+        }
+
+        private fun byteArrayToHexString(byteArray: ByteArray): String {
+            val hexString = StringBuilder()
+            for (b in byteArray) {
+                val hex = Integer.toHexString(0xFF and b.toInt())
+                if (hex.length == 1) {
+                    hexString.append('0')
+                }
+                hexString.append(hex)
+            }
+            return hexString.toString()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        val nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        nfcAdapter.enableReaderMode(this,
+            MyReaderCallback(activity = this),
+            NfcAdapter.FLAG_READER_NFC_A, null)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        val nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        nfcAdapter.disableReaderMode(this)
+    }
+
 
     private fun requestPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
