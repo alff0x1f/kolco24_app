@@ -38,7 +38,7 @@
                 android:textSize="16sp" />
 
             <TextView
-                android:id="@+id/textView"
+                android:id="@+id/members"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_margin="@dimen/small_padding"
@@ -47,6 +47,7 @@
                 android:text="Hello, world!"
                 android:textColor="@color/textContrast"
                 android:textSize="24sp"
+                android:visibility="invisible"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -59,6 +60,7 @@
                 android:layout_margin="@dimen/small_padding"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
+                android:enabled="false"
                 android:text="Сохранить"
                 android:textSize="16sp" />
         </LinearLayout>

@@ -9,20 +9,20 @@ import android.nfc.tech.Ndef
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
 
 class NfcPointActivity : AppCompatActivity() {
     private var nfcAdapter: NfcAdapter? = null
-    private lateinit var textView: TextView
     private lateinit var binding: ActivityNfcPointBinding
 
     private var pointId: String? = null
     private var pointNumber: Int? = null
+    private val members = mutableListOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,14 +31,17 @@ class NfcPointActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
-        textView = findViewById(R.id.textView)
 
         handleIntent(intent)
         requestPermission()
         if (lastGalleryImageUri() != null) {
-            Toast.makeText(this, lastGalleryImageUri(), Toast.LENGTH_SHORT).show()
+//            Toast.makeText(this, lastGalleryImageUri(), Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.button.setOnClickListener {
+            finish()
         }
     }
 
@@ -47,30 +50,29 @@ class NfcPointActivity : AppCompatActivity() {
             // toast tag id
             val tagId = tag?.id
             val ndef = Ndef.get(tag)
-
-            val records = ndef.cachedNdefMessage.records
-            // Loop through the records and get their payload
-            for (record in records) {
-                // Convert the payload to a string
-                val payload = String(record.payload)
-                // Do something with the payload
-                println(payload)
-                println(record.toMimeType())
-            }
-            var payload = ""
-            if (records.isNotEmpty()) {
-                payload = String(records[0].payload)
-                println(payload)
-                println(records[0].toMimeType())
-            }
-
             val hexId = byteArrayToHexString(tagId!!)
-            // Update the textView on the UI thread
-            activity.runOnUiThread {
-                activity.textView.text = "Hex ID: $hexId $payload"
-                activity.binding.pointNumber.text = "КП $payload ($hexId)"
-            }
 
+            if (ndef == null) {
+                // add hexId to list
+                if (!activity.members.contains(hexId)) {
+                    activity.members.add(hexId)
+
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "Участник добавлен", Toast.LENGTH_SHORT).show()
+                        activity.binding.members.text = activity.members.joinToString("\n")
+                        activity.binding.members.isVisible = true
+                        if (activity.members.count() >= 2) {
+                            activity.binding.button.isEnabled = true
+                        } else {
+                            activity.binding.button.isEnabled = false
+                        }
+                    }
+                } else {
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "Участник уже добавлен", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
 
         private fun byteArrayToHexString(byteArray: ByteArray): String {
@@ -173,8 +175,6 @@ class NfcPointActivity : AppCompatActivity() {
                     for (record in message.records) {
                         val payload = record.payload
                         val text = String(payload)
-                        // I want show hexId in TextView, chatGPT do it here
-                        textView.text = "Hex ID: $hexId, $text"
                         if (record.toMimeType() == "kolco24/point") {
                             pointId = hexId
                             pointNumber = text.toInt()
@@ -182,7 +182,6 @@ class NfcPointActivity : AppCompatActivity() {
                         }
                     }
                 }
-//                var a = findViewById(R.id.textView)
             }
         }
     }
