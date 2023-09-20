@@ -8,13 +8,16 @@ import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.os.Build
 import android.os.Bundle
+import android.os.CountDownTimer
 import android.provider.MediaStore
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
+
 
 class NfcPointActivity : AppCompatActivity() {
     private var nfcAdapter: NfcAdapter? = null
@@ -23,6 +26,11 @@ class NfcPointActivity : AppCompatActivity() {
     private var pointId: String? = null
     private var pointNumber: Int? = null
     private val members = mutableListOf<String>()
+
+    //timer
+    private var countDownTimer: CountDownTimer? = null
+    private val countdownDuration: Long = 30000 // 30 seconds in milliseconds
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +51,21 @@ class NfcPointActivity : AppCompatActivity() {
         binding.button.setOnClickListener {
             finish()
         }
+
+        countDownTimer = object : CountDownTimer(countdownDuration, 1000) {
+            // 1000 milliseconds (1 second) interval
+            override fun onTick(millisUntilFinished: Long) {
+                // Update the UI with the remaining time
+                binding.timerTextView.text = (millisUntilFinished / 1000).toString()
+            }
+
+            override fun onFinish() {
+                // Countdown finished, finish the activity
+                finish()
+            }
+        }
+
+        (countDownTimer as CountDownTimer).start();
     }
 
     class MyReaderCallback(private val activity: NfcPointActivity) : NfcAdapter.ReaderCallback {
