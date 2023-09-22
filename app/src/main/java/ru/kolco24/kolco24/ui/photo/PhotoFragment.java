@@ -77,9 +77,10 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
         mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
-        mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), photos -> {
-            uploadPhotos(false);
-        });
+        mPhotoViewModel.getPhotoByTeamId(teamId).observe(
+                getViewLifecycleOwner(),
+                photos -> uploadPhotos(false)
+        );
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -97,9 +98,10 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        mPhotoViewModel.getPhotoCount(teamId).observe(getViewLifecycleOwner(), count -> {
-            binding.textDashboard.setText(String.format("Количество КП: %d", count));
-        });
+        mPhotoViewModel.getPhotoCount(teamId).observe(
+                getViewLifecycleOwner(),
+                count -> binding.textDashboard.setText(String.format("Количество КП с фото: %d", count))
+        );
         mPhotoViewModel.getCostSum(teamId).observe(getViewLifecycleOwner(), sum -> {
             if (sum == null) {
                 binding.textDashboard2.setText("Сумма баллов: 0");
@@ -150,7 +152,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     @Override
     public void onResume() {
         super.onResume();
-        teamId = getContext().getSharedPreferences("team", Context.MODE_PRIVATE).
+        teamId = requireContext().getSharedPreferences("team", Context.MODE_PRIVATE).
                 getInt("team_id", 0);
     }
 
@@ -176,13 +178,9 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         }
         if (withToast) {
             if (localResult) {
-                getActivity().runOnUiThread(() -> {
-                    Toast.makeText(getContext(), "Фото локально отправлены", Toast.LENGTH_SHORT).show();
-                });
+                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Фото локально отправлены", Toast.LENGTH_SHORT).show());
             } else {
-                getActivity().runOnUiThread(() -> {
-                    Toast.makeText(getContext(), "Ошибка при локальной отправке фото", Toast.LENGTH_SHORT).show();
-                });
+                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Ошибка при локальной отправке фото", Toast.LENGTH_SHORT).show());
             }
         }
     }
@@ -202,13 +200,19 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         }
         if (withToast) {
             if (internetResult) {
-                getActivity().runOnUiThread(() -> {
-                    Toast.makeText(getContext(), "Фото отправлены через интернет", Toast.LENGTH_SHORT).show();
-                });
+                requireActivity().runOnUiThread(
+                        () -> Toast.makeText(
+                                getContext(),
+                                "Фото отправлены через интернет",
+                                Toast.LENGTH_SHORT).show()
+                );
             } else {
-                getActivity().runOnUiThread(() -> {
-                    Toast.makeText(getContext(), "Ошибка при отправке через интернет", Toast.LENGTH_SHORT).show();
-                });
+                requireActivity().runOnUiThread(
+                        () -> Toast.makeText(
+                                getContext(),
+                                "Ошибка при отправке через интернет",
+                                Toast.LENGTH_SHORT).show()
+                );
             }
         }
     }
