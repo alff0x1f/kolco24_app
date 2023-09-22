@@ -52,6 +52,9 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             handleIntent(getIntent());
+        } else {
+            // NFC is not supported; show a message and disable the NFC features
+            Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show();
         }
     }
 

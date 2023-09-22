@@ -57,7 +57,7 @@ public class TeamsFragment extends Fragment implements MenuProvider {
 
         // QR code
 //        binding.fabQr.setOnClickListener(this::onClick);
-//        binding.fabQr.setVisibility(View.VISIBLE);
+        binding.fabQr.setVisibility(View.GONE);
 
         // Add the MenuProvider to handle menu creation
         requireActivity().addMenuProvider(this, getViewLifecycleOwner());

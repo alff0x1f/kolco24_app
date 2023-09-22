@@ -39,7 +39,14 @@ public interface PointDao {
             "  GROUP BY point_number" +
             ") photo " +
             "ON points.number == photo.point_number " +
+            "LEFT JOIN ( " +
+            "  SELECT pointNumber AS point_number, min(createDt) AS nfc_time" +
+            "  FROM nfc_check " +
+            "  GROUP BY pointNumber" +
+            ") nfc " +
+            "ON points.number == nfc.point_number " +
             "WHERE photo.point_number IS NULL " +
+            "AND nfc.nfc_time IS NULL " +
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId);
 
