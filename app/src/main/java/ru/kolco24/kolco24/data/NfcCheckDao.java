@@ -26,4 +26,7 @@ public interface NfcCheckDao {
 
     @Query("SELECT * FROM nfc_check")
     List<NfcCheck> getNotSyncNfcCheck();
+
+    @Query("SELECT count(DISTINCT pointNumber) FROM nfc_check;")
+    LiveData<Integer> getNfcCheckCount();
 }

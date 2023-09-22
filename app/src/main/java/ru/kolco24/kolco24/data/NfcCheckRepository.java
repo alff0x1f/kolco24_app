@@ -28,6 +28,10 @@ public class NfcCheckRepository {
         return mNfcCheckDao.getNfcCheckById(id);
     }
 
+    public LiveData<Integer> getNfcCheckCount() {
+        return mNfcCheckDao.getNfcCheckCount();
+    }
+
     // You must call this on a non-UI thread or your app will throw an exception.
     public void insert(NfcCheck nfcCheck) {
         AppDatabase.databaseWriteExecutor.execute(() ->

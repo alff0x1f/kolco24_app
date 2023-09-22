@@ -18,6 +18,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import ru.kolco24.kolco24.data.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 class NfcPointActivity : AppCompatActivity() {
@@ -67,7 +70,7 @@ class NfcPointActivity : AppCompatActivity() {
             }
         }
 
-        (countDownTimer as CountDownTimer).start();
+        (countDownTimer as CountDownTimer).start()
     }
 
     class MyReaderCallback(private val activity: NfcPointActivity) : NfcAdapter.ReaderCallback {
@@ -111,7 +114,11 @@ class NfcPointActivity : AppCompatActivity() {
         private fun saveNfcCheck(hexId: String){
             println("saveNfcCheck")
             val nfcCheckViewModel = NfcCheckViewModel(activity.application)
-            val nfcCheck = NfcCheck(activity.pointId, activity.pointNumber, hexId)
+            val currTime = SimpleDateFormat(
+                "dd.MM HH:mm",
+                Locale.US
+            ).format(Date())
+            val nfcCheck = NfcCheck(activity.pointId, activity.pointNumber, hexId, currTime)
             nfcCheckViewModel.insert(nfcCheck)
 
             nfcCheckViewModel.getNotSyncNfcCheck().forEach {
@@ -222,7 +229,7 @@ class NfcPointActivity : AppCompatActivity() {
                         if (record.toMimeType() == "kolco24/point") {
                             pointId = hexId
                             pointNumber = text.toInt()
-                            binding.pointNumber.text = "$text"
+                            binding.pointNumber.text = text
                         }
                     }
                 }

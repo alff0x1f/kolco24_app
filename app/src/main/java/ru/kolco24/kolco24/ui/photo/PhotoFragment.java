@@ -100,7 +100,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         super.onViewCreated(view, savedInstanceState);
         mPhotoViewModel.getPhotoCount(teamId).observe(
                 getViewLifecycleOwner(),
-                count -> binding.textDashboard.setText(String.format("Количество КП с фото: %d", count))
+                count -> binding.textDashboard.setText(String.format("Количество КП: %d", count))
         );
         mPhotoViewModel.getCostSum(teamId).observe(getViewLifecycleOwner(), sum -> {
             if (sum == null) {

@@ -41,7 +41,15 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
             } else {
                 pointTimeTextView.setText(point.photo_time);
             }
-        } else {
+        } else if (point.nfc_time != null) {
+            String[] timeArray = point.nfc_time.split(" ");
+            if (timeArray.length > 1) {
+                pointTimeTextView.setText(timeArray[1]);
+            } else {
+                pointTimeTextView.setText(point.nfc_time);
+            }
+        }
+        else {
             pointTimeTextView.setText("");
         }
 
@@ -49,7 +57,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         textCost.setText(String.format("+%d", point.cost));
         Drawable drawable = ContextCompat.getDrawable(itemView.getContext(), R.drawable.cost_background);
         // set color based on cost
-        int color = Color.parseColor("#000000");
+        int color;
         if (point.cost == 1) {
             color = itemView.getResources().getColor(R.color.level1);
         } else if (point.cost == 2) {

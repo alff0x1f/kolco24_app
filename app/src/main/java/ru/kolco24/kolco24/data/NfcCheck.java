@@ -2,23 +2,22 @@ package ru.kolco24.kolco24.data;
 
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
-import androidx.room.TypeConverters;
 
 @Entity(tableName = "nfc_check")
 public class NfcCheck {
     @PrimaryKey(autoGenerate = true)
     private int id = 0;
-    private String pointNfc = null;
-    private int pointNumber = 0;
-    private String memberNfcId = null;
+    private String pointNfc;
+    private int pointNumber;
+    private String memberNfcId;
 
-    @TypeConverters(Converters.class)
-    private Long createDt = null;
+    private String createDt;
 
-    public NfcCheck(String pointNfc, int pointNumber, String memberNfcId) {
+    public NfcCheck(String pointNfc, int pointNumber, String memberNfcId, String createDt) {
         this.pointNfc = pointNfc;
         this.pointNumber = pointNumber;
         this.memberNfcId = memberNfcId;
+        this.createDt = createDt;
     }
 
     public int getId() {
@@ -53,11 +52,11 @@ public class NfcCheck {
         this.memberNfcId = memberNfcId;
     }
 
-    public Long getCreateDt() {
+    public String getCreateDt() {
         return createDt;
     }
 
-    public void setCreateDt(Long createDt) {
+    public void setCreateDt(String createDt) {
         this.createDt = createDt;
     }
 }
