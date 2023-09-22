@@ -158,11 +158,11 @@ public class LegendsFragment extends Fragment implements MenuProvider {
             return true;
         }
         // start SettingsActivity
-        if (menuItem.getItemId() == R.id.action_settings) {
-            Intent intent = new Intent(getActivity(), SettingsActivity.class);
-            startActivity(intent);
-            return true;
-        }
+//        if (menuItem.getItemId() == R.id.action_settings) {
+//            Intent intent = new Intent(getActivity(), SettingsActivity.class);
+//            startActivity(intent);
+//            return true;
+//        }
         return false;
     }
 }

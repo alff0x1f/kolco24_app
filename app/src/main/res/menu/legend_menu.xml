@@ -15,10 +15,10 @@
         android:title="@string/update_local"
         app:showAsAction="never" />
     <!--    settings    -->
-    <item
-        android:id="@+id/action_settings"
-        android:icon="@drawable/ic_baseline_update_24"
-        android:title="@string/settings"
-        app:showAsAction="never" />
+<!--    <item-->
+<!--        android:id="@+id/action_settings"-->
+<!--        android:icon="@drawable/ic_baseline_update_24"-->
+<!--        android:title="@string/settings"-->
+<!--        app:showAsAction="never" />-->
 
 </menu>
