@@ -43,7 +43,7 @@ public interface PointDao {
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId);
 
-    @Query("SELECT points.*, photo.photo_time " +
+    @Query("SELECT points.*, photo.photo_time, nfc.nfc_time " +
             "FROM points " +
             "LEFT JOIN (" +
             "  SELECT point_number, min(photo_time) AS photo_time " +
@@ -52,7 +52,14 @@ public interface PointDao {
             "  GROUP BY point_number" +
             ") photo " +
             "ON points.number == photo.point_number " +
-            "WHERE photo.point_number IS NOT NULL " +
+            "LEFT JOIN ( " +
+            "  SELECT pointNumber AS point_number, min(createDt) AS nfc_time" +
+            "  FROM nfc_check " +
+            "  GROUP BY pointNumber" +
+            ") nfc " +
+            "ON points.number == nfc.point_number " +
+            "WHERE photo.point_number IS NOT NULL" +
+            "  OR nfc.point_number IS NOT NULL " +
             "ORDER BY photo.photo_time")
     LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId);
 

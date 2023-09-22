@@ -33,19 +33,22 @@ public class Point {
         public String description;
         public int cost;
         public String photo_time;
+        public String nfc_time;
 
         public PointExt(
                 int id,
                 int number,
                 String description,
                 int cost,
-                String photo_time
+                String photo_time,
+                String nfc_time
         ) {
             this.id = id;
             this.number = number;
             this.description = description;
             this.cost = cost;
             this.photo_time = photo_time;
+            this.nfc_time = nfc_time;
         }
     }
 }
