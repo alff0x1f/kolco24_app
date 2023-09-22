@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24
 
+import NfcCheckViewModel
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.nfc.NdefMessage
@@ -10,12 +11,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.provider.MediaStore
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import ru.kolco24.kolco24.data.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
 
 
@@ -24,12 +25,12 @@ class NfcPointActivity : AppCompatActivity() {
     private lateinit var binding: ActivityNfcPointBinding
 
     private var pointId: String? = null
-    private var pointNumber: Int? = null
+    private var pointNumber: Int = 0
     private val members = mutableListOf<String>()
 
     //timer
     private var countDownTimer: CountDownTimer? = null
-    private val countdownDuration: Long = 30000 // 30 seconds in milliseconds
+    private val countdownDuration: Long = 60000 // 30 seconds in milliseconds
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,6 +58,7 @@ class NfcPointActivity : AppCompatActivity() {
             override fun onTick(millisUntilFinished: Long) {
                 // Update the UI with the remaining time
                 binding.timerTextView.text = (millisUntilFinished / 1000).toString()
+                binding.progressBar.progress = (millisUntilFinished / 1000).toInt()
             }
 
             override fun onFinish() {
@@ -80,6 +82,8 @@ class NfcPointActivity : AppCompatActivity() {
                 if (!activity.members.contains(hexId)) {
                     activity.members.add(hexId)
 
+                    saveNfcCheck(hexId)
+
                     activity.runOnUiThread {
                         Toast.makeText(activity, "Участник добавлен", Toast.LENGTH_SHORT).show()
                         activity.binding.members.text = activity.members.joinToString("\n")
@@ -95,6 +99,20 @@ class NfcPointActivity : AppCompatActivity() {
                         Toast.makeText(activity, "Участник уже добавлен", Toast.LENGTH_SHORT).show()
                     }
                 }
+            }
+        }
+
+        /**
+         * save value to room database
+         */
+        private fun saveNfcCheck(hexId: String){
+            println("saveNfcCheck")
+            val nfcCheckViewModel = NfcCheckViewModel(activity.application)
+            val nfcCheck = NfcCheck(activity.pointId, activity.pointNumber, hexId)
+            nfcCheckViewModel.insert(nfcCheck)
+
+            nfcCheckViewModel.getNotSyncNfcCheck().forEach {
+                println("not sync: ${it.id} ${it.pointNfc} ${it.pointNumber} ${it.memberNfcId}")
             }
         }
 

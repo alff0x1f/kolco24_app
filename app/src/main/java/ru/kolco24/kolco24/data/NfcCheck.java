@@ -9,11 +9,17 @@ public class NfcCheck {
     @PrimaryKey(autoGenerate = true)
     private int id = 0;
     private String pointNfc = null;
-    private String pointNumber = null;
+    private int pointNumber = 0;
     private String memberNfcId = null;
 
     @TypeConverters(Converters.class)
     private Long createDt = null;
+
+    public NfcCheck(String pointNfc, int pointNumber, String memberNfcId) {
+        this.pointNfc = pointNfc;
+        this.pointNumber = pointNumber;
+        this.memberNfcId = memberNfcId;
+    }
 
     public int getId() {
         return id;
@@ -31,11 +37,11 @@ public class NfcCheck {
         this.pointNfc = pointNfc;
     }
 
-    public String getPointNumber() {
+    public int getPointNumber() {
         return pointNumber;
     }
 
-    public void setPointNumber(String pointNumber) {
+    public void setPointNumber(int pointNumber) {
         this.pointNumber = pointNumber;
     }
 

@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data;
 
+import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.Query;
@@ -12,7 +13,7 @@ public interface NfcCheckDao {
     void insert(NfcCheck nfcCheck);
 
     @Query("SELECT * FROM nfc_check")
-    List<NfcCheck> getAllNfcChecks();
+    LiveData<List<NfcCheck>> getAllNfcChecks();
 
     @Query("SELECT * FROM nfc_check WHERE id = :id")
     NfcCheck getNfcCheckById(int id);
@@ -22,4 +23,7 @@ public interface NfcCheckDao {
 
     @Query("DELETE FROM nfc_check")
     void deleteAllNfcChecks();
+
+    @Query("SELECT * FROM nfc_check")
+    List<NfcCheck> getNotSyncNfcCheck();
 }
