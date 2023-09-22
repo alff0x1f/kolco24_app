@@ -10,8 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class CategoriesAdapter extends FragmentStateAdapter {
-    private static final List<String> categorie_name = Arrays.asList("4ч МЖ|ЖЖ", "4ч ММ");
-    private static final List<String> categorie_code = Arrays.asList("4h_mw", "4h_mm");
+    private static final List<String> categorie_name = Arrays.asList("8ч МЖ|ЖЖ", "8ч ММ");
+    private static final List<String> categorie_code = Arrays.asList("8h_mw", "8h_mm");
 
     public CategoriesAdapter(@NonNull Fragment fragment) {
         super(fragment);
