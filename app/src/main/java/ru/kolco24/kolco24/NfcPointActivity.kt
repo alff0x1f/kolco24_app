@@ -86,7 +86,10 @@ class NfcPointActivity : AppCompatActivity() {
 
                     activity.runOnUiThread {
                         Toast.makeText(activity, "Участник добавлен", Toast.LENGTH_SHORT).show()
-                        activity.binding.members.text = activity.members.joinToString("\n")
+                        val numberedMembers = activity.members.mapIndexed { index, element ->
+                            "${index + 1}) $element"
+                        }
+                        activity.binding.members.text = numberedMembers.joinToString("\n")
                         activity.binding.members.isVisible = true
                         if (activity.members.count() >= 2) {
                             activity.binding.button.isEnabled = true
@@ -219,7 +222,7 @@ class NfcPointActivity : AppCompatActivity() {
                         if (record.toMimeType() == "kolco24/point") {
                             pointId = hexId
                             pointNumber = text.toInt()
-                            binding.pointNumber.text = "КП $text ($hexId)"
+                            binding.pointNumber.text = "$text"
                         }
                     }
                 }
