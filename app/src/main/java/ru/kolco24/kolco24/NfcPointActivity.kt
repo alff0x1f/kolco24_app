@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24
 
 import NfcCheckViewModel
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.nfc.NdefMessage
@@ -18,9 +19,11 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import ru.kolco24.kolco24.data.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
+import ru.kolco24.kolco24.ui.teams.TeamViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 
 class NfcPointActivity : AppCompatActivity() {
@@ -31,9 +34,12 @@ class NfcPointActivity : AppCompatActivity() {
     private var pointNumber: Int = 0
     private val members = mutableListOf<String>()
 
+    private var teamId: Int = 0
+    private var teamViewModel: TeamViewModel? = null
+
     //timer
     private var countDownTimer: CountDownTimer? = null
-    private val countdownDuration: Long = 60000 // 30 seconds in milliseconds
+    private val countdownDuration: Long = 60000 // 60 seconds in milliseconds
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,12 +51,16 @@ class NfcPointActivity : AppCompatActivity() {
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
         handleIntent(intent)
-        requestPermission()
-        if (lastGalleryImageUri() != null) {
-//            Toast.makeText(this, lastGalleryImageUri(), Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
-        }
+        teamId = this.baseContext.getSharedPreferences("team", MODE_PRIVATE).getInt("team_id", 0)
+        teamViewModel = TeamViewModel(application)
+
+        // gallery playground
+//        requestPermission()
+//        if (lastGalleryImageUri() != null) {
+////            Toast.makeText(this, lastGalleryImageUri(), Toast.LENGTH_SHORT).show()
+//        } else {
+//            Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
+//        }
 
         binding.button.setOnClickListener {
             finish()
@@ -65,8 +75,17 @@ class NfcPointActivity : AppCompatActivity() {
             }
 
             override fun onFinish() {
-                // Countdown finished, finish the activity
-                finish()
+                // show dialog
+                val dialog = AlertDialog.Builder(this@NfcPointActivity)
+                    .setTitle("Время истекло")
+                    .setMessage(
+                        "Нужно за 60 секунд отметить всех участников. Считайте метку на КП ещё раз " +
+                                "чтобы начать заново."
+                    )
+                    .setPositiveButton(
+                        "Ок"
+                    ) { dialogInterface, i -> finish() }.setOnCancelListener { finish() }.create()
+                dialog.show()
             }
         }
 
@@ -85,20 +104,38 @@ class NfcPointActivity : AppCompatActivity() {
                 if (!activity.members.contains(hexId)) {
                     activity.members.add(hexId)
 
-                    saveNfcCheck(hexId)
+                    val team = activity.teamViewModel?.getTeamById(activity.teamId)
+                    val paidPeople = team?.paid_people?.roundToInt() ?: 2
+
+                    if (activity.members.count() >= paidPeople) {
+                        for (i in 0 until activity.members.count()) {
+                            saveNfcCheck(activity.members[i])
+                        }
+
+                        // Show dialog
+                        activity.runOnUiThread{
+                            val dialog = AlertDialog.Builder(activity)
+                                .setTitle("Поздравляем")
+                                .setMessage(
+                                    "КП добавлено в список взятых"
+                                )
+                                .setPositiveButton(
+                                    "Ок"
+                                ) { dialogInterface, i ->
+                                    activity.finish()
+                                }.setOnCancelListener { activity.finish() }.create()
+                            dialog.show()
+                        }
+                        activity.countDownTimer?.cancel()
+                    }
 
                     activity.runOnUiThread {
-                        Toast.makeText(activity, "Участник добавлен", Toast.LENGTH_SHORT).show()
                         val numberedMembers = activity.members.mapIndexed { index, element ->
                             "${index + 1}) $element"
                         }
+                        Toast.makeText(activity, "Участник добавлен", Toast.LENGTH_SHORT).show()
                         activity.binding.members.text = numberedMembers.joinToString("\n")
                         activity.binding.members.isVisible = true
-                        if (activity.members.count() >= 2) {
-                            activity.binding.button.isEnabled = true
-                        } else {
-                            activity.binding.button.isEnabled = false
-                        }
                     }
                 } else {
                     activity.runOnUiThread {

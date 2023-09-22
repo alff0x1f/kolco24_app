@@ -1,7 +1,6 @@
 package ru.kolco24.kolco24.data;
 
 import android.app.Application;
-import android.content.Context;
 
 import androidx.lifecycle.LiveData;
 
