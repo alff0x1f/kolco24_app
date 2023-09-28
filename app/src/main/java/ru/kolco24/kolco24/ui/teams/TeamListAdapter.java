@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 
-import ru.kolco24.kolco24.data.Team;
+import ru.kolco24.kolco24.data.entities.Team;
 
 public class TeamListAdapter extends ListAdapter<Team, TeamViewHolder> {
 

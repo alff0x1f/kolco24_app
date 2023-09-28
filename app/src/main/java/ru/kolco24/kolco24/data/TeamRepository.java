@@ -6,6 +6,8 @@ import androidx.lifecycle.LiveData;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.Team;
+
 public class TeamRepository {
     private TeamDao mTeamDao;
     private LiveData<List<Team>> mAllTeams;

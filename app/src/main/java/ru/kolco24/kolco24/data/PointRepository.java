@@ -6,6 +6,8 @@ import androidx.lifecycle.LiveData;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.Point;
+
 public class PointRepository {
     private PointDao mPointDao;
     private LiveData<List<Point.PointExt>> mAllPoints;

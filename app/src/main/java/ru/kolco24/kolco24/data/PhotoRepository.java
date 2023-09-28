@@ -6,6 +6,8 @@ import androidx.lifecycle.LiveData;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.Photo;
+
 public class PhotoRepository {
     private PhotoDao mPhotoDao;
     private LiveData<List<Photo>> mAllPhotos;

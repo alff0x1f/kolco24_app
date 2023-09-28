@@ -29,7 +29,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import ru.kolco24.kolco24.R;
-import ru.kolco24.kolco24.data.Photo;
+import ru.kolco24.kolco24.data.entities.Photo;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

@@ -8,6 +8,8 @@ import androidx.room.Update;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.Photo;
+
 @Dao
 public interface PhotoDao {
     @Insert

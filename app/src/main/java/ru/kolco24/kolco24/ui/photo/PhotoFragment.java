@@ -37,7 +37,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import ru.kolco24.kolco24.R;
-import ru.kolco24.kolco24.data.Photo;
+import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment implements MenuProvider {

@@ -1,4 +1,4 @@
-package ru.kolco24.kolco24.data;
+package ru.kolco24.kolco24.data.entities;
 
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;

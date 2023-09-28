@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 
-import ru.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.data.entities.Point;
 
 public class PointListAdapter extends ListAdapter<Point.PointExt, PointViewHolder> {
 

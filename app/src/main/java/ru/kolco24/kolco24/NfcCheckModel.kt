@@ -1,7 +1,7 @@
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
-import ru.kolco24.kolco24.data.NfcCheck
+import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.data.NfcCheckRepository
 
 class NfcCheckViewModel(application: Application?) : AndroidViewModel(application!!) {

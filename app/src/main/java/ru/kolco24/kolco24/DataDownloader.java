@@ -23,9 +23,9 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
-import ru.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.data.entities.Point;
 import ru.kolco24.kolco24.data.PointDao;
-import ru.kolco24.kolco24.data.Team;
+import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.TeamDao;
 
 public class DataDownloader {

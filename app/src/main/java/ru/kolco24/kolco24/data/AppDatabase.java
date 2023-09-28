@@ -11,6 +11,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import ru.kolco24.kolco24.data.entities.NfcCheck;
+import ru.kolco24.kolco24.data.entities.Photo;
+import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Team;
+
 @Database(
         entities = {Point.class, Photo.class, Team.class, NfcCheck.class},
         version = 1,

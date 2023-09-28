@@ -5,7 +5,7 @@ import android.app.Application;
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 
-import ru.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.data.entities.Point;
 import ru.kolco24.kolco24.data.PointRepository;
 
 import java.util.List;

@@ -1,7 +1,6 @@
 package ru.kolco24.kolco24.ui.legends;
 
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
@@ -14,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
-import ru.kolco24.kolco24.data.Point;
+import ru.kolco24.kolco24.data.entities.Point;
 
 public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;

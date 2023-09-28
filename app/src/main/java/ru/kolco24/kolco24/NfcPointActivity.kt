@@ -17,7 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
-import ru.kolco24.kolco24.data.NfcCheck
+import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
 import ru.kolco24.kolco24.ui.teams.TeamViewModel
 import java.text.SimpleDateFormat
@@ -155,7 +155,12 @@ class NfcPointActivity : AppCompatActivity() {
                 "dd.MM HH:mm",
                 Locale.US
             ).format(Date())
-            val nfcCheck = NfcCheck(activity.pointId, activity.pointNumber, hexId, currTime)
+            val nfcCheck = NfcCheck(
+                activity.pointId,
+                activity.pointNumber,
+                hexId,
+                currTime
+            )
             nfcCheckViewModel.insert(nfcCheck)
 
             nfcCheckViewModel.getNotSyncNfcCheck().forEach {

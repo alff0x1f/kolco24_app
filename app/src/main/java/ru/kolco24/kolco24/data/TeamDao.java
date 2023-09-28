@@ -8,6 +8,8 @@ import androidx.room.Update;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.Team;
+
 @Dao
 public interface TeamDao {
      @Query("SELECT * FROM teams")

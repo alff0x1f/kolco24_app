@@ -1,4 +1,4 @@
-package ru.kolco24.kolco24.data;
+package ru.kolco24.kolco24.data.entities;
 
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
@@ -6,6 +6,8 @@ import androidx.room.TypeConverters;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import ru.kolco24.kolco24.data.Converters;
 
 
 @Entity(tableName = "teams")

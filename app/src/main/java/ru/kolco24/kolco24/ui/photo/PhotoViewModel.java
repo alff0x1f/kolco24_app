@@ -9,9 +9,9 @@ import androidx.lifecycle.MediatorLiveData;
 import java.util.List;
 
 import ru.kolco24.kolco24.data.NfcCheckRepository;
-import ru.kolco24.kolco24.data.Photo;
+import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.data.PhotoRepository;
-import ru.kolco24.kolco24.data.Team;
+import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.TeamRepository;
 
 public class PhotoViewModel extends AndroidViewModel {

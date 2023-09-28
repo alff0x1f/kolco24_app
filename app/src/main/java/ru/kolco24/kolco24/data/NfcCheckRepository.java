@@ -6,6 +6,8 @@ import androidx.lifecycle.LiveData;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.NfcCheck;
+
 public class NfcCheckRepository {
     private NfcCheckDao mNfcCheckDao;
     private LiveData<List<NfcCheck>> mAllNfcChecks;

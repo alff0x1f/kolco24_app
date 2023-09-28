@@ -7,6 +7,8 @@ import androidx.room.Query;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.entities.NfcCheck;
+
 @Dao
 public interface NfcCheckDao {
     @Insert
