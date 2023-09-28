@@ -11,6 +11,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import ru.kolco24.kolco24.data.daos.NfcCheckDao;
+import ru.kolco24.kolco24.data.daos.PhotoDao;
+import ru.kolco24.kolco24.data.daos.PointDao;
+import ru.kolco24.kolco24.data.daos.TeamDao;
 import ru.kolco24.kolco24.data.entities.NfcCheck;
 import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.data.entities.Point;
