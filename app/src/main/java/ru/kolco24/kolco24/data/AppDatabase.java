@@ -27,15 +27,13 @@ import ru.kolco24.kolco24.data.entities.Team;
 )
 public abstract class AppDatabase extends RoomDatabase {
     public abstract PointDao pointDao();
-
     public abstract PhotoDao photoDao();
-
     public abstract TeamDao teamDao();
     public abstract NfcCheckDao nfcCheckDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
-    static final ExecutorService databaseWriteExecutor =
+    public static final ExecutorService databaseWriteExecutor =
             Executors.newFixedThreadPool(NUMBER_OF_THREADS);
 
     /**

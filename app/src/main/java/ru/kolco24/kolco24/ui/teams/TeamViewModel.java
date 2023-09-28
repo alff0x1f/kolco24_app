@@ -9,7 +9,7 @@ import androidx.lifecycle.MutableLiveData;
 import java.util.List;
 
 import ru.kolco24.kolco24.data.entities.Team;
-import ru.kolco24.kolco24.data.TeamRepository;
+import ru.kolco24.kolco24.data.repositories.TeamRepository;
 
 
 public class TeamViewModel extends AndroidViewModel {

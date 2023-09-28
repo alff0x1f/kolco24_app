@@ -1,4 +1,4 @@
-package ru.kolco24.kolco24.data;
+package ru.kolco24.kolco24.data.repositories;
 
 import android.app.Application;
 
@@ -6,6 +6,7 @@ import androidx.lifecycle.LiveData;
 
 import java.util.List;
 
+import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.daos.PhotoDao;
 import ru.kolco24.kolco24.data.entities.Photo;
 

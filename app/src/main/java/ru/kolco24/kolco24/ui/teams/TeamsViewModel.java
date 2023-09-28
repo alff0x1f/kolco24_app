@@ -7,7 +7,7 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
-import ru.kolco24.kolco24.data.TeamRepository;
+import ru.kolco24.kolco24.data.repositories.TeamRepository;
 
 public class TeamsViewModel extends AndroidViewModel {
 

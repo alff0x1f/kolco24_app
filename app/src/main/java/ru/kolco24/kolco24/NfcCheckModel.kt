@@ -2,14 +2,15 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import ru.kolco24.kolco24.data.entities.NfcCheck
-import ru.kolco24.kolco24.data.NfcCheckRepository
+import ru.kolco24.kolco24.data.repositories.NfcCheckRepository
 
 class NfcCheckViewModel(application: Application?) : AndroidViewModel(application!!) {
     private val mRepository: NfcCheckRepository
     val allNfcChecks: LiveData<List<NfcCheck>>
 
     init {
-        mRepository = NfcCheckRepository(application)
+        mRepository =
+            NfcCheckRepository(application)
         allNfcChecks = mRepository.allNfcChecks
     }
 
