@@ -41,7 +41,6 @@ class NfcPointActivity : AppCompatActivity() {
     private var countDownTimer: CountDownTimer? = null
     private val countdownDuration: Long = 60000 // 60 seconds in milliseconds
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -92,6 +91,11 @@ class NfcPointActivity : AppCompatActivity() {
         (countDownTimer as CountDownTimer).start()
     }
 
+    private fun sendTagToServer(pointId: String, pointNumber: Int) {
+        val dataDownloader = DataDownloader(application)
+        dataDownloader.uploadTag(pointId, pointNumber)
+    }
+
     class MyReaderCallback(private val activity: NfcPointActivity) : NfcAdapter.ReaderCallback {
         override fun onTagDiscovered(tag: Tag?) {
             // toast tag id
@@ -113,7 +117,7 @@ class NfcPointActivity : AppCompatActivity() {
                         }
 
                         // Show dialog
-                        activity.runOnUiThread{
+                        activity.runOnUiThread {
                             val dialog = AlertDialog.Builder(activity)
                                 .setTitle("Поздравляем")
                                 .setMessage(
@@ -148,7 +152,7 @@ class NfcPointActivity : AppCompatActivity() {
         /**
          * save value to room database
          */
-        private fun saveNfcCheck(hexId: String){
+        private fun saveNfcCheck(hexId: String) {
             println("saveNfcCheck")
             val nfcCheckViewModel = NfcCheckViewModel(activity.application)
             val currTime = SimpleDateFormat(
@@ -185,9 +189,12 @@ class NfcPointActivity : AppCompatActivity() {
         super.onResume()
 
         val nfcAdapter = NfcAdapter.getDefaultAdapter(this)
-        nfcAdapter.enableReaderMode(this,
+        nfcAdapter.enableReaderMode(
+            this,
             MyReaderCallback(activity = this),
-            NfcAdapter.FLAG_READER_NFC_A, null)
+            NfcAdapter.FLAG_READER_NFC_A,
+            null
+        )
     }
 
     override fun onPause() {
@@ -274,6 +281,11 @@ class NfcPointActivity : AppCompatActivity() {
                             binding.pointNumber.text = text
                         }
                     }
+                }
+                if (false) {
+                    // send tag to server
+                    // for admin only
+                    sendTagToServer(hexId, pointNumber)
                 }
             }
         }

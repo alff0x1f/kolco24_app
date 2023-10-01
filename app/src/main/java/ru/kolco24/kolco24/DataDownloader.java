@@ -18,8 +18,10 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.HttpUrl;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
@@ -45,6 +47,7 @@ public class DataDownloader {
     private boolean isLocalDownload = false;
     private static final String TEAMS_ENDPOINT = "teams";
     private static final String POINTS_ENDPOINT = "points";
+    private static final String TAGS_ENDPOINT = "race/1/point_tags";
 
     public interface DownloadCallback {
         void onDownloadComplete();
@@ -211,6 +214,59 @@ public class DataDownloader {
                 }
             }
         });
+    }
+
+    /**
+     * Добавляет тег на сайт
+     *
+     * @param PointId - id точки
+     * @param PointNumber - номер точки
+     */
+    public void uploadTag(String PointId, int PointNumber){
+        // Create a JSON object to send to the server
+        JSONObject jsonObject = new JSONObject();
+        try {
+            jsonObject.put("tag_id", PointId);
+            jsonObject.put("point_number", PointNumber);
+        } catch (JSONException e) {
+            e.printStackTrace();
+            return;
+        }
+
+
+        // Create a request body with JSON content
+        RequestBody requestBody = RequestBody.create(
+                jsonObject.toString(),
+                MediaType.parse("application/json")
+        );
+
+        // Build the POST request with the JSON body
+        Request request = new Request.Builder()
+                .url(getBaseUrl() + TAGS_ENDPOINT) // Replace UPLOAD_ENDPOINT with your server endpoint
+                .post(requestBody)
+                .build();
+
+        // Execute the request asynchronously
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                showToast("Сервер недоступен");
+                e.printStackTrace();
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    // Handle successful response from the server
+                    showToast("Объект успешно загружен");
+                } else {
+                    System.out.println(response.body().toString());
+                    // Handle unsuccessful response
+                    showToast("Ошибка " + response.code());
+                }
+            }
+        });
+
     }
 
     /**
