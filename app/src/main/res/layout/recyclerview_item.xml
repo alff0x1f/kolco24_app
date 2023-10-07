@@ -5,6 +5,7 @@
     android:id="@+id/full_item"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/item_selector"
     android:orientation="horizontal">
 
     <androidx.cardview.widget.CardView
@@ -43,8 +44,8 @@
         android:id="@+id/pointTimeTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="@dimen/big_padding"
         android:layout_marginTop="@dimen/small_padding"
+        android:layout_marginEnd="@dimen/big_padding"
         android:text="00:00"
         android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
@@ -54,8 +55,8 @@
         android:id="@+id/textCost"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/small_padding"
         android:layout_marginStart="@dimen/big_padding"
+        android:layout_marginTop="@dimen/small_padding"
         android:paddingStart="@dimen/small_padding"
         android:paddingEnd="@dimen/small_padding"
         android:text="3"

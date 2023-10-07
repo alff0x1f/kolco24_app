@@ -2,7 +2,6 @@ package ru.kolco24.kolco24.ui.legends;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -23,7 +22,6 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
-import ru.kolco24.kolco24.SettingsActivity;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
@@ -69,12 +67,14 @@ public class LegendsFragment extends Fragment implements MenuProvider {
         });
 
         // Set up the RecyclerView taken points
-        RecyclerView recyclerView = binding.recyclerView;
         final PointListAdapter adapter = new PointListAdapter(new PointListAdapter.PointDiff());
-        recyclerView.setAdapter(adapter);
-        recyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
+        binding.takenPointsRecyclerView.setAdapter(adapter);
+        binding.takenPointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
         // Get a new or existing ViewModel from the ViewModelProvider.
-        mPointViewModel.getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
+        mPointViewModel.getTakenPointsByTeam(teamId).observe(
+                getViewLifecycleOwner(),
+                adapter::submitList
+        );
 
         // Set up the RecyclerView new points
         RecyclerView newPointsRecyclerView = binding.newPointsRecyclerView;
@@ -113,19 +113,9 @@ public class LegendsFragment extends Fragment implements MenuProvider {
         return root;
     }
 
-    //set background recycle items on resume
     public void onResume() {
         super.onResume();
         teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
-        if (binding != null) {
-            //background each item of recycle view
-            RecyclerView recyclerView = binding.newPointsRecyclerView;
-            Drawable defaultBackgroundColor = recyclerView.getBackground();
-            for (int i = 0; i < recyclerView.getChildCount(); i++) {
-                View view = recyclerView.getChildAt(i);
-                view.setBackground(defaultBackgroundColor);
-            }
-        }
     }
 
     @Override
