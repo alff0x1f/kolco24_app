@@ -21,7 +21,6 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
-import ru.kolco24.kolco24.ui.SuccessActivity
 import ru.kolco24.kolco24.ui.teams.TeamViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,13 +35,14 @@ class NfcPointActivity : AppCompatActivity() {
     private var pointId: String? = null
     private var pointNumber: Int = 0
     private val members = mutableListOf<String>()
+    private var readMemberTags = true
 
     private var teamId: Int = 0
     private var teamViewModel: TeamViewModel? = null
 
     //timer
     private var countDownTimer: CountDownTimer? = null
-    private val countdownDuration: Long = 30000 // 30 seconds in milliseconds
+    private val countdownDuration: Long = 20000 // 15 seconds in milliseconds
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,7 +70,11 @@ class NfcPointActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         }
+        setupCountDownTimer()
+        (countDownTimer as CountDownTimer).start()
+    }
 
+    private fun setupCountDownTimer() {
         countDownTimer = object : CountDownTimer(countdownDuration, 100) {
             // 1000 milliseconds (1 second) interval
             override fun onTick(millisUntilFinished: Long) {
@@ -108,8 +112,6 @@ class NfcPointActivity : AppCompatActivity() {
                 dialog.show()
             }
         }
-
-        (countDownTimer as CountDownTimer).start()
     }
 
     private fun sendTagToServer(pointId: String, pointNumber: Int) {
@@ -126,6 +128,16 @@ class NfcPointActivity : AppCompatActivity() {
             val hexId = byteArrayToHexString(tagId!!)
 
             if (ndef == null) {
+                if (!activity.readMemberTags) {
+                    activity.runOnUiThread {
+                        Toast.makeText(
+                            activity,
+                            "Все участники отмечены",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return
+                }
                 // add hexId to list
                 if (!activity.members.contains(hexId)) {
                     activity.members.add(hexId)
@@ -133,27 +145,32 @@ class NfcPointActivity : AppCompatActivity() {
                     val team = activity.teamViewModel?.getTeamById(activity.teamId)
                     val paidPeople = team?.paid_people?.roundToInt() ?: 2
 
+                    activity.runOnUiThread {
+                        activity.countDownTimer?.cancel()
+                        activity.setupCountDownTimer()
+                        activity.countDownTimer?.start()
+
+                        val numberedMembers = activity.members.mapIndexed { index, element ->
+                            "${index + 1}) $element"
+                        }
+                        activity.binding.members.text = numberedMembers.joinToString("\n")
+                        activity.binding.members.isVisible = true
+                    }
+
                     if (activity.members.count() >= paidPeople) {
                         for (i in 0 until activity.members.count()) {
                             saveNfcCheck(activity.members[i])
                         }
-                        // Create an Intent to start SuccessActivity
-                        val intent = Intent(context, SuccessActivity::class.java)
-                        // You can put extra data in the intent if needed
-//                        intent.putExtra("key", "value") // Example: passing a key-value pair
-                        // Start the new activity
-                        context.startActivity(intent)
-                        activity.finish()
-                        return
-                    }
+                        activity.countDownTimer?.cancel()
+                        activity.readMemberTags = false
 
-                    activity.runOnUiThread {
-                        val numberedMembers = activity.members.mapIndexed { index, element ->
-                            "${index + 1}) $element"
+                        activity.runOnUiThread {
+                            activity.binding.doneIcon.isVisible = true
+                            activity.binding.timerTextView.isVisible = false
+                            activity.binding.circularProgressBar.isVisible = false
+                            activity.binding.button.text = "Закрыть"
+                            activity.binding.helperTextView.text = "Все участники отмечены"
                         }
-                        Toast.makeText(activity, "Участник добавлен", Toast.LENGTH_SHORT).show()
-                        activity.binding.members.text = numberedMembers.joinToString("\n")
-                        activity.binding.members.isVisible = true
                     }
                 } else {
                     activity.runOnUiThread {
