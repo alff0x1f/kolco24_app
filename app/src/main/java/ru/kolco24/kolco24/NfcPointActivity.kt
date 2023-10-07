@@ -2,6 +2,7 @@ package ru.kolco24.kolco24
 
 import NfcCheckViewModel
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.nfc.NdefMessage
@@ -16,9 +17,11 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
+import ru.kolco24.kolco24.ui.SuccessActivity
 import ru.kolco24.kolco24.ui.teams.TeamViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,7 +42,7 @@ class NfcPointActivity : AppCompatActivity() {
 
     //timer
     private var countDownTimer: CountDownTimer? = null
-    private val countdownDuration: Long = 60000 // 60 seconds in milliseconds
+    private val countdownDuration: Long = 30000 // 30 seconds in milliseconds
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,15 +65,33 @@ class NfcPointActivity : AppCompatActivity() {
 //        }
 
         binding.button.setOnClickListener {
+            val intent = Intent(this, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            startActivity(intent)
             finish()
         }
 
-        countDownTimer = object : CountDownTimer(countdownDuration, 1000) {
+        countDownTimer = object : CountDownTimer(countdownDuration, 100) {
             // 1000 milliseconds (1 second) interval
             override fun onTick(millisUntilFinished: Long) {
-                // Update the UI with the remaining time
-                binding.timerTextView.text = (millisUntilFinished / 1000).toString()
-                binding.progressBar.progress = (millisUntilFinished / 1000).toInt()
+                val secondsRemaining = millisUntilFinished / 1000.0
+                val formattedTime = String.format("%.1f", secondsRemaining)
+                val progress = (millisUntilFinished.toFloat() / countdownDuration) * 100
+                val color = calculateColor(progress)
+
+                binding.timerTextView.text = formattedTime
+                binding.timerTextView.setTextColor(color)
+                binding.circularProgressBar.progress = progress
+                binding.circularProgressBar.progressBarColor = color
+            }
+
+            fun calculateColor(progress: Float): Int {
+                var hue = 140F
+                if (progress < 50F) {
+                    hue = progress * 2.8F
+                }
+                val color = ColorUtils.HSLToColor(floatArrayOf(hue, 1F, 0.4F))
+                return color
             }
 
             override fun onFinish() {
@@ -96,7 +117,8 @@ class NfcPointActivity : AppCompatActivity() {
         dataDownloader.uploadTag(pointId, pointNumber)
     }
 
-    class MyReaderCallback(private val activity: NfcPointActivity) : NfcAdapter.ReaderCallback {
+    class MyReaderCallback(private val context: Context, private val activity: NfcPointActivity) :
+        NfcAdapter.ReaderCallback {
         override fun onTagDiscovered(tag: Tag?) {
             // toast tag id
             val tagId = tag?.id
@@ -115,22 +137,14 @@ class NfcPointActivity : AppCompatActivity() {
                         for (i in 0 until activity.members.count()) {
                             saveNfcCheck(activity.members[i])
                         }
-
-                        // Show dialog
-                        activity.runOnUiThread {
-                            val dialog = AlertDialog.Builder(activity)
-                                .setTitle("Поздравляем")
-                                .setMessage(
-                                    "КП добавлено в список взятых"
-                                )
-                                .setPositiveButton(
-                                    "Ок"
-                                ) { dialogInterface, i ->
-                                    activity.finish()
-                                }.setOnCancelListener { activity.finish() }.create()
-                            dialog.show()
-                        }
-                        activity.countDownTimer?.cancel()
+                        // Create an Intent to start SuccessActivity
+                        val intent = Intent(context, SuccessActivity::class.java)
+                        // You can put extra data in the intent if needed
+//                        intent.putExtra("key", "value") // Example: passing a key-value pair
+                        // Start the new activity
+                        context.startActivity(intent)
+                        activity.finish()
+                        return
                     }
 
                     activity.runOnUiThread {
@@ -191,7 +205,7 @@ class NfcPointActivity : AppCompatActivity() {
         val nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         nfcAdapter.enableReaderMode(
             this,
-            MyReaderCallback(activity = this),
+            MyReaderCallback(context = this, activity = this),
             NfcAdapter.FLAG_READER_NFC_A,
             null
         )
@@ -201,6 +215,11 @@ class NfcPointActivity : AppCompatActivity() {
         super.onPause()
         val nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         nfcAdapter.disableReaderMode(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        countDownTimer?.cancel()
     }
 
 

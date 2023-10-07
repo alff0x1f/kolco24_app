@@ -12,8 +12,8 @@
         android:layout_height="128dp"
         android:layout_marginTop="@dimen/big_padding"
         app:cardCornerRadius="15dp"
-        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <ImageView
@@ -43,20 +43,8 @@
         android:layout_margin="@dimen/small_padding"
         android:paddingTop="@dimen/big_padding"
         android:text="Отсканируйте чипы участников"
-        app:layout_constraintTop_toBottomOf="@+id/point_avatar"
-        android:textSize="24sp" />
-
-    <TextView
-        android:id="@+id/timerTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="@dimen/small_padding"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        app:layout_constraintTop_toBottomOf="@id/helperTextView"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:text="60"
-        android:textSize="24sp" />
+        android:textSize="24sp"
+        app:layout_constraintTop_toBottomOf="@+id/point_avatar" />
 
     <TextView
         android:id="@+id/members"
@@ -71,23 +59,45 @@
         android:visibility="invisible"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/timerTextView" />
+        app:layout_constraintTop_toBottomOf="@+id/helperTextView" />
 
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        app:layout_constraintBottom_toTopOf="@+id/button"
+    <TextView
+        android:id="@+id/timerTextView"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="@dimen/small_padding" />
+        android:layout_margin="@dimen/small_padding"
+        android:text="30"
+        android:textColor="#00cc44"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="@id/circularProgressBar"
+        app:layout_constraintEnd_toEndOf="@id/circularProgressBar"
+        app:layout_constraintStart_toStartOf="@id/circularProgressBar"
+        app:layout_constraintTop_toTopOf="@id/circularProgressBar" />
+
+    <com.mikhaellopez.circularprogressbar.CircularProgressBar
+        android:id="@+id/circularProgressBar"
+        android:layout_width="128dp"
+        android:layout_height="128dp"
+        android:layout_marginBottom="@dimen/big_padding"
+        app:cpb_background_progressbar_color="@android:color/transparent"
+        app:cpb_background_progressbar_width="5dp"
+        app:cpb_progress_direction="to_right"
+        app:cpb_progressbar_color="#00cc44"
+        app:cpb_progressbar_width="15dp"
+        app:cpb_round_border="true"
+        app:cpb_progress="100"
+        app:layout_constraintBottom_toTopOf="@id/button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <Button
         android:id="@+id/button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="@dimen/small_padding"
-        app:layout_constraintBottom_toBottomOf="parent"
         android:text="Отмена"
-        android:textSize="16sp" />
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
