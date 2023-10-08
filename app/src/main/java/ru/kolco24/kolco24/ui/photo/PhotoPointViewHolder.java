@@ -12,6 +12,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import ru.kolco24.kolco24.R;
+import ru.kolco24.kolco24.data.entities.Photo;
 
 public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
@@ -25,27 +26,26 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
         syncLabel = itemView.findViewById(R.id.syncLabel);
     }
 
-    public void bind(int id, int point_number, Uri uri, Uri uriThumb,
-                     Boolean sync_internet, boolean sync_local) {
-        textView.setText(String.format("%02d", point_number));
-        photoKP.setImageURI(uriThumb);
+    public void bind(Photo photo) {
+        textView.setText(String.format("%02d", photo.point_number));
+        photoKP.setImageURI(Uri.parse(photo.photo_thumb_url));
 
         itemView.setOnClickListener(v -> {
             Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("id", id);
-            intent.putExtra("point_number", point_number);
-            intent.putExtra("photo_uri", uri.toString());
-            intent.putExtra("photo_thumb_uri", uriThumb.toString());
+            intent.putExtra("id", photo.id);
+            intent.putExtra("point_number", photo.point_number);
+            intent.putExtra("photo_uri", photo.photo_url);
+            intent.putExtra("photo_thumb_uri", photo.photo_thumb_url);
             itemView.getContext().startActivity(intent);
         });
 
-        if (sync_internet && sync_local) {
+        if (photo.sync_internet && photo.sync_local) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorGreen));
-        } else if (sync_internet) {
+        } else if (photo.sync_internet) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorBlue));
-        } else if (sync_local) {
+        } else if (photo.sync_local) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorYellow));
         } else {

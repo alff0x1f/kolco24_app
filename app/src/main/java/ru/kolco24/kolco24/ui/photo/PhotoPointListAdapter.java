@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.ui.photo;
 
-import android.net.Uri;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -24,14 +23,7 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
 
     public void onBindViewHolder(PhotoPointViewHolder holder, int position) {
         Photo current = getItem(position);
-        holder.bind(
-                current.id,
-                current.point_number,
-                Uri.parse(current.photo_url),
-                Uri.parse(current.photo_thumb_url),
-                current.sync_internet,
-                current.sync_local
-        );
+        holder.bind(current);
     }
 
     static class PhotoPointDiff extends DiffUtil.ItemCallback<Photo> {
