@@ -42,7 +42,7 @@ class NfcPointActivity : AppCompatActivity() {
 
     //timer
     private var countDownTimer: CountDownTimer? = null
-    private val countdownDuration: Long = 20000 // 15 seconds in milliseconds
+    private val countdownDuration: Long = 20000 // 20 seconds in milliseconds
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,7 +103,8 @@ class NfcPointActivity : AppCompatActivity() {
                 val dialog = AlertDialog.Builder(this@NfcPointActivity)
                     .setTitle("Время истекло")
                     .setMessage(
-                        "Нужно за 60 секунд отметить всех участников. Считайте метку на КП ещё раз " +
+                        "Нужно за ${countdownDuration / 1000} секунд отметить всех участников. " +
+                                "Считайте метку на КП ещё раз " +
                                 "чтобы начать заново."
                     )
                     .setPositiveButton(
