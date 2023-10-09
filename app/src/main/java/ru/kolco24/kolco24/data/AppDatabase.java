@@ -47,7 +47,7 @@ public abstract class AppDatabase extends RoomDatabase {
             synchronized (AppDatabase.class) {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
-                                    AppDatabase.class, "kolco24_database_2")
+                                    AppDatabase.class, "kolco24_database_3")
                             .addCallback(sRoomDatabaseCallback)
                             .build();
                 }
