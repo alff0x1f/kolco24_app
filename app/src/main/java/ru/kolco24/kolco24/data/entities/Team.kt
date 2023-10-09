@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.data.entities
 
-import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
@@ -9,7 +8,7 @@ import org.json.JSONObject
 import ru.kolco24.kolco24.data.Converters
 
 @Entity(tableName = "teams")
-class Team /* __init__*/(
+class Team (
     @PrimaryKey(autoGenerate = true)
     var id: Int,
     var owner: String,
@@ -47,6 +46,10 @@ class Team /* __init__*/(
             paidPeople,
             other.paidPeople
         ) == 0 && dist == other.dist && this.category == other.category && teamname == other.teamname && city == other.city && organization == other.organization && year == other.year && startNumber == other.startNumber
+    }
+
+    override fun hashCode(): Int {
+        return id
     }
 
     companion object {
