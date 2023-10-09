@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data.entities;
 
+import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 import androidx.room.TypeConverters;
@@ -13,11 +14,11 @@ import ru.kolco24.kolco24.data.Converters;
 @Entity(tableName = "teams")
 public class Team {
     @PrimaryKey(autoGenerate = true)
-    public int id;
-
-    public String owner;
-    public float paid_people;
-    public String dist;  // время 6h, 12h, 24h
+    private int id;
+    private String owner;
+    @ColumnInfo(name = "paid_people")
+    private float paidPeople;
+    private String dist;  // время 6h, 12h, 24h
     public String category; // категория 6h, 12h_mm, 12h_mw, 12h_team, 24h etc
     public String teamname;
     public String city;
@@ -64,8 +65,8 @@ public class Team {
         }
         Team other = (Team) obj;
 
-        return (this.id == other.id
-                && Float.compare(this.paid_people, other.paid_people) == 0
+        return (this.getId() == other.getId()
+                && Float.compare(this.paidPeople, other.paidPeople) == 0
                 && this.dist.equals(other.dist)
                 && this.category.equals(other.category)
                 && this.teamname.equals(other.teamname)
@@ -80,8 +81,28 @@ public class Team {
         return id;
     }
 
-    public void setPaid_people(float paid_people) {
-        this.paid_people = paid_people;
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getOwner() {
+        return owner;
+    }
+
+    public void setOwner(String owner) {
+        this.owner = owner;
+    }
+
+    public float getPaidPeople() {
+        return paidPeople;
+    }
+
+    public void setPaidPeople(float paid_people) {
+        this.paidPeople = paid_people;
+    }
+
+    public String getDist() {
+        return dist;
     }
 
     public void setDist(String dist) {
@@ -113,12 +134,12 @@ public class Team {
     }
 
     // __init__
-    public Team(int id, String owner, float paid_people, String dist, String category, String teamname, String city,
+    public Team(int id, String owner, float paidPeople, String dist, String category, String teamname, String city,
                 String organization, String year, String start_number, Long start_time,
                 Long finish_time, boolean dnf, int penalty) {
         this.id = id;
         this.owner = owner;
-        this.paid_people = paid_people;
+        this.paidPeople = paidPeople;
         this.dist = dist;
         this.category = category;
         this.teamname = teamname;

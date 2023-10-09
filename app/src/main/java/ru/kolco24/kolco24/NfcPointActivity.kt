@@ -144,7 +144,7 @@ class NfcPointActivity : AppCompatActivity() {
                     activity.members.add(hexId)
 
                     val team = activity.teamViewModel?.getTeamById(activity.teamId)
-                    val paidPeople = team?.paid_people?.roundToInt() ?: 2
+                    val paidPeople = team?.paidPeople?.roundToInt() ?: 2
 
                     activity.runOnUiThread {
                         activity.countDownTimer?.cancel()

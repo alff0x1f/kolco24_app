@@ -30,12 +30,12 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
     public void bind(Team team) {
         teamNumber.setText(team.start_number);
         textView.setText(team.teamname);
-        paidPeople.setText(String.format("%.0f чел", team.paid_people));
+        paidPeople.setText(String.format("%.0f чел", team.getPaidPeople()));
         //
         int currentTeam = itemView.getContext().getSharedPreferences(
                 "team", Context.MODE_PRIVATE
         ).getInt("team_id", 0);
-        if (currentTeam == team.id) {
+        if (currentTeam == team.getId()) {
             itemView.setBackgroundColor(itemView.getResources().getColor(R.color.divider));
         } else {
             itemView.setBackgroundColor(itemView.getResources().getColor(R.color.background));
@@ -47,7 +47,7 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
                     .setMessage("Эта ваша команда?")
                     .setPositiveButton("Да", (dialogInterface, i) -> {
                         itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
-                                .edit().putInt("team_id", team.id).apply();
+                                .edit().putInt("team_id", team.getId()).apply();
                         Toast.makeText(itemView.getContext(),
                                 "Команда \"" + team.teamname + "\" выбрана как ваша",
                                 Toast.LENGTH_SHORT

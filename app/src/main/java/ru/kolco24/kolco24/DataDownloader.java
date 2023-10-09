@@ -285,8 +285,8 @@ public class DataDownloader {
 
         if (!existTeam.equals(team)) {
             // update team
-            existTeam.paid_people = team.paid_people;
-            existTeam.dist = team.dist;
+            existTeam.setPaidPeople(team.getPaidPeople());
+            existTeam.setDist(team.getDist());
             existTeam.category = team.category;
             existTeam.teamname = team.teamname;
             existTeam.city = team.city;
