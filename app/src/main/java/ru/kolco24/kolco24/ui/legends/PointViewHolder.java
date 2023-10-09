@@ -40,6 +40,8 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
             } else {
                 pointTimeTextView.setText(point.photo_time);
             }
+            // make strike through
+            textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
         } else if (point.nfc_time != null) {
             String[] timeArray = point.nfc_time.split(" ");
             if (timeArray.length > 1) {
@@ -47,6 +49,8 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
             } else {
                 pointTimeTextView.setText(point.nfc_time);
             }
+            // make strike through
+            textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
         }
         else {
             pointTimeTextView.setText("");

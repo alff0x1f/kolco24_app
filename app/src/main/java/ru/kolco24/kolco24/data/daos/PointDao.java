@@ -67,9 +67,7 @@ public interface PointDao {
             "  GROUP BY pointNumber" +
             ") nfc " +
             "ON points.number == nfc.point_number " +
-            "WHERE photo.point_number IS NOT NULL" +
-            "  OR nfc.point_number IS NOT NULL " +
-            "ORDER BY photo.photo_time")
+            "ORDER BY photo.photo_time, points.number")
     LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId);
 
     @Query("DELETE FROM points WHERE id = :id")

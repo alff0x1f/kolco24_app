@@ -41,8 +41,6 @@ public class LegendsFragment extends Fragment implements MenuProvider {
         binding = FragmentLegendsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-//        final TextView textView = binding.legendHeader;
-//        legendsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
         teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
         mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
@@ -54,48 +52,20 @@ public class LegendsFragment extends Fragment implements MenuProvider {
                 binding.takenPointsSum.setText("Сумма баллов: 0");
             }
         });
-        mPhotoViewModel.getPhotoCount(teamId).observe(getViewLifecycleOwner(), count -> {
-            if (count == 0) {
-                binding.takenPointsSum.setVisibility(View.GONE);
-                binding.header1.setVisibility(View.GONE);
-                binding.header2.setVisibility(View.GONE);
-            } else {
-                binding.takenPointsSum.setVisibility(View.VISIBLE);
-                binding.header1.setVisibility(View.VISIBLE);
-                binding.header2.setVisibility(View.VISIBLE);
-            }
-        });
 
-        // Set up the RecyclerView taken points
+        // Set up the RecyclerView all points
         final PointListAdapter adapter = new PointListAdapter(new PointListAdapter.PointDiff());
-        binding.takenPointsRecyclerView.setAdapter(adapter);
-        binding.takenPointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
-        // Get a new or existing ViewModel from the ViewModelProvider.
-        mPointViewModel.getTakenPointsByTeam(teamId).observe(
-                getViewLifecycleOwner(),
-                adapter::submitList
-        );
+        binding.pointsRecyclerView.setAdapter(adapter);
+        binding.pointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
 
-        // Set up the RecyclerView new points
-        RecyclerView newPointsRecyclerView = binding.newPointsRecyclerView;
-        final PointListAdapter adapter2 = new PointListAdapter(new PointListAdapter.PointDiff());
-        newPointsRecyclerView.setAdapter(adapter2);
-        newPointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
-        mPointViewModel.getNewPointsByTeam(teamId).observe(getViewLifecycleOwner(), adapter2::submitList);
-
-        mPointViewModel.getAllPoints().observe(getViewLifecycleOwner(), points -> {
+        mPointViewModel.getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), points -> {
+            adapter.submitList(points);
             if (points.size() == 0) {
                 binding.textNoLegends.setVisibility(View.VISIBLE);
             } else {
                 binding.textNoLegends.setVisibility(View.GONE);
                 binding.swipeToRefresh.setRefreshing(false);
             }
-        });
-        //fab
-        FloatingActionButton fab = binding.fab;
-        fab.setOnClickListener(view -> {
-            Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
-            startActivity(intent);
         });
         //swipe to refresh
         SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
