@@ -35,7 +35,7 @@ public class TeamListAdapter extends ListAdapter<Team, TeamViewHolder> {
 
         @Override
         public boolean areContentsTheSame(@NonNull Team oldItem, @NonNull Team newItem) {
-            return oldItem.start_number.equals(newItem.start_number);
+            return oldItem.getStartNumber().equals(newItem.getStartNumber());
         }
     }
 }

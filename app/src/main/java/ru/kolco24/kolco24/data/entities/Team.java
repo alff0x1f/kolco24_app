@@ -19,20 +19,42 @@ public class Team {
     @ColumnInfo(name = "paid_people")
     private float paidPeople;
     private String dist;  // время 6h, 12h, 24h
-    public String category; // категория 6h, 12h_mm, 12h_mw, 12h_team, 24h etc
-    public String teamname;
-    public String city;
-    public String organization;
-    public String year;
-    public String start_number;
+    private String category; // категория 6h, 12h_mm, 12h_mw, 12h_team, 24h etc
+    private String teamname;
+    private String city;
+    private String organization;
+    private String year;
+    @ColumnInfo(name = "start_number")
+    private String startNumber;
 
     @TypeConverters(Converters.class)
-    public Long start_time;
+    @ColumnInfo(name = "start_time")
+    private Long startTime;
 
     @TypeConverters(Converters.class)
     public Long finish_time;
     public boolean dnf;
     public int penalty;
+
+    /* __init__*/
+    public Team(int id, String owner, float paidPeople, String dist, String category, String teamname, String city,
+                String organization, String year, String startNumber, Long startTime,
+                Long finish_time, boolean dnf, int penalty) {
+        this.id = id;
+        this.owner = owner;
+        this.paidPeople = paidPeople;
+        this.dist = dist;
+        this.category = category;
+        this.teamname = teamname;
+        this.city = city;
+        this.organization = organization;
+        this.year = year;
+        this.startNumber = startNumber;
+        this.startTime = startTime;
+        this.finish_time = finish_time;
+        this.dnf = dnf;
+        this.penalty = penalty;
+    }
 
     public static Team fromJson(JSONObject jsonObject) throws JSONException {
         int id = jsonObject.getInt("id");
@@ -73,7 +95,7 @@ public class Team {
                 && this.city.equals(other.city)
                 && this.organization.equals(other.organization)
                 && this.year.equals(other.year)
-                && this.start_number.equals(other.start_number)
+                && this.startNumber.equals(other.startNumber)
         );
     }
 
@@ -97,8 +119,8 @@ public class Team {
         return paidPeople;
     }
 
-    public void setPaidPeople(float paid_people) {
-        this.paidPeople = paid_people;
+    public void setPaidPeople(float paidPeople) {
+        this.paidPeople = paidPeople;
     }
 
     public String getDist() {
@@ -109,48 +131,60 @@ public class Team {
         this.dist = dist;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public String getTeamname() {
+        return teamname;
     }
 
     public void setTeamname(String teamname) {
         this.teamname = teamname;
     }
 
+    public String getCity() {
+        return city;
+    }
+
     public void setCity(String city) {
         this.city = city;
+    }
+
+    public String getOrganization() {
+        return organization;
     }
 
     public void setOrganization(String organization) {
         this.organization = organization;
     }
 
+    public String getYear() {
+        return year;
+    }
+
     public void setYear(String year) {
         this.year = year;
     }
 
-    public void setStart_number(String start_number) {
-        this.start_number = start_number;
+    public String getStartNumber() {
+        return startNumber;
     }
 
-    // __init__
-    public Team(int id, String owner, float paidPeople, String dist, String category, String teamname, String city,
-                String organization, String year, String start_number, Long start_time,
-                Long finish_time, boolean dnf, int penalty) {
-        this.id = id;
-        this.owner = owner;
-        this.paidPeople = paidPeople;
-        this.dist = dist;
-        this.category = category;
-        this.teamname = teamname;
-        this.city = city;
-        this.organization = organization;
-        this.year = year;
-        this.start_number = start_number;
-        this.start_time = start_time;
-        this.finish_time = finish_time;
-        this.dnf = dnf;
-        this.penalty = penalty;
+    public void setStartNumber(String start_number) {
+        this.startNumber = start_number;
+    }
+
+    public Long getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(Long startTime) {
+        this.startTime = startTime;
     }
 }
 

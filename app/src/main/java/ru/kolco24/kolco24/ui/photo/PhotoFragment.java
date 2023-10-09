@@ -118,7 +118,8 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         });
         mPhotoViewModel.getTeam(teamId).observe(getViewLifecycleOwner(), team -> {
             if (team != null) {
-                binding.teamName.setText(String.format("%s: %s", team.start_number, team.teamname));
+                binding.teamName.setText(
+                        String.format("%s: %s", team.getStartNumber(), team.getTeamname()));
             }
         });
         mPhotoViewModel.getNonLegendPointNumbers(teamId).observe(getViewLifecycleOwner(), nums -> {

@@ -2,7 +2,6 @@ package ru.kolco24.kolco24.ui.teams;
 
 import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -28,8 +27,8 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
     }
 
     public void bind(Team team) {
-        teamNumber.setText(team.start_number);
-        textView.setText(team.teamname);
+        teamNumber.setText(team.getStartNumber());
+        textView.setText(team.getTeamname());
         paidPeople.setText(String.format("%.0f чел", team.getPaidPeople()));
         //
         int currentTeam = itemView.getContext().getSharedPreferences(
@@ -43,13 +42,13 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
 
         itemView.setOnClickListener(view -> {
             AlertDialog dialog = new AlertDialog.Builder(itemView.getContext())
-                    .setTitle(team.teamname)
+                    .setTitle(team.getTeamname())
                     .setMessage("Эта ваша команда?")
                     .setPositiveButton("Да", (dialogInterface, i) -> {
                         itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
                                 .edit().putInt("team_id", team.getId()).apply();
                         Toast.makeText(itemView.getContext(),
-                                "Команда \"" + team.teamname + "\" выбрана как ваша",
+                                "Команда \"" + team.getTeamname() + "\" выбрана как ваша",
                                 Toast.LENGTH_SHORT
                         ).show();
                     })

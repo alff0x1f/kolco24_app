@@ -287,12 +287,12 @@ public class DataDownloader {
             // update team
             existTeam.setPaidPeople(team.getPaidPeople());
             existTeam.setDist(team.getDist());
-            existTeam.category = team.category;
-            existTeam.teamname = team.teamname;
-            existTeam.city = team.city;
-            existTeam.organization = team.organization;
-            existTeam.year = team.year;
-            existTeam.start_number = team.start_number;
+            existTeam.setCategory(team.getCategory());
+            existTeam.setTeamname(team.getTeamname());
+            existTeam.setCity(team.getCity());
+            existTeam.setOrganization(team.getOrganization());
+            existTeam.setYear(team.getYear());
+            existTeam.setStartNumber(team.getStartNumber());
 
             mTeamDao.update(existTeam);
             return true;
