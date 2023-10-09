@@ -56,9 +56,6 @@ public class PhotoFragment extends Fragment implements MenuProvider {
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
-        PhotoViewModel takenPointsViewModel =
-                new ViewModelProvider(this).get(PhotoViewModel.class);
-
         binding = FragmentPhotosBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
@@ -76,11 +73,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         recyclerView.addItemDecoration(new GridSpacingItemDecoration(3, 8, false));
         // Get a new or existing ViewModel from the ViewModelProvider.
         mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
-        mPhotoViewModel.getPhotoByTeamId(teamId).observe(getViewLifecycleOwner(), adapter::submitList);
-        mPhotoViewModel.getPhotoByTeamId(teamId).observe(
-                getViewLifecycleOwner(),
-                photos -> uploadPhotos(false)
-        );
+        new LoadPhotosAsyncTask().execute(String.valueOf(teamId));
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
@@ -93,6 +86,20 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         requireActivity().addMenuProvider(this, getViewLifecycleOwner());
 
         return root;
+    }
+
+    private class LoadPhotosAsyncTask extends AsyncTask<String, Void, List<Photo>> {
+        @Override
+        protected List<Photo> doInBackground(String... params) {
+            int teamId = Integer.parseInt(params[0]);
+            return mPhotoViewModel.getPhotos(teamId);
+        }
+
+        @Override
+        protected void onPostExecute(List<Photo> photos) {
+            super.onPostExecute(photos);
+            adapter.submitList(photos);
+        }
     }
 
     @Override
@@ -134,6 +141,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             binding.resultHeader.setVisibility(View.GONE);
             binding.textDashboard.setVisibility(View.GONE);
             binding.textDashboard2.setVisibility(View.GONE);
+            binding.myPointsRecyclerView.setVisibility(View.GONE);
             binding.hr.setVisibility(View.GONE);
             binding.hr2.setVisibility(View.GONE);
             binding.warning.setVisibility(View.GONE);
@@ -142,6 +150,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             binding.resultHeader.setVisibility(View.VISIBLE);
             binding.textDashboard.setVisibility(View.VISIBLE);
             binding.textDashboard2.setVisibility(View.VISIBLE);
+            binding.myPointsRecyclerView.setVisibility(View.VISIBLE);
             binding.hr.setVisibility(View.VISIBLE);
             binding.hr2.setVisibility(View.VISIBLE);
             binding.textNoTeamId.setVisibility(View.GONE);
@@ -154,6 +163,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         super.onResume();
         teamId = requireContext().getSharedPreferences("team", Context.MODE_PRIVATE).
                 getInt("team_id", 0);
+        new LoadPhotosAsyncTask().execute(String.valueOf(teamId));
     }
 
     public void uploadPhotos(boolean withToast) {
@@ -198,6 +208,10 @@ public class PhotoFragment extends Fragment implements MenuProvider {
                 break;
             }
         }
+        List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
+        requireActivity().runOnUiThread(
+                () -> adapter.submitList(photos)
+        );
         if (withToast) {
             if (internetResult) {
                 requireActivity().runOnUiThread(

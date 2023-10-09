@@ -16,7 +16,7 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.cardview.widget.CardView
-        android:id="@+id/point_avatar"
+        android:id="@+id/pointIcon"
         android:layout_width="64dp"
         android:layout_height="64dp"
         android:layout_marginEnd="@dimen/big_padding"

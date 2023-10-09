@@ -29,4 +29,5 @@
     <color name="colorGreen">#4CAF50</color>
     <color name="colorBlue">#2196F3</color>
     <color name="colorYellow">#FFC107</color>
+    <color name="colorGray">#CCCCCC</color>
 </resources>

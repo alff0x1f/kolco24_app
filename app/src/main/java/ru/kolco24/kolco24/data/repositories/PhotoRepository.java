@@ -24,7 +24,7 @@ public class PhotoRepository {
         return mAllPhotos;
     }
 
-    public LiveData<List<Photo>> getPhotoByTeamId(int teamId) {
+    public List<Photo> getPhotoByTeamId(int teamId) {
         return mPhotoDao.getPhotosByTeamId(teamId);
     }
 

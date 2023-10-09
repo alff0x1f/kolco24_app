@@ -43,7 +43,7 @@ public interface PhotoDao {
     @Query("SELECT * FROM photo_points " +
             "WHERE team_id = :teamId " +
             "ORDER BY point_number")
-    LiveData<List<Photo>> getPhotosByTeamId(int teamId);
+    List<Photo> getPhotosByTeamId(int teamId);
 
     @Query("SELECT count(DISTINCT point_number) " +
             "FROM photo_points " +

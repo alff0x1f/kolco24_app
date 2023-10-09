@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MediatorLiveData;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import ru.kolco24.kolco24.data.entities.Photo;
@@ -44,8 +45,21 @@ public class PhotoViewModel extends AndroidViewModel {
         return mAllPhoto;
     }
 
-    LiveData<List<Photo>> getPhotoByTeamId(int teamId) {
-        return mPhotoRepository.getPhotoByTeamId(teamId);
+    public List<Photo> getPhotos(int teamId) {
+        List<Photo> photos = new ArrayList<>();
+        Photo addPhoto = new Photo(0, 0, "add_photo", "", "");
+        Photo addFromGallery = new Photo(0, 0, "add_from_gallery", "", "");
+        photos.add(addPhoto);
+        photos.add(addFromGallery);
+
+        List<Photo> roomPhotos  = mPhotoRepository.getPhotoByTeamId(teamId);
+        if (roomPhotos != null) {
+            photos.addAll(roomPhotos);
+        }
+        Photo nfcPhoto = new Photo(0, 10, "nfc_check", "", "");
+        photos.add(nfcPhoto);
+
+        return photos;
     }
 
     public LiveData<Integer> getPhotoCount(int teamId) {
