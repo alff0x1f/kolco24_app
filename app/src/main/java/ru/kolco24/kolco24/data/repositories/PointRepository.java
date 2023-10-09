@@ -12,16 +12,14 @@ import ru.kolco24.kolco24.data.entities.Point;
 
 public class PointRepository {
     private PointDao mPointDao;
-    private LiveData<List<Point.PointExt>> mAllPoints;
 
     public PointRepository(Application application) {
         AppDatabase db = AppDatabase.getDatabase(application);
         mPointDao = db.pointDao();
-        mAllPoints = mPointDao.getAllPoints();
     }
 
     public LiveData<List<Point.PointExt>> getAllPoints() {
-        return mAllPoints;
+        return mPointDao.getAllPoints();
     }
 
     public LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId) {

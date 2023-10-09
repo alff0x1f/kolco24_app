@@ -13,17 +13,14 @@ import ru.kolco24.kolco24.data.repositories.PointRepository;
 public class PointViewModel extends AndroidViewModel {
     private PointRepository mRepository;
 
-    private final LiveData<List<Point.PointExt>> mAllPoints;
-
     /*__init__*/
     public PointViewModel(Application application) {
         super(application);
         mRepository = new PointRepository(application);
-        mAllPoints = mRepository.getAllPoints();
     }
 
     LiveData<List<Point.PointExt>> getAllPoints() {
-        return mAllPoints;
+        return mRepository.getAllPoints();
     }
 
     LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId) {
