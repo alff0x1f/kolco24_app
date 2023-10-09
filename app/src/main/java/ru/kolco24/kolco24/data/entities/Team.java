@@ -32,14 +32,15 @@ public class Team {
     private Long startTime;
 
     @TypeConverters(Converters.class)
-    public Long finish_time;
-    public boolean dnf;
-    public int penalty;
+    @ColumnInfo(name = "finish_time")
+    private Long finishTime;
+    private boolean dnf;
+    private int penalty;
 
     /* __init__*/
     public Team(int id, String owner, float paidPeople, String dist, String category, String teamname, String city,
                 String organization, String year, String startNumber, Long startTime,
-                Long finish_time, boolean dnf, int penalty) {
+                Long finishTime, boolean dnf, int penalty) {
         this.id = id;
         this.owner = owner;
         this.paidPeople = paidPeople;
@@ -51,7 +52,7 @@ public class Team {
         this.year = year;
         this.startNumber = startNumber;
         this.startTime = startTime;
-        this.finish_time = finish_time;
+        this.finishTime = finishTime;
         this.dnf = dnf;
         this.penalty = penalty;
     }
@@ -185,6 +186,30 @@ public class Team {
 
     public void setStartTime(Long startTime) {
         this.startTime = startTime;
+    }
+
+    public Long getFinishTime() {
+        return finishTime;
+    }
+
+    public void setFinishTime(Long finishTime) {
+        this.finishTime = finishTime;
+    }
+
+    public boolean isDnf() {
+        return dnf;
+    }
+
+    public void setDnf(boolean dnf) {
+        this.dnf = dnf;
+    }
+
+    public int getPenalty() {
+        return penalty;
+    }
+
+    public void setPenalty(int penalty) {
+        this.penalty = penalty;
     }
 }
 
