@@ -10,52 +10,118 @@ public class Photo {
     public static final String NEW = "new";
 
     @PrimaryKey(autoGenerate = true)
-    public int id;
-    public int team_id;
+    private int id;
+    @ColumnInfo(name = "team_id")
+    private int teamId;
 
     @ColumnInfo(name = "point_number")
-    public int point_number;
+    private int pointNumber;
 
     @NonNull
     @ColumnInfo(name = "photo_url")
-    public String photo_url;
+    private String photoUrl;
 
     @NonNull
     @ColumnInfo(name = "photo_thumb_url")
-    public String photo_thumb_url;
+    private String photoThumbUrl;
 
     /* possible values are "new", "send_info", "send_photo", "send_photo_info" */
     @NonNull
     @ColumnInfo(name = "status")
-    public String status;
-    public boolean sync_local;
-    public boolean sync_internet;
+    private String status;
+    @ColumnInfo(name = "sync_local")
+    private boolean syncLocal;
+    @ColumnInfo(name = "sync_internet")
+    private boolean sync;
 
-    public String photo_time;
+    @ColumnInfo(name = "photo_time")
+    private String photoTime;
 
 
     //__init__
-    public Photo(int team_id, int point_number, @NonNull String photo_url,
-                 @NonNull String photo_thumb_url, @NonNull String photo_time) {
-        this.team_id = team_id;
-        this.point_number = point_number;
-        this.photo_url = photo_url;
-        this.photo_thumb_url = photo_thumb_url;
+    public Photo(int teamId, int pointNumber, @NonNull String photoUrl,
+                 @NonNull String photoThumbUrl, @NonNull String photoTime) {
+        this.teamId = teamId;
+        this.pointNumber = pointNumber;
+        this.photoUrl = photoUrl;
+        this.photoThumbUrl = photoThumbUrl;
         this.status = "new";
-        this.photo_time = photo_time;
-        this.sync_internet = false;
-        this.sync_local = false;
+        this.photoTime = photoTime;
+        this.sync = false;
+        this.syncLocal = false;
     }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public int getTeamId() {
+        return teamId;
+    }
+
+    public void setTeamId(int teamId) {
+        this.teamId = teamId;
+    }
+
 
     public int getPointNumber() {
-        return point_number;
+        return pointNumber;
     }
 
-    public void setSync(boolean b) {
-        this.sync_internet = b;
+    public void setPointNumber(int pointNumber) {
+        this.pointNumber = pointNumber;
     }
 
-    public void setSyncLocal(boolean b) {
-        this.sync_local = b;
+    @NonNull
+    public String getPhotoUrl() {
+        return photoUrl;
+    }
+
+    public void setPhotoUrl(@NonNull String photoUrl) {
+        this.photoUrl = photoUrl;
+    }
+
+    public String getPhotoThumbUrl() {
+        return photoThumbUrl;
+    }
+
+    public void setPhotoThumbUrl(String photoThumbUrl) {
+        this.photoThumbUrl = photoThumbUrl;
+    }
+
+    public String getStatus() {
+        return this.status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public boolean isSync() {
+        return this.sync;
+    }
+
+    public void setSync(boolean sync) {
+        this.sync = sync;
+    }
+
+    public boolean isSyncLocal() {
+        return this.syncLocal;
+    }
+
+    public void setSyncLocal(boolean syncLocal) {
+        this.syncLocal = syncLocal;
+    }
+
+    public String getPhotoTime() {
+        return this.photoTime;
+    }
+
+    public void setPhotoTime(String photoTime) {
+        this.photoTime = photoTime;
     }
 }

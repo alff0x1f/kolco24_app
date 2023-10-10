@@ -379,18 +379,18 @@ public class NewPhotoActivity extends AppCompatActivity {
             AsyncTask.execute(() -> {
                 Photo photo = photoViewModel.getPhotoById(photoId);
                 boolean isChanged = false;
-                if (photo.point_number != pointNumber) {
-                    photo.point_number = pointNumber;
+                if (photo.getPointNumber() != pointNumber) {
+                    photo.setPointNumber(pointNumber);
                     isChanged = true;
                 }
-                if (!photo.photo_url.equals(photoUri)) {
-                    photo.photo_url = photoUri;
-                    photo.photo_thumb_url = photoThumbUri;
-                    photo.photo_time = photoTime;
+                if (!photo.getPhotoUrl().equals(photoUri)) {
+                    photo.setPhotoUrl(photoUri);
+                    photo.setPhotoThumbUrl(photoThumbUri);
+                    photo.setPhotoTime(photoTime);
                     isChanged = true;
                 }
                 if (isChanged) {
-                    photo.status = Photo.NEW;
+                    photo.setStatus(Photo.NEW);
                     photo.setSyncLocal(false);
                     photo.setSync(false);
                     photoViewModel.update(photo);

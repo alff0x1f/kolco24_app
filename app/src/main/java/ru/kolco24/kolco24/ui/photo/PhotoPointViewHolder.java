@@ -32,12 +32,12 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
     }
 
     public void bind(Photo photo) {
-        if (photo.photo_url.equals("add_photo") || photo.photo_url.equals("add_from_gallery")) {
+        if (photo.getPhotoUrl().equals("add_photo") || photo.getPhotoUrl().equals("add_from_gallery")) {
             logo.setVisibility(View.VISIBLE);
             syncLabel.setVisibility(View.GONE);
             pointIcon.setVisibility(View.GONE);
             photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));
-            if (photo.photo_url.equals("add_photo")) {
+            if (photo.getPhotoUrl().equals("add_photo")) {
                 logo.setImageResource(R.drawable.ic_baseline_add_a_photo_24);
                 itemView.setOnClickListener(v -> {
                     Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
@@ -54,34 +54,34 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
             return;
         }
 
-        if (photo.photo_url.equals("nfc_check")){
+        if (photo.getPhotoUrl().equals("nfc_check")){
             logo.setVisibility(View.VISIBLE);
             syncLabel.setVisibility(View.GONE);
             photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));
             logo.setImageResource(R.drawable.mobile_pay);
-            textView.setText(String.format("%02d", photo.point_number));
+            textView.setText(String.format("%02d", photo.getPointNumber()));
             return;
         }
 
-        textView.setText(String.format("%02d", photo.point_number));
-        photoKP.setImageURI(Uri.parse(photo.photo_thumb_url));
+        textView.setText(String.format("%02d", photo.getPointNumber()));
+        photoKP.setImageURI(Uri.parse(photo.getPhotoThumbUrl()));
 
         itemView.setOnClickListener(v -> {
             Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("id", photo.id);
-            intent.putExtra("point_number", photo.point_number);
-            intent.putExtra("photo_uri", photo.photo_url);
-            intent.putExtra("photo_thumb_uri", photo.photo_thumb_url);
+            intent.putExtra("id", photo.getId());
+            intent.putExtra("point_number", photo.getPointNumber());
+            intent.putExtra("photo_uri", photo.getPhotoUrl());
+            intent.putExtra("photo_thumb_uri", photo.getPhotoThumbUrl());
             itemView.getContext().startActivity(intent);
         });
 
-        if (photo.sync_internet && photo.sync_local) {
+        if (photo.isSync() && photo.isSyncLocal()) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorGreen));
-        } else if (photo.sync_internet) {
+        } else if (photo.isSync()) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorBlue));
-        } else if (photo.sync_local) {
+        } else if (photo.isSyncLocal()) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorYellow));
         } else {

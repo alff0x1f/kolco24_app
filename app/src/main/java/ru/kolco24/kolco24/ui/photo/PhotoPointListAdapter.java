@@ -29,15 +29,15 @@ public class PhotoPointListAdapter extends ListAdapter<Photo, PhotoPointViewHold
     static class PhotoPointDiff extends DiffUtil.ItemCallback<Photo> {
         @Override
         public boolean areItemsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
-            return oldItem.id == newItem.id;
+            return oldItem.getId() == newItem.getId();
         }
 
         @Override
         public boolean areContentsTheSame(@NonNull Photo oldItem, @NonNull Photo newItem) {
-            return (oldItem.point_number == newItem.point_number &&
-                    oldItem.photo_thumb_url.equals(newItem.photo_thumb_url) &&
-                    oldItem.sync_internet == newItem.sync_internet &&
-                    oldItem.sync_local == newItem.sync_local);
+            return (oldItem.getPointNumber() == newItem.getPointNumber() &&
+                    oldItem.getPhotoThumbUrl().equals(newItem.getPhotoThumbUrl()) &&
+                    oldItem.isSync() == newItem.isSync() &&
+                    oldItem.isSyncLocal() == newItem.isSyncLocal());
         }
     }
 }

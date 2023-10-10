@@ -233,7 +233,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     }
 
     public boolean upload_photo(@NonNull Photo photo, String url) {
-        File file = new File(photo.photo_url);
+        File file = new File(photo.getPhotoUrl());
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("team_id", String.valueOf(teamId))
