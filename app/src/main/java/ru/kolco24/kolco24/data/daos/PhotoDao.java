@@ -22,46 +22,46 @@ public interface PhotoDao {
     Photo getPhotoById(int id);
 
     @Query("SELECT * FROM photo_points " +
-            "WHERE team_id = :teamId AND sync_internet=0")
+            "WHERE teamId = :teamId AND isSync=0")
     List<Photo> getNotSyncPhoto(int teamId);
 
     @Query("SELECT * FROM photo_points " +
-            "WHERE team_id = :teamId AND sync_local=0")
+            "WHERE teamId = :teamId AND isSync=0")
     List<Photo> getNotLocalSyncPhoto(int teamId);
 
     /* Фото с номерами отсутствующими в легенде */
-    @Query("SELECT photo_points.point_number FROM photo_points " +
+    @Query("SELECT photo_points.pointNumber FROM photo_points " +
             "LEFT JOIN points " +
-            "ON points.number=photo_points.point_number " +
-            "WHERE photo_points.team_id = :teamId AND points.id IS NULL")
+            "ON points.number=photo_points.pointNumber " +
+            "WHERE photo_points.teamId = :teamId AND points.id IS NULL")
     LiveData<List<Integer>> getNonLegendPointNumbers(int teamId);
 
     @Query("SELECT * FROM photo_points " +
-            "ORDER BY point_number")
+            "ORDER BY pointNumber")
     LiveData<List<Photo>> getAllPhotos();
 
     @Query("SELECT * FROM photo_points " +
-            "WHERE team_id = :teamId " +
-            "ORDER BY point_number")
+            "WHERE teamId = :teamId " +
+            "ORDER BY pointNumber")
     List<Photo> getPhotosByTeamId(int teamId);
 
-    @Query("SELECT count(DISTINCT point_number) " +
+    @Query("SELECT count(DISTINCT pointNumber) " +
             "FROM photo_points " +
-            "WHERE team_id = :teamId")
+            "WHERE teamId = :teamId")
     LiveData<Integer> getPhotoCount(int teamId);
 
     @Query("SELECT sum(points.cost) FROM points " +
-            "LEFT JOIN (SELECT point_number, team_id FROM photo_points " +
-            "  WHERE team_id= :teamId " +
-            "  GROUP BY point_number) photo " +
-            "    ON points.number = photo.point_number " +
+            "LEFT JOIN (SELECT pointNumber, teamId FROM photo_points " +
+            "  WHERE teamId= :teamId " +
+            "  GROUP BY pointNumber) photo " +
+            "    ON points.number = photo.pointNumber " +
             "LEFT JOIN ( " +
             "  SELECT pointNumber AS point_number " +
             "  FROM nfc_check " +
             "  GROUP BY pointNumber" +
             ") nfc " +
             "   ON points.number == nfc.point_number " +
-            "WHERE photo.point_number IS NOT NULL OR nfc.point_number IS NOT NULL")
+            "WHERE photo.pointNumber IS NOT NULL OR nfc.point_number IS NOT NULL")
     LiveData<Integer> getCostSum(int teamId);
 
     @Query("DELETE FROM photo_points " +

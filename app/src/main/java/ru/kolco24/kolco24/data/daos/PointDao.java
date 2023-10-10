@@ -27,27 +27,27 @@ public interface PointDao {
 
     @Query("SELECT points.*, photo.photo_thumb_url " +
             "FROM points " +
-            "LEFT JOIN (SELECT point_number, min(photo_thumb_url) AS photo_thumb_url FROM photo_points GROUP BY point_number) photo " +
-            "ON points.number == photo.point_number " +
+            "LEFT JOIN (SELECT pointNumber, min(photoThumbUrl) AS photo_thumb_url FROM photo_points GROUP BY pointNumber) photo " +
+            "ON points.number == photo.pointNumber " +
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getAllPoints();
 
     @Query("SELECT points.*, photo.photo_time " +
             "FROM points " +
             "LEFT JOIN (" +
-            "  SELECT point_number, min(photo_time) AS photo_time " +
+            "  SELECT pointNumber, min(photoTime) AS photo_time " +
             "  FROM photo_points " +
-            "  WHERE team_id = :teamId " +
-            "  GROUP BY point_number" +
+            "  WHERE teamId = :teamId " +
+            "  GROUP BY pointNumber" +
             ") photo " +
-            "ON points.number == photo.point_number " +
+            "ON points.number == photo.pointNumber " +
             "LEFT JOIN ( " +
             "  SELECT pointNumber AS point_number, min(createDt) AS nfc_time" +
             "  FROM nfc_check " +
             "  GROUP BY pointNumber" +
             ") nfc " +
             "ON points.number == nfc.point_number " +
-            "WHERE photo.point_number IS NULL " +
+            "WHERE photo.pointNumber IS NULL " +
             "AND nfc.nfc_time IS NULL " +
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId);
@@ -58,12 +58,12 @@ public interface PointDao {
             "nfc.nfcTime " +
             "FROM points " +
             "LEFT JOIN (" +
-            "  SELECT point_number, min(photo_time) AS photoTime " +
+            "  SELECT pointNumber, min(photoTime) AS photoTime " +
             "  FROM photo_points " +
-            "  WHERE team_id = :teamId " +
-            "  GROUP BY point_number" +
+            "  WHERE teamId = :teamId " +
+            "  GROUP BY pointNumber" +
             ") photo " +
-            "ON points.number == photo.point_number " +
+            "ON points.number == photo.pointNumber " +
             "LEFT JOIN ( " +
             "  SELECT pointNumber AS point_number, min(createDt) AS nfcTime" +
             "  FROM nfc_check " +
