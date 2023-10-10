@@ -1,84 +1,83 @@
-package ru.kolco24.kolco24.data;
+package ru.kolco24.kolco24.data
 
-import android.content.Context;
-
-import androidx.annotation.NonNull;
-import androidx.room.Database;
-import androidx.room.Room;
-import androidx.room.RoomDatabase;
-import androidx.sqlite.db.SupportSQLiteDatabase;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import ru.kolco24.kolco24.data.daos.NfcCheckDao;
-import ru.kolco24.kolco24.data.daos.PhotoDao;
-import ru.kolco24.kolco24.data.daos.PointDao;
-import ru.kolco24.kolco24.data.daos.TeamDao;
-import ru.kolco24.kolco24.data.entities.NfcCheck;
-import ru.kolco24.kolco24.data.entities.Photo;
-import ru.kolco24.kolco24.data.entities.Point;
-import ru.kolco24.kolco24.data.entities.Team;
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
+import ru.kolco24.kolco24.data.daos.NfcCheckDao
+import ru.kolco24.kolco24.data.daos.PhotoDao
+import ru.kolco24.kolco24.data.daos.PointDao
+import ru.kolco24.kolco24.data.daos.TeamDao
+import ru.kolco24.kolco24.data.entities.NfcCheck
+import ru.kolco24.kolco24.data.entities.Photo
+import ru.kolco24.kolco24.data.entities.Point
+import ru.kolco24.kolco24.data.entities.Team
+import java.util.concurrent.Executors
 
 @Database(
-        entities = {Point.class, Photo.class, Team.class, NfcCheck.class},
-        version = 1,
-        exportSchema = false
+    entities = [Point::class, Photo::class, Team::class, NfcCheck::class],
+    version = 1,
+    exportSchema = false
 )
-public abstract class AppDatabase extends RoomDatabase {
-    public abstract PointDao pointDao();
-    public abstract PhotoDao photoDao();
-    public abstract TeamDao teamDao();
-    public abstract NfcCheckDao nfcCheckDao();
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun pointDao(): PointDao
+    abstract fun photoDao(): PhotoDao
+    abstract fun teamDao(): TeamDao
+    abstract fun nfcCheckDao(): NfcCheckDao
 
-    private static volatile AppDatabase INSTANCE;
-    private static final int NUMBER_OF_THREADS = 4;
-    public static final ExecutorService databaseWriteExecutor =
-            Executors.newFixedThreadPool(NUMBER_OF_THREADS);
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+        private const val NUMBER_OF_THREADS = 4
+        @JvmField
+        val databaseWriteExecutor = Executors.newFixedThreadPool(NUMBER_OF_THREADS)
 
-    /**
-     * Get the database, creating it if it does not exist.
-     *
-     * @param context the application context Singleton pattern, allows only one instance of the
-     *                database to be opened at a time.
-     */
-    public static AppDatabase getDatabase(final Context context) {
-        if (INSTANCE == null) {
-            synchronized (AppDatabase.class) {
-                if (INSTANCE == null) {
-                    INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
-                                    AppDatabase.class, "kolco24_database_3")
+        /**
+         * Get the database, creating it if it does not exist.
+         *
+         * @param context the application context Singleton pattern, allows only one instance of the
+         * database to be opened at a time.
+         */
+        @JvmStatic
+        fun getDatabase(context: Context): AppDatabase? {
+            if (INSTANCE == null) {
+                synchronized(AppDatabase::class.java) {
+                    if (INSTANCE == null) {
+                        INSTANCE = Room.databaseBuilder(
+                            context.applicationContext,
+                            AppDatabase::class.java, "kolco24_database_3"
+                        )
                             .addCallback(sRoomDatabaseCallback)
-                            .build();
+                            .build()
+                    }
+                }
+            }
+            return INSTANCE
+        }
+
+        private val sRoomDatabaseCallback: Callback = object : Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+
+                //create empty database
+                databaseWriteExecutor.execute {
+                    val photo_dao = INSTANCE!!.pointDao()
+                    photo_dao.deleteAll()
+
+                    // Photo Point
+                    val photoDao = INSTANCE!!.photoDao()
+                    photoDao.deleteAll()
+
+                    // Team
+                    val teamDao = INSTANCE!!.teamDao()
+                    teamDao.deleteAll()
+
+                    // NfcCheck
+                    val nfcCheckDao = INSTANCE!!.nfcCheckDao()
+                    nfcCheckDao.deleteAllNfcChecks()
                 }
             }
         }
-        return INSTANCE;
     }
-
-    private static RoomDatabase.Callback sRoomDatabaseCallback = new RoomDatabase.Callback() {
-
-        @Override
-        public void onCreate(@NonNull SupportSQLiteDatabase db) {
-            super.onCreate(db);
-
-            //create empty database
-            databaseWriteExecutor.execute(() -> {
-                PointDao photo_dao = INSTANCE.pointDao();
-                photo_dao.deleteAll();
-
-                // Photo Point
-                PhotoDao photoDao = INSTANCE.photoDao();
-                photoDao.deleteAll();
-
-                // Team
-                TeamDao teamDao = INSTANCE.teamDao();
-                teamDao.deleteAll();
-
-                // NfcCheck
-                NfcCheckDao nfcCheckDao = INSTANCE.nfcCheckDao();
-                nfcCheckDao.deleteAllNfcChecks();
-            });
-        }
-    };
 }
