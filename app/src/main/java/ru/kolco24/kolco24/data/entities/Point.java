@@ -9,9 +9,7 @@ import androidx.room.PrimaryKey;
 public class Point {
     @PrimaryKey(autoGenerate = true)
     public int id;
-
-    @ColumnInfo(name = "number")
-    public int mNumber;
+    private int number;
 
     @NonNull
     @ColumnInfo(name = "description")
@@ -22,9 +20,17 @@ public class Point {
 
     /*__init__*/
     public Point(int number, @NonNull String description, int cost) {
-        this.mNumber = number;
+        this.number = number;
         this.mDescription = description;
         this.mCost = cost;
+    }
+
+    public int getNumber() {
+        return this.number;
+    }
+
+    public void setNumber(int number) {
+        this.number = number;
     }
 
     public static class PointExt{
