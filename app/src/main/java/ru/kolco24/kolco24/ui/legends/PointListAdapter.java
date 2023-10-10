@@ -35,9 +35,9 @@ public class PointListAdapter extends ListAdapter<Point.PointExt, PointViewHolde
 
         @Override
         public boolean areContentsTheSame(@NonNull Point.PointExt oldItem, @NonNull Point.PointExt newItem) {
-            return oldItem.number == newItem.number &&
-                    oldItem.description.equals(newItem.description) &&
-                    oldItem.cost == newItem.cost;
+            return oldItem.getNumber() == newItem.getNumber() &&
+                    oldItem.getDescription().equals(newItem.getDescription()) &&
+                    oldItem.getCost() == newItem.getCost();
         }
     }
 }

@@ -116,10 +116,10 @@ public class DataDownloader {
                                 ));
                                 isUpdated = true;
                             } else {
-                                if (!existPoint.mDescription.equals(description) ||
-                                        existPoint.mCost != cost) {
-                                    existPoint.mDescription = description;
-                                    existPoint.mCost = cost;
+                                if (!existPoint.getDescription().equals(description) ||
+                                        existPoint.getCost() != cost) {
+                                    existPoint.setDescription(description);
+                                    existPoint.setCost(cost);
                                     mPointDao.update(existPoint);
                                     isUpdated = true;
                                 }

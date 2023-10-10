@@ -31,23 +31,23 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
     }
 
     public void bind(Point.PointExt point) {
-        textView.setText(String.format("%02d", point.number));
+        textView.setText(String.format("%02d", point.getNumber()));
 
-        if (point.photo_time != null) {
-            String[] timeArray = point.photo_time.split(" ");
+        if (point.getPhotoTime() != null) {
+            String[] timeArray = point.getPhotoTime().split(" ");
             if (timeArray.length > 1) {
                 pointTimeTextView.setText(timeArray[1]);
             } else {
-                pointTimeTextView.setText(point.photo_time);
+                pointTimeTextView.setText(point.getPhotoTime());
             }
             // make strike through
             textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
-        } else if (point.nfc_time != null) {
-            String[] timeArray = point.nfc_time.split(" ");
+        } else if (point.getNfcTime() != null) {
+            String[] timeArray = point.getNfcTime().split(" ");
             if (timeArray.length > 1) {
                 pointTimeTextView.setText(timeArray[1]);
             } else {
-                pointTimeTextView.setText(point.nfc_time);
+                pointTimeTextView.setText(point.getNfcTime());
             }
             // make strike through
             textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
@@ -56,28 +56,28 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
             pointTimeTextView.setText("");
         }
 
-        textDescription.setText(point.description);
-        textCost.setText(String.format("+%d", point.cost));
+        textDescription.setText(point.getDescription());
+        textCost.setText(String.format("+%d", point.getCost()));
         Drawable drawable = ContextCompat.getDrawable(itemView.getContext(), R.drawable.cost_background);
         // set color based on cost
         int color;
-        if (point.cost == 1) {
+        if (point.getCost() == 1) {
             color = itemView.getResources().getColor(R.color.level1);
-        } else if (point.cost == 2) {
+        } else if (point.getCost() == 2) {
             color = itemView.getResources().getColor(R.color.level2);
-        } else if (point.cost == 3) {
+        } else if (point.getCost() == 3) {
             color = itemView.getResources().getColor(R.color.level3);
-        } else if (point.cost == 4) {
+        } else if (point.getCost() == 4) {
             color = itemView.getResources().getColor(R.color.level4);
-        } else if (point.cost == 5) {
+        } else if (point.getCost() == 5) {
             color = itemView.getResources().getColor(R.color.level5);
-        } else if (point.cost == 6) {
+        } else if (point.getCost() == 6) {
             color = itemView.getResources().getColor(R.color.level6);
-        } else if (point.cost == 7) {
+        } else if (point.getCost() == 7) {
             color = itemView.getResources().getColor(R.color.level7);
-        } else if (point.cost == 8) {
+        } else if (point.getCost() == 8) {
             color = itemView.getResources().getColor(R.color.level8);
-        } else if (point.cost == 9) {
+        } else if (point.getCost() == 9) {
             color = itemView.getResources().getColor(R.color.level9);
         } else {
             color = itemView.getResources().getColor(R.color.level10);
@@ -90,7 +90,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         // on click listener
         itemView.setOnClickListener(v -> {
             Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("point_number", point.number);
+            intent.putExtra("point_number", point.getNumber());
             itemView.getContext().startActivity(intent);
         });
     }
