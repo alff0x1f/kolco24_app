@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import ru.kolco24.kolco24.data.dao.PointTagDao;
+import ru.kolco24.kolco24.data.daos.MemberTagDao;
 import ru.kolco24.kolco24.data.daos.NfcCheckDao;
 import ru.kolco24.kolco24.data.daos.PhotoDao;
 import ru.kolco24.kolco24.data.daos.PointDao;
@@ -21,17 +22,27 @@ import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.data.entities.Point;
 import ru.kolco24.kolco24.data.entities.PointTag;
 import ru.kolco24.kolco24.data.entities.Team;
+import ru.kolco24.kolco24.data.entities.MemberTag;
 
 @Database(
-        entities = {Point.class, PointTag.class, Photo.class, Team.class, NfcCheck.class},
+        entities = {
+                Point.class, PointTag.class, Photo.class,
+                Team.class, NfcCheck.class, MemberTag.class
+        },
         version = 1,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
     public abstract PointDao pointDao();
+
     public abstract PointTagDao pointTagDao();
+
     public abstract PhotoDao photoDao();
+
     public abstract TeamDao teamDao();
+
+    public abstract MemberTagDao memberTagDao();
+
     public abstract NfcCheckDao nfcCheckDao();
 
     private static volatile AppDatabase INSTANCE;
@@ -85,6 +96,10 @@ public abstract class AppDatabase extends RoomDatabase {
                 // PointTag
                 PointTagDao pointTagDao = INSTANCE.pointTagDao();
                 pointTagDao.deleteAllPointTags();
+
+                // MemberTag
+                MemberTagDao memberTagDao = INSTANCE.memberTagDao();
+                memberTagDao.deleteAllMemberTags();
             });
         }
     };
