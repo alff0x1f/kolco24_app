@@ -5,10 +5,11 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "MemberTag")
 data class MemberTag(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
     val siteId: Int? = null,
     val tag: String,
     val teamId: Int? = null,
     val name: String = "",
-)
+){
+    @PrimaryKey(autoGenerate = true)
+    var id = 0
+}

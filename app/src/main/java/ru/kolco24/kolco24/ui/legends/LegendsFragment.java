@@ -15,15 +15,12 @@ import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-
+import ru.kolco24.kolco24.ui.members.AddMemberTagActivity;
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
-import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 public class LegendsFragment extends Fragment implements MenuProvider {
@@ -115,6 +112,11 @@ public class LegendsFragment extends Fragment implements MenuProvider {
             );
             dataDownloader.setLocalDownload(true);
             dataDownloader.downloadPoints();
+            return true;
+        }
+        if (menuItem.getItemId() == R.id.add_member_tag) {
+            Intent intent = new Intent(getActivity(), AddMemberTagActivity.class);
+            startActivity(intent);
             return true;
         }
         // start SettingsActivity
