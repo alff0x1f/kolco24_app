@@ -102,27 +102,9 @@ public class DataDownloader {
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject point = jObj.getJSONObject(i);
 
-                            int number = point.getInt("number");
-                            String description = point.getString("description");
-                            int cost = point.getInt("cost");
-
-                            Point existPoint = mPointDao.getPointByNumber(number);
-
-                            if (existPoint == null) {
-                                mPointDao.insert(new Point(
-                                        number,
-                                        description,
-                                        cost
-                                ));
+                            Point newPoint = Point.fromJson(point);
+                            if (updateOrInsertPoint(newPoint)) {
                                 isUpdated = true;
-                            } else {
-                                if (!existPoint.getDescription().equals(description) ||
-                                        existPoint.getCost() != cost) {
-                                    existPoint.setDescription(description);
-                                    existPoint.setCost(cost);
-                                    mPointDao.update(existPoint);
-                                    isUpdated = true;
-                                }
                             }
                         }
                         if (isUpdated) {
@@ -298,6 +280,37 @@ public class DataDownloader {
             return true;
         }
 
+        return false;
+    }
+
+    private boolean updateOrInsertPoint(Point point) {
+        Point existPoint = mPointDao.getPointById(point.getId());
+        if (existPoint == null) {
+            // create new point
+            mPointDao.insert(point);
+            return true;
+        }
+
+        // update point
+        boolean isUpdated = false;
+        if (existPoint.getNumber() != point.getNumber()) {
+            existPoint.setNumber(point.getNumber());
+            isUpdated = true;
+        }
+
+        if (!existPoint.getDescription().equals(point.getDescription())) {
+            existPoint.setDescription(point.getDescription());
+            isUpdated = true;
+        }
+
+        if (existPoint.getCost() != point.getCost()) {
+            existPoint.setCost(point.getCost());
+            isUpdated = true;
+        }
+        if (isUpdated) {
+            mPointDao.update(existPoint);
+            return true;
+        }
         return false;
     }
 
