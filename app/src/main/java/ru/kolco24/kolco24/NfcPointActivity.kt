@@ -5,7 +5,6 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.Ndef
@@ -19,8 +18,14 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
+import ru.kolco24.kolco24.ui.legends.PointViewModel
 import ru.kolco24.kolco24.ui.teams.TeamViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,6 +48,10 @@ class NfcPointActivity : AppCompatActivity() {
     //timer
     private var countDownTimer: CountDownTimer? = null
     private val countdownDuration: Long = 20000 // 20 seconds in milliseconds
+
+    //model
+    private var pointViewModel: PointViewModel? = null
+    private val db = AppDatabase.getDatabase(application)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +81,8 @@ class NfcPointActivity : AppCompatActivity() {
         }
         setupCountDownTimer()
         (countDownTimer as CountDownTimer).start()
+
+        pointViewModel = PointViewModel(application)
     }
 
     private fun setupCountDownTimer() {
@@ -299,32 +310,38 @@ class NfcPointActivity : AppCompatActivity() {
         val action = intent.action
         if (NfcAdapter.ACTION_NDEF_DISCOVERED == action) {
             val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
-            var hexId = "-"
-
-            if (tag != null) {
-                val tagId = tag.id
-                // Convert the byte array to a hex string
-                hexId = byteArrayToHexString(tagId)
+            if (tag == null) {
+                Toast.makeText(this, "tag is null", Toast.LENGTH_SHORT).show()
+                return
             }
+            // Convert the byte array to a hex string
+            val hexId = byteArrayToHexString(tag.id)
 
-            val rawMessages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
-            if (rawMessages != null) {
-                for (rawMessage in rawMessages) {
-                    val message = rawMessage as NdefMessage
-                    for (record in message.records) {
-                        val payload = record.payload
-                        val text = String(payload)
-                        if (record.toMimeType() == "kolco24/point") {
-                            pointId = hexId
-                            pointNumber = text.toInt()
-                            binding.pointNumber.text = text
-                        }
+            // Use a coroutine to perform database operations asynchronously
+            CoroutineScope(Dispatchers.IO).launch {
+                val pointTag = db.pointTagDao().getPointTagByTag(hexId)
+                pointTag?.let {
+                    pointId = it.tag
+                    pointNumber = db.pointDao().getPointById(it.pointId).number
+
+                    // Switch back to the main thread to update UI components
+                    withContext(Dispatchers.Main) {
+                        binding.pointNumber.text = String.format("%02d", pointNumber)
                     }
                 }
-                if (false) {
-                    // send tag to server
-                    // for admin only
-                    sendTagToServer(hexId, pointNumber)
+                if (pointTag == null) {
+                    // show dialog and finish activity
+                    withContext(Dispatchers.Main) {
+                        binding.pointNumber.text = "?"
+                        val dialog = AlertDialog.Builder(this@NfcPointActivity)
+                            .setTitle("Ошибка")
+                            .setMessage("Неизвестная метка")
+                            .setPositiveButton(
+                                "Ок"
+                            ) { dialogInterface, i -> finish() }.setOnCancelListener { finish() }
+                            .create()
+                        dialog.show()
+                    }
                 }
             }
         }
