@@ -25,13 +25,16 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
+import ru.kolco24.kolco24.data.dao.PointTagDao;
 import ru.kolco24.kolco24.data.entities.Point;
 import ru.kolco24.kolco24.data.daos.PointDao;
+import ru.kolco24.kolco24.data.entities.PointTag;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.daos.TeamDao;
 
 public class DataDownloader {
     final private PointDao mPointDao;
+    final private PointTagDao pointTagDao;
     final private TeamDao mTeamDao;
     final private Context mContext;
     final private DownloadCallback mCallback;
@@ -57,6 +60,7 @@ public class DataDownloader {
         AppDatabase db = AppDatabase.getDatabase(application);
         mPointDao = db.pointDao();
         mTeamDao = db.teamDao();
+        pointTagDao = db.pointTagDao();
         mContext = application.getApplicationContext();
         mCallback = callback;
     }
@@ -75,7 +79,7 @@ public class DataDownloader {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 showToast("Сервер недоступен");
-                e.printStackTrace();
+                executeCallback();
             }
 
             @Override
@@ -105,6 +109,18 @@ public class DataDownloader {
                             Point newPoint = Point.fromJson(point);
                             if (updateOrInsertPoint(newPoint)) {
                                 isUpdated = true;
+                                // если точка обновлена, то обновляем теги
+                                JSONArray tags = point.getJSONArray("tags");
+                                for (int j = 0; j < tags.length(); j++) {
+                                    String tagId = tags.getString(j);
+
+                                    PointTag existPointTag = pointTagDao.getPointTagByTag(tagId);
+                                    if (existPointTag == null) {
+                                        // create new point
+                                        PointTag pointTag = new PointTag(newPoint.getId(), tagId);
+                                        pointTagDao.insertPointTag(pointTag);
+                                    }
+                                }
                             }
                         }
                         if (isUpdated) {

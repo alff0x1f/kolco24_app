@@ -10,7 +10,10 @@ import ru.kolco24.kolco24.data.entities.PointTag
 interface PointTagDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPointTag(pointTag: PointTag)
+    fun insertPointTag(pointTag: PointTag)
+
+    @Query("SELECT * FROM point_tags WHERE tag = :tag")
+    fun getPointTagByTag(tag: String): PointTag?
 
     @Query("SELECT * FROM point_tags WHERE pointId = :pointId")
     suspend fun getPointTagsByPointId(pointId: Int): List<PointTag>
