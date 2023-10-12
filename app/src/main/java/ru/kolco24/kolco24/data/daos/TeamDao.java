@@ -15,7 +15,12 @@ public interface TeamDao {
      @Query("SELECT * FROM teams")
      LiveData<List<Team>> getAllTeams();
 
-     @Query("SELECT * FROM teams WHERE category = :category ORDER BY place, startNumber")
+     @Query("SELECT * FROM teams WHERE category = :category ORDER BY " +
+             "CASE " +
+             " WHEN place=0 THEN 10000" +
+             " ELSE place " +
+             "END, " +
+             "startNumber")
      LiveData<List<Team>> getTeamsByCategory(String category);
 
      @Query("SELECT * FROM teams WHERE id = :id")

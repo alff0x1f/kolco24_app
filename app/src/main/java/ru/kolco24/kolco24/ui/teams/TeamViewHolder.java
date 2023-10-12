@@ -17,6 +17,7 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
     private final TextView teamNumber;
     private final TextView paidPeople;
+    private final TextView teamPlace;
 
     /*__init__*/
     private TeamViewHolder(View itemView) {
@@ -24,11 +25,17 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         textView = itemView.findViewById(R.id.textView);
         teamNumber = itemView.findViewById(R.id.team_number);
         paidPeople = itemView.findViewById(R.id.paid_people);
+        teamPlace = itemView.findViewById(R.id.team_place);
     }
 
     public void bind(Team team) {
         teamNumber.setText(team.getStartNumber());
         textView.setText(team.getTeamname());
+        if (team.getPlace() > 0) {
+            teamPlace.setText(String.format("%d", team.getPlace()));
+        } else {
+            teamPlace.setText("-");
+        }
         paidPeople.setText(String.format("%.0f чел", team.getPaidPeople()));
         //
         int currentTeam = itemView.getContext().getSharedPreferences(
