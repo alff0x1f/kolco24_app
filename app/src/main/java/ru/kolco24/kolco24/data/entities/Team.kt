@@ -48,7 +48,12 @@ class Team(
         return id == other.id && java.lang.Float.compare(
             paidPeople,
             other.paidPeople
-        ) == 0 && dist == other.dist && this.category == other.category && teamname == other.teamname && city == other.city && organization == other.organization && year == other.year && startNumber == other.startNumber
+        ) == 0 && dist == other.dist && this.category == other.category
+                && teamname == other.teamname && city == other.city
+                && organization == other.organization && year == other.year
+                && startNumber == other.startNumber && startTime == other.startTime
+                && finishTime == other.finishTime && isDnf == other.isDnf
+                && penalty == other.penalty && place == other.place
     }
 
     override fun hashCode(): Int {
@@ -68,9 +73,14 @@ class Team(
             val organization = jsonObject.optString("organization", "")
             val year = jsonObject.optString("year", "")
             val startNumber = jsonObject.optString("start_number", "")
+            val startTime = jsonObject.optLong("start_time", 0)
+            val finishTime = jsonObject.optLong("finish_time", 0)
+            val isDnf = jsonObject.optBoolean("dnf", false)
+            val penalty = jsonObject.optInt("penalty", 0)
+            val place = jsonObject.optInt("place", 0)
             return Team(
                 id, "", paidPeople, dist, category, teamname, city, organization,
-                year, startNumber, 0L, 0L, false, 0
+                year, startNumber, startTime, finishTime, isDnf, penalty, place
             )
         }
     }
