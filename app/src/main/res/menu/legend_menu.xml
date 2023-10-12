@@ -14,10 +14,10 @@
         android:id="@+id/action_local_update"
         android:title="@string/update_local"
         app:showAsAction="never" />
-    <item
-        android:id="@+id/add_member_tag"
-        android:title="Новые теги участников"
-        app:showAsAction="never" />
+<!--    <item-->
+<!--        android:id="@+id/add_member_tag"-->
+<!--        android:title="Новые теги участников"-->
+<!--        app:showAsAction="never" />-->
     <!--    settings    -->
 <!--    <item-->
 <!--        android:id="@+id/action_settings"-->

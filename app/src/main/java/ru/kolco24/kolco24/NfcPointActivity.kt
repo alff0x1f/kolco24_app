@@ -165,7 +165,7 @@ class NfcPointActivity : AppCompatActivity() {
                         activity.countDownTimer?.start()
 
                         val numberedMembers = activity.members.mapIndexed { index, element ->
-                            "${index + 1}) $element"
+                            "${index + 1}) Участник ${index + 1}"
                         }
                         activity.binding.members.text = numberedMembers.joinToString("\n")
                         activity.binding.members.isVisible = true
