@@ -51,7 +51,7 @@ public class LegendsFragment extends Fragment implements MenuProvider {
         binding.pointsRecyclerView.setAdapter(adapter);
         binding.pointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
 
-        db.pointDao().getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), points -> {
+        db.pointDao().getPointsByTeam(teamId).observe(getViewLifecycleOwner(), points -> {
             adapter.submitList(points);
             if (points.size() == 0) {
                 binding.textNoLegends.setVisibility(View.VISIBLE);

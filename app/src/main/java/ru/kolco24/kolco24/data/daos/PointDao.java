@@ -30,38 +30,27 @@ public interface PointDao {
             "points.number, " +
             "points.description, " +
             "points.cost, " +
-            "photo.photoTime " +
+            "photo.photoTime, " +
+            "photo.time " +
             "FROM points " +
             "LEFT JOIN (" +
-            "   SELECT pointNumber, photoTime " +
+            "   SELECT pointNumber, photoTime, time " +
             "   FROM photo_points " +
             "   GROUP BY pointNumber) photo " +
             "       ON points.number == photo.pointNumber " +
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getAllPoints();
 
-    @Query("SELECT points.*, photo.photo_time " +
-            "FROM points " +
-            "LEFT JOIN (" +
-            "  SELECT pointNumber, min(photoTime) AS photo_time " +
-            "  FROM photo_points " +
-            "  WHERE teamId = :teamId " +
-            "  GROUP BY pointNumber" +
-            ") photo " +
-            "ON points.number == photo.pointNumber " +
-            "WHERE photo.pointNumber IS NULL " +
-            "ORDER BY points.number")
-    LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId);
-
     @Query("SELECT " +
             "points.id, " +
             "points.number, " +
             "points.description, " +
             "points.cost, " +
-            "photo.photoTime " +
+            "photo.photoTime, " +
+            "photo.time " +
             "FROM points " +
             "LEFT JOIN (" +
-            "  SELECT pointNumber, min(photoTime) AS photoTime " +
+            "  SELECT pointNumber, photoTime, time " +
             "  FROM photo_points " +
             "  WHERE teamId = :teamId " +
             "  GROUP BY pointNumber" +
@@ -73,7 +62,7 @@ public interface PointDao {
             "        ELSE 0" +
             "    END, " +
             "photo.photoTime, points.number")
-    LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId);
+    LiveData<List<Point.PointExt>> getPointsByTeam(int teamId);
 
     @Query("DELETE FROM points WHERE id = :id")
     void deletePointById(int id);

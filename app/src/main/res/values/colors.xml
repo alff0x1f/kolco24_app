@@ -16,6 +16,7 @@
     <color name="pointIconPlaceholderText">#000000</color>
 
     <color name="myTeam">@color/teal_200</color>
+    <color name="level0">#CCCCCC</color>
     <color name="level1">#AEEA00</color>
     <color name="level2">#64DD17</color>
     <color name="level3">#FFD600</color>

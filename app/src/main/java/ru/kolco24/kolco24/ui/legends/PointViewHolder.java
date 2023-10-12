@@ -11,6 +11,9 @@ import android.widget.TextView;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.entities.Point;
@@ -20,6 +23,8 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textDescription;
     private final TextView textCost;
     private final TextView pointTimeTextView;
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM HH:mm");
+
 
     /*__init__*/
     private PointViewHolder(View itemView) {
@@ -33,13 +38,11 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
     public void bind(Point.PointExt point) {
         textView.setText(String.format("%02d", point.getNumber()));
 
-        if (point.getPhotoTime() != null) {
-            String[] timeArray = point.getPhotoTime().split(" ");
-            if (timeArray.length > 1) {
-                pointTimeTextView.setText(timeArray[1]);
-            } else {
-                pointTimeTextView.setText(point.getPhotoTime());
-            }
+        if (point.getTime() != null) {
+            Date date = new Date(point.getTime());
+            String formattedDate = dateFormat.format(date);
+
+            pointTimeTextView.setText(formattedDate);
             // make strike through
             textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
         } else {
@@ -47,11 +50,13 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         }
 
         textDescription.setText(point.getDescription());
-        textCost.setText(String.format("+%d", point.getCost()));
+        textCost.setText(String.format("%d-%02d", point.getCost(), point.getNumber()));
         Drawable drawable = ContextCompat.getDrawable(itemView.getContext(), R.drawable.cost_background);
         // set color based on cost
         int color;
-        if (point.getCost() == 1) {
+        if (point.getCost() == 0) {
+            color = itemView.getResources().getColor(R.color.level0);
+        } else if (point.getCost() == 1) {
             color = itemView.getResources().getColor(R.color.level1);
         } else if (point.getCost() == 2) {
             color = itemView.getResources().getColor(R.color.level2);

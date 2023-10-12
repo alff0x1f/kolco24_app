@@ -19,6 +19,7 @@ class Point(
         var description: String,
         var cost: Int,
         var photoTime: String?,
+        var time: Long?,
     )
 
     companion object {

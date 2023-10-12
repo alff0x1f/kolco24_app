@@ -23,10 +23,6 @@ public class PointViewModel extends AndroidViewModel {
         return mRepository.getAllPoints();
     }
 
-    LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId) {
-        return mRepository.getNewPointsByTeam(teamId);
-    }
-
     LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId) {
         return mRepository.getTakenPointsByTeam(teamId);
     }
