@@ -277,7 +277,12 @@ public class DataDownloader {
         Team existTeam = mTeamDao.getTeamById(team.getId());
         if (existTeam == null) {
             // create new team
-            mTeamDao.insert(team);
+            try {
+                mTeamDao.insert(team);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
             return true;
         }
 
