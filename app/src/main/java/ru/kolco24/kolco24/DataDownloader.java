@@ -303,7 +303,12 @@ public class DataDownloader {
         Point existPoint = mPointDao.getPointById(point.getId());
         if (existPoint == null) {
             // create new point
-            mPointDao.insert(point);
+            try {
+                mPointDao.insert(point);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
             return true;
         }
 
