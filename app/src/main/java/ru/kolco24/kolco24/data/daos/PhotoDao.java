@@ -38,6 +38,10 @@ public interface PhotoDao {
 
     @Query("SELECT * FROM photo_points " +
             "ORDER BY pointNumber")
+    List<Photo> getListPhotos();
+
+    @Query("SELECT * FROM photo_points " +
+            "ORDER BY pointNumber")
     LiveData<List<Photo>> getAllPhotos();
 
     @Query("SELECT * FROM photo_points " +

@@ -10,10 +10,13 @@ class Photo
     var pointNumber: Int,
     var photoUrl: String,
     var photoThumbUrl: String,
-    var photoTime: String
+    var photoTime: String,
+    var time: Long,
+    var pointNfc: String,
 ) {
     @PrimaryKey(autoGenerate = true)
     var id = 0
+
     /* possible values are "new", "send_info", "send_photo", "send_photo_info" */
     var status = "new"
     var isSyncLocal = false

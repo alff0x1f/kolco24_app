@@ -54,7 +54,7 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
             return;
         }
 
-        if (photo.getPhotoUrl().equals("nfc_check")){
+        if (!photo.getPointNfc().equals("")){
             logo.setVisibility(View.VISIBLE);
             syncLabel.setVisibility(View.GONE);
             photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));

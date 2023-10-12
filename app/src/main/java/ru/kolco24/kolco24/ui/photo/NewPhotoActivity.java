@@ -372,7 +372,9 @@ public class NewPhotoActivity extends AppCompatActivity {
                     pointNumber,
                     photoUri,
                     photoThumbUri,
-                    photoTime
+                    photoTime,
+                    System.currentTimeMillis(),
+                    ""
             ));
         } else {
             // Update photo

@@ -47,8 +47,8 @@ public class PhotoViewModel extends AndroidViewModel {
 
     public List<Photo> getPhotos(int teamId) {
         List<Photo> photos = new ArrayList<>();
-        Photo addPhoto = new Photo(0, 0, "add_photo", "", "");
-        Photo addFromGallery = new Photo(0, 0, "add_from_gallery", "", "");
+        Photo addPhoto = new Photo(0, 0, "add_photo", "", "", 0, "");
+        Photo addFromGallery = new Photo(0, 0, "add_from_gallery", "", "", 0, "");
         photos.add(addPhoto);
         photos.add(addFromGallery);
 
@@ -56,8 +56,6 @@ public class PhotoViewModel extends AndroidViewModel {
         if (roomPhotos != null) {
             photos.addAll(roomPhotos);
         }
-        Photo nfcPhoto = new Photo(0, 10, "nfc_check", "", "");
-        photos.add(nfcPhoto);
 
         return photos;
     }

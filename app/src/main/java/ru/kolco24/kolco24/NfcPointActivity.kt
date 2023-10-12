@@ -154,6 +154,8 @@ class NfcPointActivity : AppCompatActivity() {
                 if (!activity.members.contains(hexId)) {
                     activity.members.add(hexId)
 
+                    saveNfcCheck(hexId)
+
                     val team = activity.teamViewModel?.getTeamById(activity.teamId)
                     val paidPeople = team?.paidPeople?.roundToInt() ?: 2
 
@@ -173,6 +175,22 @@ class NfcPointActivity : AppCompatActivity() {
                         for (i in 0 until activity.members.count()) {
                             saveNfcCheck(activity.members[i])
                         }
+                        activity.db.photoDao().insert(
+                            ru.kolco24.kolco24.data.entities.Photo(
+                                activity.teamId,
+                                activity.pointNumber,
+                                "",
+                                "",
+                                "",
+                                System.currentTimeMillis(),
+                                activity.members.joinToString(", ")
+                            )
+                        )
+
+                        activity.db.photoDao().getListPhotos().forEach {
+                            println("photo: ${it.id} ${it.teamId} ${it.pointNumber} ${it.photoUrl} ${it.photoThumbUrl} ${it.photoTime} ${it.time} ${it.pointNfc}")
+                        }
+
                         activity.countDownTimer?.cancel()
                         activity.readMemberTags = false
 
@@ -196,24 +214,28 @@ class NfcPointActivity : AppCompatActivity() {
          * save value to room database
          */
         private fun saveNfcCheck(hexId: String) {
-            println("saveNfcCheck")
             val nfcCheckViewModel = NfcCheckViewModel(activity.application)
             val currTime = SimpleDateFormat(
                 "dd.MM HH:mm",
                 Locale.US
             ).format(Date())
+
+            System.out.println(System.currentTimeMillis())
+
             if (activity.pointId != null) {
                 val nfcCheck = NfcCheck(
                     activity.pointId!!,
                     activity.pointNumber,
                     hexId,
-                    currTime
+                    currTime,
+                    System.currentTimeMillis()
                 )
                 nfcCheckViewModel.insert(nfcCheck)
+                System.out.println(nfcCheck.id)
             }
 
             nfcCheckViewModel.getNotSyncNfcCheck().forEach {
-                println("not sync: ${it.id} ${it.pointNfc} ${it.pointNumber} ${it.memberNfcId}")
+                println("not sync: ${it.id} ${it.pointNfc} ${it.pointNumber} ${it.memberNfcId} ${it.createDt} ${it.time}")
             }
         }
 
