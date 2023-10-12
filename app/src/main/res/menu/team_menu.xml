@@ -6,8 +6,14 @@
     <item
         android:id="@+id/action_update"
         android:icon="@drawable/ic_baseline_update_24"
-        android:title="Обновить"
+        android:title="@string/update_from_internet"
         app:showAsAction="ifRoom" />
+
+    <!-- Settings, should always be in the overflow -->
+    <item
+        android:id="@+id/action_local_update"
+        android:title="@string/update_local"
+        app:showAsAction="never" />
 
     <!-- Settings, should always be in the overflow -->
 <!--    <item-->

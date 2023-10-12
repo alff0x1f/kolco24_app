@@ -123,6 +123,13 @@ public class TeamsFragment extends Fragment implements MenuProvider {
             );
             dataDownloader.downloadTeams(null);
             return true;
+        } else if (menuItem.getItemId() == R.id.action_local_update) {
+            DataDownloader dataDownloader = new DataDownloader(
+                    requireActivity().getApplication()
+            );
+            dataDownloader.setLocalDownload(true);
+            dataDownloader.downloadTeams(null);
+            return true;
         }
         return false;
     }
