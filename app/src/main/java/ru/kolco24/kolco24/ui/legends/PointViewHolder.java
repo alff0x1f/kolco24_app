@@ -42,17 +42,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
             }
             // make strike through
             textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
-        } else if (point.getNfcTime() != null) {
-            String[] timeArray = point.getNfcTime().split(" ");
-            if (timeArray.length > 1) {
-                pointTimeTextView.setText(timeArray[1]);
-            } else {
-                pointTimeTextView.setText(point.getNfcTime());
-            }
-            // make strike through
-            textDescription.setPaintFlags(textDescription.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
-        }
-        else {
+        } else {
             pointTimeTextView.setText("");
         }
 

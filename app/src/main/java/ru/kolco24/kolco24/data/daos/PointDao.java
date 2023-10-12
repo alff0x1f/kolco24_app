@@ -25,10 +25,18 @@ public interface PointDao {
     @Query("SELECT * FROM points WHERE number = :number")
     Point getPointByNumber(int number);
 
-    @Query("SELECT points.*, photo.photo_thumb_url " +
+    @Query("SELECT " +
+            "points.id, " +
+            "points.number, " +
+            "points.description, " +
+            "points.cost, " +
+            "photo.photoTime " +
             "FROM points " +
-            "LEFT JOIN (SELECT pointNumber, min(photoThumbUrl) AS photo_thumb_url FROM photo_points GROUP BY pointNumber) photo " +
-            "ON points.number == photo.pointNumber " +
+            "LEFT JOIN (" +
+            "   SELECT pointNumber, photoTime " +
+            "   FROM photo_points " +
+            "   GROUP BY pointNumber) photo " +
+            "       ON points.number == photo.pointNumber " +
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getAllPoints();
 
@@ -41,21 +49,16 @@ public interface PointDao {
             "  GROUP BY pointNumber" +
             ") photo " +
             "ON points.number == photo.pointNumber " +
-            "LEFT JOIN ( " +
-            "  SELECT pointNumber AS point_number, min(createDt) AS nfc_time" +
-            "  FROM nfc_check " +
-            "  GROUP BY pointNumber" +
-            ") nfc " +
-            "ON points.number == nfc.point_number " +
             "WHERE photo.pointNumber IS NULL " +
-            "AND nfc.nfc_time IS NULL " +
             "ORDER BY points.number")
     LiveData<List<Point.PointExt>> getNewPointsByTeam(int teamId);
 
     @Query("SELECT " +
-            "points.*, " +
-            "photo.photoTime, " +
-            "nfc.nfcTime " +
+            "points.id, " +
+            "points.number, " +
+            "points.description, " +
+            "points.cost, " +
+            "photo.photoTime " +
             "FROM points " +
             "LEFT JOIN (" +
             "  SELECT pointNumber, min(photoTime) AS photoTime " +
@@ -64,13 +67,12 @@ public interface PointDao {
             "  GROUP BY pointNumber" +
             ") photo " +
             "ON points.number == photo.pointNumber " +
-            "LEFT JOIN ( " +
-            "  SELECT pointNumber AS point_number, min(createDt) AS nfcTime" +
-            "  FROM nfc_check " +
-            "  GROUP BY pointNumber" +
-            ") nfc " +
-            "ON points.number == nfc.point_number " +
-            "ORDER BY photo.photoTime, points.number")
+            "ORDER BY " +
+            "     CASE " +
+            "        WHEN photo.photoTime IS NULL THEN 1" +
+            "        ELSE 0" +
+            "    END, " +
+            "photo.photoTime, points.number")
     LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId);
 
     @Query("DELETE FROM points WHERE id = :id")

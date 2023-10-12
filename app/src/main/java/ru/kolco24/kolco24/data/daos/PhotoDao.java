@@ -59,13 +59,7 @@ public interface PhotoDao {
             "  WHERE teamId= :teamId " +
             "  GROUP BY pointNumber) photo " +
             "    ON points.number = photo.pointNumber " +
-            "LEFT JOIN ( " +
-            "  SELECT pointNumber AS point_number " +
-            "  FROM nfc_check " +
-            "  GROUP BY pointNumber" +
-            ") nfc " +
-            "   ON points.number == nfc.point_number " +
-            "WHERE photo.pointNumber IS NOT NULL OR nfc.point_number IS NOT NULL")
+            "WHERE photo.pointNumber IS NOT NULL")
     LiveData<Integer> getCostSum(int teamId);
 
     @Query("DELETE FROM photo_points " +

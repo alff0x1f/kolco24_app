@@ -13,22 +13,20 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.ui.members.AddMemberTagActivity;
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding;
-import ru.kolco24.kolco24.ui.photo.PhotoViewModel;
 
 public class LegendsFragment extends Fragment implements MenuProvider {
 
     private FragmentLegendsBinding binding;
-    private PointViewModel mPointViewModel;
-    private PhotoViewModel mPhotoViewModel;
     private int teamId;
+    private AppDatabase db;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -36,11 +34,11 @@ public class LegendsFragment extends Fragment implements MenuProvider {
         binding = FragmentLegendsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-        teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
-        mPointViewModel = new ViewModelProvider(this).get(PointViewModel.class);
-        mPhotoViewModel = new ViewModelProvider(this).get(PhotoViewModel.class);
+        db = AppDatabase.getDatabase(requireActivity().getApplication());
 
-        mPhotoViewModel.getCostSum(teamId).observe(getViewLifecycleOwner(), count -> {
+        teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE).getInt("team_id", 0);
+
+        db.photoDao().getCostSum(teamId).observe(getViewLifecycleOwner(), count -> {
             if (count != null) {
                 binding.takenPointsSum.setText(String.format("Сумма баллов: %d", count));
             } else {
@@ -53,7 +51,7 @@ public class LegendsFragment extends Fragment implements MenuProvider {
         binding.pointsRecyclerView.setAdapter(adapter);
         binding.pointsRecyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
 
-        mPointViewModel.getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), points -> {
+        db.pointDao().getTakenPointsByTeam(teamId).observe(getViewLifecycleOwner(), points -> {
             adapter.submitList(points);
             if (points.size() == 0) {
                 binding.textNoLegends.setVisibility(View.VISIBLE);
