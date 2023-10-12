@@ -56,10 +56,10 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
 
         if (!photo.getPointNfc().equals("")){
             logo.setVisibility(View.VISIBLE);
-            syncLabel.setVisibility(View.GONE);
             photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));
             logo.setImageResource(R.drawable.mobile_pay);
             textView.setText(String.format("%02d", photo.getPointNumber()));
+            showSyncLabel(photo);
             return;
         }
 
@@ -74,7 +74,10 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
             intent.putExtra("photo_thumb_uri", photo.getPhotoThumbUrl());
             itemView.getContext().startActivity(intent);
         });
+        showSyncLabel(photo);
+    }
 
+    private void showSyncLabel(Photo photo) {
         if (photo.isSync() && photo.isSyncLocal()) {
             syncLabel.setVisibility(View.VISIBLE);
             syncLabel.setColorFilter(itemView.getContext().getResources().getColor(R.color.colorGreen));

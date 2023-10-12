@@ -53,6 +53,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     private PhotoViewModel mPhotoViewModel;
     private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
     private int teamId;
+    private String phoneUuid;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -64,6 +65,19 @@ public class PhotoFragment extends Fragment implements MenuProvider {
                 "team",
                 Context.MODE_PRIVATE
         ).getInt("team_id", 0);
+
+        phoneUuid = requireContext().getSharedPreferences(
+                "team",
+                Context.MODE_PRIVATE
+        ).getString("phone_uuid", "");
+
+        if (phoneUuid.isEmpty()) {
+            phoneUuid = java.util.UUID.randomUUID().toString();
+            requireContext().getSharedPreferences(
+                    "team",
+                    Context.MODE_PRIVATE
+            ).edit().putString("phone_uuid", phoneUuid).apply();
+        }
 
         // recycle view
         RecyclerView recyclerView = binding.myPointsRecyclerView;
@@ -233,13 +247,20 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     }
 
     public boolean upload_photo(@NonNull Photo photo, String url) {
-        File file = new File(photo.getPhotoUrl());
-        RequestBody requestBody = new MultipartBody.Builder()
+        MultipartBody.Builder builder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("team_id", String.valueOf(teamId))
                 .addFormDataPart("point_number", String.valueOf(photo.getPointNumber()))
-                .addFormDataPart("photo", file.getName(), RequestBody.create(file, MediaType.parse("image/*")))
-                .build();
+                .addFormDataPart("timestamp", String.valueOf(photo.getTime()))
+                .addFormDataPart("nfc", photo.getPointNfc())
+                .addFormDataPart("phone_uuid", phoneUuid);
+
+        if (!photo.getPhotoUrl().isEmpty()) {
+            File file = new File(photo.getPhotoUrl());
+            builder.addFormDataPart("photo", file.getName(), RequestBody.create(file, MediaType.parse("image/*")));
+        }
+        RequestBody requestBody = builder.build();
+
         Request request = new Request.Builder().url(url).post(requestBody).build();
         Response response;
         try {
