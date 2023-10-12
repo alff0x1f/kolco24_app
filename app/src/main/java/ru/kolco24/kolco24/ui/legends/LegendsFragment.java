@@ -32,8 +32,6 @@ public class LegendsFragment extends Fragment implements MenuProvider {
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
-        LegendsViewModel legendsViewModel =
-                new ViewModelProvider(this).get(LegendsViewModel.class);
 
         binding = FragmentLegendsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
