@@ -215,10 +215,6 @@ class NfcPointActivity : AppCompatActivity() {
          */
         private fun saveNfcCheck(hexId: String) {
             val nfcCheckViewModel = NfcCheckViewModel(activity.application)
-            val currTime = SimpleDateFormat(
-                "dd.MM HH:mm",
-                Locale.US
-            ).format(Date())
 
             System.out.println(System.currentTimeMillis())
 
@@ -227,7 +223,6 @@ class NfcPointActivity : AppCompatActivity() {
                     activity.pointId!!,
                     activity.pointNumber,
                     hexId,
-                    currTime,
                     System.currentTimeMillis()
                 )
                 nfcCheckViewModel.insert(nfcCheck)
@@ -235,7 +230,7 @@ class NfcPointActivity : AppCompatActivity() {
             }
 
             nfcCheckViewModel.getNotSyncNfcCheck().forEach {
-                println("not sync: ${it.id} ${it.pointNfc} ${it.pointNumber} ${it.memberNfcId} ${it.createDt} ${it.time}")
+                println("not sync: ${it.id} ${it.pointNfc} ${it.pointNumber} ${it.memberNfcId} ${it.time}")
             }
         }
 

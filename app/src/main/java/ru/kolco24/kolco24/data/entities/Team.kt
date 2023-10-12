@@ -8,7 +8,7 @@ import org.json.JSONObject
 import ru.kolco24.kolco24.data.Converters
 
 @Entity(tableName = "teams")
-class Team (
+class Team(
     @PrimaryKey(autoGenerate = true)
     var id: Int,
     var owner: String,
@@ -25,7 +25,10 @@ class Team (
     @TypeConverters(Converters::class)
     var finishTime: Long,
     var isDnf: Boolean,
-    var penalty: Int
+    var penalty: Int,
+    var place: Int = 0,
+    var pointsSum: Int = 0,
+    var points: String = ""
 ) {
 
     /**

@@ -10,7 +10,6 @@ class NfcCheck(
     var pointNfc: String,
     var pointNumber: Int,
     var memberNfcId: String,
-    var createDt: String,
     @TypeConverters(Converters::class)
     var time: Long
 ) {
