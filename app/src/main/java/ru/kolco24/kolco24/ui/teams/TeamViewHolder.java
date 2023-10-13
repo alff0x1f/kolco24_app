@@ -1,7 +1,10 @@
 package ru.kolco24.kolco24.ui.teams;
 
+import static androidx.core.content.ContextCompat.startActivity;
+
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -12,6 +15,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.entities.Team;
+import ru.kolco24.kolco24.ui.StartFinishActivity;
+import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 
 public class TeamViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
@@ -48,23 +53,9 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         }
 
         itemView.setOnClickListener(view -> {
-            AlertDialog dialog = new AlertDialog.Builder(itemView.getContext())
-                    .setTitle(team.getTeamname())
-                    .setMessage("Эта ваша команда?")
-                    .setPositiveButton("Да", (dialogInterface, i) -> {
-                        itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
-                                .edit().putInt("team_id", team.getId()).apply();
-                        Toast.makeText(itemView.getContext(),
-                                "Команда \"" + team.getTeamname() + "\" выбрана как ваша",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    })
-                    .setNegativeButton("Нет", (dialogInterface, i) -> {
-                    })
-                    .setOnCancelListener(dialogInterface -> {
-                    })
-                    .create();
-            dialog.show();
+            Intent intent = new Intent(itemView.getContext(), StartFinishActivity.class);
+            intent.putExtra("fromGallery", true);
+            itemView.getContext().startActivity(intent);
         });
     }
 
