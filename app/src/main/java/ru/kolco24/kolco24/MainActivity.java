@@ -14,6 +14,9 @@ import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
 import ru.kolco24.kolco24.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
@@ -37,10 +40,15 @@ public class MainActivity extends AppCompatActivity {
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         NavigationUI.setupWithNavController(binding.navView, navController);
 
-        DataDownloader dataDownloader = new DataDownloader(getApplication());
-        dataDownloader.hideToasts();
-        dataDownloader.downloadPoints();
-        dataDownloader.downloadTeams(null);
+        Executor executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
+            DataDownloader dataDownloader = new DataDownloader(getApplication());
+            dataDownloader.hideToasts();
+            dataDownloader.setLocalDownload(true);
+            dataDownloader.downloadPoints();
+            dataDownloader.downloadTeams(null);
+        });
+
 
         // Check for available NFC Adapter
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
