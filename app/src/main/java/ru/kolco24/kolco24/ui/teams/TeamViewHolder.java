@@ -54,7 +54,7 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
 
         itemView.setOnClickListener(view -> {
             Intent intent = new Intent(itemView.getContext(), StartFinishActivity.class);
-            intent.putExtra("fromGallery", true);
+            intent.putExtra("teamId", team.getId());
             itemView.getContext().startActivity(intent);
         });
     }
