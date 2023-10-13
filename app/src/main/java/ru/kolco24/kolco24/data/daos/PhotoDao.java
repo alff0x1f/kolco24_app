@@ -26,7 +26,7 @@ public interface PhotoDao {
     List<Photo> getNotSyncPhoto(int teamId);
 
     @Query("SELECT * FROM photo_points " +
-            "WHERE teamId = :teamId AND isSync=0")
+            "WHERE teamId = :teamId AND isSyncLocal=0")
     List<Photo> getNotLocalSyncPhoto(int teamId);
 
     /* Фото с номерами отсутствующими в легенде */
