@@ -15,6 +15,11 @@
         android:title="@string/update_local"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_upload_times"
+        android:title="Выгрузить времена"
+        app:showAsAction="never" />
+
     <!-- Settings, should always be in the overflow -->
 <!--    <item-->
 <!--        android:id="@+id/action_scan_qr"-->

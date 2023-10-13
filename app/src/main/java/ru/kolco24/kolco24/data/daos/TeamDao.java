@@ -15,6 +15,10 @@ public interface TeamDao {
      @Query("SELECT * FROM teams")
      LiveData<List<Team>> getAllTeams();
 
+     @Query("SELECT * FROM teams WHERE startTime != 0 OR finishTime != 0")
+     List<Team> getAllTeamsWithTimes();
+
+
      @Query("SELECT * FROM teams WHERE category = :category ORDER BY " +
              "CASE " +
              " WHEN place=0 THEN 10000" +

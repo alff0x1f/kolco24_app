@@ -13,6 +13,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -51,6 +52,7 @@ public class DataDownloader {
     private static final String TEAMS_ENDPOINT = "teams";
     private static final String POINTS_ENDPOINT = "points";
     private static final String TAGS_ENDPOINT = "race/1/point_tags";
+    private static final String TEAM_TIMES_ENDPOINT = "api/v1/teams/times";
 
     public interface DownloadCallback {
         void onDownloadComplete();
@@ -217,10 +219,10 @@ public class DataDownloader {
     /**
      * Добавляет тег на сайт
      *
-     * @param PointId - id точки
+     * @param PointId     - id точки
      * @param PointNumber - номер точки
      */
-    public void uploadTag(String PointId, int PointNumber){
+    public void uploadTag(String PointId, int PointNumber) {
         // Create a JSON object to send to the server
         JSONObject jsonObject = new JSONObject();
         try {
@@ -297,10 +299,10 @@ public class DataDownloader {
             existTeam.setYear(team.getYear());
             existTeam.setStartNumber(team.getStartNumber());
             existTeam.setPlace(team.getPlace());
-            if (team.getStartTime() == 0){
+            if (team.getStartTime() == 0) {
                 existTeam.setStartTime(team.getStartTime());
             }
-            if (team.getFinishTime() == 0){
+            if (team.getFinishTime() == 0) {
                 existTeam.setFinishTime(team.getFinishTime());
             }
             existTeam.setDnf(team.isDnf());
@@ -310,6 +312,60 @@ public class DataDownloader {
         }
 
         return false;
+    }
+
+
+    public void uploadTeamsTimes() {
+        List<Team> teams = mTeamDao.getAllTeamsWithTimes();
+
+        JSONArray jsonArray = new JSONArray();
+
+        for (Team team : teams) {
+            JSONObject jsonObject = new JSONObject();
+            try {
+                jsonObject.put("team_id", team.getId());
+                jsonObject.put("start_time", team.getStartTime());
+                jsonObject.put("finish_time", team.getFinishTime());
+                jsonArray.put(jsonObject);
+            } catch (JSONException e) {
+                e.printStackTrace();
+                // Handle the exception, log the error, or return an error response
+                return;
+            }
+        }
+
+        // Create a request body with JSON content
+        RequestBody requestBody = RequestBody.create(
+                jsonArray.toString(),
+                MediaType.parse("application/json")
+        );
+
+        // Build the POST request with the JSON body
+        Request request = new Request.Builder()
+                .url(getBaseUrl() + TEAM_TIMES_ENDPOINT) // Replace UPLOAD_ENDPOINT with your server endpoint
+                .post(requestBody)
+                .build();
+
+        // Execute the request asynchronously
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                showToast("Сервер недоступен");
+                e.printStackTrace();
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    // Handle successful response from the server
+                    showToast("Времена успешно загружены");
+                } else {
+                    System.out.println(response.body().toString());
+                    // Handle unsuccessful response
+                    showToast("Ошибка " + response.code());
+                }
+            }
+        });
     }
 
     private boolean updateOrInsertPoint(Point point) {
