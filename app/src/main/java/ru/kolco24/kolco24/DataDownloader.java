@@ -297,8 +297,12 @@ public class DataDownloader {
             existTeam.setYear(team.getYear());
             existTeam.setStartNumber(team.getStartNumber());
             existTeam.setPlace(team.getPlace());
-            existTeam.setStartTime(team.getStartTime());
-            existTeam.setFinishTime(team.getFinishTime());
+            if (team.getStartTime() == 0){
+                existTeam.setStartTime(team.getStartTime());
+            }
+            if (team.getFinishTime() == 0){
+                existTeam.setFinishTime(team.getFinishTime());
+            }
             existTeam.setDnf(team.isDnf());
 
             mTeamDao.update(existTeam);

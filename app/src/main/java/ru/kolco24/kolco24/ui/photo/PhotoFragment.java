@@ -179,7 +179,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         teamId = requireContext().getSharedPreferences("team", Context.MODE_PRIVATE).
                 getInt("team_id", 0);
         new LoadPhotosAsyncTask().execute(String.valueOf(teamId));
-        uploadPhotos(false);
+        // uploadPhotos(false);
     }
 
     public void uploadPhotos(boolean withToast) {
