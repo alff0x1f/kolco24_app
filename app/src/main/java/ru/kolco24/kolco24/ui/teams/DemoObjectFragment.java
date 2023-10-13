@@ -29,8 +29,8 @@ public class DemoObjectFragment extends Fragment {
 
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    public static final String CATEGORY_NAME = "6ч";
-    public static final String CATEGORY_CODE = "6h";
+    public static final String CATEGORY_NAME = "Команды";
+    public static final String CATEGORY_CODE = "gastello_4";
 
     // TODO: Rename and change types of parameters
     private String categoryName;

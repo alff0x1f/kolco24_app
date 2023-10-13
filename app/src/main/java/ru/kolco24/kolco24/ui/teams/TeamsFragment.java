@@ -2,6 +2,8 @@ package ru.kolco24.kolco24.ui.teams;
 
 import static android.app.Activity.RESULT_OK;
 
+import static kotlinx.coroutines.CoroutineScopeKt.CoroutineScope;
+
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -26,6 +28,10 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
+
+import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
@@ -129,6 +135,19 @@ public class TeamsFragment extends Fragment implements MenuProvider {
             );
             dataDownloader.setLocalDownload(true);
             dataDownloader.downloadTeams(null);
+            return true;
+        } else if (menuItem.getItemId() == R.id.action_upload_times) {
+            Executor executor = Executors.newSingleThreadExecutor();
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    DataDownloader dataDownloader = new DataDownloader(
+                            requireActivity().getApplication()
+                    );
+//                    dataDownloader.setLocalDownload(true);
+                    dataDownloader.uploadTeamsTimes();
+                }
+            });
             return true;
         }
         return false;

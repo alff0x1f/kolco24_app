@@ -83,11 +83,11 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
 
 
         // on click listener
-        itemView.setOnClickListener(v -> {
-            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("point_number", point.getNumber());
-            itemView.getContext().startActivity(intent);
-        });
+//        itemView.setOnClickListener(v -> {
+//            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+//            intent.putExtra("point_number", point.getNumber());
+//            itemView.getContext().startActivity(intent);
+//        });
     }
 
     /**
