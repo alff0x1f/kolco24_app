@@ -52,7 +52,7 @@ public class DataDownloader {
     private static final String TEAMS_ENDPOINT = "teams";
     private static final String POINTS_ENDPOINT = "points";
     private static final String TAGS_ENDPOINT = "race/1/point_tags";
-    private static final String TEAM_TIMES_ENDPOINT = "api/v1/teams/times";
+    private static final String TEAM_TIMES_ENDPOINT = "teams/times";
 
     public interface DownloadCallback {
         void onDownloadComplete();
