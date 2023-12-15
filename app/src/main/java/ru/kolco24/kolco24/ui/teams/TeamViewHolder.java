@@ -20,6 +20,10 @@ import org.w3c.dom.Text;
 
 import java.util.Date;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
+import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.ui.StartFinishActivity;

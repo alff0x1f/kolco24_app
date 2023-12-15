@@ -144,7 +144,7 @@ public class TeamsFragment extends Fragment implements MenuProvider {
                     DataDownloader dataDownloader = new DataDownloader(
                             requireActivity().getApplication()
                     );
-                    dataDownloader.setLocalDownload(true);
+//                    dataDownloader.setLocalDownload(true);
                     dataDownloader.uploadTeamsTimes();
                 }
             });

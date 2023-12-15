@@ -69,7 +69,7 @@ class StartFinishActivity : AppCompatActivity() {
                     db.teamDao().update(team)
                     withContext(Dispatchers.Main) {
                         binding.startTime.text = dateFormat.format(team!!.startTime)
-//                        binding.startButton.isEnabled = false
+                        binding.startButton.isEnabled = false
                     }
                 }
             }
@@ -82,6 +82,7 @@ class StartFinishActivity : AppCompatActivity() {
                     db.teamDao().update(team)
                     withContext(Dispatchers.Main) {
                         binding.finishTime.text = dateFormat.format(team!!.finishTime)
+                        binding.finishButton.isEnabled = false
                     }
                 }
             }
