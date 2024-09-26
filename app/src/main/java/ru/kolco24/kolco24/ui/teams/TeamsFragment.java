@@ -27,6 +27,7 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
+import ru.kolco24.kolco24.AddTagActivity;
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
@@ -112,26 +113,42 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     public void onCreateMenu(@NonNull Menu menu, MenuInflater inflater) {
         menu.clear(); // Clear the menu before inflating it
         inflater.inflate(R.menu.team_menu, menu);
-
     }
 
     @Override
     public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
-        if (menuItem.getItemId() == R.id.action_update) {
-            DataDownloader dataDownloader = new DataDownloader(
-                    requireActivity().getApplication()
-            );
-            dataDownloader.downloadTeams(null);
+        int itemId = menuItem.getItemId();
+        if (itemId == R.id.action_update || itemId == R.id.action_local_update) {
+            handleUpdateAction(itemId == R.id.action_local_update);
             return true;
-        } else if (menuItem.getItemId() == R.id.action_local_update) {
-            DataDownloader dataDownloader = new DataDownloader(
-                    requireActivity().getApplication()
-            );
-            dataDownloader.setLocalDownload(true);
-            dataDownloader.downloadTeams(null);
+        } else if (itemId == R.id.action_add_tag) {
+            handleAddTagAction();
             return true;
         }
         return false;
+    }
+
+    /**
+     * Handles the update action.
+     * This method download teams.
+     *
+     * @param isLocalUpdate A boolean indicating whether the update should be local.
+     */
+    private void handleUpdateAction(boolean isLocalUpdate) {
+        DataDownloader dataDownloader = new DataDownloader(requireActivity().getApplication());
+        if (isLocalUpdate) {
+            dataDownloader.setLocalDownload(true);
+        }
+        dataDownloader.downloadTeams(null);
+    }
+
+    /**
+     * Handles the action to add a new tag.
+     * This method starts the AddTagActivity.
+     */
+    private void handleAddTagAction() {
+        Intent intent = new Intent(getActivity(), AddTagActivity.class);
+        startActivity(intent);
     }
 
 
