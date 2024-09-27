@@ -331,7 +331,7 @@ class NfcPointActivity : AppCompatActivity() {
                 return
             }
             // Convert the byte array to a hex string
-            val hexId = byteArrayToHexString(tag.id)
+            val hexId = bytesToHex(tag.id)
 
             // Use a coroutine to perform database operations asynchronously
             CoroutineScope(Dispatchers.IO).launch {
@@ -363,15 +363,14 @@ class NfcPointActivity : AppCompatActivity() {
         }
     }
 
-    private fun byteArrayToHexString(byteArray: ByteArray): String {
-        val hexString = StringBuilder()
-        for (b in byteArray) {
-            val hex = Integer.toHexString(0xFF and b.toInt())
-            if (hex.length == 1) {
-                hexString.append('0')
-            }
-            hexString.append(hex)
+    private fun bytesToHex(bytes: ByteArray): String {
+        val hexChars = "0123456789ABCDEF"
+        val result = StringBuilder(bytes.size * 2)
+        for (byte in bytes) {
+            val i = byte.toInt()
+            result.append(hexChars[i shr 4 and 0x0F])
+            result.append(hexChars[i and 0x0F])
         }
-        return hexString.toString()
+        return result.toString()
     }
 }
