@@ -31,4 +31,5 @@
     <color name="colorBlue">#2196F3</color>
     <color name="colorYellow">#FFC107</color>
     <color name="colorGray">#CCCCCC</color>
+    <color name="colorRed">#FFFF0000</color>
 </resources>

@@ -18,7 +18,8 @@
         tools:targetApi="31">
         <activity
             android:name=".AddTagActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".ui.members.AddMemberTagActivity"
             android:exported="false"
