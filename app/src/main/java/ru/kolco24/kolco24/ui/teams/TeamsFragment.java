@@ -121,10 +121,12 @@ public class TeamsFragment extends Fragment implements MenuProvider {
         if (itemId == R.id.action_update || itemId == R.id.action_local_update) {
             handleUpdateAction(itemId == R.id.action_local_update);
             return true;
-        } else if (itemId == R.id.action_add_tag) {
-            handleAddTagAction();
-            return true;
         }
+//        Добавление меток, для администратора, отключено пока
+//        else if (itemId == R.id.action_add_tag) {
+//            handleAddTagAction();
+//            return true;
+//        }
         return false;
     }
 
