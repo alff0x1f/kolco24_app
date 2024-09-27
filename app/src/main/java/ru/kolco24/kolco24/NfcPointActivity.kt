@@ -27,9 +27,6 @@ import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.ActivityNfcPointBinding
 import ru.kolco24.kolco24.ui.legends.PointViewModel
 import ru.kolco24.kolco24.ui.teams.TeamViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.roundToInt
 
 
@@ -51,13 +48,15 @@ class NfcPointActivity : AppCompatActivity() {
 
     //model
     private var pointViewModel: PointViewModel? = null
-    private val db = AppDatabase.getDatabase(application)
+    private lateinit var db: AppDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         binding = ActivityNfcPointBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        db = AppDatabase.getDatabase(applicationContext)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
