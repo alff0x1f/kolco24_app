@@ -18,7 +18,7 @@ interface MemberTagDao {
     @Query("SELECT * FROM MemberTag WHERE id = :id")
     fun getMemberTagById(id: Int): MemberTag?
 
-    @Query("SELECT * FROM MemberTag WHERE tag = :tagId")
+    @Query("SELECT * FROM MemberTag WHERE tagId = :tagId")
     fun getMemberTagByTagId(tagId: String): MemberTag?
 
     @Query("SELECT * FROM MemberTag")

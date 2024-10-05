@@ -5,11 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "MemberTag")
 data class MemberTag(
-    val siteId: Int? = null,
-    val tag: String,
-    val teamId: Int? = null,
-    val name: String = "",
-){
-    @PrimaryKey(autoGenerate = true)
-    var id = 0
-}
+    @PrimaryKey(autoGenerate = true) val id: Int,
+    val number: Int,
+    val tagId: String
+)

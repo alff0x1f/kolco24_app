@@ -11,26 +11,29 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="ID: "
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         tools:text="ID: 123" />
+
+    <TextView
+        android:id="@+id/numberTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:text="Name: "
+        android:textSize="24sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="Number: " />
 
     <TextView
         android:id="@+id/tagTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Tag: "
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/idTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/idTextView"
         tools:text="Tag: Sample Tag" />
 
-    <TextView
-        android:id="@+id/nameTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Name: "
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tagTextView"
-        tools:text="Name: John Doe" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

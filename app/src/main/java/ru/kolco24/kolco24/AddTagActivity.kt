@@ -11,6 +11,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Observer
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -19,6 +22,9 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
+import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.entities.MemberTag
+import ru.kolco24.kolco24.ui.members.MemberTagAdapter
 import java.io.IOException
 
 
@@ -28,8 +34,11 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     private var currentTagId: String? = null
     private val client = OkHttpClient()
 
+    private lateinit var db: AppDatabase
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_add_tag)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -55,6 +64,17 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                 ).show()
             }
         }
+
+        db = AppDatabase.getDatabase(applicationContext)
+
+        //        recycle view
+        val memberTagsLiveData = db.memberTagDao().getAllMemberTagsLiveData()
+        val recyclerView = findViewById<RecyclerView>(R.id.recyclerView)
+        memberTagsLiveData.observe(this, Observer {
+            val adapter = MemberTagAdapter(memberTagsLiveData)
+            recyclerView.adapter = adapter
+            recyclerView.layoutManager = LinearLayoutManager(this)
+        })
 
         val tagIdTextView = findViewById<TextView>(R.id.tag_id_text)
         val tagNumberInput = findViewById<EditText>(R.id.tag_number_input)
@@ -107,6 +127,17 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                     }
                 }
             }
+            db.memberTagDao().getMemberTagByTagId(currentTagId!!)?.let { memberTag ->
+                runOnUiThread {
+                    findViewById<TextView>(R.id.header_text).apply {
+                        text = "${memberTag.number}"
+                    }
+                }
+            } ?: runOnUiThread {
+                findViewById<TextView>(R.id.header_text).apply {
+                    text = "Добавление меток"
+                }
+            }
         }
     }
 
@@ -114,13 +145,12 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         val json = JSONObject().apply {
             put("tag_id", tagId)
             put("number", tagNumber)
-            put("race", 2)
         }
 
         val body =
             json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
-            .url("https://kolco24.ru/api/race/2/point_tags/")
+            .url("https://kolco24.ru/api/member_tag/")
             .post(body)
             .build()
 
@@ -128,13 +158,23 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     findViewById<TextView>(R.id.tag_id_text).apply {
-                        text = "Failed to send data: ${e.message}"
+                        text = "Ошибка сохранения: ${e.message}"
                         setTextColor(resources.getColor(R.color.colorRed))
                     }
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val json = JSONObject(response.body?.string())
+
+                    val memberTag = MemberTag(
+                        id = json.getInt("id"),
+                        tagId = json.getString("tag_id"),
+                        number = json.getInt("number"),
+                    )
+                    db.memberTagDao().insertMemberTag(memberTag)
+                }
                 runOnUiThread {
                     if (response.isSuccessful) {
                         findViewById<TextView>(R.id.tag_id_text).apply {
@@ -143,7 +183,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                         }
                     } else {
                         findViewById<TextView>(R.id.tag_id_text).apply {
-                            text = "Failed to send data: ${response.body?.string()}"
+                            text = "Ошибка сохранения: ${response.body?.string()}"
                             setTextColor(resources.getColor(R.color.colorRed))
                         }
                     }
