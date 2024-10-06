@@ -19,7 +19,7 @@ import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.Point.PointExt
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding
 import ru.kolco24.kolco24.ui.legends.PointListAdapter.PointDiff
-import ru.kolco24.kolco24.ui.members.AddMemberTagActivity
+
 
 class LegendsFragment : Fragment(), MenuProvider {
     private lateinit var binding: FragmentLegendsBinding
@@ -106,11 +106,6 @@ class LegendsFragment : Fragment(), MenuProvider {
                 true
             }
 
-            R.id.add_member_tag -> {
-                val intent = Intent(activity, AddMemberTagActivity::class.java)
-                startActivity(intent)
-                true
-            }
 
             R.id.action_add_tag -> {
                 handleAddTagAction()

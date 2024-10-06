@@ -32,7 +32,11 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     private lateinit var nfcAdapter: NfcAdapter
     private var currentTagId: String? = null
-    private val client = okhttp3.OkHttpClient()
+    private val client = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     private lateinit var db: AppDatabase
 
