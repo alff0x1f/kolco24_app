@@ -57,7 +57,7 @@ class LegendsFragment : Fragment(), MenuProvider {
             viewLifecycleOwner
         ) { points: List<PointExt?> ->
             adapter.submitList(points)
-            if (points.size == 0) {
+            if (points.isEmpty()) {
                 binding.textNoLegends.visibility = View.VISIBLE
             } else {
                 binding.textNoLegends.visibility = View.GONE
@@ -94,35 +94,31 @@ class LegendsFragment : Fragment(), MenuProvider {
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-        val itemId = menuItem.itemId
-        if (itemId == R.id.action_update) {
-            val dataDownloader = DataDownloader(
-                requireActivity().application
-            )
-            dataDownloader.downloadPoints()
-            return true
-        } else if (itemId == R.id.action_local_update) {
-            val dataDownloader = DataDownloader(
-                requireActivity().application
-            )
-            dataDownloader.setLocalDownload(true)
-            dataDownloader.downloadPoints()
-            return true
-        } else if (menuItem.itemId == R.id.add_member_tag) {
-            val intent = Intent(activity, AddMemberTagActivity::class.java)
-            startActivity(intent)
-            return true
-        } else if (itemId == R.id.action_add_tag) {
-            handleAddTagAction()
-            return true
+        return when (menuItem.itemId) {
+            R.id.action_update -> {
+                DataDownloader(requireActivity().application).downloadPoints()
+                true
+            }
+
+            R.id.action_local_update -> {
+                DataDownloader(requireActivity().application).apply { setLocalDownload(true) }
+                    .downloadPoints()
+                true
+            }
+
+            R.id.add_member_tag -> {
+                val intent = Intent(activity, AddMemberTagActivity::class.java)
+                startActivity(intent)
+                true
+            }
+
+            R.id.action_add_tag -> {
+                handleAddTagAction()
+                true
+            }
+
+            else -> false
         }
-        // start SettingsActivity
-//        if (menuItem.getItemId() == R.id.action_settings) {
-//            Intent intent = new Intent(getActivity(), SettingsActivity.class);
-//            startActivity(intent);
-//            return true;
-//        }
-        return false
     }
 
     /**
