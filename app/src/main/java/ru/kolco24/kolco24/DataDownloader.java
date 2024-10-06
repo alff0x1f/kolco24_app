@@ -28,7 +28,7 @@ import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.dao.PointTagDao;
 import ru.kolco24.kolco24.data.entities.Checkpoint;
 import ru.kolco24.kolco24.data.daos.PointDao;
-import ru.kolco24.kolco24.data.entities.PointTag;
+import ru.kolco24.kolco24.data.entities.CheckpointTag;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.daos.TeamDao;
 
@@ -114,11 +114,11 @@ public class DataDownloader {
                                 for (int j = 0; j < tags.length(); j++) {
                                     String tagId = tags.getString(j);
 
-                                    PointTag existPointTag = pointTagDao.getPointTagByTag(tagId);
-                                    if (existPointTag == null) {
+                                    CheckpointTag existCheckpointTag = pointTagDao.getPointTagByTag(tagId);
+                                    if (existCheckpointTag == null) {
                                         // create new point
-                                        PointTag pointTag = new PointTag(newPoint.getId(), tagId);
-                                        pointTagDao.insertPointTag(pointTag);
+                                        CheckpointTag checkpointTag = new CheckpointTag(newPoint.getId(), tagId);
+                                        pointTagDao.insertPointTag(checkpointTag);
                                     }
                                 }
                             }

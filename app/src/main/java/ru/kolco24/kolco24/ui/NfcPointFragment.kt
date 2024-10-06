@@ -1,21 +1,15 @@
 package ru.kolco24.kolco24
 
-import NfcCheckViewModel
 import android.app.AlertDialog
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.os.CountDownTimer
-import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -27,7 +21,6 @@ import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.FragmentNfcPointBinding
-import ru.kolco24.kolco24.ui.teams.TeamViewModel
 import kotlin.math.roundToInt
 
 class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
@@ -58,7 +51,7 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
             lifecycleScope.launch(Dispatchers.IO) {
                 val pointTag = db.pointTagDao().getPointTagByTag(tagId)
                 pointTag?.let {
-                    pointNumber = db.pointDao().getPointById(it.pointId).number
+                    pointNumber = db.pointDao().getPointById(it.checkpointId).number
                     println("pointNumber: $pointNumber")
                     withContext(Dispatchers.Main) {
                         binding.pointNumber.text = String.format("%02d", pointNumber)

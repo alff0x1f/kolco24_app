@@ -15,7 +15,7 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupActionBarWithNavController
 import ru.kolco24.kolco24.data.AppDatabase
-import ru.kolco24.kolco24.data.entities.PointTag
+import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
 import java.nio.charset.Charset
 import java.util.concurrent.Executors
@@ -175,10 +175,10 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         }
     }
 
-    private fun navigateToNfcPointFragment(pointTag: PointTag) {
+    private fun navigateToNfcPointFragment(checkpointTag: CheckpointTag) {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         val bundle = Bundle().apply {
-            putString("tagId", pointTag.tag)
+            putString("tagId", checkpointTag.tagUID)
         }
         navController.navigate(R.id.nfcPointFragment, bundle)
     }

@@ -4,27 +4,27 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import ru.kolco24.kolco24.data.entities.PointTag
+import ru.kolco24.kolco24.data.entities.CheckpointTag
 
 @Dao
 interface PointTagDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertPointTag(pointTag: PointTag)
+    fun insertPointTag(checkpointTag: CheckpointTag)
 
     @Query("SELECT * FROM point_tags WHERE id = :id")
-    fun getPointTagById(id: Int): PointTag
+    fun getPointTagById(id: Int): CheckpointTag
 
-    @Query("SELECT * FROM point_tags WHERE tag = :tag")
-    fun getPointTagByTag(tag: String): PointTag?
+    @Query("SELECT * FROM point_tags WHERE tagUID = :tagUID")
+    fun getPointTagByTag(tagUID: String): CheckpointTag?
 
-    @Query("SELECT * FROM point_tags WHERE pointId = :pointId")
-    suspend fun getPointTagsByPointId(pointId: Int): List<PointTag>
+    @Query("SELECT * FROM point_tags WHERE checkpointId = :pointId")
+    suspend fun getPointTagsByPointId(pointId: Int): List<CheckpointTag>
 
-    @Query("DELETE FROM point_tags WHERE pointId = :pointId")
+    @Query("DELETE FROM point_tags WHERE checkpointId = :pointId")
     suspend fun deletePointTagsByPointId(pointId: Int)
 
-    @Query("DELETE FROM point_tags WHERE pointId = :pointId AND tag = :tag")
+    @Query("DELETE FROM point_tags WHERE checkpointId = :pointId AND tagUID = :tag")
     suspend fun deletePointTag(pointId: Int, tag: String)
 
     @Query("DELETE FROM point_tags")

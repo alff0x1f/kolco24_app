@@ -20,13 +20,13 @@ import ru.kolco24.kolco24.data.daos.TeamDao;
 import ru.kolco24.kolco24.data.entities.NfcCheck;
 import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.data.entities.Checkpoint;
-import ru.kolco24.kolco24.data.entities.PointTag;
+import ru.kolco24.kolco24.data.entities.CheckpointTag;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.entities.MemberTag;
 
 @Database(
         entities = {
-                Checkpoint.class, PointTag.class, Photo.class,
+                Checkpoint.class, CheckpointTag.class, Photo.class,
                 Team.class, NfcCheck.class, MemberTag.class
         },
         version = 1,
