@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
+import androidx.navigation.ui.setupActionBarWithNavController
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
 import java.nio.charset.Charset
@@ -41,6 +42,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration)
         NavigationUI.setupWithNavController(binding.navView, navController)
+        setupActionBarWithNavController(navController, appBarConfiguration)
 
         // Add OnDestinationChangedListener to NavController
         navController.addOnDestinationChangedListener { _, destination, _ ->
@@ -182,6 +184,12 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         navController.navigate(R.id.nfcPointFragment, bundle)
         println("Navigating to NfcPointFragment with pointNumber: $pointNumber")
     }
+
+    override fun onSupportNavigateUp(): Boolean {
+        val navController = findNavController(R.id.nav_host_fragment_activity_main)
+        return navController.navigateUp() || super.onSupportNavigateUp()
+    }
+
 
     private fun bytesToHex(bytes: ByteArray): String {
         val hexChars = "0123456789ABCDEF"

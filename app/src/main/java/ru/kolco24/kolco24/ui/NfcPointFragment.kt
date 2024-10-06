@@ -3,6 +3,7 @@ package ru.kolco24.kolco24
 import NfcCheckViewModel
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import android.nfc.Tag
@@ -59,6 +60,8 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
         nfcAdapter = NfcAdapter.getDefaultAdapter(requireContext())
         db = AppDatabase.getDatabase(requireContext())
 
+        binding.button.setOnClickListener { navigateBack() }
+
         setupCountDownTimer()
         (countDownTimer as CountDownTimer).start()
 
@@ -89,6 +92,11 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
         println("onPause")
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        countDownTimer?.cancel()
+    }
+
     private fun setupCountDownTimer() {
         countDownTimer = object : CountDownTimer(countdownDuration, 100) {
             // 1000 milliseconds (1 second) interval
@@ -114,7 +122,10 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
             }
 
             override fun onFinish() {
-                // show dialog
+                if (!isAdded) {
+                    // fragment is not added to activity, no need to show dialog
+                    return
+                }
                 val dialog = AlertDialog.Builder(requireContext())
                     .setTitle("Время истекло")
                     .setMessage(
@@ -124,7 +135,8 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
                     )
                     .setPositiveButton(
                         "Ок"
-                    ) { dialogInterface, i -> navigateBack() }.setOnCancelListener { navigateBack() }.create()
+                    ) { dialogInterface, i -> navigateBack() }
+                    .setOnCancelListener { navigateBack() }.create()
                 dialog.show()
             }
         }
