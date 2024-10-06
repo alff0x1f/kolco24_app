@@ -16,7 +16,7 @@ import java.util.Date;
 
 import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
-import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
 
 public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
@@ -35,7 +35,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         pointTimeTextView = itemView.findViewById(R.id.pointTimeTextView);
     }
 
-    public void bind(Point.PointExt point) {
+    public void bind(Checkpoint.PointExt point) {
         textView.setText(String.format("%02d", point.getNumber()));
 
         if (point.getTime() != null) {

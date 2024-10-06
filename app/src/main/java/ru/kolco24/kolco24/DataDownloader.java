@@ -26,7 +26,7 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.dao.PointTagDao;
-import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
 import ru.kolco24.kolco24.data.daos.PointDao;
 import ru.kolco24.kolco24.data.entities.PointTag;
 import ru.kolco24.kolco24.data.entities.Team;
@@ -106,7 +106,7 @@ public class DataDownloader {
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject point = jObj.getJSONObject(i);
 
-                            Point newPoint = Point.fromJson(point);
+                            Checkpoint newPoint = Checkpoint.fromJson(point);
                             if (updateOrInsertPoint(newPoint)) {
                                 isUpdated = true;
                                 // если точка обновлена, то обновляем теги
@@ -308,8 +308,8 @@ public class DataDownloader {
         return false;
     }
 
-    private boolean updateOrInsertPoint(Point point) {
-        Point existPoint = mPointDao.getPointById(point.getId());
+    private boolean updateOrInsertPoint(Checkpoint point) {
+        Checkpoint existPoint = mPointDao.getPointById(point.getId());
         if (existPoint == null) {
             // create new point
             try {

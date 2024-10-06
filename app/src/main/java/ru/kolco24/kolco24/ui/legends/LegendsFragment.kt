@@ -16,7 +16,7 @@ import ru.kolco24.kolco24.AddTagActivity
 import ru.kolco24.kolco24.DataDownloader
 import ru.kolco24.kolco24.R
 import ru.kolco24.kolco24.data.AppDatabase
-import ru.kolco24.kolco24.data.entities.Point.PointExt
+import ru.kolco24.kolco24.data.entities.Checkpoint.PointExt
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding
 import ru.kolco24.kolco24.ui.legends.PointListAdapter.PointDiff
 

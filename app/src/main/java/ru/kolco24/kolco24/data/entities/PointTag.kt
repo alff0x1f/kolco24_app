@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "point_tags",
     foreignKeys = [ForeignKey(
-        entity = Point::class,
+        entity = Checkpoint::class,
         parentColumns = ["id"],
         childColumns = ["pointId"],
         onDelete = ForeignKey.CASCADE

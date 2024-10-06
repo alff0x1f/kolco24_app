@@ -7,7 +7,7 @@ import androidx.lifecycle.LiveData;
 
 import java.util.List;
 
-import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
 import ru.kolco24.kolco24.data.repositories.PointRepository;
 
 public class PointViewModel extends AndroidViewModel {
@@ -19,25 +19,25 @@ public class PointViewModel extends AndroidViewModel {
         mRepository = new PointRepository(application);
     }
 
-    LiveData<List<Point.PointExt>> getAllPoints() {
+    LiveData<List<Checkpoint.PointExt>> getAllPoints() {
         return mRepository.getAllPoints();
     }
 
-    LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId) {
+    LiveData<List<Checkpoint.PointExt>> getTakenPointsByTeam(int teamId) {
         return mRepository.getTakenPointsByTeam(teamId);
     }
 
-    public Point getPointById(int id) {
+    public Checkpoint getPointById(int id) {
         return mRepository.getPointById(id);
     }
-    public Point getPointByNumber(int number) {
+    public Checkpoint getPointByNumber(int number) {
         return mRepository.getPointByNumber(number);
     }
 
-    public void insert(Point point) {
+    public void insert(Checkpoint point) {
         mRepository.insert(point);
     }
-    public void update(Point point) {
+    public void update(Checkpoint point) {
         mRepository.update(point);
     }
     public void deleteAll() {
