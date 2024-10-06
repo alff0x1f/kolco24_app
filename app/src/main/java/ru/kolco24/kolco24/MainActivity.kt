@@ -6,6 +6,7 @@ import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         setContentView(binding.root)
 
         db = AppDatabase.getDatabase(application)
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
@@ -39,6 +41,18 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration)
         NavigationUI.setupWithNavController(binding.navView, navController)
+
+        // Add OnDestinationChangedListener to NavController
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (destination.id == R.id.nfcPointFragment) {
+                // Hide BottomNavigationView when in NfcPointFragment
+                binding.navView.visibility = View.GONE
+            } else {
+                // Show BottomNavigationView for other fragments
+                binding.navView.visibility = View.VISIBLE
+                enableNfcReaderMode()
+            }
+        }
 
         val executor = Executors.newSingleThreadExecutor()
         executor.execute {
@@ -50,7 +64,6 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         }
 
         // Check for available NFC Adapter
-        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         if (nfcAdapter == null) {
             // NFC is not supported;
             Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show()
@@ -66,17 +79,30 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     override fun onResume() {
         super.onResume()
-        nfcAdapter.enableReaderMode(
-            this,
-            this,
-            NfcAdapter.FLAG_READER_NFC_A,
-            null
-        )
+        enableNfcReaderMode()
     }
 
     override fun onPause() {
         super.onPause()
-        nfcAdapter.disableReaderMode(this)
+        disableNfcReaderMode()
+    }
+
+    private fun enableNfcReaderMode() {
+        println("Enabling NFC reader mode in MainActivity")
+        if (::nfcAdapter.isInitialized) {
+            nfcAdapter.enableReaderMode(
+                this,
+                this,
+                NfcAdapter.FLAG_READER_NFC_A,
+                null
+            )
+        }
+    }
+
+    private fun disableNfcReaderMode() {
+        if (::nfcAdapter.isInitialized) {
+            nfcAdapter.disableReaderMode(this)
+        }
     }
 
 
@@ -134,10 +160,10 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                 val pointTag = db.pointTagDao().getPointTagByTag(hexId)
                 if (pointTag != null) {
                     val pointNumber = db.pointDao().getPointById(pointTag.pointId).number
-                    runOnUiThread({
-                        Toast.makeText(this, "КП: $pointNumber", Toast.LENGTH_LONG)
-                            .show()
-                    })
+                    runOnUiThread {
+                        navigateToNfcPointFragment(pointNumber)
+                    }
+
                 }
             } else {
                 runOnUiThread({
@@ -146,6 +172,15 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                 })
             }
         }
+    }
+
+    private fun navigateToNfcPointFragment(pointNumber: Int) {
+        val navController = findNavController(R.id.nav_host_fragment_activity_main)
+        val bundle = Bundle().apply {
+            putInt("pointNumber", pointNumber)  // Pass pointNumber as an argument
+        }
+        navController.navigate(R.id.nfcPointFragment, bundle)
+        println("Navigating to NfcPointFragment with pointNumber: $pointNumber")
     }
 
     private fun bytesToHex(bytes: ByteArray): String {
