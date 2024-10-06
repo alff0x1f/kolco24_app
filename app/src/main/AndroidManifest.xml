@@ -21,10 +21,6 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity
-            android:name=".ui.members.AddMemberTagActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-        <activity
             android:name=".NfcPointActivity"
             android:exported="true"
             android:screenOrientation="portrait">
