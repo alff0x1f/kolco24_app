@@ -15,6 +15,7 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupActionBarWithNavController
 import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.entities.PointTag
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
 import java.nio.charset.Charset
 import java.util.concurrent.Executors
@@ -160,12 +161,10 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             if (pointNdafExist) {
                 val hexId = bytesToHex(tag.id)
                 val pointTag = db.pointTagDao().getPointTagByTag(hexId)
-                if (pointTag != null) {
-                    val pointNumber = db.pointDao().getPointById(pointTag.pointId).number
+                pointTag?.let {
                     runOnUiThread {
-                        navigateToNfcPointFragment(pointNumber)
+                        navigateToNfcPointFragment(pointTag)
                     }
-
                 }
             } else {
                 runOnUiThread({
@@ -176,13 +175,12 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         }
     }
 
-    private fun navigateToNfcPointFragment(pointNumber: Int) {
+    private fun navigateToNfcPointFragment(pointTag: PointTag) {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         val bundle = Bundle().apply {
-            putInt("pointNumber", pointNumber)  // Pass pointNumber as an argument
+            putString("tagId", pointTag.tag)
         }
         navController.navigate(R.id.nfcPointFragment, bundle)
-        println("Navigating to NfcPointFragment with pointNumber: $pointNumber")
     }
 
     override fun onSupportNavigateUp(): Boolean {

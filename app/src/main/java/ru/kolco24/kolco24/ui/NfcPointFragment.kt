@@ -21,6 +21,7 @@ import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.AppDatabase
@@ -49,16 +50,29 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        pointNumber = arguments?.getInt("pointNumber") ?: -1
-        println("Received pointNumber: $pointNumber")
+        db = AppDatabase.getDatabase(requireContext())
         binding = FragmentNfcPointBinding.inflate(inflater, container, false)
+
+        arguments?.let {
+            val tagId = arguments?.getString("tagId") ?: ""
+            lifecycleScope.launch(Dispatchers.IO) {
+                val pointTag = db.pointTagDao().getPointTagByTag(tagId)
+                pointTag?.let {
+                    pointNumber = db.pointDao().getPointById(it.pointId).number
+                    println("pointNumber: $pointNumber")
+                    withContext(Dispatchers.Main) {
+                        binding.pointNumber.text = String.format("%02d", pointNumber)
+                    }
+                }
+            }
+        }
+
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         nfcAdapter = NfcAdapter.getDefaultAdapter(requireContext())
-        db = AppDatabase.getDatabase(requireContext())
 
         binding.button.setOnClickListener { navigateBack() }
 
@@ -155,13 +169,100 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
-            // Access the NDEF technology
-            val ndef = Ndef.get(it)
-            val hexId = bytesToHex(tag.id)
-            requireActivity().runOnUiThread {
-                Toast.makeText(requireContext(), "Tag ID: $hexId", Toast.LENGTH_SHORT).show()
-            }
+            // toast tag id
+            println("NfcPointTagFragment: Tag ID: ${bytesToHex(tag.id)}")
+            val tagId = tag.id
+            val ndef = Ndef.get(tag)
+            val hexId = bytesToHex(tagId)
+//            val activity = requireActivity() as MainActivity
 
+            if (readMemberTags) {
+                requireActivity().runOnUiThread {
+                    Toast.makeText(
+                        requireActivity(),
+                        "Все участники отмечены",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return
+            }
+            // add hexId to list
+            if (!members.contains(hexId)) {
+                members.add(hexId)
+                saveNfcCheck(hexId)
+
+                val team = db.teamDao().getTeamById(teamId)
+                val paidPeople = team?.paidPeople?.roundToInt() ?: 2
+
+                requireActivity().runOnUiThread {
+                    countDownTimer?.cancel()
+                    setupCountDownTimer()
+                    countDownTimer?.start()
+
+                    val numberedMembers = members.mapIndexed { index, element ->
+                        "${index + 1}) Участник ${index + 1}"
+                    }
+                    binding.members.text = numberedMembers.joinToString("\n")
+                    binding.members.isVisible = true
+                }
+
+                if (members.count() >= paidPeople) {
+                    for (i in 0 until members.count()) {
+                        saveNfcCheck(members[i])
+                    }
+                    db.photoDao().insert(
+                        ru.kolco24.kolco24.data.entities.Photo(
+                            teamId,
+                            pointNumber,
+                            "",
+                            "",
+                            "",
+                            System.currentTimeMillis(),
+                            members.joinToString(", ")
+                        )
+                    )
+
+                    db.photoDao().getListPhotos().forEach {
+                        println("photo: ${it.id} ${it.teamId} ${it.pointNumber} ${it.photoUrl} ${it.photoThumbUrl} ${it.photoTime} ${it.time} ${it.pointNfc}")
+                    }
+
+                    countDownTimer?.cancel()
+                    readMemberTags = false
+
+                    requireActivity().runOnUiThread {
+                        binding.doneIcon.isVisible = true
+                        binding.timerTextView.isVisible = false
+                        binding.circularProgressBar.isVisible = false
+                        binding.button.text = "Закрыть"
+                        binding.helperTextView.text = "Все участники отмечены"
+                    }
+                }
+            } else {
+                requireActivity().runOnUiThread {
+                    Toast.makeText(activity, "Участник уже добавлен", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * save value to room database
+     */
+    private fun saveNfcCheck(hexId: String) {
+        System.out.println(System.currentTimeMillis())
+
+        if (pointId != null) {
+            val nfcCheck = NfcCheck(
+                pointId!!,
+                pointNumber,
+                hexId,
+                System.currentTimeMillis()
+            )
+            db.nfcCheckDao().insert(nfcCheck)
+        }
+
+        db.nfcCheckDao().getNotSyncNfcCheck().forEach {
+            println("not sync: ${it.id} ${it.pointNfc} ${it.pointNumber} ${it.memberNfcId} ${it.time}")
         }
     }
 

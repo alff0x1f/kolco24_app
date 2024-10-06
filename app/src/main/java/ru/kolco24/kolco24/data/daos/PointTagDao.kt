@@ -12,6 +12,9 @@ interface PointTagDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertPointTag(pointTag: PointTag)
 
+    @Query("SELECT * FROM point_tags WHERE id = :id")
+    fun getPointTagById(id: Int): PointTag
+
     @Query("SELECT * FROM point_tags WHERE tag = :tag")
     fun getPointTagByTag(tag: String): PointTag?
 
