@@ -11,16 +11,16 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import okhttp3.Call
-import okhttp3.Callback
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.MemberTag
@@ -32,7 +32,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     private lateinit var nfcAdapter: NfcAdapter
     private var currentTagId: String? = null
-    private val client = OkHttpClient()
+    private val client = okhttp3.OkHttpClient()
 
     private lateinit var db: AppDatabase
 
@@ -47,16 +47,15 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         }
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        val tagIdTextView = findViewById<TextView>(R.id.tag_id_text)
         if (nfcAdapter == null) {
-            findViewById<TextView>(R.id.tag_id_text).text = "NFC not supported on this device"
+            tagIdTextView.text = "NFC not supported on this device"
             // NFC is not supported;
             Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show()
         } else {
-
             // Check if NFC is enabled
             if (!nfcAdapter.isEnabled) {
-                findViewById<TextView>(R.id.tag_id_text).text =
-                    "Please enable NFC in your phone settings"
+                tagIdTextView.text = "Включите NFC в настройках вашего телефона"
                 Toast.makeText(
                     this,
                     "Пожалуйста, включите NFC в настройках вашего телефона",
@@ -67,16 +66,21 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
         db = AppDatabase.getDatabase(applicationContext)
 
-        //        recycle view
+        // recycle view
         val memberTagsLiveData = db.memberTagDao().getAllMemberTagsLiveData()
-        val recyclerView = findViewById<RecyclerView>(R.id.recyclerView)
-        memberTagsLiveData.observe(this, Observer {
+        val recyclerView = findViewById<RecyclerView>(R.id.memberTagListView)
+        memberTagsLiveData.observe(this) {
             val adapter = MemberTagAdapter(memberTagsLiveData)
             recyclerView.adapter = adapter
             recyclerView.layoutManager = LinearLayoutManager(this)
-        })
+        }
+        // swipe to refresh
+        val swipeRefreshLayout = findViewById<SwipeRefreshLayout>(R.id.swipeToRefresh)
+        swipeRefreshLayout.setOnRefreshListener {
+            fetchMemberTagsFromServer()
+            swipeRefreshLayout.isRefreshing = false
+        }
 
-        val tagIdTextView = findViewById<TextView>(R.id.tag_id_text)
         val tagNumberInput = findViewById<EditText>(R.id.tag_number_input)
         val submitButton = findViewById<Button>(R.id.submit_button)
 
@@ -142,20 +146,20 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     }
 
     private fun sendTagDataToServer(tagId: String, tagNumber: Int) {
-        val json = JSONObject().apply {
+        val requestJson = JSONObject().apply {
             put("tag_id", tagId)
             put("number", tagNumber)
         }
 
         val body =
-            json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        val request = Request.Builder()
+            requestJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = okhttp3.Request.Builder()
             .url("https://kolco24.ru/api/member_tag/")
             .post(body)
             .build()
 
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
                 runOnUiThread {
                     findViewById<TextView>(R.id.tag_id_text).apply {
                         text = "Ошибка сохранения: ${e.message}"
@@ -164,14 +168,14 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                 }
             }
 
-            override fun onResponse(call: Call, response: Response) {
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 if (response.isSuccessful) {
-                    val json = JSONObject(response.body?.string())
+                    val responseJson = JSONObject(response.body?.string())
 
                     val memberTag = MemberTag(
-                        id = json.getInt("id"),
-                        tagId = json.getString("tag_id"),
-                        number = json.getInt("number"),
+                        id = responseJson.getInt("id"),
+                        tagId = responseJson.getString("tag_id"),
+                        number = responseJson.getInt("number"),
                     )
                     db.memberTagDao().insertMemberTag(memberTag)
                 }
@@ -181,11 +185,109 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                             text = "Метка сохранена"
                             setTextColor(resources.getColor(R.color.colorGreen))
                         }
+                        findViewById<EditText>(R.id.tag_number_input).apply {
+                            setText("")
+                        }
                     } else {
                         findViewById<TextView>(R.id.tag_id_text).apply {
                             text = "Ошибка сохранения: ${response.body?.string()}"
                             setTextColor(resources.getColor(R.color.colorRed))
                         }
+                    }
+                }
+            }
+        })
+    }
+
+
+    // Function to fetch member tags from the server
+    private fun fetchMemberTagsFromServer() {
+        // Build the GET request
+        val request = okhttp3.Request.Builder()
+            .url("https://kolco24.ru/api/member_tag/")
+            .build()
+
+        // Make the network call
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                // Handle the failure case
+                e.printStackTrace()
+                runOnUiThread {
+                    Toast.makeText(
+                        this@AddTagActivity,
+                        "Ошибка получения данных: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                // Handle the response
+                if (response.isSuccessful) {
+                    response.body?.let { responseBody ->
+                        try {
+                            // Step 5: Parse the response body as JSON Array
+                            val jsonArray = JSONArray(responseBody.string())
+
+                            // Step 6: Iterate through the array and parse each JSON object
+                            for (i in 0 until jsonArray.length()) {
+                                val jsonObject = jsonArray.getJSONObject(i)
+
+                                // Create a MemberTag object
+                                val memberTag = MemberTag(
+                                    id = jsonObject.getInt("id"),
+                                    number = jsonObject.getInt("number"),
+                                    tagId = jsonObject.getString("tag_id")
+                                )
+                                // Launch a coroutine to interact with the database
+                                lifecycleScope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        // Check if the record with the same ID already exists in the database
+                                        val existingMemberTag =
+                                            db.memberTagDao().getMemberTagById(memberTag.id)
+
+                                        if (existingMemberTag == null) {
+                                            // No existing record, insert the new MemberTag
+                                            db.memberTagDao().insertMemberTag(memberTag)
+                                        } else {
+                                            // Existing record found, check if the number or tagId is different
+                                            if (existingMemberTag.number != memberTag.number || existingMemberTag.tagId != memberTag.tagId) {
+                                                // Update the record since there are differences
+                                                db.memberTagDao().updateMemberTag(memberTag)
+                                            } else {
+                                                println("Skipping: No changes for MemberTag ID ${memberTag.id}")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@AddTagActivity,
+                                    "Метки участников загружены",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+
+                        } catch (e: Exception) {
+                            // Handle JSON parsing errors
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@AddTagActivity,
+                                    "Ошибка обработки данных: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
+                } else {
+                    // Handle non-successful response
+                    runOnUiThread {
+                        Toast.makeText(
+                            this@AddTagActivity,
+                            "Ошибка получения данных: ${response.code}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             }
