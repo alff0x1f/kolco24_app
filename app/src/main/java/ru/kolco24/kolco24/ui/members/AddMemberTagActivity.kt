@@ -42,15 +42,15 @@ class AddMemberTagActivity : AppCompatActivity() {
             val tagId = tag?.id
 
             val tagHex = bytesToHex(tagId!!)
-            val t = MemberTag(
-                null,
-                tagHex,
-            )
-
-            val existingTag = activity.db.memberTagDao().getMemberTagByTagId(tagHex)
-            if (existingTag == null) {
-                activity.db.memberTagDao().insertMemberTag(t)
-            }
+//            val t = MemberTag(
+//                null,
+//                tagHex,
+//            )
+//
+//            val existingTag = activity.db.memberTagDao().getMemberTagByTagId(tagHex)
+//            if (existingTag == null) {
+//                activity.db.memberTagDao().insertMemberTag(t)
+//            }
             activity.runOnUiThread {
                 activity.binding.lastTagTextView.text = tagHex
             }

@@ -14,15 +14,21 @@
         android:id="@+id/action_local_update"
         android:title="@string/update_local"
         app:showAsAction="never" />
-<!--    <item-->
-<!--        android:id="@+id/add_member_tag"-->
-<!--        android:title="Новые теги участников"-->
-<!--        app:showAsAction="never" />-->
+    <!-- Пункты для администратора!-->
+    <item
+        android:id="@+id/add_member_tag"
+        android:title="Новые теги участников"
+        app:showAsAction="never" />
+    <!--    Добавление меток, для администратора-->
+    <item
+        android:id="@+id/action_add_tag"
+        android:title="@string/tag_admin"
+        app:showAsAction="never" />
     <!--    settings    -->
-<!--    <item-->
-<!--        android:id="@+id/action_settings"-->
-<!--        android:icon="@drawable/ic_baseline_update_24"-->
-<!--        android:title="@string/settings"-->
-<!--        app:showAsAction="never" />-->
+    <!--    <item-->
+    <!--        android:id="@+id/action_settings"-->
+    <!--        android:icon="@drawable/ic_baseline_update_24"-->
+    <!--        android:title="@string/settings"-->
+    <!--        app:showAsAction="never" />-->
 
 </menu>

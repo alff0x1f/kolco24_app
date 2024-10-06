@@ -15,10 +15,4 @@
         android:title="@string/update_local"
         app:showAsAction="never" />
 
-    <!-- Settings, should always be in the overflow -->
-<!--    Добавление меток, для администратора, отключено пока-->
-<!--    <item-->
-<!--        android:id="@+id/action_add_tag"-->
-<!--        android:title="@string/tag_admin"-->
-<!--        app:showAsAction="never" />-->
 </menu>

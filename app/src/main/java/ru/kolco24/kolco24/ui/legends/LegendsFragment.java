@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import ru.kolco24.kolco24.AddTagActivity;
 import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.ui.members.AddMemberTagActivity;
 import ru.kolco24.kolco24.DataDownloader;
@@ -95,26 +96,29 @@ public class LegendsFragment extends Fragment implements MenuProvider {
 
     @Override
     public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
-        if (menuItem.getItemId() == R.id.action_update) {
+        int itemId = menuItem.getItemId();
+        if (itemId == R.id.action_update) {
             DataDownloader dataDownloader = new DataDownloader(
                     requireActivity().getApplication()
             );
             dataDownloader.downloadPoints();
             return true;
-        }
-        if (menuItem.getItemId() == R.id.action_local_update) {
+        } else if (itemId == R.id.action_local_update) {
             DataDownloader dataDownloader = new DataDownloader(
                     requireActivity().getApplication()
             );
             dataDownloader.setLocalDownload(true);
             dataDownloader.downloadPoints();
             return true;
+        } else if (menuItem.getItemId() == R.id.add_member_tag) {
+            Intent intent = new Intent(getActivity(), AddMemberTagActivity.class);
+            startActivity(intent);
+            return true;
+        } else if (itemId == R.id.action_add_tag) {
+            //        Добавление меток, для администратора, отключено пока
+            handleAddTagAction();
+            return true;
         }
-//        if (menuItem.getItemId() == R.id.add_member_tag) {
-//            Intent intent = new Intent(getActivity(), AddMemberTagActivity.class);
-//            startActivity(intent);
-//            return true;
-//        }
         // start SettingsActivity
 //        if (menuItem.getItemId() == R.id.action_settings) {
 //            Intent intent = new Intent(getActivity(), SettingsActivity.class);
@@ -122,5 +126,14 @@ public class LegendsFragment extends Fragment implements MenuProvider {
 //            return true;
 //        }
         return false;
+    }
+
+    /**
+     * Handles the action to add a new tag.
+     * This method starts the AddTagActivity.
+     */
+    private void handleAddTagAction() {
+        Intent intent = new Intent(getActivity(), AddTagActivity.class);
+        startActivity(intent);
     }
 }

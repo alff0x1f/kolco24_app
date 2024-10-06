@@ -122,11 +122,6 @@ public class TeamsFragment extends Fragment implements MenuProvider {
             handleUpdateAction(itemId == R.id.action_local_update);
             return true;
         }
-//        Добавление меток, для администратора, отключено пока
-//        else if (itemId == R.id.action_add_tag) {
-//            handleAddTagAction();
-//            return true;
-//        }
         return false;
     }
 
@@ -142,15 +137,6 @@ public class TeamsFragment extends Fragment implements MenuProvider {
             dataDownloader.setLocalDownload(true);
         }
         dataDownloader.downloadTeams(null);
-    }
-
-    /**
-     * Handles the action to add a new tag.
-     * This method starts the AddTagActivity.
-     */
-    private void handleAddTagAction() {
-        Intent intent = new Intent(getActivity(), AddTagActivity.class);
-        startActivity(intent);
     }
 
 
