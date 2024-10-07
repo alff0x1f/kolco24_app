@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             val dataDownloader = DataDownloader(application)
             dataDownloader.hideToasts()
             dataDownloader.setLocalDownload(true)
-            dataDownloader.downloadPoints()
+            dataDownloader.downloadCheckpoints()
             dataDownloader.downloadTeams(null)
         }
 

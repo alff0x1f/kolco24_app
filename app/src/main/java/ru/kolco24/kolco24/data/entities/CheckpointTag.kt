@@ -14,9 +14,8 @@ import androidx.room.PrimaryKey
     )]
 )
 data class CheckpointTag(
-    var checkpointId: Int = 0,
-    var tagUID: String
-){
-    @PrimaryKey(autoGenerate = true)
-    var id: Int = 0
-}
+    @PrimaryKey(autoGenerate = true) val id: Int,
+    var checkpointId: Int,
+    var tagUID: String,
+    var checkMethod: String
+)

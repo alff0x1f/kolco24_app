@@ -45,12 +45,12 @@ public class DataDownloader {
             .readTimeout(2, TimeUnit.SECONDS)
             .build();
 
-    private static final String API_BASE_URL = "https://kolco24.ru/api/v1/";
-    private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/v1/";
+    private static final String API_BASE_URL = "https://kolco24.ru/api/";
+    private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
     private boolean isLocalDownload = false;
-    private static final String TEAMS_ENDPOINT = "teams";
-    private static final String POINTS_ENDPOINT = "points";
-    private static final String TAGS_ENDPOINT = "race/1/point_tags";
+    private static final String TEAMS_ENDPOINT = "v1/teams";
+    private static final String CHECKPOINT_ENDPOINT = "race/2/checkpoint";
+    private static final String TAGS_ENDPOINT = "race/2/point_tags";
 
     public interface DownloadCallback {
         void onDownloadComplete();
@@ -69,9 +69,9 @@ public class DataDownloader {
         this(application, null);
     }
 
-    public void downloadPoints() {
+    public void downloadCheckpoints() {
         Request request = new Request.Builder()
-                .url(getBaseUrl() + POINTS_ENDPOINT)
+                .url(getBaseUrl() + CHECKPOINT_ENDPOINT)
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
@@ -104,24 +104,35 @@ public class DataDownloader {
                         JSONArray jObj = new JSONArray(legend);
                         boolean isUpdated = false;
                         for (int i = 0; i < jObj.length(); i++) {
-                            JSONObject point = jObj.getJSONObject(i);
+                            JSONObject checkpoint = jObj.getJSONObject(i);
 
-                            Checkpoint newPoint = Checkpoint.fromJson(point);
+                            Checkpoint newPoint = Checkpoint.fromJson(checkpoint);
                             if (updateOrInsertPoint(newPoint)) {
                                 isUpdated = true;
-                                // если точка обновлена, то обновляем теги
-                                JSONArray tags = point.getJSONArray("tags");
-                                for (int j = 0; j < tags.length(); j++) {
-                                    String tagId = tags.getString(j);
+                            }
+                            // If the point is updated, then update tags
+                            JSONArray tags = checkpoint.getJSONArray("tags");
+                            for (int j = 0; j < tags.length(); j++) {
+                                JSONObject tagObject = tags.getJSONObject(j);
+                                String tagUID = tagObject.getString("tag_id");
+                                int id = tagObject.getInt("id");
+                                String checkMethod = tagObject.getString("check_method");
 
-                                    CheckpointTag existCheckpointTag = pointTagDao.getPointTagByTag(tagId);
-                                    if (existCheckpointTag == null) {
-                                        // create new point
-                                        CheckpointTag checkpointTag = new CheckpointTag(newPoint.getId(), tagId);
-                                        pointTagDao.insertPointTag(checkpointTag);
-                                    }
+                                CheckpointTag existCheckpointTag = pointTagDao.getPointTagByTag(tagUID);
+                                if (existCheckpointTag == null) {
+                                    // Create new tag with additional fields
+                                    CheckpointTag checkpointTag = new CheckpointTag(
+                                            id,
+                                            newPoint.getId(),
+                                            tagUID, // tagUID
+                                            checkMethod
+                                    );
+                                    pointTagDao.insertPointTag(checkpointTag);
+                                } else {
+                                    // Optionally update existing tag if necessary
                                 }
                             }
+
                         }
                         if (isUpdated) {
                             showToast("Список обновлен");
@@ -131,6 +142,7 @@ public class DataDownloader {
                     } catch (JSONException e) {
                         showToast("Ошибка декодирования JSON");
                         executeCallback();
+                        e.printStackTrace();
                         throw new IOException("Wrong JSON");
                     }
                 }
@@ -217,10 +229,10 @@ public class DataDownloader {
     /**
      * Добавляет тег на сайт
      *
-     * @param PointId - id точки
+     * @param PointId     - id точки
      * @param PointNumber - номер точки
      */
-    public void uploadTag(String PointId, int PointNumber){
+    public void uploadTag(String PointId, int PointNumber) {
         // Create a JSON object to send to the server
         JSONObject jsonObject = new JSONObject();
         try {
@@ -258,7 +270,7 @@ public class DataDownloader {
                     // Handle successful response from the server
                     showToast("Объект успешно загружен");
                 } else {
-                    System.out.println(response.body().toString());
+                    System.out.println(response.body() != null ? response.body().string() : "Response body is null");
                     // Handle unsuccessful response
                     showToast("Ошибка " + response.code());
                 }
@@ -335,6 +347,11 @@ public class DataDownloader {
 
         if (existPoint.getCost() != point.getCost()) {
             existPoint.setCost(point.getCost());
+            isUpdated = true;
+        }
+
+        if (!existPoint.getType().equals(point.getType())) {
+            existPoint.setType(point.getType());
             isUpdated = true;
         }
         if (isUpdated) {

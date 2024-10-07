@@ -8,7 +8,8 @@ import org.json.JSONObject
 class Checkpoint(
     var number: Int,
     var description: String,
-    var cost: Int
+    var cost: Int,
+    var type: String,
 ) {
     @PrimaryKey(autoGenerate = true)
     var id: Int = 0
@@ -29,6 +30,7 @@ class Checkpoint(
             "number": 54,
             "description": "Описание 54",
             "cost": 1,
+            "type": "1d8f550e960000",
             "tags": [
               "1d8f550e960000",
               "1d90550e960000"
@@ -41,7 +43,8 @@ class Checkpoint(
             val number = point.getInt("number")
             val description = point.getString("description")
             val cost = point.getInt("cost")
-            return Checkpoint(number, description, cost).apply { this.id = id }
+            val type = point.getString("type")
+            return Checkpoint(number, description, cost, type).apply { this.id = id }
         }
     }
 }
