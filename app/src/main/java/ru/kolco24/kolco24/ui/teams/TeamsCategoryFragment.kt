@@ -11,7 +11,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import ru.kolco24.kolco24.DataDownloader
 import ru.kolco24.kolco24.data.entities.Team
-import ru.kolco24.kolco24.databinding.FragmentDemoObjectBinding
+import ru.kolco24.kolco24.databinding.FragmentTeamsCategoryBinding
 import ru.kolco24.kolco24.ui.teams.TeamListAdapter.TeamDiff
 
 /**
@@ -20,7 +20,7 @@ import ru.kolco24.kolco24.ui.teams.TeamListAdapter.TeamDiff
  * create an instance of this fragment.
  */
 class TeamsCategoryFragment : Fragment() {
-    private var binding: FragmentDemoObjectBinding? = null
+    private var binding: FragmentTeamsCategoryBinding? = null
     private var teamViewModel: TeamViewModel? = null
 
     // TODO: Rename and change types of parameters
@@ -40,7 +40,7 @@ class TeamsCategoryFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         // Inflate the layout for this fragment
-        binding = FragmentDemoObjectBinding.inflate(inflater, container, false)
+        binding = FragmentTeamsCategoryBinding.inflate(inflater, container, false)
         val root: View = binding!!.root
         // recycler view
         val recyclerTeams = binding!!.recyclerTeams
