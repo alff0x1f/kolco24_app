@@ -16,7 +16,7 @@ import ru.kolco24.kolco24.AddTagActivity
 import ru.kolco24.kolco24.DataDownloader
 import ru.kolco24.kolco24.R
 import ru.kolco24.kolco24.data.AppDatabase
-import ru.kolco24.kolco24.data.entities.Point.PointExt
+import ru.kolco24.kolco24.data.entities.Checkpoint.PointExt
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding
 import ru.kolco24.kolco24.ui.legends.PointListAdapter.PointDiff
 
@@ -72,7 +72,7 @@ class LegendsFragment : Fragment(), MenuProvider {
             val dataDownloader = DataDownloader(
                 requireActivity().application
             ) { swipeRefreshLayout.isRefreshing = false }
-            dataDownloader.downloadPoints()
+            dataDownloader.downloadCheckpoints()
         }
 
         // Add the MenuProvider to handle menu creation
@@ -96,13 +96,13 @@ class LegendsFragment : Fragment(), MenuProvider {
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
         return when (menuItem.itemId) {
             R.id.action_update -> {
-                DataDownloader(requireActivity().application).downloadPoints()
+                DataDownloader(requireActivity().application).downloadCheckpoints()
                 true
             }
 
             R.id.action_local_update -> {
                 DataDownloader(requireActivity().application).apply { setLocalDownload(true) }
-                    .downloadPoints()
+                    .downloadCheckpoints()
                 true
             }
 

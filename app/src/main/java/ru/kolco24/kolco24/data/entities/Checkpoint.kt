@@ -5,10 +5,11 @@ import androidx.room.PrimaryKey
 import org.json.JSONObject
 
 @Entity(tableName = "points")
-class Point(
+class Checkpoint(
     var number: Int,
     var description: String,
-    var cost: Int
+    var cost: Int,
+    var type: String,
 ) {
     @PrimaryKey(autoGenerate = true)
     var id: Int = 0
@@ -29,6 +30,7 @@ class Point(
             "number": 54,
             "description": "Описание 54",
             "cost": 1,
+            "type": "1d8f550e960000",
             "tags": [
               "1d8f550e960000",
               "1d90550e960000"
@@ -36,12 +38,13 @@ class Point(
           }
          */
         @JvmStatic
-        fun fromJson(point: JSONObject): Point {
+        fun fromJson(point: JSONObject): Checkpoint {
             val id = point.getInt("id")
             val number = point.getInt("number")
             val description = point.getString("description")
             val cost = point.getInt("cost")
-            return Point(number, description, cost).apply { this.id = id }
+            val type = point.getString("type")
+            return Checkpoint(number, description, cost, type).apply { this.id = id }
         }
     }
 }

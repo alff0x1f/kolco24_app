@@ -6,12 +6,12 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 
-import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
 
-public class PointListAdapter extends ListAdapter<Point.PointExt, PointViewHolder> {
+public class PointListAdapter extends ListAdapter<Checkpoint.PointExt, PointViewHolder> {
 
     /*__init__*/
-    public PointListAdapter(@NonNull DiffUtil.ItemCallback<Point.PointExt> diffCallback) {
+    public PointListAdapter(@NonNull DiffUtil.ItemCallback<Checkpoint.PointExt> diffCallback) {
         super(diffCallback);
     }
 
@@ -22,19 +22,19 @@ public class PointListAdapter extends ListAdapter<Point.PointExt, PointViewHolde
     }
 
     public void onBindViewHolder(PointViewHolder holder, int position) {
-        Point.PointExt current = getItem(position);
+        Checkpoint.PointExt current = getItem(position);
         holder.bind(current);
     }
 
-    static class PointDiff extends DiffUtil.ItemCallback<Point.PointExt> {
+    static class PointDiff extends DiffUtil.ItemCallback<Checkpoint.PointExt> {
 
         @Override
-        public boolean areItemsTheSame(@NonNull Point.PointExt oldItem, @NonNull Point.PointExt newItem) {
+        public boolean areItemsTheSame(@NonNull Checkpoint.PointExt oldItem, @NonNull Checkpoint.PointExt newItem) {
             return oldItem == newItem;
         }
 
         @Override
-        public boolean areContentsTheSame(@NonNull Point.PointExt oldItem, @NonNull Point.PointExt newItem) {
+        public boolean areContentsTheSame(@NonNull Checkpoint.PointExt oldItem, @NonNull Checkpoint.PointExt newItem) {
             return oldItem.getNumber() == newItem.getNumber() &&
                     oldItem.getDescription().equals(newItem.getDescription()) &&
                     oldItem.getCost() == newItem.getCost();

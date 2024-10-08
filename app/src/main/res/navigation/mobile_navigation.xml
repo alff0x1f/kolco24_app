@@ -3,24 +3,48 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/mobile_navigation"
-    app:startDestination="@+id/navigation_legends">
+    app:startDestination="@id/navigation_legends">
 
+    <!-- Home Fragment -->
     <fragment
         android:id="@+id/navigation_home"
         android:name="ru.kolco24.kolco24.ui.teams.TeamsFragment"
         android:label="@string/title_home"
-        tools:layout="@layout/fragment_teams" />
+        tools:layout="@layout/fragment_teams">
 
+        <!-- Action to navigate from TeamsFragment to NfcPointFragment -->
+        <action
+            android:id="@+id/action_navigation_home_to_nfcPointFragment"
+            app:destination="@id/nfcPointFragment" />
+    </fragment>
+
+    <!-- Taken Points Fragment -->
     <fragment
         android:id="@+id/navigation_taken_points"
         android:name="ru.kolco24.kolco24.ui.photo.PhotoFragment"
         android:label="@string/title_dashboard"
-        tools:layout="@layout/fragment_photos" />
+        tools:layout="@layout/fragment_photos" >
+        <action
+            android:id="@+id/action_navigation_taken_points_to_nfcPointFragment"
+            app:destination="@id/nfcPointFragment" />
+    </fragment>
 
+    <!-- Legends Fragment -->
     <fragment
         android:id="@+id/navigation_legends"
         android:name="ru.kolco24.kolco24.ui.legends.LegendsFragment"
         android:label="@string/title_legends"
-        tools:layout="@layout/fragment_legends" />
+        tools:layout="@layout/fragment_legends" >
+        <action
+            android:id="@+id/action_navigation_legends_to_nfcPointFragment"
+            app:destination="@id/nfcPointFragment" />
+    </fragment>
+
+    <!-- NFC Point Fragment -->
+    <fragment
+        android:id="@+id/nfcPointFragment"
+        android:name="ru.kolco24.kolco24.CheckpointVisitVerifyFragment"
+        android:label="@string/nfc_chekcpoint"
+        tools:layout="@layout/fragment_nfc_point" />
 
 </navigation>

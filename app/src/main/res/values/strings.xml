@@ -4,6 +4,7 @@
     <string name="title_dashboard">Фото</string>
     <string name="title_legends">Легенда</string>
     <string name="add_point">Добавить КП</string>
+    <string name="nfc_chekcpoint">Отметить КП</string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="hint_word">Номер кп…</string>
     <string name="button_save">Сохранить</string>

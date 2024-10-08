@@ -7,16 +7,15 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "point_tags",
     foreignKeys = [ForeignKey(
-        entity = Point::class,
+        entity = Checkpoint::class,
         parentColumns = ["id"],
-        childColumns = ["pointId"],
+        childColumns = ["checkpointId"],
         onDelete = ForeignKey.CASCADE
     )]
 )
-data class PointTag(
-    var pointId: Int = 0,
-    var tag: String
-){
-    @PrimaryKey(autoGenerate = true)
-    var id: Int = 0
-}
+data class CheckpointTag(
+    @PrimaryKey(autoGenerate = true) val id: Int,
+    var checkpointId: Int,
+    var tagUID: String,
+    var checkMethod: String
+)

@@ -204,9 +204,13 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         }
         if (withToast) {
             if (localResult) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Фото локально отправлены", Toast.LENGTH_SHORT).show());
+                if (isAdded()) { // Check if fragment is still attached to activity
+                    requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Фото локально отправлены", Toast.LENGTH_SHORT).show());
+                }
             } else {
-                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Ошибка при локальной отправке фото", Toast.LENGTH_SHORT).show());
+                if (isAdded()) { // Check if fragment is still attached to activity
+                    requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Ошибка при локальной отправке фото", Toast.LENGTH_SHORT).show());
+                }
             }
         }
     }
@@ -224,25 +228,33 @@ public class PhotoFragment extends Fragment implements MenuProvider {
                 break;
             }
         }
-        List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
-        requireActivity().runOnUiThread(
-                () -> adapter.submitList(photos)
-        );
+
+        if (isAdded()) {
+            // Update the adapter with the new list of photos
+            List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
+            requireActivity().runOnUiThread(
+                    () -> adapter.submitList(photos)
+            );
+        }
         if (withToast) {
             if (internetResult) {
-                requireActivity().runOnUiThread(
-                        () -> Toast.makeText(
-                                getContext(),
-                                "Фото отправлены через интернет",
-                                Toast.LENGTH_SHORT).show()
-                );
+                if (isAdded()) { // Check if fragment is still attached to activity
+                    requireActivity().runOnUiThread(
+                            () -> Toast.makeText(
+                                    getContext(),
+                                    "Фото отправлены через интернет",
+                                    Toast.LENGTH_SHORT).show()
+                    );
+                }
             } else {
-                requireActivity().runOnUiThread(
-                        () -> Toast.makeText(
-                                getContext(),
-                                "Ошибка при отправке через интернет",
-                                Toast.LENGTH_SHORT).show()
-                );
+                if (isAdded()) { // Check if fragment is still attached to activity
+                    requireActivity().runOnUiThread(
+                            () -> Toast.makeText(
+                                    getContext(),
+                                    "Ошибка при отправке через интернет",
+                                    Toast.LENGTH_SHORT).show()
+                    );
+                }
             }
         }
     }

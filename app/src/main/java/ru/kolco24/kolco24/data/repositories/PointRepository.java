@@ -8,7 +8,7 @@ import java.util.List;
 
 import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.daos.PointDao;
-import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
 
 public class PointRepository {
     private PointDao mPointDao;
@@ -18,30 +18,30 @@ public class PointRepository {
         mPointDao = db.pointDao();
     }
 
-    public LiveData<List<Point.PointExt>> getAllPoints() {
+    public LiveData<List<Checkpoint.PointExt>> getAllPoints() {
         return mPointDao.getAllPoints();
     }
 
-    public LiveData<List<Point.PointExt>> getTakenPointsByTeam(int teamId) {
+    public LiveData<List<Checkpoint.PointExt>> getTakenPointsByTeam(int teamId) {
         return mPointDao.getPointsByTeam(teamId);
     }
 
-    public Point getPointById(int id) {
+    public Checkpoint getPointById(int id) {
         return mPointDao.getPointById(id);
     }
-    public Point getPointByNumber(int number) {
+    public Checkpoint getPointByNumber(int number) {
         return mPointDao.getPointByNumber(number);
     }
 
     // You must call this on a non-UI thread or your app will throw an exception. Room ensures
     // that you're not doing any long running operations on the main thread, blocking the UI.
-    public void insert(Point point) {
+    public void insert(Checkpoint point) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             mPointDao.insert(point);
         });
     }
 
-    public void update(Point point) {
+    public void update(Checkpoint point) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             mPointDao.update(point);
         });

@@ -8,22 +8,22 @@ import androidx.room.Update;
 
 import java.util.List;
 
-import ru.kolco24.kolco24.data.entities.Point;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
 
 
 @Dao
 public interface PointDao {
     @Insert
-    void insert(Point point);
+    void insert(Checkpoint point);
 
     @Update
-    void update(Point point);
+    void update(Checkpoint point);
 
     @Query("SELECT * FROM points WHERE id = :id")
-    Point getPointById(int id);
+    Checkpoint getPointById(int id);
 
     @Query("SELECT * FROM points WHERE number = :number")
-    Point getPointByNumber(int number);
+    Checkpoint getPointByNumber(int number);
 
     @Query("SELECT " +
             "points.id, " +
@@ -39,7 +39,7 @@ public interface PointDao {
             "   GROUP BY pointNumber) photo " +
             "       ON points.number == photo.pointNumber " +
             "ORDER BY points.number")
-    LiveData<List<Point.PointExt>> getAllPoints();
+    LiveData<List<Checkpoint.PointExt>> getAllPoints();
 
     @Query("SELECT " +
             "points.id, " +
@@ -62,7 +62,7 @@ public interface PointDao {
             "        ELSE 0" +
             "    END, " +
             "photo.photoTime, points.number")
-    LiveData<List<Point.PointExt>> getPointsByTeam(int teamId);
+    LiveData<List<Checkpoint.PointExt>> getPointsByTeam(int teamId);
 
     @Query("DELETE FROM points WHERE id = :id")
     void deletePointById(int id);

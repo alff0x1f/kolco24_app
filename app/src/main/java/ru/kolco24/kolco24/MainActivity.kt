@@ -3,18 +3,20 @@ package ru.kolco24.kolco24
 import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
+import androidx.navigation.ui.setupActionBarWithNavController
 import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.entities.CheckpointTag
+import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
-import java.nio.charset.Charset
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
@@ -30,6 +32,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         setContentView(binding.root)
 
         db = AppDatabase.getDatabase(application)
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
@@ -39,18 +42,30 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration)
         NavigationUI.setupWithNavController(binding.navView, navController)
+        setupActionBarWithNavController(navController, appBarConfiguration)
+
+        // Add OnDestinationChangedListener to NavController
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (destination.id == R.id.nfcPointFragment) {
+                // Hide BottomNavigationView when in NfcPointFragment
+                binding.navView.visibility = View.GONE
+            } else {
+                // Show BottomNavigationView for other fragments
+                binding.navView.visibility = View.VISIBLE
+                enableNfcReaderMode()
+            }
+        }
 
         val executor = Executors.newSingleThreadExecutor()
         executor.execute {
             val dataDownloader = DataDownloader(application)
             dataDownloader.hideToasts()
             dataDownloader.setLocalDownload(true)
-            dataDownloader.downloadPoints()
+            dataDownloader.downloadCheckpoints()
             dataDownloader.downloadTeams(null)
         }
 
         // Check for available NFC Adapter
-        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         if (nfcAdapter == null) {
             // NFC is not supported;
             Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show()
@@ -66,17 +81,30 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     override fun onResume() {
         super.onResume()
-        nfcAdapter.enableReaderMode(
-            this,
-            this,
-            NfcAdapter.FLAG_READER_NFC_A,
-            null
-        )
+        enableNfcReaderMode()
     }
 
     override fun onPause() {
         super.onPause()
-        nfcAdapter.disableReaderMode(this)
+        disableNfcReaderMode()
+    }
+
+    private fun enableNfcReaderMode() {
+        println("Enabling NFC reader mode in MainActivity")
+        if (::nfcAdapter.isInitialized) {
+            nfcAdapter.enableReaderMode(
+                this,
+                this,
+                NfcAdapter.FLAG_READER_NFC_A,
+                null
+            )
+        }
+    }
+
+    private fun disableNfcReaderMode() {
+        if (::nfcAdapter.isInitialized) {
+            nfcAdapter.disableReaderMode(this)
+        }
     }
 
 
@@ -101,52 +129,49 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
-            // Access the NDEF technology
-            val ndef = Ndef.get(it)
-            var pointNdafExist = false
-            if (ndef != null) {
-                // Connect to the tag
-                ndef.connect()
-                // Check if the tag has NDEF data
-                val ndefMessage = ndef.cachedNdefMessage
-                if (ndefMessage != null) {
-                    val records = ndefMessage.records
-                    for (record in records) {
-                        val record_type = String(record.type, Charset.forName("US-ASCII"))
-                        println("Record type: $record_type")
-                        if (record_type == "kolco24/point") {
-                            pointNdafExist = true
-                        }
-                    }
-                } else {
-                    println("No NDEF message found on the tag")
+            val hexId = bytesToHex(tag.id)
+
+            db.pointTagDao().getPointTagByUID(hexId)?.let { pointTag ->
+                runOnUiThread {
+                    navigateToNfcPointFragment(pointTag)
                 }
-                // Always close the connection when done
-                ndef.close()
-            } else {
-                runOnUiThread({
-                    Toast.makeText(this, "Метка не поддерживает NDEF", Toast.LENGTH_SHORT)
-                        .show()
-                })
+                return
             }
-            if (pointNdafExist) {
-                val hexId = bytesToHex(tag.id)
-                val pointTag = db.pointTagDao().getPointTagByTag(hexId)
-                if (pointTag != null) {
-                    val pointNumber = db.pointDao().getPointById(pointTag.pointId).number
-                    runOnUiThread({
-                        Toast.makeText(this, "КП: $pointNumber", Toast.LENGTH_LONG)
-                            .show()
-                    })
+
+            db.memberTagDao().getMemberTagByUID(hexId)?.let { memberTag ->
+                runOnUiThread {
+                    navigateToNfcMemberFragment(memberTag)
                 }
-            } else {
-                runOnUiThread({
-                    Toast.makeText(this, "Метка не является меткой Кольцо24", Toast.LENGTH_SHORT)
-                        .show()
-                })
+                return
+            }
+
+            runOnUiThread {
+                Toast.makeText(this, "Неизвестный чип", Toast.LENGTH_SHORT).show()
             }
         }
     }
+
+    private fun navigateToNfcPointFragment(checkpointTag: CheckpointTag) {
+        val navController = findNavController(R.id.nav_host_fragment_activity_main)
+        val bundle = Bundle().apply {
+            putInt("checkpointTagId", checkpointTag.id)
+        }
+        navController.navigate(R.id.nfcPointFragment, bundle)
+    }
+
+    private fun navigateToNfcMemberFragment(memberTag: MemberTag) {
+        val navController = findNavController(R.id.nav_host_fragment_activity_main)
+        val bundle = Bundle().apply {
+            putInt("memberTagId", memberTag.id)
+        }
+        navController.navigate(R.id.nfcPointFragment, bundle)
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        val navController = findNavController(R.id.nav_host_fragment_activity_main)
+        return navController.navigateUp() || super.onSupportNavigateUp()
+    }
+
 
     private fun bytesToHex(bytes: ByteArray): String {
         val hexChars = "0123456789ABCDEF"
