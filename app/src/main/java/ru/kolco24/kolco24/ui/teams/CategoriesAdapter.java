@@ -19,10 +19,10 @@ public class CategoriesAdapter extends FragmentStateAdapter {
     @NonNull
     @Override
     public Fragment createFragment(int position) {
-        Fragment fragment = new DemoObjectFragment();
+        Fragment fragment = new TeamsCategoryFragment();
         Bundle args = new Bundle();
-        args.putString(DemoObjectFragment.CATEGORY_NAME, getCategoryName(position));
-        args.putString(DemoObjectFragment.CATEGORY_CODE, getCategoryCode(position));
+        args.putString(TeamsCategoryFragment.CATEGORY_NAME, getCategoryName(position));
+        args.putString(TeamsCategoryFragment.CATEGORY_CODE, getCategoryCode(position));
         fragment.setArguments(args);
         return fragment;
     }
