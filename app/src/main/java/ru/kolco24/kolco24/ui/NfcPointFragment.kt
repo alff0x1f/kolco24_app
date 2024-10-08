@@ -19,6 +19,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.entities.Checkpoint
+import ru.kolco24.kolco24.data.entities.CheckpointTag
+import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.FragmentNfcPointBinding
 import kotlin.math.roundToInt
@@ -27,10 +30,15 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     private lateinit var nfcAdapter: NfcAdapter
     private lateinit var binding: FragmentNfcPointBinding
-    private var pointId: String? = null
-    private var pointNumber: Int = 0
-    private val members = mutableListOf<String>()
-    private var readMemberTags = true
+
+    private var pointId: String? = null // TODO remove this
+    private var pointNumber: Int = 0 // TODO remove this
+
+    private val memberTags = mutableListOf<MemberTag>()
+    private var checkpointTag: CheckpointTag? = null
+    private var checkpoint: Checkpoint? = null
+
+    private var readMemberTags = false
     private var teamId: Int = 0
 
     //timer
@@ -47,15 +55,41 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
         binding = FragmentNfcPointBinding.inflate(inflater, container, false)
 
         arguments?.let {
-            val tagId = arguments?.getString("tagId") ?: ""
-            lifecycleScope.launch(Dispatchers.IO) {
-                val pointTag = db.pointTagDao().getPointTagByTag(tagId)
-                pointTag?.let {
-                    pointNumber = db.pointDao().getPointById(it.checkpointId).number
-                    println("pointNumber: $pointNumber")
-                    withContext(Dispatchers.Main) {
-                        binding.pointNumber.text = String.format("%02d", pointNumber)
+            val checkpointTagId = arguments?.getInt("checkpointTagId", 0)
+            if (checkpointTagId != null && checkpointTagId != 0) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    checkpointTag = db.pointTagDao().getPointTagById(checkpointTagId)
+                    checkpointTag?.let {
+                        checkpoint = db.pointDao().getPointById(it.checkpointId)
+                        checkpoint?.let {
+                            pointNumber = checkpoint!!.number
+                            arguments?.putInt(
+                                "pointNumber", pointNumber
+                            )
+
+                            withContext(Dispatchers.Main) {
+                                binding.pointNumber.text = String.format("%02d", pointNumber)
+                            }
+                        }
+
                     }
+                }
+            } else {
+                binding.pointNumber.text = "?"
+            }
+
+            val memberTagId = arguments?.getInt("memberTagId")
+            memberTagId?.let {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val memberTag = db.memberTagDao().getMemberTagById(memberTagId)
+                    memberTag?.let {
+                        memberTags.add(memberTag)
+                        withContext(Dispatchers.Main) {
+                            binding.members.text = "1) Чип ${memberTag.number}"
+                            binding.members.isVisible = true
+                        }
+                    }
+
                 }
             }
         }
@@ -79,8 +113,6 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
             pointNumber = it.getInt("pointNumber")
             teamId = it.getInt("teamId")
         }
-
-        Toast.makeText(requireContext(), "Point ID: $pointNumber", Toast.LENGTH_SHORT).show()
     }
 
 
@@ -137,8 +169,7 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
                     .setTitle("Время истекло")
                     .setMessage(
                         "Нужно за ${countdownDuration / 1000} секунд отметить всех участников. " +
-                                "Считайте метку на КП ещё раз " +
-                                "чтобы начать заново."
+                                "Считайте чип ещё раз чтобы начать заново."
                     )
                     .setPositiveButton(
                         "Ок"
@@ -179,64 +210,96 @@ class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
                 }
                 return
             }
-            // add hexId to list
-            if (!members.contains(hexId)) {
-                members.add(hexId)
-                saveNfcCheck(hexId)
-
-                val team = db.teamDao().getTeamById(teamId)
-                val paidPeople = team?.paidPeople?.roundToInt() ?: 2
-
-                requireActivity().runOnUiThread {
-                    countDownTimer?.cancel()
-                    setupCountDownTimer()
-                    countDownTimer?.start()
-
-                    val numberedMembers = members.mapIndexed { index, element ->
-                        "${index + 1}) Участник ${index + 1}"
-                    }
-                    binding.members.text = numberedMembers.joinToString("\n")
-                    binding.members.isVisible = true
-                }
-
-                if (members.count() >= paidPeople) {
-                    for (i in 0 until members.count()) {
-                        saveNfcCheck(members[i])
-                    }
-                    db.photoDao().insert(
-                        ru.kolco24.kolco24.data.entities.Photo(
-                            teamId,
-                            pointNumber,
-                            "",
-                            "",
-                            "",
-                            System.currentTimeMillis(),
-                            members.joinToString(", ")
-                        )
-                    )
-
-                    db.photoDao().getListPhotos().forEach {
-                        println("photo: ${it.id} ${it.teamId} ${it.pointNumber} ${it.photoUrl} ${it.photoThumbUrl} ${it.photoTime} ${it.time} ${it.pointNfc}")
-                    }
-
-                    countDownTimer?.cancel()
-                    readMemberTags = false
-
+            // check if hexId is already in list
+            for (i in 0 until memberTags.count()) {
+                if (memberTags[i].tagId == hexId) {
                     requireActivity().runOnUiThread {
-                        binding.doneIcon.isVisible = true
-                        binding.timerTextView.isVisible = false
-                        binding.circularProgressBar.isVisible = false
-                        binding.button.text = "Закрыть"
-                        binding.helperTextView.text = "Все участники отмечены"
+                        Toast.makeText(
+                            requireActivity(),
+                            "Участник уже добавлен",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
+                    return
                 }
-            } else {
+            }
+            if (checkpointTag == null) {
+                db.pointTagDao().getPointTagByUID(hexId)?.let { fetchedCheckpointTag ->
+                    checkpointTag = fetchedCheckpointTag
+                    checkpoint = db.pointDao().getPointById(fetchedCheckpointTag.checkpointId)
+                    requireActivity().runOnUiThread {
+                        binding.pointNumber.text = String.format("%02d", checkpoint!!.number)
+                    }
+                    // TODO save checkpointVisit if all members are checked
+                    return
+                }
+            }
+
+            val memberTag = db.memberTagDao().getMemberTagByUID(hexId)
+            if (memberTag == null) {
                 requireActivity().runOnUiThread {
-                    Toast.makeText(activity, "Участник уже добавлен", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        requireActivity(),
+                        "Неизвестный чип",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return
+            }
+
+            // add hexId to list
+            memberTags.add(memberTag)
+            saveNfcCheck(hexId)
+
+            val team = db.teamDao().getTeamById(teamId)
+            val paidPeople = team?.paidPeople?.roundToInt() ?: 2
+
+            requireActivity().runOnUiThread {
+                countDownTimer?.cancel()
+                setupCountDownTimer()
+                countDownTimer?.start()
+
+                val numberedMembers = memberTags.mapIndexed { index, element ->
+                    "${index + 1}) Чип ${element.number}"
+                }
+                binding.members.text = numberedMembers.joinToString("\n")
+                binding.members.isVisible = true
+            }
+
+            if (memberTags.count() >= paidPeople) {
+                for (i in 0 until memberTags.count()) {
+                    saveNfcCheck(memberTags[i].tagId)
+                }
+                db.photoDao().insert(
+                    ru.kolco24.kolco24.data.entities.Photo(
+                        teamId,
+                        pointNumber,
+                        "",
+                        "",
+                        "",
+                        System.currentTimeMillis(),
+                        memberTags.joinToString(", ")
+                    )
+                )
+
+                db.photoDao().getListPhotos().forEach {
+                    println("photo: ${it.id} ${it.teamId} ${it.pointNumber} ${it.photoUrl} ${it.photoThumbUrl} ${it.photoTime} ${it.time} ${it.pointNfc}")
+                }
+
+                countDownTimer?.cancel()
+                readMemberTags = false
+
+                requireActivity().runOnUiThread {
+                    binding.doneIcon.isVisible = true
+                    binding.timerTextView.isVisible = false
+                    binding.circularProgressBar.isVisible = false
+                    binding.button.text = "Закрыть"
+                    binding.helperTextView.text = "Все участники отмечены"
                 }
             }
         }
     }
+
 
     /**
      * save value to room database

@@ -3,7 +3,6 @@ package ru.kolco24.kolco24
 import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -16,8 +15,8 @@ import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupActionBarWithNavController
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.CheckpointTag
+import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
-import java.nio.charset.Charset
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
@@ -130,47 +129,24 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
-            // Access the NDEF technology
-            val ndef = Ndef.get(it)
-            var pointNdafExist = false
-            if (ndef != null) {
-                // Connect to the tag
-                ndef.connect()
-                // Check if the tag has NDEF data
-                val ndefMessage = ndef.cachedNdefMessage
-                if (ndefMessage != null) {
-                    val records = ndefMessage.records
-                    for (record in records) {
-                        val record_type = String(record.type, Charset.forName("US-ASCII"))
-                        println("Record type: $record_type")
-                        if (record_type == "kolco24/point") {
-                            pointNdafExist = true
-                        }
-                    }
-                } else {
-                    println("No NDEF message found on the tag")
+            val hexId = bytesToHex(tag.id)
+
+            db.pointTagDao().getPointTagByUID(hexId)?.let { pointTag ->
+                runOnUiThread {
+                    navigateToNfcPointFragment(pointTag)
                 }
-                // Always close the connection when done
-                ndef.close()
-            } else {
-                runOnUiThread({
-                    Toast.makeText(this, "Метка не поддерживает NDEF", Toast.LENGTH_SHORT)
-                        .show()
-                })
+                return
             }
-            if (pointNdafExist) {
-                val hexId = bytesToHex(tag.id)
-                val pointTag = db.pointTagDao().getPointTagByTag(hexId)
-                pointTag?.let {
-                    runOnUiThread {
-                        navigateToNfcPointFragment(pointTag)
-                    }
+
+            db.memberTagDao().getMemberTagByUID(hexId)?.let { memberTag ->
+                runOnUiThread {
+                    navigateToNfcMemberFragment(memberTag)
                 }
-            } else {
-                runOnUiThread({
-                    Toast.makeText(this, "Метка не является меткой Кольцо24", Toast.LENGTH_SHORT)
-                        .show()
-                })
+                return
+            }
+
+            runOnUiThread {
+                Toast.makeText(this, "Неизвестный чип", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -178,7 +154,15 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     private fun navigateToNfcPointFragment(checkpointTag: CheckpointTag) {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         val bundle = Bundle().apply {
-            putString("tagId", checkpointTag.tagUID)
+            putInt("checkpointTagId", checkpointTag.id)
+        }
+        navController.navigate(R.id.nfcPointFragment, bundle)
+    }
+
+    private fun navigateToNfcMemberFragment(memberTag: MemberTag) {
+        val navController = findNavController(R.id.nav_host_fragment_activity_main)
+        val bundle = Bundle().apply {
+            putInt("memberTagId", memberTag.id)
         }
         navController.navigate(R.id.nfcPointFragment, bundle)
     }

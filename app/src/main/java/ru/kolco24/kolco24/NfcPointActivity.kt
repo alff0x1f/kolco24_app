@@ -335,7 +335,7 @@ class NfcPointActivity : AppCompatActivity() {
 
             // Use a coroutine to perform database operations asynchronously
             CoroutineScope(Dispatchers.IO).launch {
-                val pointTag = db.pointTagDao().getPointTagByTag(hexId)
+                val pointTag = db.pointTagDao().getPointTagByUID(hexId)
                 pointTag?.let {
                     pointId = it.tagUID
                     pointNumber = db.pointDao().getPointById(it.checkpointId).number

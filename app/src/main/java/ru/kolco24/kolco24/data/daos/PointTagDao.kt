@@ -13,10 +13,10 @@ interface PointTagDao {
     fun insertPointTag(checkpointTag: CheckpointTag)
 
     @Query("SELECT * FROM point_tags WHERE id = :id")
-    fun getPointTagById(id: Int): CheckpointTag
+    fun getPointTagById(id: Int): CheckpointTag?
 
     @Query("SELECT * FROM point_tags WHERE tagUID = :tagUID")
-    fun getPointTagByTag(tagUID: String): CheckpointTag?
+    fun getPointTagByUID(tagUID: String): CheckpointTag?
 
     @Query("SELECT * FROM point_tags WHERE checkpointId = :pointId")
     suspend fun getPointTagsByPointId(pointId: Int): List<CheckpointTag>

@@ -118,7 +118,7 @@ public class DataDownloader {
                                 int id = tagObject.getInt("id");
                                 String checkMethod = tagObject.getString("check_method");
 
-                                CheckpointTag existCheckpointTag = pointTagDao.getPointTagByTag(tagUID);
+                                CheckpointTag existCheckpointTag = pointTagDao.getPointTagByUID(tagUID);
                                 if (existCheckpointTag == null) {
                                     // Create new tag with additional fields
                                     CheckpointTag checkpointTag = new CheckpointTag(

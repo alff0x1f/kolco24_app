@@ -135,7 +135,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                     }
                 }
             }
-            db.memberTagDao().getMemberTagByTagId(currentTagId!!)?.let { memberTag ->
+            db.memberTagDao().getMemberTagByUID(currentTagId!!)?.let { memberTag ->
                 runOnUiThread {
                     findViewById<TextView>(R.id.header_text).apply {
                         text = "${memberTag.number}"
