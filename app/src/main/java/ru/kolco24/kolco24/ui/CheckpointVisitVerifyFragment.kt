@@ -26,7 +26,7 @@ import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.FragmentNfcPointBinding
 import kotlin.math.roundToInt
 
-class NfcPointFragment : Fragment(), NfcAdapter.ReaderCallback {
+class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     private lateinit var nfcAdapter: NfcAdapter
     private lateinit var binding: FragmentNfcPointBinding

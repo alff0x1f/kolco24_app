@@ -43,7 +43,7 @@
     <!-- NFC Point Fragment -->
     <fragment
         android:id="@+id/nfcPointFragment"
-        android:name="ru.kolco24.kolco24.NfcPointFragment"
+        android:name="ru.kolco24.kolco24.CheckpointVisitVerifyFragment"
         android:label="@string/nfc_chekcpoint"
         tools:layout="@layout/fragment_nfc_point" />
 
