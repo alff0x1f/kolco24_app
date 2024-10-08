@@ -228,10 +228,14 @@ public class PhotoFragment extends Fragment implements MenuProvider {
                 break;
             }
         }
-        List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
-        requireActivity().runOnUiThread(
-                () -> adapter.submitList(photos)
-        );
+
+        if (isAdded()) {
+            // Update the adapter with the new list of photos
+            List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
+            requireActivity().runOnUiThread(
+                    () -> adapter.submitList(photos)
+            );
+        }
         if (withToast) {
             if (internetResult) {
                 if (isAdded()) { // Check if fragment is still attached to activity
