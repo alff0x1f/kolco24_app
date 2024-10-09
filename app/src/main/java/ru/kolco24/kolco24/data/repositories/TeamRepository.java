@@ -25,7 +25,7 @@ public class TeamRepository {
         return mAllTeams;
     }
 
-    public LiveData<List<Team>> getTeamsByCategory(String category){
+    public LiveData<List<Team>> getTeamsByCategory(Integer category){
         return mTeamDao.getTeamsByCategory(category);
     }
 

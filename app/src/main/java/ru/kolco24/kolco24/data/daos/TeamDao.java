@@ -21,7 +21,7 @@ public interface TeamDao {
              " ELSE place " +
              "END, " +
              "startNumber")
-     LiveData<List<Team>> getTeamsByCategory(String category);
+     LiveData<List<Team>> getTeamsByCategory(Integer category);
 
      @Query("SELECT * FROM teams WHERE id = :id")
      Team getTeamById(int id);

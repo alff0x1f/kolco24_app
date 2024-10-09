@@ -25,13 +25,13 @@ class TeamsCategoryFragment : Fragment() {
 
     // TODO: Rename and change types of parameters
     private var categoryName: String? = null
-    private var categoryCode: String? = null
+    private var categoryCode: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (arguments != null) {
             categoryName = requireArguments().getString(CATEGORY_NAME)
-            categoryCode = requireArguments().getString(CATEGORY_CODE)
+            categoryCode = requireArguments().getInt(CATEGORY_CODE)
         }
     }
 

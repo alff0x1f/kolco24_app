@@ -48,7 +48,7 @@ public class DataDownloader {
     private static final String API_BASE_URL = "https://kolco24.ru/api/";
     private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
     private boolean isLocalDownload = false;
-    private static final String TEAMS_ENDPOINT = "v1/teams";
+    private static final String TEAMS_ENDPOINT = "race/2/teams";
     private static final String CHECKPOINT_ENDPOINT = "race/2/checkpoint";
     private static final String TAGS_ENDPOINT = "race/2/point_tags";
 
@@ -163,17 +163,17 @@ public class DataDownloader {
         return API_BASE_URL;
     }
 
-    private HttpUrl buildTeamsUrl(String categoryCode) {
+    private HttpUrl buildTeamsUrl(Integer categoryCode) {
         HttpUrl.Builder urlBuilder = HttpUrl.parse(getBaseUrl() + TEAMS_ENDPOINT).newBuilder();
 
         if (categoryCode != null) {
-            urlBuilder.addQueryParameter("category", categoryCode);
+            urlBuilder.addQueryParameter("category", categoryCode.toString());
         }
 
         return urlBuilder.build();
     }
 
-    public void downloadTeams(String categoryCode) {
+    public void downloadTeams(Integer categoryCode) {
         Request request = new Request.Builder().url(buildTeamsUrl(categoryCode)).build();
 
         client.newCall(request).enqueue(new Callback() {
