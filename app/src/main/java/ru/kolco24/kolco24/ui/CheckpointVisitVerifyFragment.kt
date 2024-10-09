@@ -10,6 +10,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity.MODE_PRIVATE
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -53,6 +54,8 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
     ): View {
         db = AppDatabase.getDatabase(requireContext())
         binding = FragmentNfcPointBinding.inflate(inflater, container, false)
+
+        teamId = requireContext().getSharedPreferences("team", MODE_PRIVATE).getInt("team_id", 0)
 
         arguments?.let {
             val checkpointTagId = arguments?.getInt("checkpointTagId", 0)
@@ -105,14 +108,6 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
         setupCountDownTimer()
         (countDownTimer as CountDownTimer).start()
-
-        //putInt("pointNumber", pointNumber)
-        // extract arguments
-        arguments?.let {
-            pointId = it.getString("pointId")
-            pointNumber = it.getInt("pointNumber")
-            teamId = it.getInt("teamId")
-        }
     }
 
 
@@ -226,7 +221,8 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
             if (checkpointTag == null) {
                 db.pointTagDao().getPointTagByUID(hexId)?.let { fetchedCheckpointTag ->
                     checkpointTag = fetchedCheckpointTag
-                    checkpoint = db.checkpointDao().getCheckpointById(fetchedCheckpointTag.checkpointId)
+                    checkpoint =
+                        db.checkpointDao().getCheckpointById(fetchedCheckpointTag.checkpointId)
                     requireActivity().runOnUiThread {
                         binding.pointNumber.text = String.format("%02d", checkpoint!!.number)
                     }
@@ -252,7 +248,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
             saveNfcCheck(hexId)
 
             val team = db.teamDao().getTeamById(teamId)
-            val paidPeople = team?.paidPeople?.roundToInt() ?: 2
+            val ucount = team?.ucount ?: 0
 
             requireActivity().runOnUiThread {
                 countDownTimer?.cancel()
@@ -266,14 +262,25 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                 binding.members.isVisible = true
             }
 
-            if (memberTags.count() >= paidPeople) {
+            if (memberTags.count() >= 6) {
+                requireActivity().runOnUiThread {
+                    Toast.makeText(
+                        requireActivity(),
+                        "Уже 6 участников!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return
+            }
+
+            if (memberTags.count() >= ucount && checkpoint != null) {
                 for (i in 0 until memberTags.count()) {
                     saveNfcCheck(memberTags[i].tagId)
                 }
                 db.photoDao().insert(
                     ru.kolco24.kolco24.data.entities.Photo(
                         teamId,
-                        pointNumber,
+                        checkpoint!!.number,
                         "",
                         "",
                         "",
