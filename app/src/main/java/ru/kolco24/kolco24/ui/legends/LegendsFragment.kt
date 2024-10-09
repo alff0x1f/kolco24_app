@@ -53,7 +53,7 @@ class LegendsFragment : Fragment(), MenuProvider {
         binding.pointsRecyclerView.adapter = adapter
         binding.pointsRecyclerView.layoutManager = LinearLayoutManager(root.context)
 
-        db.pointDao().getPointsByTeam(teamId).observe(
+        db.checkpointDao().getPointsByTeam(teamId).observe(
             viewLifecycleOwner
         ) { points: List<PointExt?> ->
             adapter.submitList(points)

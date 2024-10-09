@@ -12,10 +12,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import ru.kolco24.kolco24.data.dao.PointTagDao;
+import ru.kolco24.kolco24.data.daos.CheckpointDao;
 import ru.kolco24.kolco24.data.daos.MemberTagDao;
 import ru.kolco24.kolco24.data.daos.NfcCheckDao;
 import ru.kolco24.kolco24.data.daos.PhotoDao;
-import ru.kolco24.kolco24.data.daos.PointDao;
 import ru.kolco24.kolco24.data.daos.TeamDao;
 import ru.kolco24.kolco24.data.entities.NfcCheck;
 import ru.kolco24.kolco24.data.entities.Photo;
@@ -33,7 +33,7 @@ import ru.kolco24.kolco24.data.entities.MemberTag;
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
-    public abstract PointDao pointDao();
+    public abstract CheckpointDao checkpointDao();
 
     public abstract PointTagDao pointTagDao();
 
@@ -78,7 +78,7 @@ public abstract class AppDatabase extends RoomDatabase {
 
             //create empty database
             databaseWriteExecutor.execute(() -> {
-                PointDao photo_dao = INSTANCE.pointDao();
+                CheckpointDao photo_dao = INSTANCE.checkpointDao();
                 photo_dao.deleteAll();
 
                 // Photo Point

@@ -60,7 +60,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                 lifecycleScope.launch(Dispatchers.IO) {
                     checkpointTag = db.pointTagDao().getPointTagById(checkpointTagId)
                     checkpointTag?.let {
-                        checkpoint = db.pointDao().getPointById(it.checkpointId)
+                        checkpoint = db.checkpointDao().getCheckpointById(it.checkpointId)
                         checkpoint?.let {
                             pointNumber = checkpoint!!.number
                             arguments?.putInt(
@@ -226,7 +226,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
             if (checkpointTag == null) {
                 db.pointTagDao().getPointTagByUID(hexId)?.let { fetchedCheckpointTag ->
                     checkpointTag = fetchedCheckpointTag
-                    checkpoint = db.pointDao().getPointById(fetchedCheckpointTag.checkpointId)
+                    checkpoint = db.checkpointDao().getCheckpointById(fetchedCheckpointTag.checkpointId)
                     requireActivity().runOnUiThread {
                         binding.pointNumber.text = String.format("%02d", checkpoint!!.number)
                     }

@@ -27,13 +27,13 @@ import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.dao.PointTagDao;
 import ru.kolco24.kolco24.data.entities.Checkpoint;
-import ru.kolco24.kolco24.data.daos.PointDao;
+import ru.kolco24.kolco24.data.daos.CheckpointDao;
 import ru.kolco24.kolco24.data.entities.CheckpointTag;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.daos.TeamDao;
 
 public class DataDownloader {
-    final private PointDao mPointDao;
+    final private CheckpointDao mCheckpointDao;
     final private PointTagDao pointTagDao;
     final private TeamDao mTeamDao;
     final private Context mContext;
@@ -58,7 +58,7 @@ public class DataDownloader {
 
     public DataDownloader(Application application, DownloadCallback callback) {
         AppDatabase db = AppDatabase.getDatabase(application);
-        mPointDao = db.pointDao();
+        mCheckpointDao = db.checkpointDao();
         mTeamDao = db.teamDao();
         pointTagDao = db.pointTagDao();
         mContext = application.getApplicationContext();
@@ -176,6 +176,8 @@ public class DataDownloader {
     public void downloadTeams(Integer categoryCode) {
         Request request = new Request.Builder().url(buildTeamsUrl(categoryCode)).build();
 
+        System.out.println("request: " + request.toString());
+
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
@@ -202,9 +204,11 @@ public class DataDownloader {
                     String teams = responseBody.string();
                     try {
                         JSONArray jObj = new JSONArray(teams);
+                        System.out.println("teams: " + jObj.toString());
                         boolean isUpdated = false;
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject team = jObj.getJSONObject(i);
+                            System.out.println("team " + i + ": " + team.toString());
                             Team newTeam = Team.fromJson(team);
                             if (updateOrInsertTeam(newTeam)) {
                                 isUpdated = true;
@@ -321,11 +325,11 @@ public class DataDownloader {
     }
 
     private boolean updateOrInsertPoint(Checkpoint point) {
-        Checkpoint existPoint = mPointDao.getPointById(point.getId());
+        Checkpoint existPoint = mCheckpointDao.getCheckpointById(point.getId());
         if (existPoint == null) {
             // create new point
             try {
-                mPointDao.insert(point);
+                mCheckpointDao.insert(point);
             } catch (Exception e) {
                 e.printStackTrace();
                 return false;
@@ -355,7 +359,7 @@ public class DataDownloader {
             isUpdated = true;
         }
         if (isUpdated) {
-            mPointDao.update(existPoint);
+            mCheckpointDao.update(existPoint);
             return true;
         }
         return false;

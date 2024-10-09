@@ -8,15 +8,15 @@ import androidx.lifecycle.LiveData;
 import java.util.List;
 
 import ru.kolco24.kolco24.data.entities.Checkpoint;
-import ru.kolco24.kolco24.data.repositories.PointRepository;
+import ru.kolco24.kolco24.data.repositories.CheckpointRepository;
 
 public class PointViewModel extends AndroidViewModel {
-    private PointRepository mRepository;
+    private CheckpointRepository mRepository;
 
     /*__init__*/
     public PointViewModel(Application application) {
         super(application);
-        mRepository = new PointRepository(application);
+        mRepository = new CheckpointRepository(application);
     }
 
     LiveData<List<Checkpoint.PointExt>> getAllPoints() {

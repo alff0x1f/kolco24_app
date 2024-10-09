@@ -12,7 +12,7 @@ import ru.kolco24.kolco24.data.entities.Checkpoint;
 
 
 @Dao
-public interface PointDao {
+public interface CheckpointDao {
     @Insert
     void insert(Checkpoint point);
 
@@ -20,10 +20,10 @@ public interface PointDao {
     void update(Checkpoint point);
 
     @Query("SELECT * FROM points WHERE id = :id")
-    Checkpoint getPointById(int id);
+    Checkpoint getCheckpointById(int id);
 
     @Query("SELECT * FROM points WHERE number = :number")
-    Checkpoint getPointByNumber(int number);
+    Checkpoint getCheckpointByNumber(int number);
 
     @Query("SELECT " +
             "points.id, " +

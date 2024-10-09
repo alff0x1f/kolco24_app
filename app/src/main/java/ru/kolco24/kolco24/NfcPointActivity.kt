@@ -338,7 +338,7 @@ class NfcPointActivity : AppCompatActivity() {
                 val pointTag = db.pointTagDao().getPointTagByUID(hexId)
                 pointTag?.let {
                     pointId = it.tagUID
-                    pointNumber = db.pointDao().getPointById(it.checkpointId).number
+                    pointNumber = db.checkpointDao().getCheckpointById(it.checkpointId).number
 
                     // Switch back to the main thread to update UI components
                     withContext(Dispatchers.Main) {
