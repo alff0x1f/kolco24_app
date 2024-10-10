@@ -26,14 +26,17 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.dao.PointTagDao;
-import ru.kolco24.kolco24.data.entities.Checkpoint;
-import ru.kolco24.kolco24.data.daos.PointDao;
-import ru.kolco24.kolco24.data.entities.CheckpointTag;
-import ru.kolco24.kolco24.data.entities.Team;
+import ru.kolco24.kolco24.data.daos.CheckpointDao;
 import ru.kolco24.kolco24.data.daos.TeamDao;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
+import ru.kolco24.kolco24.data.entities.CheckpointTag;
+import ru.kolco24.kolco24.data.entities.MemberTag;
+import ru.kolco24.kolco24.data.entities.Team;
+
 
 public class DataDownloader {
-    final private PointDao mPointDao;
+    final private AppDatabase db;
+    final private CheckpointDao mCheckpointDao;
     final private PointTagDao pointTagDao;
     final private TeamDao mTeamDao;
     final private Context mContext;
@@ -48,17 +51,18 @@ public class DataDownloader {
     private static final String API_BASE_URL = "https://kolco24.ru/api/";
     private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
     private boolean isLocalDownload = false;
-    private static final String TEAMS_ENDPOINT = "v1/teams";
+    private static final String TEAMS_ENDPOINT = "race/2/teams";
     private static final String CHECKPOINT_ENDPOINT = "race/2/checkpoint";
     private static final String TAGS_ENDPOINT = "race/2/point_tags";
+    private static final String MEMBER_TAG_ENDPOINT = "member_tag/";
 
     public interface DownloadCallback {
         void onDownloadComplete();
     }
 
     public DataDownloader(Application application, DownloadCallback callback) {
-        AppDatabase db = AppDatabase.getDatabase(application);
-        mPointDao = db.pointDao();
+        db = AppDatabase.getDatabase(application);
+        mCheckpointDao = db.checkpointDao();
         mTeamDao = db.teamDao();
         pointTagDao = db.pointTagDao();
         mContext = application.getApplicationContext();
@@ -110,7 +114,7 @@ public class DataDownloader {
                             if (updateOrInsertPoint(newPoint)) {
                                 isUpdated = true;
                             }
-                            // If the point is updated, then update tags
+                            // update checkpoint tags
                             JSONArray tags = checkpoint.getJSONArray("tags");
                             for (int j = 0; j < tags.length(); j++) {
                                 JSONObject tagObject = tags.getJSONObject(j);
@@ -163,18 +167,20 @@ public class DataDownloader {
         return API_BASE_URL;
     }
 
-    private HttpUrl buildTeamsUrl(String categoryCode) {
+    private HttpUrl buildTeamsUrl(Integer categoryCode) {
         HttpUrl.Builder urlBuilder = HttpUrl.parse(getBaseUrl() + TEAMS_ENDPOINT).newBuilder();
 
         if (categoryCode != null) {
-            urlBuilder.addQueryParameter("category", categoryCode);
+            urlBuilder.addQueryParameter("category", categoryCode.toString());
         }
 
         return urlBuilder.build();
     }
 
-    public void downloadTeams(String categoryCode) {
+    public void downloadTeams(Integer categoryCode) {
         Request request = new Request.Builder().url(buildTeamsUrl(categoryCode)).build();
+
+        System.out.println("request: " + request.toString());
 
         client.newCall(request).enqueue(new Callback() {
             @Override
@@ -225,6 +231,66 @@ public class DataDownloader {
             }
         });
     }
+
+    public void downloadMemberTags() {
+        Request request = new Request.Builder()
+                .url(getBaseUrl() + MEMBER_TAG_ENDPOINT)
+                .build();
+
+        System.out.println("request: " + request.toString());
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                showToast("Ошибка обновления меток участников, нет связи с сервером");
+                executeCallback();
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        showToast("Ошибка " + response.code());
+                        executeCallback();
+                        throw new IOException("Unexpected code " + response);
+                    }
+
+                    if (responseBody == null) {
+                        showToast("Пустой ответ");
+                        executeCallback();
+                        throw new IOException("Empty response");
+                    }
+
+                    // Parse and insert MemberTags into the database
+                    String memberTagsJson = responseBody.string();
+                    try {
+                        JSONArray jArray = new JSONArray(memberTagsJson);
+                        System.out.println("memberTags: " + jArray.toString());
+                        boolean isUpdated = false;
+                        for (int i = 0; i < jArray.length(); i++) {
+                            JSONObject memberTagObj = jArray.getJSONObject(i);
+                            System.out.println("memberTag " + i + ": " + memberTagObj.toString());
+                            MemberTag newMemberTag = MemberTag.fromJson(memberTagObj);
+                            if (updateOrInsertMemberTag(newMemberTag)) {
+                                isUpdated = true;
+                            }
+                        }
+                        if (isUpdated) {
+                            showToast("Метки участников обновлены");
+                        } else {
+                            showToast("Нет новых меток участников");
+                        }
+                        executeCallback();
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        showToast("Ошибка декодирования JSON");
+                        executeCallback();
+                    }
+                }
+            }
+        });
+    }
+
 
     /**
      * Добавляет тег на сайт
@@ -301,6 +367,7 @@ public class DataDownloader {
         if (!existTeam.equals(team)) {
             // update team
             existTeam.setPaidPeople(team.getPaidPeople());
+            existTeam.setUcount(team.getUcount());
             existTeam.setDist(team.getDist());
             existTeam.setCategory(team.getCategory());
             existTeam.setTeamname(team.getTeamname());
@@ -320,12 +387,28 @@ public class DataDownloader {
         return false;
     }
 
+    public boolean updateOrInsertMemberTag(MemberTag newMemberTag) {
+        // Logic to check if MemberTag exists in the database
+        MemberTag existingMemberTag = db.memberTagDao().getMemberTagById(newMemberTag.getId());
+
+        if (existingMemberTag == null) {
+            // Update the existing MemberTag
+            db.memberTagDao().insertMemberTag(newMemberTag);
+            return true; // Indicating the database was updated
+        } else if (existingMemberTag.getNumber() != newMemberTag.getNumber() && existingMemberTag.getTagId() != newMemberTag.getTagId()) {
+            // Insert new MemberTag
+            db.memberTagDao().updateMemberTag(newMemberTag);
+            return true; // Indicating new entry was added
+        }
+        return false; // Indicating no changes were made
+    }
+
     private boolean updateOrInsertPoint(Checkpoint point) {
-        Checkpoint existPoint = mPointDao.getPointById(point.getId());
+        Checkpoint existPoint = mCheckpointDao.getCheckpointById(point.getId());
         if (existPoint == null) {
             // create new point
             try {
-                mPointDao.insert(point);
+                mCheckpointDao.insert(point);
             } catch (Exception e) {
                 e.printStackTrace();
                 return false;
@@ -355,7 +438,7 @@ public class DataDownloader {
             isUpdated = true;
         }
         if (isUpdated) {
-            mPointDao.update(existPoint);
+            mCheckpointDao.update(existPoint);
             return true;
         }
         return false;

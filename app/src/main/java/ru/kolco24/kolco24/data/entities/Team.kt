@@ -12,9 +12,11 @@ class Team(
     @PrimaryKey(autoGenerate = true)
     var id: Int,
     var owner: String,
-    var paidPeople: Float, // время 6h, 12h, 24h
+    var paidPeople: Float,
+    var ucount: Int,
+    // время 6h, 12h, 24h
     var dist: String, // категория 6h, 12h_mm, 12h_mw, 12h_team, 24h etc
-    var category: String,
+    var category: Int,
     var teamname: String,
     var city: String,
     var organization: String,
@@ -48,7 +50,7 @@ class Team(
         return id == other.id && java.lang.Float.compare(
             paidPeople,
             other.paidPeople
-        ) == 0 && dist == other.dist && this.category == other.category
+        ) == 0 && ucount == other.ucount && dist == other.dist && this.category == other.category
                 && teamname == other.teamname && city == other.city
                 && organization == other.organization && year == other.year
                 && startNumber == other.startNumber && startTime == other.startTime
@@ -67,7 +69,8 @@ class Team(
             val id = jsonObject.getInt("id")
             val paidPeople = jsonObject.optDouble("paid_people", 0.0).toFloat()
             val dist = jsonObject.optString("dist", "")
-            val category = jsonObject.optString("category", "")
+            val ucount = jsonObject.optInt("ucount", 0)
+            val category = jsonObject.optInt("category", 0)
             val teamname = jsonObject.optString("teamname", "")
             val city = jsonObject.optString("city", "")
             val organization = jsonObject.optString("organization", "")
@@ -79,7 +82,7 @@ class Team(
             val penalty = jsonObject.optInt("penalty", 0)
             val place = jsonObject.optInt("place", 0)
             return Team(
-                id, "", paidPeople, dist, category, teamname, city, organization,
+                id, "", paidPeople, ucount, dist, category, teamname, city, organization,
                 year, startNumber, startTime, finishTime, isDnf, penalty, place
             )
         }

@@ -16,7 +16,7 @@ import ru.kolco24.kolco24.data.entities.Team;
 public class TeamViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
     private final TextView teamNumber;
-    private final TextView paidPeople;
+    private final TextView ucount;
     private final TextView teamPlace;
 
     /*__init__*/
@@ -24,7 +24,7 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         super(itemView);
         textView = itemView.findViewById(R.id.textView);
         teamNumber = itemView.findViewById(R.id.team_number);
-        paidPeople = itemView.findViewById(R.id.paid_people);
+        ucount = itemView.findViewById(R.id.paid_people);
         teamPlace = itemView.findViewById(R.id.team_place);
     }
 
@@ -36,7 +36,7 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         } else {
             teamPlace.setText("-");
         }
-        paidPeople.setText(String.format("%.0f чел", team.getPaidPeople()));
+        ucount.setText(String.format("%d чел", team.getUcount()));
         //
         int currentTeam = itemView.getContext().getSharedPreferences(
                 "team", Context.MODE_PRIVATE

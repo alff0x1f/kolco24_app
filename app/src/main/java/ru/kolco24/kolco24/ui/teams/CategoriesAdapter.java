@@ -10,8 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class CategoriesAdapter extends FragmentStateAdapter {
-    private static final List<String> categorie_name = Arrays.asList("6ч", "12ч", "12ч МЖ", "12ч ММ", "12ч ЖЖ", "25ч");
-    private static final List<String> categorie_code = Arrays.asList("6h", "12h_team", "12h_mw", "12h_mm", "12h_ww", "24h");
+    private static final List<String> categorie_name = Arrays.asList("6ч", "12", "МЖ", "ММ", "ЖЖ", "24", "8ч", "8ч");
+    private static final List<Integer> categorie_code = Arrays.asList(8, 9, 10, 11, 12, 13, 14, 15);
     public CategoriesAdapter(@NonNull Fragment fragment) {
         super(fragment);
     }
@@ -19,10 +19,10 @@ public class CategoriesAdapter extends FragmentStateAdapter {
     @NonNull
     @Override
     public Fragment createFragment(int position) {
-        Fragment fragment = new DemoObjectFragment();
+        Fragment fragment = new TeamsCategoryFragment();
         Bundle args = new Bundle();
-        args.putString(DemoObjectFragment.CATEGORY_NAME, getCategoryName(position));
-        args.putString(DemoObjectFragment.CATEGORY_CODE, getCategoryCode(position));
+        args.putString(TeamsCategoryFragment.CATEGORY_NAME, getCategoryName(position));
+        args.putInt(TeamsCategoryFragment.CATEGORY_CODE, getCategoryCode(position));
         fragment.setArguments(args);
         return fragment;
     }
@@ -40,9 +40,9 @@ public class CategoriesAdapter extends FragmentStateAdapter {
         return categorie_name.get(position);
     }
 
-    public static String getCategoryCode(int position){
+    public static Integer getCategoryCode(int position){
         if (position < 0 || position >= categorie_code.size()) {
-            return "";
+            return 0;
         }
         return categorie_code.get(position);
     }
