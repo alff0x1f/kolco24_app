@@ -288,7 +288,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                 "",
                 "",
                 System.currentTimeMillis(),
-                memberTagUIDs.joinToString(", ")
+                memberTagUIDs.joinToString(",")
             )
         )
 
