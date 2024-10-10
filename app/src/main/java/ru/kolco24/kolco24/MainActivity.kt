@@ -16,7 +16,6 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.data.entities.MemberTag
@@ -136,9 +135,27 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         dialog.show()
     }
 
+    fun selectTeamRequiredDialog() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Выберите команду")
+        builder.setMessage("Нужно выбрать свою команду из списка")
+        builder.setPositiveButton("Выбрать") { _, _ ->
+            binding.navView.setSelectedItemId(R.id.navigation_home)
+        }
+        val dialog = builder.create()
+        dialog.show()
+    }
+
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
             val hexId = bytesToHex(tag.id)
+            val teamId = getSharedPreferences("team", MODE_PRIVATE).getInt("team_id", 0)
+            if (teamId == 0) {
+                runOnUiThread {
+                    selectTeamRequiredDialog()
+                }
+                return
+            }
 
             db.pointTagDao().getPointTagByUID(hexId)?.let { pointTag ->
                 runOnUiThread {

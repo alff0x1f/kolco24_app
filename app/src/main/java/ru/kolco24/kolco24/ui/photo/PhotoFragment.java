@@ -36,6 +36,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import ru.kolco24.kolco24.MainActivity;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
@@ -91,6 +92,11 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         //fab
         FloatingActionButton fab = binding.fab;
         fab.setOnClickListener(view -> {
+            if (teamId == 0) {
+                MainActivity mainActivity = (MainActivity) requireActivity();
+                mainActivity.selectTeamRequiredDialog();
+                return;
+            }
             Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
             startActivity(intent);
 //            NavHostFragment.findNavController(this).navigate(R.id.action_navigation_taken_points_to_navigation_new_photo);
@@ -307,13 +313,25 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             uploadPhotos(true);
         }
         if (menuItem.getItemId() == R.id.actionAddFromCamera) {
+            if (teamId == 0) {
+                MainActivity mainActivity = (MainActivity) requireActivity();
+                mainActivity.selectTeamRequiredDialog();
+                return true;
+            }
             Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
             startActivity(intent);
+            return true;
         }
         if (menuItem.getItemId() == R.id.actionAddFromGallery) {
+            if (teamId == 0) {
+                MainActivity mainActivity = (MainActivity) requireActivity();
+                mainActivity.selectTeamRequiredDialog();
+                return true;
+            }
             Intent intent = new Intent(getActivity(), NewPhotoActivity.class);
             intent.putExtra("fromGallery", true);
             startActivity(intent);
+            return true;
         }
         return false;
     }
