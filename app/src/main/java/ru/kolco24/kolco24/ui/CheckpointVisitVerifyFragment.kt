@@ -25,7 +25,6 @@ import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.data.entities.NfcCheck
 import ru.kolco24.kolco24.databinding.FragmentNfcPointBinding
-import kotlin.math.roundToInt
 
 class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
@@ -280,6 +279,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
         for (i in 0 until memberTags.count()) {
             saveNfcCheck(memberTags[i].tagId)
         }
+        val memberTagUIDs = memberTags.map { it.tagId }
         db.photoDao().insert(
             ru.kolco24.kolco24.data.entities.Photo(
                 teamId,
@@ -288,7 +288,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                 "",
                 "",
                 System.currentTimeMillis(),
-                memberTags.joinToString(", ")
+                memberTagUIDs.joinToString(", ")
             )
         )
 
