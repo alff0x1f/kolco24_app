@@ -143,7 +143,7 @@ public abstract class AppDatabase extends RoomDatabase {
 
         private void populateTeams(TeamDao teamDao) {
             try {
-                InputStream is = context.getAssets().open("team.json");
+                InputStream is = context.getAssets().open("teams.json");
                 BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                 StringBuilder jsonString = new StringBuilder();
                 String line;
