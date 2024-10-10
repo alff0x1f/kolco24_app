@@ -114,7 +114,7 @@ public class DataDownloader {
                             if (updateOrInsertPoint(newPoint)) {
                                 isUpdated = true;
                             }
-                            // If the point is updated, then update tags
+                            // update checkpoint tags
                             JSONArray tags = checkpoint.getJSONArray("tags");
                             for (int j = 0; j < tags.length(); j++) {
                                 JSONObject tagObject = tags.getJSONObject(j);

@@ -108,6 +108,7 @@ public abstract class AppDatabase extends RoomDatabase {
                 // PointTag
                 PointTagDao pointTagDao = INSTANCE.pointTagDao();
                 pointTagDao.deleteAllPointTags();
+                populateCheckpoints(photo_dao, pointTagDao);
 
                 // MemberTag
                 MemberTagDao memberTagDao = INSTANCE.memberTagDao();
@@ -116,6 +117,48 @@ public abstract class AppDatabase extends RoomDatabase {
                 // Load JSON data from assets and populate the database
 
             });
+        }
+
+        private void populateCheckpoints(CheckpointDao checkpointDao, PointTagDao pointTagDao) {
+            try {
+                InputStream is = context.getAssets().open("checkpoints.json");
+                BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+                StringBuilder jsonString = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    jsonString.append(line);
+                }
+                reader.close();
+
+                // Parse JSON and insert data
+                JSONArray jsonArray = new JSONArray(jsonString.toString());
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    JSONObject jsonObject = jsonArray.getJSONObject(i);
+                    Checkpoint checkpoint = Checkpoint.fromJson(jsonObject);
+                    checkpointDao.insert(checkpoint);
+
+                    JSONArray tags = jsonObject.getJSONArray("tags");
+                    for (int j = 0; j < tags.length(); j++) {
+                        JSONObject tagObject = tags.getJSONObject(j);
+                        String tagUID = tagObject.getString("tag_id");
+                        int id = tagObject.getInt("id");
+                        String checkMethod = tagObject.getString("check_method");
+
+                        CheckpointTag existCheckpointTag = pointTagDao.getPointTagByUID(tagUID);
+                        if (existCheckpointTag == null) {
+                            CheckpointTag checkpointTag = new CheckpointTag(
+                                    id,
+                                    checkpoint.getId(),
+                                    tagUID,
+                                    checkMethod
+                            );
+                            pointTagDao.insertPointTag(checkpointTag);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         private void populateMemberTags(MemberTagDao memberTagDao) {
