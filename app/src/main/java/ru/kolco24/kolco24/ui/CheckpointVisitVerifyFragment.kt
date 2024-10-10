@@ -193,6 +193,9 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
             val tagId = tag.id
             val ndef = Ndef.get(tag)
             val hexId = bytesToHex(tagId)
+
+            val team = db.teamDao().getTeamById(teamId)
+            val ucount = team?.ucount ?: 0
 //            val activity = requireActivity() as MainActivity
 
             if (readMemberTags) {
@@ -226,7 +229,12 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                     requireActivity().runOnUiThread {
                         binding.pointNumber.text = String.format("%02d", checkpoint!!.number)
                     }
-                    // TODO save checkpointVisit if all members are checked
+                    if (memberTags.count() >= ucount && checkpoint != null) {
+                        endVerify()
+                    } else {
+                        restartTimer()
+                    }
+                    binding.helperTextView.text = "Отсканируйте чипы участников"
                     return
                 }
             }
@@ -244,66 +252,73 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
             }
 
             // add hexId to list
-            memberTags.add(memberTag)
             saveNfcCheck(hexId)
 
-            val team = db.teamDao().getTeamById(teamId)
-            val ucount = team?.ucount ?: 0
-
-            requireActivity().runOnUiThread {
-                countDownTimer?.cancel()
-                setupCountDownTimer()
-                countDownTimer?.start()
-
-                val numberedMembers = memberTags.mapIndexed { index, element ->
-                    "${index + 1}) Чип ${element.number}"
-                }
-                binding.members.text = numberedMembers.joinToString("\n")
-                binding.members.isVisible = true
-            }
-
-            if (memberTags.count() >= 6) {
+            if (memberTags.count() >= ucount) {
                 requireActivity().runOnUiThread {
                     Toast.makeText(
                         requireActivity(),
-                        "Уже 6 участников!",
+                        "Уже ${ucount}  участников!",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
                 return
             }
+            memberTags.add(memberTag)
+            if (memberTags.count() == ucount && checkpoint == null){
+                binding.helperTextView.text = "Отсканируйте КП"
+            }
+            restartTimer()
 
             if (memberTags.count() >= ucount && checkpoint != null) {
-                for (i in 0 until memberTags.count()) {
-                    saveNfcCheck(memberTags[i].tagId)
-                }
-                db.photoDao().insert(
-                    ru.kolco24.kolco24.data.entities.Photo(
-                        teamId,
-                        checkpoint!!.number,
-                        "",
-                        "",
-                        "",
-                        System.currentTimeMillis(),
-                        memberTags.joinToString(", ")
-                    )
-                )
-
-                db.photoDao().getListPhotos().forEach {
-                    println("photo: ${it.id} ${it.teamId} ${it.pointNumber} ${it.photoUrl} ${it.photoThumbUrl} ${it.photoTime} ${it.time} ${it.pointNfc}")
-                }
-
-                countDownTimer?.cancel()
-                readMemberTags = false
-
-                requireActivity().runOnUiThread {
-                    binding.doneIcon.isVisible = true
-                    binding.timerTextView.isVisible = false
-                    binding.circularProgressBar.isVisible = false
-                    binding.button.text = "Закрыть"
-                    binding.helperTextView.text = "Все участники отмечены"
-                }
+                endVerify()
             }
+        }
+    }
+
+    private fun endVerify() {
+        for (i in 0 until memberTags.count()) {
+            saveNfcCheck(memberTags[i].tagId)
+        }
+        db.photoDao().insert(
+            ru.kolco24.kolco24.data.entities.Photo(
+                teamId,
+                checkpoint!!.number,
+                "",
+                "",
+                "",
+                System.currentTimeMillis(),
+                memberTags.joinToString(", ")
+            )
+        )
+
+        db.photoDao().getListPhotos().forEach {
+            println("photo: ${it.id} ${it.teamId} ${it.pointNumber} ${it.photoUrl} ${it.photoThumbUrl} ${it.photoTime} ${it.time} ${it.pointNfc}")
+        }
+
+        countDownTimer?.cancel()
+        readMemberTags = false
+
+        requireActivity().runOnUiThread {
+            binding.doneIcon.isVisible = true
+            binding.timerTextView.isVisible = false
+            binding.circularProgressBar.isVisible = false
+            binding.button.text = "Закрыть"
+            binding.helperTextView.text = "Все участники отмечены"
+        }
+    }
+
+    private fun restartTimer() {
+        requireActivity().runOnUiThread {
+            countDownTimer?.cancel()
+            setupCountDownTimer()
+            countDownTimer?.start()
+
+            val numberedMembers = memberTags.mapIndexed { index, element ->
+                "${index + 1}) Чип ${element.number}"
+            }
+            binding.members.text = numberedMembers.joinToString("\n")
+            binding.members.isVisible = true
         }
     }
 
