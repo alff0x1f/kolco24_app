@@ -102,6 +102,11 @@ public class PhotoFragment extends Fragment implements MenuProvider {
 //            NavHostFragment.findNavController(this).navigate(R.id.action_navigation_taken_points_to_navigation_new_photo);
         });
 
+        binding.textNoTeamId.setOnClickListener(view -> {
+            MainActivity mainActivity = (MainActivity) requireActivity();
+            mainActivity.getNavView().setSelectedItemId(R.id.navigation_home);
+        });
+
         // Add the MenuProvider to handle menu creation
         requireActivity().addMenuProvider(this, getViewLifecycleOwner());
 
