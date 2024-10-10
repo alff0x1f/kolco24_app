@@ -8,6 +8,12 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -62,7 +68,7 @@ public abstract class AppDatabase extends RoomDatabase {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
                                     AppDatabase.class, "kolco24_database_3")
-                            .addCallback(sRoomDatabaseCallback)
+                            .addCallback(new RoomDatabaseCallback(context)) // Pass context here
                             .build();
                 }
             }
@@ -70,13 +76,18 @@ public abstract class AppDatabase extends RoomDatabase {
         return INSTANCE;
     }
 
-    private static RoomDatabase.Callback sRoomDatabaseCallback = new RoomDatabase.Callback() {
+    private static class RoomDatabaseCallback extends RoomDatabase.Callback {
+        private final Context context;
+
+        RoomDatabaseCallback(Context context) {
+            this.context = context;
+        }
 
         @Override
         public void onCreate(@NonNull SupportSQLiteDatabase db) {
             super.onCreate(db);
 
-            //create empty database
+            // Create empty database and populate with initial data
             databaseWriteExecutor.execute(() -> {
                 CheckpointDao photo_dao = INSTANCE.checkpointDao();
                 photo_dao.deleteAll();
@@ -88,6 +99,7 @@ public abstract class AppDatabase extends RoomDatabase {
                 // Team
                 TeamDao teamDao = INSTANCE.teamDao();
                 teamDao.deleteAll();
+                populateTeams(teamDao);
 
                 // NfcCheck
                 NfcCheckDao nfcCheckDao = INSTANCE.nfcCheckDao();
@@ -100,7 +112,55 @@ public abstract class AppDatabase extends RoomDatabase {
                 // MemberTag
                 MemberTagDao memberTagDao = INSTANCE.memberTagDao();
                 memberTagDao.deleteAllMemberTags();
+                populateMemberTags(memberTagDao);
+                // Load JSON data from assets and populate the database
+
             });
         }
-    };
+
+        private void populateMemberTags(MemberTagDao memberTagDao) {
+            try {
+                InputStream is = context.getAssets().open("member_tags.json"); // Use passed context
+                BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+                StringBuilder jsonString = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    jsonString.append(line);
+                }
+                reader.close();
+
+                // Parse JSON and insert data
+                JSONArray jsonArray = new JSONArray(jsonString.toString());
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    JSONObject jsonObject = jsonArray.getJSONObject(i);
+                    MemberTag memberTag = MemberTag.fromJson(jsonObject);
+                    memberTagDao.insertMemberTag(memberTag);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        private void populateTeams(TeamDao teamDao) {
+            try {
+                InputStream is = context.getAssets().open("team.json");
+                BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+                StringBuilder jsonString = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    jsonString.append(line);
+                }
+                reader.close();
+
+                JSONArray jsonArray = new JSONArray(jsonString.toString());
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    JSONObject jsonObject = jsonArray.getJSONObject(i);
+                    Team team = Team.fromJson(jsonObject);
+                    teamDao.insert(team);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }

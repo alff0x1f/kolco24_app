@@ -208,11 +208,9 @@ public class DataDownloader {
                     String teams = responseBody.string();
                     try {
                         JSONArray jObj = new JSONArray(teams);
-                        System.out.println("teams: " + jObj.toString());
                         boolean isUpdated = false;
                         for (int i = 0; i < jObj.length(); i++) {
                             JSONObject team = jObj.getJSONObject(i);
-                            System.out.println("team " + i + ": " + team.toString());
                             Team newTeam = Team.fromJson(team);
                             if (updateOrInsertTeam(newTeam)) {
                                 isUpdated = true;
