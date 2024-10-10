@@ -24,15 +24,6 @@
             android:name=".NfcPointActivity"
             android:exported="true"
             android:screenOrientation="portrait">
-
-            <!-- Intent filter for the NFC action -->
-            <intent-filter>
-                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:mimeType="kolco24/point" />
-            </intent-filter>
         </activity>
         <activity
             android:name=".SettingsActivity"
@@ -56,8 +47,11 @@
             <!-- Intent filter for the main launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
+
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="kolco24/point" />
             </intent-filter>
         </activity>
 

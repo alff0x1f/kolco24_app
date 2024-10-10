@@ -13,6 +13,10 @@ import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupActionBarWithNavController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.data.entities.MemberTag
@@ -56,6 +60,10 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             }
         }
 
+        CoroutineScope(Dispatchers.IO).launch {
+            handleIntent(intent)
+        }
+
         val executor = Executors.newSingleThreadExecutor()
         executor.execute {
             val dataDownloader = DataDownloader(application)
@@ -78,6 +86,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             }
         }
     }
+
 
     override fun onResume() {
         super.onResume()
@@ -170,6 +179,21 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     override fun onSupportNavigateUp(): Boolean {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         return navController.navigateUp() || super.onSupportNavigateUp()
+    }
+
+    private fun handleIntent(intent: Intent) {
+        val action = intent.action
+        if (NfcAdapter.ACTION_NDEF_DISCOVERED == action) {
+            println("NDEF_DISCOVERED")
+            val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+            if (tag == null) {
+                Toast.makeText(this, "tag is null", Toast.LENGTH_SHORT).show()
+                return
+            }
+            CoroutineScope(Dispatchers.IO).launch {
+                onTagDiscovered(tag)
+            }
+        }
     }
 
 
