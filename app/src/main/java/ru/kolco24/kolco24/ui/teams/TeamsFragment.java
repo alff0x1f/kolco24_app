@@ -121,6 +121,9 @@ public class TeamsFragment extends Fragment implements MenuProvider {
         if (itemId == R.id.action_update || itemId == R.id.action_local_update) {
             handleUpdateAction(itemId == R.id.action_local_update);
             return true;
+        } else if (itemId == R.id.action_member_tag_update || itemId == R.id.action_local_member_tag_update) {
+            handleMemberTagUpdateAction(itemId == R.id.action_local_member_tag_update);
+            return true;
         }
         return false;
     }
@@ -137,6 +140,14 @@ public class TeamsFragment extends Fragment implements MenuProvider {
             dataDownloader.setLocalDownload(true);
         }
         dataDownloader.downloadTeams(null);
+    }
+
+    private void handleMemberTagUpdateAction(boolean isLocalUpdate) {
+        DataDownloader dataDownloader = new DataDownloader(requireActivity().getApplication());
+        if (isLocalUpdate) {
+            dataDownloader.setLocalDownload(true);
+        }
+        dataDownloader.downloadMemberTags();
     }
 
 

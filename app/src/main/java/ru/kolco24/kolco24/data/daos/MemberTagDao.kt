@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import ru.kolco24.kolco24.data.entities.Checkpoint
 import ru.kolco24.kolco24.data.entities.MemberTag
 
 @Dao
@@ -13,7 +14,7 @@ interface MemberTagDao {
     fun insertMemberTag(memberTag: MemberTag)
 
     @Update
-    suspend fun updateMemberTag(memberTag: MemberTag)
+    fun updateMemberTag(memberTag: MemberTag)
 
     @Query("SELECT * FROM MemberTag WHERE id = :id")
     fun getMemberTagById(id: Int): MemberTag?

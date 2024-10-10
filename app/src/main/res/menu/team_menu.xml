@@ -14,5 +14,13 @@
         android:id="@+id/action_local_update"
         android:title="@string/update_local"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_member_tag_update"
+        android:title="@string/update_member_tag"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_local_member_tag_update"
+        android:title="@string/update_local_member_tag"
+        app:showAsAction="never" />
 
 </menu>

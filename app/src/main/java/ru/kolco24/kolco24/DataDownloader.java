@@ -26,13 +26,16 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.dao.PointTagDao;
-import ru.kolco24.kolco24.data.entities.Checkpoint;
 import ru.kolco24.kolco24.data.daos.CheckpointDao;
-import ru.kolco24.kolco24.data.entities.CheckpointTag;
-import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.daos.TeamDao;
+import ru.kolco24.kolco24.data.entities.Checkpoint;
+import ru.kolco24.kolco24.data.entities.CheckpointTag;
+import ru.kolco24.kolco24.data.entities.MemberTag;
+import ru.kolco24.kolco24.data.entities.Team;
+
 
 public class DataDownloader {
+    final private AppDatabase db;
     final private CheckpointDao mCheckpointDao;
     final private PointTagDao pointTagDao;
     final private TeamDao mTeamDao;
@@ -51,13 +54,14 @@ public class DataDownloader {
     private static final String TEAMS_ENDPOINT = "race/2/teams";
     private static final String CHECKPOINT_ENDPOINT = "race/2/checkpoint";
     private static final String TAGS_ENDPOINT = "race/2/point_tags";
+    private static final String MEMBER_TAG_ENDPOINT = "member_tag/";
 
     public interface DownloadCallback {
         void onDownloadComplete();
     }
 
     public DataDownloader(Application application, DownloadCallback callback) {
-        AppDatabase db = AppDatabase.getDatabase(application);
+        db = AppDatabase.getDatabase(application);
         mCheckpointDao = db.checkpointDao();
         mTeamDao = db.teamDao();
         pointTagDao = db.pointTagDao();
@@ -230,6 +234,66 @@ public class DataDownloader {
         });
     }
 
+    public void downloadMemberTags() {
+        Request request = new Request.Builder()
+                .url(getBaseUrl() + MEMBER_TAG_ENDPOINT)
+                .build();
+
+        System.out.println("request: " + request.toString());
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                showToast("Ошибка обновления меток участников, нет связи с сервером");
+                executeCallback();
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        showToast("Ошибка " + response.code());
+                        executeCallback();
+                        throw new IOException("Unexpected code " + response);
+                    }
+
+                    if (responseBody == null) {
+                        showToast("Пустой ответ");
+                        executeCallback();
+                        throw new IOException("Empty response");
+                    }
+
+                    // Parse and insert MemberTags into the database
+                    String memberTagsJson = responseBody.string();
+                    try {
+                        JSONArray jArray = new JSONArray(memberTagsJson);
+                        System.out.println("memberTags: " + jArray.toString());
+                        boolean isUpdated = false;
+                        for (int i = 0; i < jArray.length(); i++) {
+                            JSONObject memberTagObj = jArray.getJSONObject(i);
+                            System.out.println("memberTag " + i + ": " + memberTagObj.toString());
+                            MemberTag newMemberTag = MemberTag.fromJson(memberTagObj);
+                            if (updateOrInsertMemberTag(newMemberTag)) {
+                                isUpdated = true;
+                            }
+                        }
+                        if (isUpdated) {
+                            showToast("Метки участников обновлены");
+                        } else {
+                            showToast("Нет новых меток участников");
+                        }
+                        executeCallback();
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        showToast("Ошибка декодирования JSON");
+                        executeCallback();
+                    }
+                }
+            }
+        });
+    }
+
+
     /**
      * Добавляет тег на сайт
      *
@@ -322,6 +386,22 @@ public class DataDownloader {
         }
 
         return false;
+    }
+
+    public boolean updateOrInsertMemberTag(MemberTag newMemberTag) {
+        // Logic to check if MemberTag exists in the database
+        MemberTag existingMemberTag = db.memberTagDao().getMemberTagById(newMemberTag.getId());
+
+        if (existingMemberTag == null) {
+            // Update the existing MemberTag
+            db.memberTagDao().insertMemberTag(newMemberTag);
+            return true; // Indicating the database was updated
+        } else if (existingMemberTag.getNumber() != newMemberTag.getNumber() && existingMemberTag.getTagId() != newMemberTag.getTagId()) {
+            // Insert new MemberTag
+            db.memberTagDao().updateMemberTag(newMemberTag);
+            return true; // Indicating new entry was added
+        }
+        return false; // Indicating no changes were made
     }
 
     private boolean updateOrInsertPoint(Checkpoint point) {
