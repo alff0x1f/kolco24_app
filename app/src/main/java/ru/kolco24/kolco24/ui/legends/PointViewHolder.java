@@ -48,8 +48,14 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         } else {
             pointTimeTextView.setText("");
         }
+        if (point.getDescription().isEmpty()) {
+            textDescription.setText("Описание пока скрыто");
+            textDescription.setTypeface(null, android.graphics.Typeface.ITALIC);
+        } else {
+            textDescription.setText(point.getDescription());
+            textDescription.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
 
-        textDescription.setText(point.getDescription());
         textCost.setText(String.format("%d-%02d", point.getCost(), point.getNumber()));
         Drawable drawable = ContextCompat.getDrawable(itemView.getContext(), R.drawable.cost_background);
         // set color based on cost
@@ -83,11 +89,11 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
 
 
         // on click listener
-        itemView.setOnClickListener(v -> {
-            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("point_number", point.getNumber());
-            itemView.getContext().startActivity(intent);
-        });
+        //        itemView.setOnClickListener(v -> {
+        //            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+        //            intent.putExtra("point_number", point.getNumber());
+        //            itemView.getContext().startActivity(intent);
+        //        });
     }
 
     /**
