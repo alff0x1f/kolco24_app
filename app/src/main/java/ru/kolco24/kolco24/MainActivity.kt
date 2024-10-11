@@ -36,7 +36,12 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         setContentView(binding.root)
 
         db = AppDatabase.getDatabase(application)
-        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        val nfc = NfcAdapter.getDefaultAdapter(this)
+        if (nfc != null) {
+            nfcAdapter = nfc
+        } else{
+            Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show()
+        }
 
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
@@ -73,12 +78,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             dataDownloader.downloadTeams(null)
         }
 
-        // Check for available NFC Adapter
-        if (nfcAdapter == null) {
-            // NFC is not supported;
-            Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show()
-        } else {
-            // Check if NFC is enabled
+        if (::nfcAdapter.isInitialized){
             if (!nfcAdapter.isEnabled) {
                 // NFC is disabled; show a dialog or message to prompt the user to enable it
                 showNFCEnableDialog()
