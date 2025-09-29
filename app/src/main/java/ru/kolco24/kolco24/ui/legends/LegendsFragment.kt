@@ -107,10 +107,10 @@ class LegendsFragment : Fragment(), MenuProvider {
             }
 
 
-//            R.id.action_add_tag -> {
-//                handleAddTagAction()
-//                true
-//            }
+            R.id.action_add_tag -> {
+                handleAddTagAction()
+                true
+            }
 
             else -> false
         }

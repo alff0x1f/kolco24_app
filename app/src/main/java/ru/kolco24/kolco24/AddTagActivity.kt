@@ -30,7 +30,7 @@ import java.io.IOException
 
 class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
-    private lateinit var nfcAdapter: NfcAdapter
+    private var nfcAdapter: NfcAdapter? = null
     private var currentTagId: String? = null
     private val client = okhttp3.OkHttpClient.Builder()
         .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
@@ -42,30 +42,26 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContentView(R.layout.activity_add_tag)
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+
+        // Handle window insets for proper padding
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
 
-        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        // Initial UI setup
         val tagIdTextView = findViewById<TextView>(R.id.tag_id_text)
         if (nfcAdapter == null) {
-            tagIdTextView.text = "NFC not supported on this device"
-            // NFC is not supported;
+            tagIdTextView.text = "NFC не поддерживается"
             Toast.makeText(this, "NFC не поддерживается", Toast.LENGTH_SHORT).show()
+        } else if (nfcAdapter?.isEnabled != true) {
+            tagIdTextView.text = "Включите NFC в настройках"
+            Toast.makeText(this, "Пожалуйста, включите NFC в настройках", Toast.LENGTH_SHORT).show()
         } else {
-            // Check if NFC is enabled
-            if (!nfcAdapter.isEnabled) {
-                tagIdTextView.text = "Включите NFC в настройках вашего телефона"
-                Toast.makeText(
-                    this,
-                    "Пожалуйста, включите NFC в настройках вашего телефона",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+            tagIdTextView.text = "Поднесите метку к задней панели телефона"
         }
 
         db = AppDatabase.getDatabase(applicationContext)
@@ -101,7 +97,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     override fun onResume() {
         super.onResume()
         // Enable NFC Reader Mode
-        nfcAdapter.enableReaderMode(
+        nfcAdapter?.enableReaderMode(
             this,
             this,  // The activity itself acts as the reader callback
             NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
@@ -112,7 +108,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     override fun onPause() {
         super.onPause()
         // Disable NFC Reader Mode
-        nfcAdapter.disableReaderMode(this)
+        nfcAdapter?.disableReaderMode(this)
     }
 
     // This method is called when a new NFC tag is detected
