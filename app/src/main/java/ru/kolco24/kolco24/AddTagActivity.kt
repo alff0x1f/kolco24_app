@@ -3,14 +3,19 @@ package ru.kolco24.kolco24
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.os.Bundle
+import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -27,7 +32,6 @@ import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.ui.members.MemberTagAdapter
 import java.io.IOException
 
-
 class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     private var nfcAdapter: NfcAdapter? = null
@@ -37,6 +41,10 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
         .build()
+
+    private enum class Mode { ADD, INVENTORY }
+
+    private var currentMode: Mode = Mode.ADD
 
     private lateinit var db: AppDatabase
 
@@ -84,6 +92,36 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         val tagNumberInput = findViewById<EditText>(R.id.tag_number_input)
         val submitButton = findViewById<Button>(R.id.submit_button)
 
+        // Spinner setup
+        val modeSpinner = findViewById<Spinner>(R.id.tag_choice_spinner)
+        ArrayAdapter.createFromResource(
+            this,
+            R.array.mode_choices,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            modeSpinner.adapter = adapter
+        }
+
+        val inputLayout = findViewById<View>(R.id.tag_number_input_layout)
+
+        modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                currentMode = if (position == 0) Mode.ADD else Mode.INVENTORY
+                val isAdd = currentMode == Mode.ADD
+                inputLayout.isVisible = isAdd
+                submitButton.isVisible = isAdd
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+
+        // Кнопка отправки
         submitButton.setOnClickListener {
             val tagNumber = tagNumberInput.text.toString().toIntOrNull()
             if (currentTagId != null && tagNumber != null) {
@@ -116,34 +154,40 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         tag?.let {
             currentTagId = bytesToHex(tag.id)
 
-            // Update UI on the main thread
             runOnUiThread {
                 findViewById<TextView>(R.id.tag_id_text).apply {
                     text = "Tag ID: $currentTagId"
                     setTextColor(resources.getColor(R.color.textContrast))
                 }
-                findViewById<EditText>(R.id.tag_number_input).apply {
-                    setText("")
-                    requestFocus()
-                    post {
-                        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-                        imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+                // Поле ввода чистим только в режиме добавления
+                if (currentMode == Mode.ADD) {
+                    findViewById<EditText>(R.id.tag_number_input).apply {
+                        setText("")
+                        requestFocus()
+                        post {
+                            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                            imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+                        }
                     }
                 }
             }
+
+            // Обновляем заголовок номером, если тег известен локально
             db.memberTagDao().getMemberTagByUID(currentTagId!!)?.let { memberTag ->
                 runOnUiThread {
-                    findViewById<TextView>(R.id.header_text).apply {
-                        text = "${memberTag.number}"
-                    }
+                    findViewById<TextView>(R.id.header_text).text = "${memberTag.number}"
                 }
             } ?: runOnUiThread {
-                findViewById<TextView>(R.id.header_text).apply {
-                    text = "Добавление меток"
-                }
+                findViewById<TextView>(R.id.header_text).text = "Добавление меток"
+            }
+
+            // В режиме инвентаризации сразу шлём touch
+            if (currentMode == Mode.INVENTORY) {
+                touchTagLastSeen(currentTagId!!)
             }
         }
     }
+
 
     private fun sendTagDataToServer(tagId: String, tagNumber: Int) {
         val requestJson = JSONObject().apply {
@@ -169,28 +213,82 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             }
 
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                if (response.isSuccessful) {
-                    val responseJson = JSONObject(response.body?.string())
-
-                    val memberTag = MemberTag(
-                        id = responseJson.getInt("id"),
-                        tagId = responseJson.getString("tag_id"),
-                        number = responseJson.getInt("number"),
-                    )
-                    db.memberTagDao().insertMemberTag(memberTag)
+                response.use {
+                    val bodyString = it.body?.string().orEmpty()
+                    if (it.isSuccessful) {
+                        val responseJson = JSONObject(bodyString)
+                        val memberTag = MemberTag(
+                            id = responseJson.getInt("id"),
+                            tagId = responseJson.getString("tag_id"),
+                            number = responseJson.getInt("number"),
+                        )
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            db.memberTagDao().insertMemberTag(memberTag)
+                        }
+                        runOnUiThread {
+                            findViewById<TextView>(R.id.tag_id_text).apply {
+                                text = "Метка сохранена"
+                                setTextColor(
+                                    androidx.core.content.ContextCompat.getColor(
+                                        this@AddTagActivity,
+                                        R.color.colorGreen
+                                    )
+                                )
+                            }
+                            findViewById<EditText>(R.id.tag_number_input).setText("")
+                        }
+                    } else {
+                        runOnUiThread {
+                            findViewById<TextView>(R.id.tag_id_text).apply {
+                                text = "Ошибка сохранения: $bodyString"
+                                setTextColor(
+                                    androidx.core.content.ContextCompat.getColor(
+                                        this@AddTagActivity,
+                                        R.color.colorRed
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
+            }
+        })
+    }
+
+    private fun touchTagLastSeen(tagId: String) {
+        val payload = JSONObject().apply {
+            put("tag_id", tagId)
+        }
+
+        val body = payload.toString()
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+
+        val request = okhttp3.Request.Builder()
+            .url("https://kolco24.ru/api/member_tag/touch/")
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                runOnUiThread {
+                    findViewById<TextView>(R.id.tag_id_text).apply {
+                        text = "Инвентаризация: ошибка отправки — ${e.message}"
+                        setTextColor(resources.getColor(R.color.colorRed))
+                    }
+                }
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 runOnUiThread {
                     if (response.isSuccessful) {
                         findViewById<TextView>(R.id.tag_id_text).apply {
-                            text = "Метка сохранена"
+                            text = "Инвентаризация: отметили last_seen_at"
                             setTextColor(resources.getColor(R.color.colorGreen))
                         }
-                        findViewById<EditText>(R.id.tag_number_input).apply {
-                            setText("")
-                        }
                     } else {
+                        val err = response.body?.string()
                         findViewById<TextView>(R.id.tag_id_text).apply {
-                            text = "Ошибка сохранения: ${response.body?.string()}"
+                            text = "Инвентаризация: ошибка ${response.code} — $err"
                             setTextColor(resources.getColor(R.color.colorRed))
                         }
                     }

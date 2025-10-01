@@ -13,4 +13,8 @@
         <item>Member</item>
         <item>Checkpoint</item>
     </string-array>
+    <string-array name="mode_choices">
+        <item>Добавление</item>
+        <item>Инвентаризация</item>
+    </string-array>
 </resources>
