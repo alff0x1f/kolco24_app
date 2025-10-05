@@ -25,6 +25,9 @@
             android:exported="false"
             android:label="@string/title_activity_settings" />
         <activity
+            android:name=".ui.teams.TeamSelectionActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.photo.NewPhotoActivity"
             android:exported="false"
             android:label="Добавить фото КП"

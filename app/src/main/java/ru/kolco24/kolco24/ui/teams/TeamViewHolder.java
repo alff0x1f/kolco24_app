@@ -1,7 +1,9 @@
 package ru.kolco24.kolco24.ui.teams;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -58,6 +60,10 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
                                 "Команда \"" + team.getTeamname() + "\" выбрана как ваша",
                                 Toast.LENGTH_SHORT
                         ).show();
+                        Activity activity = unwrapActivity(itemView.getContext());
+                        if (activity instanceof TeamSelectionActivity) {
+                            activity.finish();
+                        }
                     })
                     .setNegativeButton("Нет", (dialogInterface, i) -> {
                     })
@@ -72,5 +78,15 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.team_item, parent, false);
         return new TeamViewHolder(view);
+    }
+
+    private static Activity unwrapActivity(Context context) {
+        while (context instanceof ContextWrapper) {
+            if (context instanceof Activity) {
+                return (Activity) context;
+            }
+            context = ((ContextWrapper) context).getBaseContext();
+        }
+        return null;
     }
 }
