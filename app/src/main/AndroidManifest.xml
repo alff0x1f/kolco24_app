@@ -26,7 +26,8 @@
             android:label="@string/title_activity_settings" />
         <activity
             android:name=".ui.teams.TeamSelectionActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:theme="@style/Theme.Kolco24.NoActionBar" />
         <activity
             android:name=".ui.photo.NewPhotoActivity"
             android:exported="false"
