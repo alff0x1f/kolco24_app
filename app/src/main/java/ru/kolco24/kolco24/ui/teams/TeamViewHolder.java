@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.entities.Team;
+import ru.kolco24.kolco24.data.SettingsPreferences;
 
 public class TeamViewHolder extends RecyclerView.ViewHolder {
     private final TextView textView;
@@ -37,10 +38,8 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
             teamPlace.setText("-");
         }
         ucount.setText(String.format("%d чел", team.getUcount()));
-        //
-        int currentTeam = itemView.getContext().getSharedPreferences(
-                "team", Context.MODE_PRIVATE
-        ).getInt("team_id", 0);
+        Context context = itemView.getContext();
+        int currentTeam = SettingsPreferences.getSelectedTeamId(context);
         if (currentTeam == team.getId()) {
             itemView.setBackgroundColor(itemView.getResources().getColor(R.color.divider));
         } else {
@@ -48,13 +47,17 @@ public class TeamViewHolder extends RecyclerView.ViewHolder {
         }
 
         itemView.setOnClickListener(view -> {
-            AlertDialog dialog = new AlertDialog.Builder(itemView.getContext())
+            AlertDialog dialog = new AlertDialog.Builder(context)
                     .setTitle(team.getTeamname())
                     .setMessage("Эта ваша команда?")
                     .setPositiveButton("Да", (dialogInterface, i) -> {
-                        itemView.getContext().getSharedPreferences("team", Context.MODE_PRIVATE)
-                                .edit().putInt("team_id", team.getId()).apply();
-                        Toast.makeText(itemView.getContext(),
+                        SettingsPreferences.persistTeamSelection(
+                                context,
+                                team.getId(),
+                                team.getTeamname(),
+                                team.getStartNumber()
+                        );
+                        Toast.makeText(context,
                                 "Команда \"" + team.getTeamname() + "\" выбрана как ваша",
                                 Toast.LENGTH_SHORT
                         ).show();

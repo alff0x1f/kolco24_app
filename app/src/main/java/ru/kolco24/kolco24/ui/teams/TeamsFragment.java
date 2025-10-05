@@ -31,11 +31,14 @@ import ru.kolco24.kolco24.AddTagActivity;
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
+import ru.kolco24.kolco24.data.CategoryConfig;
+import ru.kolco24.kolco24.data.SettingsPreferences;
 
 public class TeamsFragment extends Fragment implements MenuProvider {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
     private SharedPreferences sharedpreferences;
+    private ViewPager2.OnPageChangeCallback pageChangeCallback;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -70,6 +73,17 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         attachTabToViewPager(binding.tabTeams, binding.viewPagerTeams);
+        int categoryCode = SettingsPreferences.getSelectedCategory(requireContext());
+        int position = CategoryConfig.findPositionByCode(categoryCode);
+        binding.viewPagerTeams.post(() -> binding.viewPagerTeams.setCurrentItem(position, false));
+        pageChangeCallback = new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                super.onPageSelected(position);
+                SettingsPreferences.setSelectedCategory(requireContext(), CategoryConfig.getCode(position));
+            }
+        };
+        binding.viewPagerTeams.registerOnPageChangeCallback(pageChangeCallback);
         //toast observer
         mTeamViewModel.getToastMessage().observe(getViewLifecycleOwner(), s -> {
             System.out.println("toast message: " + s);
@@ -154,6 +168,10 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (pageChangeCallback != null) {
+            binding.viewPagerTeams.unregisterOnPageChangeCallback(pageChangeCallback);
+            pageChangeCallback = null;
+        }
         binding = null;
     }
 

@@ -31,7 +31,7 @@ public class TeamViewModel extends AndroidViewModel {
         return mAllTeams;
     }
 
-    LiveData<List<Team>> getTeamsByCategory(Integer category) {
+    public LiveData<List<Team>> getTeamsByCategory(Integer category) {
         return mRepository.getTeamsByCategory(category);
     }
 

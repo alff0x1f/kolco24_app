@@ -36,4 +36,12 @@
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <string name="settings">Настройки</string>
     <string name="tag_admin">Метки (Админ)</string>
+    <string name="settings_competition_label">Текущее соревнование</string>
+    <string name="settings_category_label">Категория</string>
+    <string name="settings_team_label">Моя команда</string>
+    <string name="settings_team_spinner_placeholder">Выберите команду</string>
+    <string name="settings_team_not_selected">Команда не выбрана</string>
+    <string name="settings_team_summary">Вы выбрали команду %1$s — %2$s</string>
+    <string name="settings_team_item_format">%1$s — %2$s</string>
+    <string name="settings_no_teams_placeholder">Нет команд в выбранной категории</string>
 </resources>

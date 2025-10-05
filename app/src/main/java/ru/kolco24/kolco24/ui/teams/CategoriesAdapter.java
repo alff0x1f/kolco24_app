@@ -6,12 +6,9 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
-import java.util.Arrays;
-import java.util.List;
+import ru.kolco24.kolco24.data.CategoryConfig;
 
 public class CategoriesAdapter extends FragmentStateAdapter {
-    private static final List<String> categorie_name = Arrays.asList("6ч", "12", "МЖ", "ММ", "ЖЖ", "24", "8ч", "8ч");
-    private static final List<Integer> categorie_code = Arrays.asList(8, 9, 10, 11, 12, 13, 14, 15);
     public CategoriesAdapter(@NonNull Fragment fragment) {
         super(fragment);
     }
@@ -29,21 +26,15 @@ public class CategoriesAdapter extends FragmentStateAdapter {
 
     @Override
     public int getItemCount() {
-        return categorie_name.size();
+        return CategoryConfig.getCount();
     }
 
 
     public static String getCategoryName(int position) {
-        if (position < 0 || position >= categorie_name.size()) {
-            return "";
-        }
-        return categorie_name.get(position);
+        return CategoryConfig.getName(position);
     }
 
     public static Integer getCategoryCode(int position){
-        if (position < 0 || position >= categorie_code.size()) {
-            return 0;
-        }
-        return categorie_code.get(position);
+        return CategoryConfig.getCode(position);
     }
 }

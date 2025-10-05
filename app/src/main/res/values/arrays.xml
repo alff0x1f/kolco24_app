@@ -17,4 +17,14 @@
         <item>Добавление</item>
         <item>Инвентаризация</item>
     </string-array>
+
+    <string-array name="competition_names">
+        <item>Кольцо24 2023</item>
+        <item>Кольцо24 2024</item>
+    </string-array>
+
+    <integer-array name="competition_ids">
+        <item>8</item>
+        <item>9</item>
+    </integer-array>
 </resources>
