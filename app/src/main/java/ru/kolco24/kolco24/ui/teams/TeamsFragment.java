@@ -3,11 +3,7 @@ package ru.kolco24.kolco24.ui.teams;
 import static android.app.Activity.RESULT_OK;
 
 import android.annotation.SuppressLint;
-import android.content.ActivityNotFoundException;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -27,17 +23,15 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
-import ru.kolco24.kolco24.AddTagActivity;
 import ru.kolco24.kolco24.DataDownloader;
 import ru.kolco24.kolco24.R;
-import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 import ru.kolco24.kolco24.data.CategoryConfig;
 import ru.kolco24.kolco24.data.SettingsPreferences;
+import ru.kolco24.kolco24.databinding.FragmentTeamsBinding;
 
 public class TeamsFragment extends Fragment implements MenuProvider {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
-    private SharedPreferences sharedpreferences;
     private ViewPager2.OnPageChangeCallback pageChangeCallback;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -55,9 +49,6 @@ public class TeamsFragment extends Fragment implements MenuProvider {
 
 //        final TextView textView = binding.textHome;
 //        teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
-
-        sharedpreferences = getActivity().getSharedPreferences("team", Context.MODE_PRIVATE);
-        String team = sharedpreferences.getString("team", "");
 
         // QR code
 //        binding.fabQr.setOnClickListener(this::onClick);
@@ -173,22 +164,5 @@ public class TeamsFragment extends Fragment implements MenuProvider {
             pageChangeCallback = null;
         }
         binding = null;
-    }
-
-    private void onClick(View view) {
-        try {
-            Intent intent = new Intent("com.google.zxing.client.android.SCAN");
-            intent.putExtra("SCAN_MODE", "QR_CODE_MODE"); // "PRODUCT_MODE for bar codes
-            startActivityForResult(intent, 0);
-
-        } catch (Exception e) {
-            try {
-                Uri marketUri = Uri.parse("market://details?id=com.google.zxing.client.android");
-                Intent marketIntent = new Intent(Intent.ACTION_VIEW, marketUri);
-                startActivity(marketIntent);
-            } catch (ActivityNotFoundException e1) {
-                Toast.makeText(getActivity(), "Сканирование QR недоступно", Toast.LENGTH_LONG).show();
-            }
-        }
     }
 }

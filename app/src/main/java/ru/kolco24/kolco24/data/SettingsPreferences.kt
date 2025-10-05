@@ -15,7 +15,7 @@ object SettingsPreferences {
     const val KEY_TEAM_NUMBER = "team_number"
 
     const val DEFAULT_RACE_ID = 8
-    const val DEFAULT_CATEGORY_CODE = 8
+    const val DEFAULT_CATEGORY_CODE = 16
 
     @JvmStatic
     fun getPrefs(context: Context): SharedPreferences =
