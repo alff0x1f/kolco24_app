@@ -36,4 +36,19 @@
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <string name="settings">Настройки</string>
     <string name="tag_admin">Метки (Админ)</string>
+    <string name="current_team_title">Ваша команда</string>
+    <string name="team_category_title_format">Команды %1$s</string>
+    <string name="change_team">Изменить команду</string>
+    <string name="team_not_selected_message">Команда не выбрана</string>
+    <string name="team_not_found_message">Не удалось загрузить данные команды</string>
+    <string name="team_category_mismatch_message">Выбранная команда относится к другой категории</string>
+    <string name="team_number_format">Стартовый номер: %1$s</string>
+    <string name="team_category_format">Категория: %1$s</string>
+    <string name="team_city_format">Город: %1$s</string>
+    <string name="team_organization_format">Организация: %1$s</string>
+    <string name="team_members_format">Участников: %1$d</string>
+    <string name="team_info_not_specified">не указано</string>
+    <string name="team_selection_empty">Команды не найдены. Обновите список, потянув вниз.</string>
+    <string name="select_team_title">Выбор команды %1$s</string>
+    <string name="select_team_title_generic">Выбор команды</string>
 </resources>
