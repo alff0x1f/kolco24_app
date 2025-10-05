@@ -47,6 +47,7 @@ class SettingsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         selectedCategoryCode = SettingsPreferences.getSelectedCategory(requireContext())
         selectedTeamId = SettingsPreferences.getSelectedTeamId(requireContext())
+        restoreTeamSummaryFromPreferences()
         setupCompetitionSpinner()
         setupCategorySpinner()
         setupTeamSpinner()
@@ -129,6 +130,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupTeamSpinner() {
+        ignoreTeamSelection = true
         teamAdapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_item,
@@ -202,15 +204,33 @@ class SettingsFragment : Fragment() {
         updateTeamSummary(newTeams.getOrNull(index))
     }
 
-    private fun updateTeamSummary(team: Team?) {
-        binding.teamSummary.text = if (team == null) {
-            getString(R.string.settings_team_not_selected)
+    private fun restoreTeamSummaryFromPreferences() {
+        if (selectedTeamId == 0) {
+            applyTeamSummary(null, null)
+            return
+        }
+        val teamName = SettingsPreferences.getSelectedTeamName(requireContext())
+        val teamNumber = SettingsPreferences.getSelectedTeamNumber(requireContext())
+        if (teamName.isNullOrBlank()) {
+            applyTeamSummary(null, null)
         } else {
-            getString(
-                R.string.settings_team_summary,
-                team.startNumber,
-                team.teamname
-            )
+            applyTeamSummary(teamNumber, teamName)
+        }
+    }
+
+    private fun updateTeamSummary(team: Team?) {
+        if (team == null) {
+            applyTeamSummary(null, null)
+        } else {
+            applyTeamSummary(team.startNumber, team.teamname)
+        }
+    }
+
+    private fun applyTeamSummary(startNumber: String?, teamName: String?) {
+        binding.teamSummary.text = when {
+            teamName.isNullOrBlank() -> getString(R.string.settings_team_not_selected)
+            startNumber.isNullOrBlank() -> getString(R.string.settings_team_summary_name_only, teamName)
+            else -> getString(R.string.settings_team_summary, startNumber, teamName)
         }
     }
 
