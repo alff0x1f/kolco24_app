@@ -46,7 +46,10 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
         val appBarConfiguration = AppBarConfiguration.Builder(
-            R.id.navigation_home, R.id.navigation_taken_points, R.id.navigation_legends
+            R.id.navigation_home,
+            R.id.navigation_taken_points,
+            R.id.navigation_legends,
+            R.id.navigation_settings
         ).build()
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration)
@@ -144,7 +147,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         builder.setTitle("Выберите команду")
         builder.setMessage("Нужно выбрать свою команду из списка")
         builder.setPositiveButton("Выбрать") { _, _ ->
-            binding.navView.setSelectedItemId(R.id.navigation_home)
+            binding.navView.setSelectedItemId(R.id.navigation_settings)
         }
         val dialog = builder.create()
         dialog.show()

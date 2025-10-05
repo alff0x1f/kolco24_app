@@ -28,6 +28,7 @@ import ru.kolco24.kolco24.data.AppDatabase;
 import ru.kolco24.kolco24.data.dao.PointTagDao;
 import ru.kolco24.kolco24.data.daos.CheckpointDao;
 import ru.kolco24.kolco24.data.daos.TeamDao;
+import ru.kolco24.kolco24.data.SettingsPreferences;
 import ru.kolco24.kolco24.data.entities.Checkpoint;
 import ru.kolco24.kolco24.data.entities.CheckpointTag;
 import ru.kolco24.kolco24.data.entities.MemberTag;
@@ -51,9 +52,9 @@ public class DataDownloader {
     private static final String API_BASE_URL = "https://kolco24.ru/api/";
     private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
     private boolean isLocalDownload = false;
-    private static final String TEAMS_ENDPOINT = "race/8/teams";
-    private static final String CHECKPOINT_ENDPOINT = "race/8/checkpoint";
-    private static final String TAGS_ENDPOINT = "race/8/point_tags";
+    private static final String TEAMS_SUFFIX = "teams";
+    private static final String CHECKPOINT_SUFFIX = "checkpoint";
+    private static final String TAGS_SUFFIX = "point_tags";
     private static final String MEMBER_TAG_ENDPOINT = "member_tag/";
 
     public interface DownloadCallback {
@@ -75,7 +76,7 @@ public class DataDownloader {
 
     public void downloadCheckpoints() {
         Request request = new Request.Builder()
-                .url(getBaseUrl() + CHECKPOINT_ENDPOINT)
+                .url(getBaseUrl() + buildRaceEndpoint(CHECKPOINT_SUFFIX))
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
@@ -167,8 +168,16 @@ public class DataDownloader {
         return API_BASE_URL;
     }
 
+    private int getCurrentRaceId() {
+        return SettingsPreferences.getRaceId(mContext);
+    }
+
+    private String buildRaceEndpoint(String suffix) {
+        return "race/" + getCurrentRaceId() + "/" + suffix;
+    }
+
     private HttpUrl buildTeamsUrl(Integer categoryCode) {
-        HttpUrl.Builder urlBuilder = HttpUrl.parse(getBaseUrl() + TEAMS_ENDPOINT).newBuilder();
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(getBaseUrl() + buildRaceEndpoint(TEAMS_SUFFIX)).newBuilder();
 
         if (categoryCode != null) {
             urlBuilder.addQueryParameter("category", categoryCode.toString());
@@ -318,7 +327,7 @@ public class DataDownloader {
 
         // Build the POST request with the JSON body
         Request request = new Request.Builder()
-                .url(getBaseUrl() + TAGS_ENDPOINT) // Replace UPLOAD_ENDPOINT with your server endpoint
+                .url(getBaseUrl() + buildRaceEndpoint(TAGS_SUFFIX)) // Replace UPLOAD_ENDPOINT with your server endpoint
                 .post(requestBody)
                 .build();
 

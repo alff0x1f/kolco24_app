@@ -16,4 +16,9 @@
         android:icon="@drawable/ic_legends_24dp"
         android:title="@string/title_legends" />
 
+    <item
+        android:id="@+id/navigation_settings"
+        android:icon="@drawable/ic_baseline_settings_24"
+        android:title="@string/settings" />
+
 </menu>

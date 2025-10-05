@@ -40,6 +40,13 @@
             app:destination="@id/nfcPointFragment" />
     </fragment>
 
+    <!-- Settings Fragment -->
+    <fragment
+        android:id="@+id/navigation_settings"
+        android:name="ru.kolco24.kolco24.ui.settings.SettingsFragment"
+        android:label="@string/settings"
+        tools:layout="@layout/fragment_settings" />
+
     <!-- NFC Point Fragment -->
     <fragment
         android:id="@+id/nfcPointFragment"
