@@ -51,7 +51,6 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration)
         NavigationUI.setupWithNavController(binding.navView, navController)
-        setupActionBarWithNavController(navController, appBarConfiguration)
 
         // Add OnDestinationChangedListener to NavController
         navController.addOnDestinationChangedListener { _, destination, _ ->
