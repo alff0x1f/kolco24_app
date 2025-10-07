@@ -6,4 +6,5 @@
     <dimen name="fab_margin">16dp</dimen>
     <dimen name="small_padding">8dp</dimen>
     <dimen name="big_padding">16dp</dimen>
+    <dimen name="content_bottom_padding">100dp</dimen>
 </resources>

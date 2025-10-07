@@ -29,7 +29,7 @@
                 android:fontFamily="sans-serif-black"
                 android:text=""
                 android:textColor="@color/textContrast"
-                android:textSize="24sp" />
+                android:textSize="18sp" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/my_points_recycler_view"
@@ -89,21 +89,24 @@
                 android:layout_marginLeft="@dimen/small_padding"
                 android:layout_marginRight="@dimen/small_padding"
                 android:background="@color/divider" />
-
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/content_bottom_padding" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
     <Button
         android:id="@+id/textNoTeamId"
+        style="?attr/materialButtonOutlinedStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="Выбрать команду"
+        android:text="@string/select_team"
         android:textSize="18sp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"

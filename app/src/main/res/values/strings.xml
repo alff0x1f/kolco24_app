@@ -48,4 +48,5 @@
     <string name="settings_server_label">Сервер</string>
     <string name="settings_server_local">Local</string>
     <string name="settings_server_internet">Internet</string>
+    <string name="select_team">Выбрать команду</string>
 </resources>
