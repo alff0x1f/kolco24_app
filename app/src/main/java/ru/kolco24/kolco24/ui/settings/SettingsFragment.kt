@@ -2,6 +2,9 @@ package ru.kolco24.kolco24.ui.settings
 
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
@@ -9,16 +12,18 @@ import android.widget.ArrayAdapter
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.LiveData
+import androidx.core.view.MenuProvider
 import ru.kolco24.kolco24.R
 import ru.kolco24.kolco24.data.CategoryConfig
 import ru.kolco24.kolco24.data.SettingsPreferences
 import ru.kolco24.kolco24.data.entities.Team
 import ru.kolco24.kolco24.databinding.FragmentSettingsBinding
 import ru.kolco24.kolco24.ui.teams.TeamViewModel
+import ru.kolco24.kolco24.DataDownloader
 
 private data class CompetitionOption(val id: Int, val title: String)
 
-class SettingsFragment : Fragment() {
+class SettingsFragment : Fragment(), MenuProvider {
 
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
@@ -45,6 +50,7 @@ class SettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        requireActivity().addMenuProvider(this, viewLifecycleOwner)
         selectedCategoryCode = SettingsPreferences.getSelectedCategory(requireContext())
         selectedTeamId = SettingsPreferences.getSelectedTeamId(requireContext())
         restoreTeamSummaryFromPreferences()
@@ -252,5 +258,48 @@ class SettingsFragment : Fragment() {
             options.add(CompetitionOption(ids[index], names[index]))
         }
         return options
+    }
+
+    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+        menu.clear()
+        menuInflater.inflate(R.menu.team_menu, menu)
+    }
+
+    override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+        return when (menuItem.itemId) {
+            R.id.action_update -> {
+                handleUpdateAction(isLocalUpdate = false)
+                true
+            }
+            R.id.action_local_update -> {
+                handleUpdateAction(isLocalUpdate = true)
+                true
+            }
+            R.id.action_member_tag_update -> {
+                handleMemberTagUpdateAction(isLocalUpdate = false)
+                true
+            }
+            R.id.action_local_member_tag_update -> {
+                handleMemberTagUpdateAction(isLocalUpdate = true)
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun handleUpdateAction(isLocalUpdate: Boolean) {
+        val dataDownloader = DataDownloader(requireActivity().application)
+        if (isLocalUpdate) {
+            dataDownloader.setLocalDownload(true)
+        }
+        dataDownloader.downloadTeams(null)
+    }
+
+    private fun handleMemberTagUpdateAction(isLocalUpdate: Boolean) {
+        val dataDownloader = DataDownloader(requireActivity().application)
+        if (isLocalUpdate) {
+            dataDownloader.setLocalDownload(true)
+        }
+        dataDownloader.downloadMemberTags()
     }
 }
