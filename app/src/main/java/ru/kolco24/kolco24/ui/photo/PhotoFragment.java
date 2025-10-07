@@ -38,6 +38,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import ru.kolco24.kolco24.MainActivity;
 import ru.kolco24.kolco24.R;
+import ru.kolco24.kolco24.data.SettingsPreferences;
 import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
@@ -62,10 +63,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         View root = binding.getRoot();
 
         //
-        teamId = requireContext().getSharedPreferences(
-                "team",
-                Context.MODE_PRIVATE
-        ).getInt("team_id", 0);
+        teamId = SettingsPreferences.getSelectedTeamId(requireContext());
 
         phoneUuid = requireContext().getSharedPreferences(
                 "team",
@@ -187,8 +185,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     @Override
     public void onResume() {
         super.onResume();
-        teamId = requireContext().getSharedPreferences("team", Context.MODE_PRIVATE).
-                getInt("team_id", 0);
+        teamId = SettingsPreferences.getSelectedTeamId(requireContext());
         new LoadPhotosAsyncTask().execute(String.valueOf(teamId));
         uploadPhotos(false);
     }

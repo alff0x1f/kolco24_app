@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.SettingsPreferences
 import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
@@ -145,7 +146,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     fun selectTeamRequiredDialog() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Выберите команду")
-        builder.setMessage("Нужно выбрать свою команду из списка")
+        builder.setMessage("Нужно выбрать свою команду в настройках")
         builder.setPositiveButton("Выбрать") { _, _ ->
             binding.navView.setSelectedItemId(R.id.navigation_settings)
         }
@@ -156,7 +157,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
             val hexId = bytesToHex(tag.id)
-            val teamId = getSharedPreferences("team", MODE_PRIVATE).getInt("team_id", 0)
+            val teamId = SettingsPreferences.getSelectedTeamId(this)
             if (teamId == 0) {
                 runOnUiThread {
                     selectTeamRequiredDialog()

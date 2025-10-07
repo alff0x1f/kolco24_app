@@ -16,6 +16,7 @@ import ru.kolco24.kolco24.AddTagActivity
 import ru.kolco24.kolco24.DataDownloader
 import ru.kolco24.kolco24.R
 import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.SettingsPreferences
 import ru.kolco24.kolco24.data.entities.Checkpoint.PointExt
 import ru.kolco24.kolco24.databinding.FragmentLegendsBinding
 import ru.kolco24.kolco24.ui.legends.PointListAdapter.PointDiff
@@ -35,8 +36,7 @@ class LegendsFragment : Fragment(), MenuProvider {
 
         db = AppDatabase.getDatabase(requireActivity().application)
 
-        teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE)
-            .getInt("team_id", 0)
+        teamId = SettingsPreferences.getSelectedTeamId(requireContext())
 
         db.photoDao().getCostSum(teamId).observe(
             viewLifecycleOwner
@@ -83,8 +83,7 @@ class LegendsFragment : Fragment(), MenuProvider {
 
     override fun onResume() {
         super.onResume()
-        teamId = requireActivity().getSharedPreferences("team", Context.MODE_PRIVATE)
-            .getInt("team_id", 0)
+        teamId = SettingsPreferences.getSelectedTeamId(requireContext())
     }
 
 

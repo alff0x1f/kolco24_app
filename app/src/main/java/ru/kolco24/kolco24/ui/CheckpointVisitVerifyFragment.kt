@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.AppDatabase
+import ru.kolco24.kolco24.data.SettingsPreferences
 import ru.kolco24.kolco24.data.entities.Checkpoint
 import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.data.entities.MemberTag
@@ -54,7 +55,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
         db = AppDatabase.getDatabase(requireContext())
         binding = FragmentNfcPointBinding.inflate(inflater, container, false)
 
-        teamId = requireContext().getSharedPreferences("team", MODE_PRIVATE).getInt("team_id", 0)
+        teamId = SettingsPreferences.getSelectedTeamId(requireContext())
 
         arguments?.let {
             val checkpointTagId = arguments?.getInt("checkpointTagId", 0)

@@ -29,6 +29,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import ru.kolco24.kolco24.R;
+import ru.kolco24.kolco24.data.SettingsPreferences;
 import ru.kolco24.kolco24.data.entities.Photo;
 
 import java.io.ByteArrayOutputStream;
@@ -57,9 +58,8 @@ public class NewPhotoActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        int teamId = getApplicationContext()
-                .getSharedPreferences("team", Context.MODE_PRIVATE)
-                .getInt("team_id", 0);
+        int teamId = SettingsPreferences.getSelectedTeamId(getApplicationContext());
+
         if (teamId == 0) {
             AlertDialog dialog = new AlertDialog.Builder(this)
                     .setTitle("Не выбрана команда")
@@ -363,10 +363,7 @@ public class NewPhotoActivity extends AppCompatActivity {
         PhotoViewModel photoViewModel = new PhotoViewModel(getApplication());
         if (photoId == 0) {
             // Create new photo
-            int teamId = getApplicationContext().getSharedPreferences(
-                    "team",
-                    Context.MODE_PRIVATE
-            ).getInt("team_id", 0);
+            int teamId = SettingsPreferences.getSelectedTeamId(getApplicationContext());
             photoViewModel.insert(new Photo(
                     teamId,
                     pointNumber,
