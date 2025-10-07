@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import java.util.UUID
 
 object SettingsPreferences {
     private const val PREF_NAME = "settings"
@@ -12,6 +13,7 @@ object SettingsPreferences {
     const val KEY_TEAM_ID = "team_id"
     const val KEY_TEAM_NAME = "team_name"
     const val KEY_TEAM_NUMBER = "team_number"
+    const val KEY_PHONE_UUID = "phone_uuid"
 
     const val DEFAULT_RACE_ID = 8
     const val DEFAULT_CATEGORY_CODE = 16
@@ -71,5 +73,26 @@ object SettingsPreferences {
             remove(KEY_TEAM_NAME)
             remove(KEY_TEAM_NUMBER)
         }
+    }
+
+    @JvmStatic
+    fun getPhoneUuid(context: Context): String =
+        getPrefs(context).getString(KEY_PHONE_UUID, "").orEmpty()
+
+    @JvmStatic
+    fun persistPhoneUuid(context: Context, uuid: String) {
+        getPrefs(context).edit { putString(KEY_PHONE_UUID, uuid) }
+    }
+
+    @JvmStatic
+    fun ensurePhoneUuid(context: Context): String {
+        val existing = getPhoneUuid(context)
+        if (existing.isNotEmpty()) {
+            return existing
+        }
+
+        val generated = UUID.randomUUID().toString()
+        persistPhoneUuid(context, generated)
+        return generated
     }
 }

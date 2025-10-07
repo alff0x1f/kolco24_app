@@ -1,7 +1,6 @@
 package ru.kolco24.kolco24.ui.photo;
 
 
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Rect;
 import android.os.AsyncTask;
@@ -64,19 +63,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
 
         //
         teamId = SettingsPreferences.getSelectedTeamId(requireContext());
-
-        phoneUuid = requireContext().getSharedPreferences(
-                "team",
-                Context.MODE_PRIVATE
-        ).getString("phone_uuid", "");
-
-        if (phoneUuid.isEmpty()) {
-            phoneUuid = java.util.UUID.randomUUID().toString();
-            requireContext().getSharedPreferences(
-                    "team",
-                    Context.MODE_PRIVATE
-            ).edit().putString("phone_uuid", phoneUuid).apply();
-        }
+        phoneUuid = SettingsPreferences.ensurePhoneUuid(requireContext());
 
         // recycle view
         RecyclerView recyclerView = binding.myPointsRecyclerView;
