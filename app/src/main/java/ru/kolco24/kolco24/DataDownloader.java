@@ -190,8 +190,6 @@ public class DataDownloader {
     public void downloadTeams(Integer categoryCode) {
         Request request = new Request.Builder().url(buildTeamsUrl(categoryCode)).build();
 
-        System.out.println("request: " + request.toString());
-
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {

@@ -68,6 +68,7 @@ public interface CheckpointDao {
             "  FROM point_tags " +
             "  GROUP BY checkpointId " +
             ") tags ON points.id = tags.checkpointId " +
+            "WHERE points.type = 'kp' " +
             "ORDER BY " +
             "     CASE " +
             "        WHEN photo.photoTime IS NULL THEN 1" +

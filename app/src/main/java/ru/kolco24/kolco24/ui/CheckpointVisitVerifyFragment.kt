@@ -188,10 +188,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
-            // toast tag id
-            println("NfcPointTagFragment: Tag ID: ${bytesToHex(tag.id)}")
             val tagId = tag.id
-            val ndef = Ndef.get(tag)
             val hexId = bytesToHex(tagId)
 
             val team = db.teamDao().getTeamById(teamId)
@@ -328,8 +325,6 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
      * save value to room database
      */
     private fun saveNfcCheck(hexId: String) {
-        System.out.println(System.currentTimeMillis())
-
         if (pointId != null) {
             val nfcCheck = NfcCheck(
                 pointId!!,

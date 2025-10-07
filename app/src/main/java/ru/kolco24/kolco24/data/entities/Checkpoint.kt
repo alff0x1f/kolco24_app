@@ -35,7 +35,7 @@ class Checkpoint(
             "number": 54,
             "description": "Описание 54",
             "cost": 1,
-            "type": "1d8f550e960000",
+            "type": "kp",
             "tags": [
               "1d8f550e960000",
               "1d90550e960000"
