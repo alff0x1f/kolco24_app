@@ -30,7 +30,7 @@ public class PointListAdapter extends ListAdapter<Checkpoint.PointExt, PointView
 
         @Override
         public boolean areItemsTheSame(@NonNull Checkpoint.PointExt oldItem, @NonNull Checkpoint.PointExt newItem) {
-            return oldItem == newItem;
+            return oldItem.getId() == newItem.getId();
         }
 
         @Override

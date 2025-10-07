@@ -1,10 +1,14 @@
 package ru.kolco24.kolco24.data.entities
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import org.json.JSONObject
 
-@Entity(tableName = "points")
+@Entity(
+    tableName = "points",
+    indices = [Index(value = ["number"], unique = true)]
+)
 class Checkpoint(
     var number: Int,
     var description: String,

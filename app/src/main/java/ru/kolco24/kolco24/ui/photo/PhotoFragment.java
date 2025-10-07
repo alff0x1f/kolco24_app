@@ -89,7 +89,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
 
         binding.textNoTeamId.setOnClickListener(view -> {
             MainActivity mainActivity = (MainActivity) requireActivity();
-            mainActivity.getNavView().setSelectedItemId(R.id.navigation_home);
+            mainActivity.getNavView().setSelectedItemId(R.id.navigation_settings);
         });
 
         // Add the MenuProvider to handle menu creation

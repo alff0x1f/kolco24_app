@@ -1,9 +1,18 @@
 package ru.kolco24.kolco24.data.entities
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "photo_points")
+@Entity(
+    tableName = "photo_points",
+    indices = [
+        Index(value = ["teamId", "pointNumber", "photoTime"]),
+        Index(value = ["teamId", "isSync"]),
+        Index(value = ["teamId", "isSyncLocal"]),
+        Index(value = ["pointNumber"])
+    ]
+)
 class Photo
     (
     var teamId: Int,

@@ -34,7 +34,7 @@ class LegendsFragment : Fragment(), MenuProvider {
         binding = FragmentLegendsBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
-        db = AppDatabase.getDatabase(requireActivity().application)
+        db = AppDatabase.getDatabase(requireContext().applicationContext)
 
         teamId = SettingsPreferences.getSelectedTeamId(requireContext())
 

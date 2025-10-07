@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var nfcAdapter: NfcAdapter
-    private lateinit var db: AppDatabase
+    private val db: AppDatabase by lazy { AppDatabase.getDatabase(application) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +36,6 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        db = AppDatabase.getDatabase(application)
         val nfc = NfcAdapter.getDefaultAdapter(this)
         if (nfc != null) {
             nfcAdapter = nfc
@@ -89,6 +88,8 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             }
         }
     }
+
+    fun appDatabase(): AppDatabase = db
 
     fun getNavView(): BottomNavigationView {
         return binding.navView
