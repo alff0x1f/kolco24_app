@@ -6,6 +6,8 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 
+import java.util.Objects;
+
 import ru.kolco24.kolco24.data.entities.Checkpoint;
 
 public class PointListAdapter extends ListAdapter<Checkpoint.PointExt, PointViewHolder> {
@@ -37,7 +39,9 @@ public class PointListAdapter extends ListAdapter<Checkpoint.PointExt, PointView
         public boolean areContentsTheSame(@NonNull Checkpoint.PointExt oldItem, @NonNull Checkpoint.PointExt newItem) {
             return oldItem.getNumber() == newItem.getNumber() &&
                     oldItem.getDescription().equals(newItem.getDescription()) &&
-                    oldItem.getCost() == newItem.getCost();
+                    oldItem.getCost() == newItem.getCost() &&
+                    oldItem.getTagCount() == newItem.getTagCount() &&
+                    Objects.equals(oldItem.getTime(), newItem.getTime());
         }
     }
 }

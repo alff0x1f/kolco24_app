@@ -31,13 +31,19 @@ public interface CheckpointDao {
             "points.description, " +
             "points.cost, " +
             "photo.photoTime, " +
-            "photo.time " +
+            "photo.time, " +
+            "COALESCE(tags.tagCount, 0) AS tagCount " +
             "FROM points " +
             "LEFT JOIN (" +
             "   SELECT pointNumber, photoTime, time " +
             "   FROM photo_points " +
             "   GROUP BY pointNumber) photo " +
             "       ON points.number == photo.pointNumber " +
+            "LEFT JOIN (" +
+            "   SELECT checkpointId, COUNT(*) AS tagCount " +
+            "   FROM point_tags " +
+            "   GROUP BY checkpointId " +
+            ") tags ON points.id = tags.checkpointId " +
             "ORDER BY points.number")
     LiveData<List<Checkpoint.PointExt>> getAllPoints();
 
@@ -47,7 +53,8 @@ public interface CheckpointDao {
             "points.description, " +
             "points.cost, " +
             "photo.photoTime, " +
-            "photo.time " +
+            "photo.time, " +
+            "COALESCE(tags.tagCount, 0) AS tagCount " +
             "FROM points " +
             "LEFT JOIN (" +
             "  SELECT pointNumber, photoTime, time " +
@@ -56,6 +63,11 @@ public interface CheckpointDao {
             "  GROUP BY pointNumber" +
             ") photo " +
             "ON points.number == photo.pointNumber " +
+            "LEFT JOIN (" +
+            "  SELECT checkpointId, COUNT(*) AS tagCount " +
+            "  FROM point_tags " +
+            "  GROUP BY checkpointId " +
+            ") tags ON points.id = tags.checkpointId " +
             "ORDER BY " +
             "     CASE " +
             "        WHEN photo.photoTime IS NULL THEN 1" +

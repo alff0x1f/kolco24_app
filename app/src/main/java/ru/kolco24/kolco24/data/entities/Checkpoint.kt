@@ -25,6 +25,7 @@ class Checkpoint(
         var cost: Int,
         var photoTime: String?,
         var time: Long?,
+        var tagCount: Int,
     )
 
     companion object {

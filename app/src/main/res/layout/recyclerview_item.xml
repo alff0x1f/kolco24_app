@@ -66,6 +66,19 @@
         app:layout_constraintStart_toEndOf="@id/pointIcon"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <LinearLayout
+        android:id="@+id/tagIconContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="@dimen/small_padding"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        tools:visibility="visible"
+        app:layout_constraintStart_toEndOf="@id/textCost"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <TextView
         android:id="@+id/textDescription"
         android:layout_width="0sp"

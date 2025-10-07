@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.ui.legends
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -83,7 +82,10 @@ class LegendsFragment : Fragment(), MenuProvider {
 
     override fun onResume() {
         super.onResume()
-        teamId = SettingsPreferences.getSelectedTeamId(requireContext())
+        val newTeamId = SettingsPreferences.getSelectedTeamId(requireContext())
+        if (newTeamId != teamId) {
+            teamId = newTeamId
+        }
     }
 
 

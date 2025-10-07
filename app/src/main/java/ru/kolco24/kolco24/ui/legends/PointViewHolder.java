@@ -1,11 +1,12 @@
 package ru.kolco24.kolco24.ui.legends;
 
-import android.content.Intent;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
@@ -14,7 +15,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import ru.kolco24.kolco24.ui.photo.NewPhotoActivity;
 import ru.kolco24.kolco24.R;
 import ru.kolco24.kolco24.data.entities.Checkpoint;
 
@@ -23,6 +23,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
     private final TextView textDescription;
     private final TextView textCost;
     private final TextView pointTimeTextView;
+    private final LinearLayout tagIconContainer;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM HH:mm");
 
 
@@ -33,6 +34,7 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         textDescription = itemView.findViewById(R.id.textDescription);
         textCost = itemView.findViewById(R.id.textCost);
         pointTimeTextView = itemView.findViewById(R.id.pointTimeTextView);
+        tagIconContainer = itemView.findViewById(R.id.tagIconContainer);
     }
 
     public void bind(Checkpoint.PointExt point) {
@@ -87,6 +89,29 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         drawable.mutate().setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
         textCost.setBackground(drawable);
 
+        if (point.getTagCount() > 0) {
+            tagIconContainer.setVisibility(View.VISIBLE);
+            tagIconContainer.removeAllViews();
+
+            int iconSize = dpToPx(12);
+            int iconMargin = dpToPx(4);
+            int tintColor = ContextCompat.getColor(itemView.getContext(), R.color.pointIconPlaceholderText);
+
+            for (int i = 0; i < point.getTagCount(); i++) {
+                ImageView imageView = new ImageView(itemView.getContext());
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(iconSize, iconSize);
+                if (i != 0) {
+                    params.setMarginStart(iconMargin);
+                }
+                imageView.setLayoutParams(params);
+                imageView.setImageResource(R.drawable.ic_baseline_nfc_24);
+                imageView.setColorFilter(tintColor, PorterDuff.Mode.SRC_IN);
+                tagIconContainer.addView(imageView);
+            }
+        } else {
+            tagIconContainer.setVisibility(View.GONE);
+        }
+
 
         // on click listener
         //        itemView.setOnClickListener(v -> {
@@ -107,5 +132,9 @@ public class PointViewHolder extends RecyclerView.ViewHolder {
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.recyclerview_item, parent, false);
         return new PointViewHolder(view);
+}
+    private int dpToPx(int dp) {
+        float density = itemView.getResources().getDisplayMetrics().density;
+        return (int) (dp * density);
     }
 }
