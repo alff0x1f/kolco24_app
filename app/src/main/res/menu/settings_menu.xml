@@ -4,15 +4,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/action_update_teams"
+        android:id="@+id/action_teams_update"
         android:icon="@drawable/ic_baseline_update_24"
         android:title="@string/update_teams"
-        app:showAsAction="ifRoom" />
-
-    <!-- Settings, should always be in the overflow -->
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_member_tag_update"
         android:title="@string/update_member_tag"
         app:showAsAction="never" />
-
 </menu>

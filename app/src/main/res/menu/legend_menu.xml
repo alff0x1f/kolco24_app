@@ -6,14 +6,9 @@
     <item
         android:id="@+id/action_update"
         android:icon="@drawable/ic_baseline_update_24"
-        android:title="@string/update_from_internet"
+        android:title="@string/update_checkpoints"
         app:showAsAction="ifRoom" />
 
-    <!-- Settings, should always be in the overflow -->
-    <item
-        android:id="@+id/action_local_update"
-        android:title="@string/update_local"
-        app:showAsAction="never" />
     <!-- Пункты для администратора!-->
     <item
         android:id="@+id/action_add_tag"

@@ -101,13 +101,6 @@ class LegendsFragment : Fragment(), MenuProvider {
                 true
             }
 
-            R.id.action_local_update -> {
-                DataDownloader(requireActivity().application).apply { setLocalDownload(true) }
-                    .downloadCheckpoints()
-                true
-            }
-
-
             R.id.action_add_tag -> {
                 handleAddTagAction()
                 true

@@ -14,6 +14,7 @@ object SettingsPreferences {
     const val KEY_TEAM_NAME = "team_name"
     const val KEY_TEAM_NUMBER = "team_number"
     const val KEY_PHONE_UUID = "phone_uuid"
+    const val KEY_USE_LOCAL_SERVER = "use_local_server"
 
     const val DEFAULT_RACE_ID = 8
     const val DEFAULT_CATEGORY_CODE = 16
@@ -94,5 +95,14 @@ object SettingsPreferences {
         val generated = UUID.randomUUID().toString()
         persistPhoneUuid(context, generated)
         return generated
+    }
+
+    @JvmStatic
+    fun shouldUseLocalServer(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_USE_LOCAL_SERVER, false)
+
+    @JvmStatic
+    fun setUseLocalServer(context: Context, useLocal: Boolean) {
+        getPrefs(context).edit { putBoolean(KEY_USE_LOCAL_SERVER, useLocal) }
     }
 }

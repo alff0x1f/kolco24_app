@@ -123,11 +123,11 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     @Override
     public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
         int itemId = menuItem.getItemId();
-        if (itemId == R.id.action_update || itemId == R.id.action_local_update) {
-            handleUpdateAction(itemId == R.id.action_local_update);
+        if (itemId == R.id.action_update_teams ) {
+            handleUpdateTeamsAction();
             return true;
-        } else if (itemId == R.id.action_member_tag_update || itemId == R.id.action_local_member_tag_update) {
-            handleMemberTagUpdateAction(itemId == R.id.action_local_member_tag_update);
+        } else if (itemId == R.id.action_member_tag_update) {
+            handleMemberTagUpdateAction();
             return true;
         }
         return false;
@@ -137,21 +137,14 @@ public class TeamsFragment extends Fragment implements MenuProvider {
      * Handles the update action.
      * This method download teams.
      *
-     * @param isLocalUpdate A boolean indicating whether the update should be local.
      */
-    private void handleUpdateAction(boolean isLocalUpdate) {
+    private void handleUpdateTeamsAction() {
         DataDownloader dataDownloader = new DataDownloader(requireActivity().getApplication());
-        if (isLocalUpdate) {
-            dataDownloader.setLocalDownload(true);
-        }
         dataDownloader.downloadTeams(null);
     }
 
-    private void handleMemberTagUpdateAction(boolean isLocalUpdate) {
+    private void handleMemberTagUpdateAction() {
         DataDownloader dataDownloader = new DataDownloader(requireActivity().getApplication());
-        if (isLocalUpdate) {
-            dataDownloader.setLocalDownload(true);
-        }
         dataDownloader.downloadMemberTags();
     }
 

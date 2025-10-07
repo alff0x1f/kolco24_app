@@ -38,6 +38,7 @@ class SettingsFragment : Fragment(), MenuProvider {
     private var selectedCategoryCode: Int = SettingsPreferences.DEFAULT_CATEGORY_CODE
     private var selectedTeamId: Int = 0
     private var selectedCompetitionPosition: Int = 0
+    private var isLocalServerSelected = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -55,6 +56,7 @@ class SettingsFragment : Fragment(), MenuProvider {
         selectedTeamId = SettingsPreferences.getSelectedTeamId(requireContext())
         restoreTeamSummaryFromPreferences()
         setupCompetitionSpinner()
+        setupServerSelector()
         setupCategorySpinner()
         setupTeamSpinner()
         observeTeams(selectedCategoryCode)
@@ -260,46 +262,49 @@ class SettingsFragment : Fragment(), MenuProvider {
         return options
     }
 
+    private fun setupServerSelector() {
+        isLocalServerSelected = SettingsPreferences.shouldUseLocalServer(requireContext())
+        val group = binding.serverModeGroup
+        group.setOnCheckedChangeListener(null)
+        group.check(
+            if (isLocalServerSelected) R.id.serverLocalButton else R.id.serverInternetButton
+        )
+        group.setOnCheckedChangeListener { _, checkedId ->
+            val useLocal = checkedId == R.id.serverLocalButton
+            if (useLocal == isLocalServerSelected) {
+                return@setOnCheckedChangeListener
+            }
+            isLocalServerSelected = useLocal
+            SettingsPreferences.setUseLocalServer(requireContext(), useLocal)
+        }
+    }
+
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menu.clear()
-        menuInflater.inflate(R.menu.team_menu, menu)
+        menuInflater.inflate(R.menu.settings_menu, menu)
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
         return when (menuItem.itemId) {
-            R.id.action_update -> {
-                handleUpdateAction(isLocalUpdate = false)
-                true
-            }
-            R.id.action_local_update -> {
-                handleUpdateAction(isLocalUpdate = true)
+            R.id.action_teams_update -> {
+                handleTeamsUpdateAction()
                 true
             }
             R.id.action_member_tag_update -> {
-                handleMemberTagUpdateAction(isLocalUpdate = false)
-                true
-            }
-            R.id.action_local_member_tag_update -> {
-                handleMemberTagUpdateAction(isLocalUpdate = true)
+                handleMemberTagUpdateAction()
                 true
             }
             else -> false
         }
     }
 
-    private fun handleUpdateAction(isLocalUpdate: Boolean) {
+    private fun handleTeamsUpdateAction() {
         val dataDownloader = DataDownloader(requireActivity().application)
-        if (isLocalUpdate) {
-            dataDownloader.setLocalDownload(true)
-        }
         dataDownloader.downloadTeams(null)
     }
 
-    private fun handleMemberTagUpdateAction(isLocalUpdate: Boolean) {
+    private fun handleMemberTagUpdateAction() {
         val dataDownloader = DataDownloader(requireActivity().application)
-        if (isLocalUpdate) {
-            dataDownloader.setLocalDownload(true)
-        }
         dataDownloader.downloadMemberTags()
     }
 }
