@@ -22,6 +22,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.R
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.SettingsPreferences
@@ -64,6 +65,7 @@ class TeamStartFragment : Fragment(), NfcAdapter.ReaderCallback {
         db = AppDatabase.getDatabase(requireContext())
         nfcAdapter = NfcAdapter.getDefaultAdapter(requireContext())
         initSounds()
+        (activity as? MainActivity)?.getNavView()?.isVisible = false
 
         binding.scannedTagsList.apply {
             layoutManager = LinearLayoutManager(context)
@@ -113,6 +115,7 @@ class TeamStartFragment : Fragment(), NfcAdapter.ReaderCallback {
     override fun onDestroyView() {
         disableReaderMode()
         releaseSounds()
+        (activity as? MainActivity)?.getNavView()?.isVisible = true
         _binding = null
         super.onDestroyView()
     }
