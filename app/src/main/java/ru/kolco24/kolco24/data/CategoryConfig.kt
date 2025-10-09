@@ -5,13 +5,13 @@ data class CategoryOption(val code: Int, val name: String)
 object CategoryConfig {
     private val categoriesInternal = listOf(
         CategoryOption(16, "6ч"),
-        CategoryOption(17, "12"),
-        CategoryOption(18, "МЖ"),
-        CategoryOption(19, "ММ"),
-        CategoryOption(20, "ЖЖ"),
-        CategoryOption(21, "24"),
-        CategoryOption(22, "8ч"),
-        CategoryOption(23, "8ч"))
+        CategoryOption(17, "12ч, команды"),
+        CategoryOption(18, "12ч, МЖ"),
+        CategoryOption(19, "12ч, ММ"),
+        CategoryOption(20, "12ч, ЖЖ"),
+        CategoryOption(21, "24ч"),
+        CategoryOption(22, "8ч вело ММ"),
+        CategoryOption(23, "8ч вело МЖ/ЖЖ"))
 
     val categories: List<CategoryOption>
         @JvmStatic

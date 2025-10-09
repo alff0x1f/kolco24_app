@@ -20,7 +20,6 @@
 
     <string-array name="competition_names">
         <item>Кольцо24</item>
-        <item>Тест</item>
     </string-array>
 
     <integer-array name="competition_ids">
