@@ -1,8 +1,13 @@
 package ru.kolco24.kolco24
 
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.AdapterView
@@ -47,7 +52,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     private var currentMode: Mode = Mode.ADD
 
     // sounds
-    private lateinit var soundPool: android.media.SoundPool
+    private var soundPool: SoundPool? = null
     private var soundScan: Int = 0
     private var soundErr: Int = 0
     private var soundSend: Int = 0
@@ -137,23 +142,13 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             }
         }
 
-        // sounds
-        val attrs = android.media.AudioAttributes.Builder()
-            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        soundPool = android.media.SoundPool.Builder()
-            .setAudioAttributes(attrs)
-            .setMaxStreams(2)
-            .build()
-        soundScan = soundPool.load(this, R.raw.beep_scan, 1)
-        soundSend = soundPool.load(this, R.raw.beep_send, 1)
-        soundErr = soundPool.load(this, R.raw.beep_err, 1)
+        initSounds()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::soundPool.isInitialized) soundPool.release()
+        soundPool?.release()
+        soundPool = null
     }
 
     override fun onResume() {
@@ -175,19 +170,45 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         nfcAdapter?.disableReaderMode(this)
     }
 
-    private fun playScan() { soundPool.play(soundScan, 1f, 1f, 0, 0, 1f) }
-    private fun playSend() { soundPool.play(soundSend, 1f, 1f, 0, 0, 1f) }
-    private fun playErr() { soundPool.play(soundErr, 1f, 1f, 0, 0, 1f) }
+    private fun playScanFeedback() {
+        soundPool?.play(soundScan, 1f, 1f, 0, 0, 1f)
+        buzz(success = true)
+    }
 
-    private fun buzz(success: Boolean = true) {
-        val v = getSystemService(VIBRATOR_SERVICE) as android.os.Vibrator
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val amp = if (success) android.os.VibrationEffect.DEFAULT_AMPLITUDE else 64
-            v.vibrate(android.os.VibrationEffect.createOneShot(30, amp))
+    private fun playSendFeedback() {
+        soundPool?.play(soundSend, 1f, 1f, 0, 0, 1f)
+        buzz(success = true)
+    }
+
+    private fun playErrorFeedback() {
+        soundPool?.play(soundErr, 1f, 1f, 0, 0, 1f)
+        buzz(success = false)
+    }
+
+    private fun buzz(success: Boolean) {
+        val vibrator = getSystemService(VIBRATOR_SERVICE) as? Vibrator ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val amplitude = if (success) VibrationEffect.DEFAULT_AMPLITUDE else 96
+            vibrator.vibrate(VibrationEffect.createOneShot(40, amplitude))
         } else {
             @Suppress("DEPRECATION")
-            v.vibrate(30)
+            vibrator.vibrate(40)
         }
+    }
+
+    private fun initSounds() {
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = SoundPool.Builder()
+            .setAudioAttributes(attributes)
+            .setMaxStreams(2)
+            .build().apply {
+                soundScan = load(this@AddTagActivity, R.raw.beep_scan, 1)
+                soundSend = load(this@AddTagActivity, R.raw.beep_send, 1)
+                soundErr = load(this@AddTagActivity, R.raw.beep_err, 1)
+            }
     }
 
     // This method is called when a new NFC tag is detected
@@ -196,14 +217,13 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             currentTagId = bytesToHex(tag.id)
 
             runOnUiThread {
-                buzz()
+                playScanFeedback()
                 findViewById<TextView>(R.id.tag_id_text).apply {
                     text = "Tag ID: $currentTagId"
                     setTextColor(resources.getColor(R.color.textContrast))
                 }
                 // Поле ввода чистим только в режиме добавления
                 if (currentMode == Mode.ADD) {
-                    playScan()
                     findViewById<EditText>(R.id.tag_number_input).apply {
                         setText("")
                         requestFocus()
@@ -313,7 +333,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
-                playErr()
+                playErrorFeedback()
                 runOnUiThread {
                     findViewById<TextView>(R.id.tag_id_text).apply {
                         text = "Инвентаризация: ошибка отправки — ${e.message}"
@@ -325,13 +345,13 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 runOnUiThread {
                     if (response.isSuccessful) {
-                        playSend()
+                        playSendFeedback()
                         findViewById<TextView>(R.id.tag_id_text).apply {
                             text = "Инвентаризация: отметили last_seen_at"
                             setTextColor(resources.getColor(R.color.colorGreen))
                         }
                     } else {
-                        playErr()
+                        playErrorFeedback()
                         val err = response.body?.string()
                         findViewById<TextView>(R.id.tag_id_text).apply {
                             text = "Инвентаризация: ошибка ${response.code} — $err"

@@ -385,7 +385,6 @@ public class NewPhotoActivity extends AppCompatActivity {
                 if (!photo.getPhotoUrl().equals(photoUri)) {
                     photo.setPhotoUrl(photoUri);
                     photo.setPhotoThumbUrl(photoThumbUri);
-                    photo.setPhotoTime(photoTime);
                     isChanged = true;
                 }
                 if (isChanged) {

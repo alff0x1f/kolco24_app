@@ -1,9 +1,14 @@
 package ru.kolco24.kolco24
 
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
@@ -12,7 +17,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
-import androidx.navigation.ui.setupActionBarWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +33,9 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     private lateinit var binding: ActivityMainBinding
     private lateinit var nfcAdapter: NfcAdapter
     private val db: AppDatabase by lazy { AppDatabase.getDatabase(application) }
+    private var soundPool: SoundPool? = null
+    private var soundScan: Int = 0
+    private var soundErr: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +94,8 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                 return
             }
         }
+
+        initSounds()
     }
 
     fun appDatabase(): AppDatabase = db
@@ -106,13 +115,21 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         disableNfcReaderMode()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        soundPool?.release()
+        soundPool = null
+    }
+
     private fun enableNfcReaderMode() {
         println("Enabling NFC reader mode in MainActivity")
         if (::nfcAdapter.isInitialized) {
             nfcAdapter.enableReaderMode(
                 this,
                 this,
-                NfcAdapter.FLAG_READER_NFC_A,
+                NfcAdapter.FLAG_READER_NFC_A or
+                        NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS or
+                        NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
                 null
             )
         }
@@ -161,6 +178,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             val teamId = SettingsPreferences.getSelectedTeamId(this)
             if (teamId == 0) {
                 runOnUiThread {
+                    playErrorFeedback()
                     selectTeamRequiredDialog()
                 }
                 return
@@ -168,6 +186,7 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
             db.pointTagDao().getPointTagByUID(hexId)?.let { pointTag ->
                 runOnUiThread {
+                    playScanFeedback()
                     navigateToNfcPointFragment(pointTag)
                 }
                 return
@@ -175,12 +194,14 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
             db.memberTagDao().getMemberTagByUID(hexId)?.let { memberTag ->
                 runOnUiThread {
+                    playScanFeedback()
                     navigateToNfcMemberFragment(memberTag)
                 }
                 return
             }
 
             runOnUiThread {
+                playErrorFeedback()
                 Toast.makeText(this, "Неизвестный чип", Toast.LENGTH_SHORT).show()
             }
         }
@@ -232,5 +253,40 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             result.append(hexChars[i and 0x0F])
         }
         return result.toString()
+    }
+
+    private fun initSounds() {
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(2)
+            .setAudioAttributes(attributes)
+            .build().apply {
+                soundScan = load(this@MainActivity, R.raw.beep_send, 1)
+                soundErr = load(this@MainActivity, R.raw.beep_err, 1)
+            }
+    }
+
+    private fun playScanFeedback() {
+        soundPool?.play(soundScan, 1f, 1f, 0, 0, 1f)
+        buzz(success = true)
+    }
+
+    private fun playErrorFeedback() {
+        soundPool?.play(soundErr, 1f, 1f, 0, 0, 1f)
+        buzz(success = false)
+    }
+
+    private fun buzz(success: Boolean) {
+        val vibrator = getSystemService(VIBRATOR_SERVICE) as? Vibrator ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val amplitude = if (success) VibrationEffect.DEFAULT_AMPLITUDE else 96
+            vibrator.vibrate(VibrationEffect.createOneShot(40, amplitude))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(40)
+        }
     }
 }

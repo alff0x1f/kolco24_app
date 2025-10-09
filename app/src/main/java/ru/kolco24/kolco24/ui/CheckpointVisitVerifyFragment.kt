@@ -1,16 +1,20 @@
 package ru.kolco24.kolco24
 
 import android.app.AlertDialog
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.nfc.tech.Ndef
+import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity.MODE_PRIVATE
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -39,7 +43,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
     private var checkpointTag: CheckpointTag? = null
     private var checkpoint: Checkpoint? = null
 
-    private var readMemberTags = false
+    private var readMemberTags = true
     private var teamId: Int = 0
 
     //timer
@@ -47,6 +51,10 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
     private val countdownDuration: Long = 20000 // 20 seconds in milliseconds
 
     private lateinit var db: AppDatabase
+    private var soundPool: SoundPool? = null
+    private var soundScan: Int = 0
+    private var soundErr: Int = 0
+    private var soundDone: Int = 0
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -56,6 +64,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
         binding = FragmentNfcPointBinding.inflate(inflater, container, false)
 
         teamId = SettingsPreferences.getSelectedTeamId(requireContext())
+        initSounds(requireContext())
 
         arguments?.let {
             val checkpointTagId = arguments?.getInt("checkpointTagId", 0)
@@ -116,7 +125,9 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
         nfcAdapter.enableReaderMode(
             requireActivity(),
             this,
-            NfcAdapter.FLAG_READER_NFC_A,
+            NfcAdapter.FLAG_READER_NFC_A or
+                    NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS or
+                    NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
             null
         )
     }
@@ -124,11 +135,14 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
     override fun onPause() {
         super.onPause()
         println("onPause")
+        soundPool?.autoPause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         countDownTimer?.cancel()
+        soundPool?.release()
+        soundPool = null
     }
 
     private fun setupCountDownTimer() {
@@ -188,21 +202,12 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
-            val tagId = tag.id
-            val hexId = bytesToHex(tagId)
+            val hexId = bytesToHex(tag.id)
 
             val team = db.teamDao().getTeamById(teamId)
             val ucount = team?.ucount ?: 0
-//            val activity = requireActivity() as MainActivity
 
-            if (readMemberTags) {
-                requireActivity().runOnUiThread {
-                    Toast.makeText(
-                        requireActivity(),
-                        "Все участники отмечены",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+            if (!readMemberTags) {
                 return
             }
             // check if hexId is already in list
@@ -218,27 +223,27 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                     return
                 }
             }
-            if (checkpointTag == null) {
-                db.pointTagDao().getPointTagByUID(hexId)?.let { fetchedCheckpointTag ->
-                    checkpointTag = fetchedCheckpointTag
-                    checkpoint =
-                        db.checkpointDao().getCheckpointById(fetchedCheckpointTag.checkpointId)
-                    requireActivity().runOnUiThread {
-                        binding.pointNumber.text = String.format("%02d", checkpoint!!.number)
-                    }
-                    if (memberTags.count() >= ucount && checkpoint != null) {
-                        endVerify()
-                    } else {
-                        restartTimer()
-                    }
-                    binding.helperTextView.text = "Отсканируйте чипы участников"
-                    return
+            db.pointTagDao().getPointTagByUID(hexId)?.let { fetchedCheckpointTag ->
+                checkpointTag = fetchedCheckpointTag
+                checkpoint =
+                    db.checkpointDao().getCheckpointById(fetchedCheckpointTag.checkpointId)
+                requireActivity().runOnUiThread {
+                    playScanFeedback()
+                    binding.pointNumber.text = String.format("%02d", checkpoint!!.number)
                 }
+                if (memberTags.count() >= ucount && checkpoint != null) {
+                    endVerify()
+                } else {
+                    restartTimer()
+                }
+                binding.helperTextView.text = "Отсканируйте чипы участников"
+                return
             }
 
             val memberTag = db.memberTagDao().getMemberTagByUID(hexId)
             if (memberTag == null) {
                 requireActivity().runOnUiThread {
+                    playErrorFeedback()
                     Toast.makeText(
                         requireActivity(),
                         "Неизвестный чип",
@@ -253,6 +258,7 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
             if (memberTags.count() >= ucount) {
                 requireActivity().runOnUiThread {
+                    playErrorFeedback()
                     Toast.makeText(
                         requireActivity(),
                         "Уже ${ucount}  участников!",
@@ -262,7 +268,8 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
                 return
             }
             memberTags.add(memberTag)
-            if (memberTags.count() == ucount && checkpoint == null){
+            playScanFeedback()
+            if (memberTags.count() == ucount && checkpoint == null) {
                 binding.helperTextView.text = "Отсканируйте КП"
             }
             restartTimer()
@@ -349,5 +356,46 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
             result.append(hexChars[i and 0x0F])
         }
         return result.toString()
+    }
+
+    private fun initSounds(context: Context) {
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(2)
+            .setAudioAttributes(attributes)
+            .build().apply {
+                soundScan = load(context, R.raw.beep_send, 1)
+                soundErr = load(context, R.raw.beep_err, 1)
+                soundDone = load(context, R.raw.beep_send, 1)
+            }
+    }
+
+    private fun playScanFeedback() {
+        soundPool?.play(soundScan, 1f, 1f, 0, 0, 1f)
+        vibrate(success = true)
+    }
+
+    private fun playErrorFeedback() {
+        soundPool?.play(soundErr, 1f, 1f, 0, 0, 1f)
+        vibrate(success = false)
+    }
+
+    private fun playSuccessFeedback() {
+        soundPool?.play(soundDone, 1f, 1f, 0, 0, 1f)
+        vibrate(success = true)
+    }
+
+    private fun vibrate(success: Boolean) {
+        val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val amplitude = if (success) VibrationEffect.DEFAULT_AMPLITUDE else 96
+            vibrator.vibrate(VibrationEffect.createOneShot(40, amplitude))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(40)
+        }
     }
 }
