@@ -23,6 +23,7 @@ import androidx.navigation.fragment.findNavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.jvm.Volatile
 import ru.kolco24.kolco24.data.AppDatabase
 import ru.kolco24.kolco24.data.SettingsPreferences
 import ru.kolco24.kolco24.data.entities.Checkpoint
@@ -55,6 +56,8 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
     private var soundScan: Int = 0
     private var soundErr: Int = 0
     private var soundDone: Int = 0
+    @Volatile private var lastScanTimestamp: Long = 0
+    private val scanCooldownMs = 600L
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -202,6 +205,18 @@ class CheckpointVisitVerifyFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
+            val now = System.currentTimeMillis()
+            val allowScan = synchronized(this) {
+                if (now - lastScanTimestamp < scanCooldownMs) {
+                    false
+                } else {
+                    lastScanTimestamp = now
+                    true
+                }
+            }
+            if (!allowScan) {
+                return
+            }
             val hexId = bytesToHex(tag.id)
 
             val team = db.teamDao().getTeamById(teamId)
