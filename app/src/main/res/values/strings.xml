@@ -61,7 +61,7 @@
     <string name="team_start_button">Старт</string>
     <string name="team_start_pending_header">Отложенные старты</string>
     <string name="team_start_entry_title">№%1$s — %2$s</string>
-    <string name="team_start_entry_details">Участников: %1$d, отмечено: %2$d (%3$s)</string>
+    <string name="team_start_entry_details">Участников: %1$d, отмечено: %2$d (локально: %3$s, интернет: %4$s)</string>
     <string name="team_start_status_synced">отправлено</string>
     <string name="team_start_status_pending">не отправлено</string>
     <string name="team_start_toast_saved">Старт команды "%1$s" сохранён</string>

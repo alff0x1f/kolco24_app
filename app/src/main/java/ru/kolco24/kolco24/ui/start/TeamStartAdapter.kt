@@ -48,6 +48,8 @@ class TeamStartAdapter : RecyclerView.Adapter<TeamStartAdapter.ViewHolder>() {
                 R.string.team_start_entry_details,
                 item.participantCount,
                 item.scannedCount,
+                if (item.isSyncLocal) itemView.context.getString(R.string.team_start_status_synced)
+                else itemView.context.getString(R.string.team_start_status_pending),
                 if (item.isSync) itemView.context.getString(R.string.team_start_status_synced)
                 else itemView.context.getString(R.string.team_start_status_pending)
             )

@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "team_starts",
-    indices = [Index(value = ["teamId"]), Index(value = ["isSync"])]
+    indices = [Index(value = ["teamId"]), Index(value = ["isSync"]), Index(value = ["isSyncLocal"])]
 )
 data class TeamStart(
     @PrimaryKey(autoGenerate = true)
@@ -19,5 +19,6 @@ data class TeamStart(
     val memberTags: String,
     val startTimestamp: Long,
     val createdAt: Long = System.currentTimeMillis(),
-    val isSync: Boolean = false
+    var isSyncLocal: Boolean = false,
+    var isSync: Boolean = false
 )

@@ -18,11 +18,15 @@ class TeamStartViewModel(application: Application) : AndroidViewModel(applicatio
         startRepository.insert(event)
     }
 
-    fun markSynced(id: Int, synced: Boolean) {
-        startRepository.markSynced(id, synced)
+    fun markLocalSynced(id: Int, synced: Boolean) {
+        startRepository.markLocalSynced(id, synced)
     }
 
-    fun getPending(): List<TeamStart> = startRepository.getPending()
+    fun markRemoteSynced(id: Int, synced: Boolean) {
+        startRepository.markRemoteSynced(id, synced)
+    }
+
+    fun getPending(useLocal: Boolean): List<TeamStart> = startRepository.getPending(useLocal)
 
     fun findTeamByStartNumber(startNumber: String): Team? =
         teamRepository.getTeamByStartNumber(startNumber)

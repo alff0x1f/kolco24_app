@@ -42,7 +42,7 @@ class TeamStartUploader(private val context: Context) {
 
     fun uploadPending(useLocal: Boolean): Boolean {
         val db = AppDatabase.getDatabase(context)
-        val pending = db.teamStartDao().getPending()
+        val pending = if (useLocal) db.teamStartDao().getPendingLocal() else db.teamStartDao().getPendingRemote()
         if (pending.isEmpty()) return true
 
         val raceId = SettingsPreferences.getRaceId(context)
@@ -57,7 +57,11 @@ class TeamStartUploader(private val context: Context) {
                 }
             }.getOrDefault(false)
             if (success) {
-                db.teamStartDao().markSynced(event.id, true)
+                if (useLocal) {
+                    db.teamStartDao().markLocalSynced(event.id, true)
+                } else {
+                    db.teamStartDao().markRemoteSynced(event.id, true)
+                }
             } else {
                 allOk = false
             }

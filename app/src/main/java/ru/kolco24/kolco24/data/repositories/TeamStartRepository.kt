@@ -14,9 +14,14 @@ class TeamStartRepository(application: Application) {
         AppDatabase.databaseWriteExecutor.execute { dao.insert(event) }
     }
 
-    fun markSynced(id: Int, synced: Boolean) {
-        AppDatabase.databaseWriteExecutor.execute { dao.markSynced(id, synced) }
+    fun markLocalSynced(id: Int, synced: Boolean) {
+        AppDatabase.databaseWriteExecutor.execute { dao.markLocalSynced(id, synced) }
     }
 
-    fun getPending(): List<TeamStart> = dao.getPending()
+    fun markRemoteSynced(id: Int, synced: Boolean) {
+        AppDatabase.databaseWriteExecutor.execute { dao.markRemoteSynced(id, synced) }
+    }
+
+    fun getPending(useLocal: Boolean): List<TeamStart> =
+        if (useLocal) dao.getPendingLocal() else dao.getPendingRemote()
 }

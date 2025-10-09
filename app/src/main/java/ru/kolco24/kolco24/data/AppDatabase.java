@@ -95,12 +95,15 @@ public abstract class AppDatabase extends RoomDatabase {
                     "memberTags TEXT NOT NULL, " +
                     "startTimestamp INTEGER NOT NULL, " +
                     "createdAt INTEGER NOT NULL, " +
+                    "isSyncLocal INTEGER NOT NULL DEFAULT 0, " +
                     "isSync INTEGER NOT NULL DEFAULT 0"
                     + ")");
             database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_teamId ON team_starts(teamId)");
             database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_isSync ON team_starts(isSync)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_isSyncLocal ON team_starts(isSyncLocal)");
         }
     };
+
 
     private static class RoomDatabaseCallback extends RoomDatabase.Callback {
         private final Context context;
