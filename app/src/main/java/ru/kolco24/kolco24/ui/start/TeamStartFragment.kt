@@ -183,12 +183,14 @@ class TeamStartFragment : Fragment(), NfcAdapter.ReaderCallback {
     private fun updateTeamInfo(team: Team?) {
         if (team == null) {
             binding.teamInfo.text = getString(R.string.team_start_info_placeholder)
+            binding.buttonStart.isEnabled = false
         } else {
             binding.teamInfo.text = getString(
                 R.string.team_start_entry_title,
                 team.startNumber.ifBlank { "?" },
                 team.teamname
             )
+            binding.buttonStart.isEnabled = true
         }
     }
 
