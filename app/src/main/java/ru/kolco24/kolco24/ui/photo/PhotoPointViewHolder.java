@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.photo;
 
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,6 +22,7 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
     private final ImageView syncLabel;
     private final CardView pointIcon;
     private final ImageView logo;
+    private final ImageView nfcBadge;
 
     public PhotoPointViewHolder(@NonNull View itemView) {
         super(itemView);
@@ -29,13 +31,21 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
         syncLabel = itemView.findViewById(R.id.syncLabel);
         pointIcon = itemView.findViewById(R.id.pointIcon);
         logo = itemView.findViewById(R.id.logo);
+        nfcBadge = itemView.findViewById(R.id.nfcBadge);
     }
 
     public void bind(Photo photo) {
+        logo.setVisibility(View.GONE);
+        nfcBadge.setVisibility(View.GONE);
+        pointIcon.setVisibility(View.VISIBLE);
+        photoKP.setImageDrawable(null);
+        photoKP.setBackgroundColor(Color.TRANSPARENT);
+
         if (photo.getPhotoUrl().equals("add_photo") || photo.getPhotoUrl().equals("add_from_gallery")) {
             logo.setVisibility(View.VISIBLE);
             syncLabel.setVisibility(View.GONE);
             pointIcon.setVisibility(View.GONE);
+            nfcBadge.setVisibility(View.GONE);
             photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));
             if (photo.getPhotoUrl().equals("add_photo")) {
                 logo.setImageResource(R.drawable.ic_baseline_add_a_photo_24);
@@ -54,26 +64,41 @@ public class PhotoPointViewHolder extends RecyclerView.ViewHolder {
             return;
         }
 
-        if (!photo.getPointNfc().equals("")){
-            logo.setVisibility(View.VISIBLE);
-            photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));
-            logo.setImageResource(R.drawable.mobile_pay);
-            textView.setText(String.format("%02d", photo.getPointNumber()));
-            showSyncLabel(photo);
-            return;
+        textView.setText(String.format("%02d", photo.getPointNumber()));
+        if (!photo.getPhotoThumbUrl().isEmpty()) {
+            photoKP.setImageURI(Uri.parse(photo.getPhotoThumbUrl()));
         }
 
-        textView.setText(String.format("%02d", photo.getPointNumber()));
-        photoKP.setImageURI(Uri.parse(photo.getPhotoThumbUrl()));
+        if (!photo.getPointNfc().equals("")) {
+            if (photo.getPhotoThumbUrl().isEmpty()) {
+                logo.setVisibility(View.VISIBLE);
+                logo.setImageResource(R.drawable.mobile_pay);
+                nfcBadge.setVisibility(View.GONE);
+                photoKP.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.colorGray));
+                photoKP.setImageDrawable(null);
+            } else {
+                nfcBadge.setVisibility(View.VISIBLE);
+            }
 
-        itemView.setOnClickListener(v -> {
-            Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
-            intent.putExtra("id", photo.getId());
-            intent.putExtra("point_number", photo.getPointNumber());
-            intent.putExtra("photo_uri", photo.getPhotoUrl());
-            intent.putExtra("photo_thumb_uri", photo.getPhotoThumbUrl());
-            itemView.getContext().startActivity(intent);
-        });
+            itemView.setOnClickListener(v -> {
+                Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+                intent.putExtra("id", photo.getId());
+                intent.putExtra("point_number", photo.getPointNumber());
+                intent.putExtra("fromGallery", true);
+                itemView.getContext().startActivity(intent);
+            });
+        } else {
+            itemView.setOnClickListener(v -> {
+                Intent intent = new Intent(itemView.getContext(), NewPhotoActivity.class);
+                intent.putExtra("id", photo.getId());
+                intent.putExtra("point_number", photo.getPointNumber());
+                intent.putExtra("photo_uri", photo.getPhotoUrl());
+                intent.putExtra("photo_thumb_uri", photo.getPhotoThumbUrl());
+                itemView.getContext().startActivity(intent);
+            });
+        }
+
+
         showSyncLabel(photo);
     }
 

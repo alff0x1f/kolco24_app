@@ -48,5 +48,6 @@
     <string name="settings_server_label">Сервер</string>
     <string name="settings_server_local">Local</string>
     <string name="settings_server_internet">Internet</string>
+    <string name="photo_has_nfc_badge">Есть NFC-метка</string>
     <string name="select_team">Выбрать команду</string>
 </resources>

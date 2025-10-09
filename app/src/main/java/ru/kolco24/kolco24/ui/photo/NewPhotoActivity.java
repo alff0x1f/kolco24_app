@@ -89,12 +89,12 @@ public class NewPhotoActivity extends AppCompatActivity {
 
         Intent callingIntent = getIntent();
         photoId = callingIntent.getIntExtra("id", 0);
-        pointNumber = callingIntent.getIntExtra("point_number", 0);
+        pointNumber = callingIntent.getIntExtra("point_number", -1);
         photoUri = callingIntent.getStringExtra("photo_uri");
         photoThumbUri = callingIntent.getStringExtra("photo_thumb_uri");
         boolean fromGallery = callingIntent.getBooleanExtra("fromGallery", false);
 
-        if (photoId != 0) {
+        if (photoUri  != null) {
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageURI(Uri.parse(photoUri));
             TextView pointNumberTextView = findViewById(R.id.pointNumberTextView);
@@ -106,13 +106,13 @@ public class NewPhotoActivity extends AppCompatActivity {
             actionBar.setTitle("Новое фото");
         }
 
-        if (photoId == 0) {
-            if (fromGallery) {
-                openGallery(null);
-            } else {
-                openCamera(null);
-            }
+
+        if (fromGallery) {
+            openGallery(null);
+        } else if (photoId == 0) {
+            openCamera(null);
         }
+
     }
 
     @Override
@@ -351,7 +351,7 @@ public class NewPhotoActivity extends AppCompatActivity {
     }
 
     private void savePhoto(View view) {
-        if (pointNumber == 0) {
+        if (pointNumber < 0) {
             requestNumber();
             return;
         }

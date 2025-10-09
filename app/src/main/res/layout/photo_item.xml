@@ -29,6 +29,20 @@
         app:layout_constraintBottom_toBottomOf="parent"
         android:visibility="gone"/>
 
+    <ImageView
+        android:id="@+id/nfcBadge"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="@dimen/small_padding"
+        android:layout_marginTop="@dimen/small_padding"
+        android:background="@drawable/bg_nfc_badge"
+        android:contentDescription="@string/photo_has_nfc_badge"
+        android:padding="6dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/mobile_pay" />
+
     <androidx.cardview.widget.CardView
         android:id="@+id/pointIcon"
         android:layout_width="28dp"
