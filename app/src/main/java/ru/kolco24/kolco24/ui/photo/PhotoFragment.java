@@ -54,6 +54,9 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
     private int teamId;
     private String phoneUuid;
+    private int totalKpCount = 0;
+    private int localSyncedCount = 0;
+    private int internetSyncedCount = 0;
 
     private static final String API_BASE_URL = "https://kolco24.ru/api/";
     private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
@@ -130,8 +133,26 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         super.onViewCreated(view, savedInstanceState);
         mPhotoViewModel.getPhotoCount(teamId).observe(
                 getViewLifecycleOwner(),
-                count -> binding.textDashboard.setText(String.format("Количество КП: %d", count))
+                count -> {
+                    totalKpCount = count != null ? count : 0;
+                    updatePhotoStatsSummary();
+                }
         );
+        mPhotoViewModel.getLocalSyncedCount(teamId).observe(
+                getViewLifecycleOwner(),
+                count -> {
+                    localSyncedCount = count != null ? count : 0;
+                    updatePhotoStatsSummary();
+                }
+        );
+        mPhotoViewModel.getInternetSyncedCount(teamId).observe(
+                getViewLifecycleOwner(),
+                count -> {
+                    internetSyncedCount = count != null ? count : 0;
+                    updatePhotoStatsSummary();
+                }
+        );
+        updatePhotoStatsSummary();
         mPhotoViewModel.getCostSum(teamId).observe(getViewLifecycleOwner(), sum -> {
             if (sum == null) {
                 binding.textDashboard2.setText("Сумма баллов: 0");
@@ -191,7 +212,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         super.onResume();
         teamId = SettingsPreferences.getSelectedTeamId(requireContext());
         new LoadPhotosAsyncTask().execute(String.valueOf(teamId));
-        uploadPhotos(false);
+        uploadPhotos(false, null);
         if (binding != null) {
             binding.swipeToRefresh.setEnabled(teamId != 0);
             binding.swipeToRefresh.setRefreshing(false);
@@ -295,7 +316,18 @@ public class PhotoFragment extends Fragment implements MenuProvider {
 
     private String buildUploadUrl(boolean useLocalServer, int raceId) {
         String base = useLocalServer ? API_LOCAL_BASE_URL : API_BASE_URL;
-        return base + "race/" + raceId + "/upload_photo/";
+        return base + "race/" + raceId + "/upload_photo";
+    }
+
+    private void updatePhotoStatsSummary() {
+        if (binding == null) {
+            return;
+        }
+        String text = String.format("Количество КП: %d (выгружено: %d, локально: %d)",
+                totalKpCount,
+                internetSyncedCount,
+                localSyncedCount);
+        binding.textDashboard.setText(text);
     }
 
     // MenuProvider interface

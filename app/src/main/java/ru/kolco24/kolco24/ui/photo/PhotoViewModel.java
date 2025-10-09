@@ -65,6 +65,14 @@ public class PhotoViewModel extends AndroidViewModel {
         return mPhotoRepository.getCostSum(teamId);
     }
 
+    public LiveData<Integer> getLocalSyncedCount(int teamId) {
+        return mPhotoRepository.getLocalSyncedCount(teamId);
+    }
+
+    public LiveData<Integer> getInternetSyncedCount(int teamId) {
+        return mPhotoRepository.getInternetSyncedCount(teamId);
+    }
+
     public Photo getPhotoById(int id) {
         return mPhotoRepository.getPhotoById(id);
     }

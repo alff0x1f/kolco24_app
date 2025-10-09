@@ -62,6 +62,14 @@ public interface PhotoDao {
             "WHERE photo.pointNumber IS NOT NULL")
     LiveData<Integer> getCostSum(int teamId);
 
+    @Query("SELECT count(DISTINCT pointNumber) FROM photo_points " +
+            "WHERE teamId = :teamId AND isSyncLocal = 1")
+    LiveData<Integer> getLocalSyncedCount(int teamId);
+
+    @Query("SELECT count(DISTINCT pointNumber) FROM photo_points " +
+            "WHERE teamId = :teamId AND isSync = 1")
+    LiveData<Integer> getInternetSyncedCount(int teamId);
+
     @Query("DELETE FROM photo_points " +
             "WHERE id = :id")
     void deletePhotoPointById(int id);
