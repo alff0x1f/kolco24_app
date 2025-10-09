@@ -26,6 +26,8 @@ import ru.kolco24.kolco24.data.SettingsPreferences
 import ru.kolco24.kolco24.data.entities.CheckpointTag
 import ru.kolco24.kolco24.data.entities.MemberTag
 import ru.kolco24.kolco24.databinding.ActivityMainBinding
+import ru.kolco24.kolco24.sync.PhotoUploader
+import ru.kolco24.kolco24.sync.UploadTarget
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
@@ -96,6 +98,10 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         }
 
         initSounds()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            PhotoUploader(applicationContext).uploadPending(UploadTarget.REMOTE)
+        }
     }
 
     fun appDatabase(): AppDatabase = db
