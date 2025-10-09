@@ -39,6 +39,10 @@ public class TeamViewModel extends AndroidViewModel {
         return mRepository.getTeamById(id);
     }
 
+    public LiveData<Team> getTeamLive(int id) {
+        return mRepository.getTeam(id);
+    }
+
     public LiveData<String> getToastMessage() {
         return toastMessage;
     }

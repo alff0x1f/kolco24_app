@@ -32,6 +32,7 @@ class SettingsFragment : Fragment(), MenuProvider {
 
     private var competitionOptions: List<CompetitionOption> = emptyList()
     private var teamsLiveData: LiveData<List<Team>>? = null
+    private var selectedTeamLiveData: LiveData<Team>? = null
     private var teams: List<Team> = emptyList()
     private lateinit var teamAdapter: ArrayAdapter<String>
     private var ignoreTeamSelection = false
@@ -54,7 +55,7 @@ class SettingsFragment : Fragment(), MenuProvider {
         requireActivity().addMenuProvider(this, viewLifecycleOwner)
         selectedCategoryCode = SettingsPreferences.getSelectedCategory(requireContext())
         selectedTeamId = SettingsPreferences.getSelectedTeamId(requireContext())
-        restoreTeamSummaryFromPreferences()
+        observeSelectedTeam(selectedTeamId)
         setupCompetitionSpinner()
         setupServerSelector()
         setupCategorySpinner()
@@ -63,9 +64,11 @@ class SettingsFragment : Fragment(), MenuProvider {
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
+        selectedTeamLiveData?.removeObservers(viewLifecycleOwner)
+        selectedTeamLiveData = null
         teamsLiveData = null
         _binding = null
+        super.onDestroyView()
     }
 
     private fun setupCompetitionSpinner() {
@@ -92,19 +95,25 @@ class SettingsFragment : Fragment(), MenuProvider {
             }
         }
 
-        binding.competitionSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                if (competitionOptions.isEmpty()) return
-                if (position == selectedCompetitionPosition) return
-                selectedCompetitionPosition = position
-                val selectedRace = competitionOptions[position]
-                SettingsPreferences.setRaceId(requireContext(), selectedRace.id)
-            }
+        binding.competitionSpinner.onItemSelectedListener =
+            object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    if (competitionOptions.isEmpty()) return
+                    if (position == selectedCompetitionPosition) return
+                    selectedCompetitionPosition = position
+                    val selectedRace = competitionOptions[position]
+                    SettingsPreferences.setRaceId(requireContext(), selectedRace.id)
+                }
 
-            override fun onNothingSelected(parent: AdapterView<*>) {
-                // no-op
+                override fun onNothingSelected(parent: AdapterView<*>) {
+                    // no-op
+                }
             }
-        }
     }
 
     private fun setupCategorySpinner() {
@@ -120,21 +129,27 @@ class SettingsFragment : Fragment(), MenuProvider {
         val initialIndex = CategoryConfig.findPositionByCode(selectedCategoryCode)
         binding.categorySpinner.setSelection(initialIndex)
 
-        binding.categorySpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                val categoryCode = CategoryConfig.getCode(position)
-                if (categoryCode == selectedCategoryCode) {
-                    return
+        binding.categorySpinner.onItemSelectedListener =
+            object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    val categoryCode = CategoryConfig.getCode(position)
+                    if (categoryCode == selectedCategoryCode) {
+                        return
+                    }
+                    selectedCategoryCode = categoryCode
+                    SettingsPreferences.setSelectedCategory(requireContext(), categoryCode)
+                    observeTeams(categoryCode)
                 }
-                selectedCategoryCode = categoryCode
-                SettingsPreferences.setSelectedCategory(requireContext(), categoryCode)
-                observeTeams(categoryCode)
-            }
 
-            override fun onNothingSelected(parent: AdapterView<*>) {
-                // no-op
+                override fun onNothingSelected(parent: AdapterView<*>) {
+                    // no-op
+                }
             }
-        }
     }
 
     private fun setupTeamSpinner() {
@@ -148,13 +163,18 @@ class SettingsFragment : Fragment(), MenuProvider {
         binding.teamSpinner.adapter = teamAdapter
 
         binding.teamSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+            override fun onItemSelected(
+                parent: AdapterView<*>,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
                 if (ignoreTeamSelection) return
                 if (position == 0) {
                     if (selectedTeamId != 0) {
                         SettingsPreferences.clearTeamSelection(requireContext())
                         selectedTeamId = 0
-                        updateTeamSummary(null)
+                        observeSelectedTeam(0)
                     }
                     return
                 }
@@ -166,7 +186,7 @@ class SettingsFragment : Fragment(), MenuProvider {
                     team.teamname,
                     team.startNumber
                 )
-                updateTeamSummary(team)
+                observeSelectedTeam(selectedTeamId)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {
@@ -197,7 +217,8 @@ class SettingsFragment : Fragment(), MenuProvider {
             ignoreTeamSelection = false
             binding.teamSpinner.isEnabled = false
             binding.noTeamsText.visibility = View.VISIBLE
-            updateTeamSummary(null)
+            selectedTeamId = 0
+            observeSelectedTeam(0)
             return
         }
 
@@ -209,36 +230,36 @@ class SettingsFragment : Fragment(), MenuProvider {
         ignoreTeamSelection = true
         binding.teamSpinner.setSelection(if (index >= 0) index + 1 else 0)
         ignoreTeamSelection = false
-        updateTeamSummary(newTeams.getOrNull(index))
-    }
-
-    private fun restoreTeamSummaryFromPreferences() {
-        if (selectedTeamId == 0) {
-            applyTeamSummary(null, null)
-            return
+        val teamForSummary = newTeams.getOrNull(index)
+        selectedTeamId = teamForSummary?.id ?: 0
+        if (teamForSummary == null) {
+            SettingsPreferences.clearTeamSelection(requireContext())
         }
-        val teamName = SettingsPreferences.getSelectedTeamName(requireContext())
-        val teamNumber = SettingsPreferences.getSelectedTeamNumber(requireContext())
-        if (teamName.isNullOrBlank()) {
-            applyTeamSummary(null, null)
-        } else {
-            applyTeamSummary(teamNumber, teamName)
-        }
+        observeSelectedTeam(selectedTeamId)
     }
 
     private fun updateTeamSummary(team: Team?) {
-        if (team == null) {
-            applyTeamSummary(null, null)
+        binding.teamSummary.text = if (team == null) {
+            getString(R.string.settings_team_not_selected)
         } else {
-            applyTeamSummary(team.startNumber, team.teamname)
+            getString(
+                R.string.settings_team_summary_with_count,
+                team.teamname,
+                team.ucount
+            )
         }
     }
 
-    private fun applyTeamSummary(startNumber: String?, teamName: String?) {
-        binding.teamSummary.text = when {
-            teamName.isNullOrBlank() -> getString(R.string.settings_team_not_selected)
-            startNumber.isNullOrBlank() -> getString(R.string.settings_team_summary_name_only, teamName)
-            else -> getString(R.string.settings_team_summary, startNumber, teamName)
+    private fun observeSelectedTeam(teamId: Int) {
+        selectedTeamLiveData?.removeObservers(viewLifecycleOwner)
+        if (teamId == 0) {
+            selectedTeamLiveData = null
+            updateTeamSummary(null)
+            return
+        }
+        selectedTeamLiveData = teamViewModel.getTeamLive(teamId)
+        selectedTeamLiveData?.observe(viewLifecycleOwner) { team ->
+            updateTeamSummary(team)
         }
     }
 
@@ -290,10 +311,12 @@ class SettingsFragment : Fragment(), MenuProvider {
                 handleTeamsUpdateAction()
                 true
             }
+
             R.id.action_member_tag_update -> {
                 handleMemberTagUpdateAction()
                 true
             }
+
             else -> false
         }
     }

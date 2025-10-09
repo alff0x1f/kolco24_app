@@ -45,6 +45,7 @@
     <string name="settings_team_summary">Вы выбрали команду %1$s — %2$s</string>
     <string name="settings_team_item_format">%1$s — %2$s</string>
     <string name="settings_no_teams_placeholder">Нет команд в выбранной категории</string>
+    <string name="settings_team_summary_with_count">Команда %1$s" — %2$d чел.</string>
     <string name="settings_server_label">Сервер</string>
     <string name="settings_server_local">Local</string>
     <string name="settings_server_internet">Internet</string>

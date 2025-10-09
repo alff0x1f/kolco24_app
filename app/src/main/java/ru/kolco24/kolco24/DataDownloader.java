@@ -52,9 +52,9 @@ public class DataDownloader {
     private static final String API_BASE_URL = "https://kolco24.ru/api/";
     private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
     private boolean isLocalDownload;
-    private static final String TEAMS_SUFFIX = "teams";
-    private static final String CHECKPOINT_SUFFIX = "checkpoint";
-    private static final String TAGS_SUFFIX = "point_tags";
+    private static final String TEAMS_SUFFIX = "teams/";
+    private static final String CHECKPOINT_SUFFIX = "checkpoint/";
+    private static final String TAGS_SUFFIX = "point_tags/";
     private static final String MEMBER_TAG_ENDPOINT = "member_tag/";
 
     public interface DownloadCallback {
