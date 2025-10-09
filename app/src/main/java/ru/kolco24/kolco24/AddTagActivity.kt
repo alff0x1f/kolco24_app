@@ -37,14 +37,20 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     private var nfcAdapter: NfcAdapter? = null
     private var currentTagId: String? = null
     private val client = okhttp3.OkHttpClient.Builder()
-        .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
     private enum class Mode { ADD, INVENTORY }
 
     private var currentMode: Mode = Mode.ADD
+
+    // sounds
+    private lateinit var soundPool: android.media.SoundPool
+    private var soundScan: Int = 0
+    private var soundErr: Int = 0
+    private var soundSend: Int = 0
 
     private lateinit var db: AppDatabase
 
@@ -130,6 +136,24 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
                 tagIdTextView.text = "Please scan a tag and enter a valid number."
             }
         }
+
+        // sounds
+        val attrs = android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = android.media.SoundPool.Builder()
+            .setAudioAttributes(attrs)
+            .setMaxStreams(2)
+            .build()
+        soundScan = soundPool.load(this, R.raw.beep_scan, 1)
+        soundSend = soundPool.load(this, R.raw.beep_send, 1)
+        soundErr = soundPool.load(this, R.raw.beep_err, 1)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::soundPool.isInitialized) soundPool.release()
     }
 
     override fun onResume() {
@@ -138,7 +162,9 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         nfcAdapter?.enableReaderMode(
             this,
             this,  // The activity itself acts as the reader callback
-            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+            NfcAdapter.FLAG_READER_NFC_A or
+                    NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK or
+                    NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS,
             null
         )
     }
@@ -149,18 +175,35 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
         nfcAdapter?.disableReaderMode(this)
     }
 
+    private fun playScan() { soundPool.play(soundScan, 1f, 1f, 0, 0, 1f) }
+    private fun playSend() { soundPool.play(soundSend, 1f, 1f, 0, 0, 1f) }
+    private fun playErr() { soundPool.play(soundErr, 1f, 1f, 0, 0, 1f) }
+
+    private fun buzz(success: Boolean = true) {
+        val v = getSystemService(VIBRATOR_SERVICE) as android.os.Vibrator
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val amp = if (success) android.os.VibrationEffect.DEFAULT_AMPLITUDE else 64
+            v.vibrate(android.os.VibrationEffect.createOneShot(30, amp))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(30)
+        }
+    }
+
     // This method is called when a new NFC tag is detected
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
             currentTagId = bytesToHex(tag.id)
 
             runOnUiThread {
+                buzz()
                 findViewById<TextView>(R.id.tag_id_text).apply {
                     text = "Tag ID: $currentTagId"
                     setTextColor(resources.getColor(R.color.textContrast))
                 }
                 // Поле ввода чистим только в режиме добавления
                 if (currentMode == Mode.ADD) {
+                    playScan()
                     findViewById<EditText>(R.id.tag_number_input).apply {
                         setText("")
                         requestFocus()
@@ -270,6 +313,7 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
+                playErr()
                 runOnUiThread {
                     findViewById<TextView>(R.id.tag_id_text).apply {
                         text = "Инвентаризация: ошибка отправки — ${e.message}"
@@ -281,11 +325,13 @@ class AddTagActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 runOnUiThread {
                     if (response.isSuccessful) {
+                        playSend()
                         findViewById<TextView>(R.id.tag_id_text).apply {
                             text = "Инвентаризация: отметили last_seen_at"
                             setTextColor(resources.getColor(R.color.colorGreen))
                         }
                     } else {
+                        playErr()
                         val err = response.body?.string()
                         findViewById<TextView>(R.id.tag_id_text).apply {
                             text = "Инвентаризация: ошибка ${response.code} — $err"
