@@ -316,7 +316,7 @@ public class PhotoFragment extends Fragment implements MenuProvider {
 
     private String buildUploadUrl(boolean useLocalServer, int raceId) {
         String base = useLocalServer ? API_LOCAL_BASE_URL : API_BASE_URL;
-        return base + "race/" + raceId + "/upload_photo";
+        return base + "race/" + raceId + "/upload_photo/";
     }
 
     private void updatePhotoStatsSummary() {
