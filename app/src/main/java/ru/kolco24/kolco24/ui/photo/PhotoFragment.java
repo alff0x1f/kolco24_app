@@ -20,6 +20,7 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -92,6 +93,17 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             mainActivity.getNavView().setSelectedItemId(R.id.navigation_settings);
         });
 
+        SwipeRefreshLayout swipeRefreshLayout = binding.swipeToRefresh;
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            if (teamId == 0) {
+                swipeRefreshLayout.setRefreshing(false);
+                Toast.makeText(getContext(), R.string.select_team, Toast.LENGTH_SHORT).show();
+            } else {
+                swipeRefreshLayout.setRefreshing(true);
+                uploadPhotos(true, () -> swipeRefreshLayout.setRefreshing(false));
+            }
+        });
+
         // Add the MenuProvider to handle menu creation
         requireActivity().addMenuProvider(this, getViewLifecycleOwner());
 
@@ -157,6 +169,8 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             binding.hr2.setVisibility(View.GONE);
             binding.warning.setVisibility(View.GONE);
             binding.textNoTeamId.setVisibility(View.VISIBLE);
+            binding.swipeToRefresh.setEnabled(false);
+            binding.swipeToRefresh.setRefreshing(false);
         } else {
             binding.resultHeader.setVisibility(View.VISIBLE);
             binding.textDashboard.setVisibility(View.VISIBLE);
@@ -165,6 +179,8 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             binding.hr.setVisibility(View.VISIBLE);
             binding.hr2.setVisibility(View.VISIBLE);
             binding.textNoTeamId.setVisibility(View.GONE);
+            binding.swipeToRefresh.setEnabled(true);
+            binding.swipeToRefresh.setRefreshing(false);
         }
     }
 
@@ -175,12 +191,23 @@ public class PhotoFragment extends Fragment implements MenuProvider {
         teamId = SettingsPreferences.getSelectedTeamId(requireContext());
         new LoadPhotosAsyncTask().execute(String.valueOf(teamId));
         uploadPhotos(false);
+        if (binding != null) {
+            binding.swipeToRefresh.setEnabled(teamId != 0);
+            binding.swipeToRefresh.setRefreshing(false);
+        }
     }
 
     public void uploadPhotos(boolean withToast) {
+        uploadPhotos(withToast, null);
+    }
+
+    private void uploadPhotos(boolean withToast, @Nullable Runnable onComplete) {
         AsyncTask.execute(() -> {
             uploadLocalPhotos(withToast);
             uploadInternetPhotos(withToast);
+            if (onComplete != null && isAdded()) {
+                requireActivity().runOnUiThread(onComplete);
+            }
         });
     }
 
