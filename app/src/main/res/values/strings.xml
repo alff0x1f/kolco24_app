@@ -53,4 +53,22 @@
     <string name="select_team">Выбрать команду</string>
     <string name="admin_mode_enabled">Административный режим включен</string>
     <string name="admin_mode_disabled">Административный режим отключен</string>
+    <string name="team_start_input_hint">Стартовый номер команды</string>
+    <string name="team_start_find">Найти</string>
+    <string name="team_start_clear">Сбросить</string>
+    <string name="team_start_info_placeholder">Команда не выбрана</string>
+    <string name="team_start_scan_placeholder">Отсканируйте метки участников</string>
+    <string name="team_start_button">Старт</string>
+    <string name="team_start_pending_header">Отложенные старты</string>
+    <string name="team_start_entry_title">№%1$s — %2$s</string>
+    <string name="team_start_entry_details">Участников: %1$d, отмечено: %2$d (%3$s)</string>
+    <string name="team_start_status_synced">отправлено</string>
+    <string name="team_start_status_pending">не отправлено</string>
+    <string name="team_start_toast_saved">Старт команды "%1$s" сохранён</string>
+    <string name="team_start_toast_no_team">Сначала выберите команду</string>
+    <string name="team_start_toast_duplicate_tag">Метка уже добавлена</string>
+    <string name="team_start_toast_unknown_tag">Метка не найдена</string>
+    <string name="team_start_toast_tag_loaded">Отмечено %1$d из %2$d</string>
+    <string name="team_start_toast_upload_ok">Старты отправлены</string>
+    <string name="team_start_toast_upload_error">Не удалось отправить все старты</string>
 </resources>

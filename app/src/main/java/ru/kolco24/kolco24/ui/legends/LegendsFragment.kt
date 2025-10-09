@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import ru.kolco24.kolco24.AddTagActivity
 import ru.kolco24.kolco24.DataDownloader
@@ -93,7 +94,9 @@ class LegendsFragment : Fragment(), MenuProvider {
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menu.clear()
         menuInflater.inflate(R.menu.legend_menu, menu)
-        menu.findItem(R.id.action_add_tag)?.isVisible = SettingsPreferences.isAdminMode(requireContext())
+        val isAdmin = SettingsPreferences.isAdminMode(requireContext())
+        menu.findItem(R.id.action_add_tag)?.isVisible = isAdmin
+        menu.findItem(R.id.action_team_start)?.isVisible = isAdmin
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -112,12 +115,23 @@ class LegendsFragment : Fragment(), MenuProvider {
                 }
             }
 
+            R.id.action_team_start -> {
+                if (SettingsPreferences.isAdminMode(requireContext())) {
+                    findNavController().navigate(R.id.action_navigation_legends_to_teamStartFragment)
+                    true
+                } else {
+                    false
+                }
+            }
+
             else -> false
         }
     }
 
     override fun onPrepareMenu(menu: Menu) {
-        menu.findItem(R.id.action_add_tag)?.isVisible = SettingsPreferences.isAdminMode(requireContext())
+        val isAdmin = SettingsPreferences.isAdminMode(requireContext())
+        menu.findItem(R.id.action_add_tag)?.isVisible = isAdmin
+        menu.findItem(R.id.action_team_start)?.isVisible = isAdmin
     }
 
     /**

@@ -26,6 +26,9 @@
         <action
             android:id="@+id/action_navigation_legends_to_nfcPointFragment"
             app:destination="@id/nfcPointFragment" />
+        <action
+            android:id="@+id/action_navigation_legends_to_teamStartFragment"
+            app:destination="@id/teamStartFragment" />
     </fragment>
 
     <!-- Settings Fragment -->
@@ -41,5 +44,11 @@
         android:name="ru.kolco24.kolco24.CheckpointVisitVerifyFragment"
         android:label="@string/nfc_chekcpoint"
         tools:layout="@layout/fragment_nfc_point" />
+
+    <fragment
+        android:id="@+id/teamStartFragment"
+        android:name="ru.kolco24.kolco24.ui.start.TeamStartFragment"
+        android:label="@string/team_start_button"
+        tools:layout="@layout/fragment_team_start" />
 
 </navigation>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingVertical="8dp"
+    android:paddingHorizontal="12dp">
+
+    <TextView
+        android:id="@+id/startTeamTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+        android:text="Команда 1"
+        android:textColor="@color/textContrast" />
+
+    <TextView
+        android:id="@+id/startTeamDetails"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
+        android:text="3 чел., сканировано 3"
+        android:textColor="@color/textContrast" />
+
+    <TextView
+        android:id="@+id/startTeamTimestamp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+        android:text="14:05 12.05.2024"
+        android:textColor="@color/textContrast" />
+
+</LinearLayout>

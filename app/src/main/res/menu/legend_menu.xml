@@ -14,6 +14,11 @@
         android:id="@+id/action_add_tag"
         android:title="@string/tag_admin"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_team_start"
+        android:title="@string/team_start_button"
+        app:showAsAction="never" />
     <!--    settings    -->
     <!--    <item-->
     <!--        android:id="@+id/action_settings"-->

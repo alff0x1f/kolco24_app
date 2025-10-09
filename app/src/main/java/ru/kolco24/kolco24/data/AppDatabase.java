@@ -7,6 +7,7 @@ import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import androidx.sqlite.db.SupportSQLiteDatabase;
+import androidx.room.migration.Migration;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -21,6 +22,7 @@ import ru.kolco24.kolco24.data.dao.PointTagDao;
 import ru.kolco24.kolco24.data.daos.CheckpointDao;
 import ru.kolco24.kolco24.data.daos.MemberTagDao;
 import ru.kolco24.kolco24.data.daos.NfcCheckDao;
+import ru.kolco24.kolco24.data.daos.TeamStartDao;
 import ru.kolco24.kolco24.data.daos.PhotoDao;
 import ru.kolco24.kolco24.data.daos.TeamDao;
 import ru.kolco24.kolco24.data.entities.NfcCheck;
@@ -29,13 +31,14 @@ import ru.kolco24.kolco24.data.entities.Checkpoint;
 import ru.kolco24.kolco24.data.entities.CheckpointTag;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.entities.MemberTag;
+import ru.kolco24.kolco24.data.entities.TeamStart;
 
 @Database(
         entities = {
                 Checkpoint.class, CheckpointTag.class, Photo.class,
-                Team.class, NfcCheck.class, MemberTag.class
+                Team.class, NfcCheck.class, MemberTag.class, TeamStart.class
         },
-        version = 1,
+        version = 2,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -50,6 +53,8 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract MemberTagDao memberTagDao();
 
     public abstract NfcCheckDao nfcCheckDao();
+
+    public abstract TeamStartDao teamStartDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
@@ -69,12 +74,33 @@ public abstract class AppDatabase extends RoomDatabase {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
                                     AppDatabase.class, "kolco24_database_5")
                             .addCallback(new RoomDatabaseCallback(context)) // Pass context here
+                            .addMigrations(MIGRATION_1_2)
                             .build();
                 }
             }
         }
         return INSTANCE;
     }
+
+    private static final Migration MIGRATION_1_2 = new Migration(1, 2) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS team_starts (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "teamId INTEGER NOT NULL, " +
+                    "startNumber TEXT NOT NULL, " +
+                    "teamName TEXT NOT NULL, " +
+                    "participantCount INTEGER NOT NULL, " +
+                    "scannedCount INTEGER NOT NULL, " +
+                    "memberTags TEXT NOT NULL, " +
+                    "startTimestamp INTEGER NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, " +
+                    "isSync INTEGER NOT NULL DEFAULT 0"
+                    + ")");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_teamId ON team_starts(teamId)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_isSync ON team_starts(isSync)");
+        }
+    };
 
     private static class RoomDatabaseCallback extends RoomDatabase.Callback {
         private final Context context;
