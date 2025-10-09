@@ -15,6 +15,7 @@ object SettingsPreferences {
     const val KEY_TEAM_NUMBER = "team_number"
     const val KEY_PHONE_UUID = "phone_uuid"
     const val KEY_USE_LOCAL_SERVER = "use_local_server"
+    private const val KEY_ADMIN_MODE = "admin_mode"
 
     const val DEFAULT_RACE_ID = 8
     const val DEFAULT_CATEGORY_CODE = 16
@@ -104,5 +105,14 @@ object SettingsPreferences {
     @JvmStatic
     fun setUseLocalServer(context: Context, useLocal: Boolean) {
         getPrefs(context).edit { putBoolean(KEY_USE_LOCAL_SERVER, useLocal) }
+    }
+
+    @JvmStatic
+    fun isAdminMode(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_ADMIN_MODE, false)
+
+    @JvmStatic
+    fun setAdminMode(context: Context, enabled: Boolean) {
+        getPrefs(context).edit { putBoolean(KEY_ADMIN_MODE, enabled) }
     }
 }

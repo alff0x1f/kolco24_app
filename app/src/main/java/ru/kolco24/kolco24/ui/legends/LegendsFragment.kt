@@ -76,6 +76,7 @@ class LegendsFragment : Fragment(), MenuProvider {
 
         // Add the MenuProvider to handle menu creation
         requireActivity().addMenuProvider(this, viewLifecycleOwner)
+        requireActivity().invalidateOptionsMenu()
 
         return root
     }
@@ -92,6 +93,7 @@ class LegendsFragment : Fragment(), MenuProvider {
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menu.clear()
         menuInflater.inflate(R.menu.legend_menu, menu)
+        menu.findItem(R.id.action_add_tag)?.isVisible = SettingsPreferences.isAdminMode(requireContext())
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -102,12 +104,20 @@ class LegendsFragment : Fragment(), MenuProvider {
             }
 
             R.id.action_add_tag -> {
-                handleAddTagAction()
-                true
+                if (SettingsPreferences.isAdminMode(requireContext())) {
+                    handleAddTagAction()
+                    true
+                } else {
+                    false
+                }
             }
 
             else -> false
         }
+    }
+
+    override fun onPrepareMenu(menu: Menu) {
+        menu.findItem(R.id.action_add_tag)?.isVisible = SettingsPreferences.isAdminMode(requireContext())
     }
 
     /**

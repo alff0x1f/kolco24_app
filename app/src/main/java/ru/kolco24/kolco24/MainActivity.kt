@@ -32,6 +32,10 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
 
+    companion object {
+        private const val ADMIN_TAG_ID = "04582B1AFD1E94"
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var nfcAdapter: NfcAdapter
     private val db: AppDatabase by lazy { AppDatabase.getDatabase(application) }
@@ -180,6 +184,23 @@ class MainActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
     override fun onTagDiscovered(tag: Tag?) {
         tag?.let {
             val hexId = bytesToHex(tag.id)
+
+            if (hexId.equals(ADMIN_TAG_ID, ignoreCase = true)) {
+                val newMode = !SettingsPreferences.isAdminMode(this)
+                SettingsPreferences.setAdminMode(this, newMode)
+                runOnUiThread {
+                    playScanFeedback()
+                    invalidateOptionsMenu()
+                    val message = if (newMode) {
+                        getString(R.string.admin_mode_enabled)
+                    } else {
+                        getString(R.string.admin_mode_disabled)
+                    }
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                }
+                return
+            }
+
             val teamId = SettingsPreferences.getSelectedTeamId(this)
             if (teamId == 0) {
                 runOnUiThread {
