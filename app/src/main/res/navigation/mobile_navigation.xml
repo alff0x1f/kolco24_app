@@ -6,18 +6,6 @@
     app:startDestination="@id/navigation_legends">
 
     <!-- Home Fragment -->
-    <fragment
-        android:id="@+id/navigation_home"
-        android:name="ru.kolco24.kolco24.ui.teams.TeamsFragment"
-        android:label="@string/title_home"
-        tools:layout="@layout/fragment_teams">
-
-        <!-- Action to navigate from TeamsFragment to NfcPointFragment -->
-        <action
-            android:id="@+id/action_navigation_home_to_nfcPointFragment"
-            app:destination="@id/nfcPointFragment" />
-    </fragment>
-
     <!-- Taken Points Fragment -->
     <fragment
         android:id="@+id/navigation_taken_points"

@@ -33,6 +33,7 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     private FragmentTeamsBinding binding;
     private TeamViewModel mTeamViewModel;
     private ViewPager2.OnPageChangeCallback pageChangeCallback;
+    private static final boolean SHOW_CATEGORY_PAGES = false;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -43,9 +44,13 @@ public class TeamsFragment extends Fragment implements MenuProvider {
 
         binding = FragmentTeamsBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
-        //pager
-        ViewPager2 viewPager = binding.viewPagerTeams;
-        viewPager.setAdapter(new CategoriesAdapter(this));
+        if (SHOW_CATEGORY_PAGES) {
+            ViewPager2 viewPager = binding.viewPagerTeams;
+            viewPager.setAdapter(new CategoriesAdapter(this));
+        } else {
+            binding.tabTeams.setVisibility(View.GONE);
+            binding.viewPagerTeams.setVisibility(View.GONE);
+        }
 
 //        final TextView textView = binding.textHome;
 //        teamsViewModel.getText().observe(getViewLifecycleOwner(), textView::setText);
@@ -63,18 +68,23 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        attachTabToViewPager(binding.tabTeams, binding.viewPagerTeams);
-        int categoryCode = SettingsPreferences.getSelectedCategory(requireContext());
-        int position = CategoryConfig.findPositionByCode(categoryCode);
-        binding.viewPagerTeams.post(() -> binding.viewPagerTeams.setCurrentItem(position, false));
-        pageChangeCallback = new ViewPager2.OnPageChangeCallback() {
-            @Override
-            public void onPageSelected(int position) {
-                super.onPageSelected(position);
-                SettingsPreferences.setSelectedCategory(requireContext(), CategoryConfig.getCode(position));
-            }
-        };
-        binding.viewPagerTeams.registerOnPageChangeCallback(pageChangeCallback);
+        if (SHOW_CATEGORY_PAGES) {
+            attachTabToViewPager(binding.tabTeams, binding.viewPagerTeams);
+            int categoryCode = SettingsPreferences.getSelectedCategory(requireContext());
+            int position = CategoryConfig.findPositionByCode(categoryCode);
+            binding.viewPagerTeams.post(() -> binding.viewPagerTeams.setCurrentItem(position, false));
+            pageChangeCallback = new ViewPager2.OnPageChangeCallback() {
+                @Override
+                public void onPageSelected(int position) {
+                    super.onPageSelected(position);
+                    SettingsPreferences.setSelectedCategory(requireContext(), CategoryConfig.getCode(position));
+                }
+            };
+            binding.viewPagerTeams.registerOnPageChangeCallback(pageChangeCallback);
+        } else {
+            binding.tabTeams.setVisibility(View.GONE);
+            binding.viewPagerTeams.setVisibility(View.GONE);
+        }
         //toast observer
         mTeamViewModel.getToastMessage().observe(getViewLifecycleOwner(), s -> {
             System.out.println("toast message: " + s);
@@ -152,7 +162,7 @@ public class TeamsFragment extends Fragment implements MenuProvider {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        if (pageChangeCallback != null) {
+        if (SHOW_CATEGORY_PAGES && pageChangeCallback != null) {
             binding.viewPagerTeams.unregisterOnPageChangeCallback(pageChangeCallback);
             pageChangeCallback = null;
         }
