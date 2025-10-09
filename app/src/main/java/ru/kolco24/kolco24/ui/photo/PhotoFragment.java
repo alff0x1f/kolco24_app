@@ -43,8 +43,6 @@ import ru.kolco24.kolco24.data.entities.Photo;
 import ru.kolco24.kolco24.databinding.FragmentPhotosBinding;
 
 public class PhotoFragment extends Fragment implements MenuProvider {
-    private final int LOCAL_SYNC = 1;
-    private final int INTERNET_SYNC = 2;
     public final OkHttpClient client = new OkHttpClient.Builder()
             .connectTimeout(2, TimeUnit.SECONDS)
             .writeTimeout(2, TimeUnit.SECONDS)
@@ -56,6 +54,9 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     private final PhotoPointListAdapter adapter = new PhotoPointListAdapter(new PhotoPointListAdapter.PhotoPointDiff());
     private int teamId;
     private String phoneUuid;
+
+    private static final String API_BASE_URL = "https://kolco24.ru/api/";
+    private static final String API_LOCAL_BASE_URL = "http://192.168.1.5/api/";
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -202,83 +203,36 @@ public class PhotoFragment extends Fragment implements MenuProvider {
     }
 
     private void uploadPhotos(boolean withToast, @Nullable Runnable onComplete) {
+        if (!isAdded()) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+
+        final boolean useLocalServer = SettingsPreferences.shouldUseLocalServer(requireContext());
+        final int raceId = SettingsPreferences.getRaceId(requireContext());
+        final String uploadUrl = buildUploadUrl(useLocalServer, raceId);
+
         AsyncTask.execute(() -> {
-            uploadLocalPhotos(withToast);
-            uploadInternetPhotos(withToast);
-            if (onComplete != null && isAdded()) {
-                requireActivity().runOnUiThread(onComplete);
+            boolean allSuccess = uploadPhotosInternal(useLocalServer, uploadUrl);
+
+            if (isAdded()) {
+                List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
+                requireActivity().runOnUiThread(() -> {
+                    adapter.submitList(photos);
+                    if (withToast) {
+                        String message = allSuccess
+                                ? (useLocalServer ? "Фото отправлены (локально)" : "Фото отправлены через интернет")
+                                : (useLocalServer ? "Ошибка при локальной отправке фото" : "Ошибка при отправке через интернет");
+                        Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+                    }
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                });
             }
         });
-    }
-
-    public void uploadLocalPhotos(boolean withToast) {
-        boolean localResult = true;
-        List<Photo> notLocalSync = mPhotoViewModel.getNotLocalSyncPhoto(teamId);
-        for (Photo photo : notLocalSync) {
-            boolean isSuccess = upload_photo(photo, "http://192.168.1.5/api/v1/upload_photo/");
-            if (isSuccess) {
-                photo.setSyncLocal(true);
-                mPhotoViewModel.update(photo);
-            } else {
-                localResult = false;
-                break;
-            }
-        }
-        if (withToast) {
-            if (localResult) {
-                if (isAdded()) { // Check if fragment is still attached to activity
-                    requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Фото локально отправлены", Toast.LENGTH_SHORT).show());
-                }
-            } else {
-                if (isAdded()) { // Check if fragment is still attached to activity
-                    requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Ошибка при локальной отправке фото", Toast.LENGTH_SHORT).show());
-                }
-            }
-        }
-    }
-
-    public void uploadInternetPhotos(boolean withToast) {
-        boolean internetResult = true;
-        List<Photo> notSync = mPhotoViewModel.getNotSyncPhoto(teamId);
-        for (Photo photo : notSync) {
-            boolean isSuccess = upload_photo(photo, "https://kolco24.ru/api/v1/upload_photo/");
-            if (isSuccess) {
-                photo.setSync(true);
-                mPhotoViewModel.update(photo);
-            } else {
-                internetResult = false;
-                break;
-            }
-        }
-
-        if (isAdded()) {
-            // Update the adapter with the new list of photos
-            List<Photo> photos = mPhotoViewModel.getPhotos(teamId);
-            requireActivity().runOnUiThread(
-                    () -> adapter.submitList(photos)
-            );
-        }
-        if (withToast) {
-            if (internetResult) {
-                if (isAdded()) { // Check if fragment is still attached to activity
-                    requireActivity().runOnUiThread(
-                            () -> Toast.makeText(
-                                    getContext(),
-                                    "Фото отправлены через интернет",
-                                    Toast.LENGTH_SHORT).show()
-                    );
-                }
-            } else {
-                if (isAdded()) { // Check if fragment is still attached to activity
-                    requireActivity().runOnUiThread(
-                            () -> Toast.makeText(
-                                    getContext(),
-                                    "Ошибка при отправке через интернет",
-                                    Toast.LENGTH_SHORT).show()
-                    );
-                }
-            }
-        }
     }
 
     public boolean upload_photo(@NonNull Photo photo, String url) {
@@ -314,6 +268,34 @@ public class PhotoFragment extends Fragment implements MenuProvider {
             }
         }
         return false;
+    }
+
+    private boolean uploadPhotosInternal(boolean useLocalServer, String uploadUrl) {
+        boolean result = true;
+        List<Photo> photosToUpload = useLocalServer
+                ? mPhotoViewModel.getNotLocalSyncPhoto(teamId)
+                : mPhotoViewModel.getNotSyncPhoto(teamId);
+
+        for (Photo photo : photosToUpload) {
+            boolean success = upload_photo(photo, uploadUrl);
+            if (success) {
+                if (useLocalServer) {
+                    photo.setSyncLocal(true);
+                } else {
+                    photo.setSync(true);
+                }
+                mPhotoViewModel.update(photo);
+            } else {
+                result = false;
+                break;
+            }
+        }
+        return result;
+    }
+
+    private String buildUploadUrl(boolean useLocalServer, int raceId) {
+        String base = useLocalServer ? API_LOCAL_BASE_URL : API_BASE_URL;
+        return base + "race/" + raceId + "/upload_photo/";
     }
 
     // MenuProvider interface
