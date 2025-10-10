@@ -50,6 +50,8 @@ class TeamStartFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     private val scannedTags = mutableListOf<MemberTag>()
     private var currentTeam: Team? = null
+    @Volatile private var lastScanTimestamp: Long = 0
+    private val scanCooldownMs = 600L
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -209,6 +211,16 @@ class TeamStartFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag ?: return
+        val now = System.currentTimeMillis()
+        val allowScan = synchronized(this) {
+            if (now - lastScanTimestamp < scanCooldownMs) {
+                false
+            } else {
+                lastScanTimestamp = now
+                true
+            }
+        }
+        if (!allowScan) return
         val hex = bytesToHex(tag.id)
         val team = currentTeam
         if (team == null) {

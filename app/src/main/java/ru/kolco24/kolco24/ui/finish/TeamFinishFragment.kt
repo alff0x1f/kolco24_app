@@ -41,6 +41,8 @@ class TeamFinishFragment : Fragment(), NfcAdapter.ReaderCallback {
     private var soundScan: Int = 0
     private var soundErr: Int = 0
     private var soundDone: Int = 0
+    @Volatile private var lastScanTimestamp: Long = 0
+    private val scanCooldownMs = 600L
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -109,6 +111,16 @@ class TeamFinishFragment : Fragment(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: Tag?) {
         tag ?: return
+        val now = System.currentTimeMillis()
+        val allowScan = synchronized(this) {
+            if (now - lastScanTimestamp < scanCooldownMs) {
+                false
+            } else {
+                lastScanTimestamp = now
+                true
+            }
+        }
+        if (!allowScan) return
         val hex = bytesToHex(tag.id)
         lifecycleScope.launch(Dispatchers.IO) {
             val member = db.memberTagDao().getMemberTagByUID(hex)
