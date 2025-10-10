@@ -71,4 +71,14 @@
     <string name="team_start_toast_tag_loaded">Отмечено %1$d из %2$d</string>
     <string name="team_start_toast_upload_ok">Старты отправлены</string>
     <string name="team_start_toast_upload_error">Не удалось отправить все старты</string>
+    <string name="team_finish_placeholder">Метка не отсканирована</string>
+    <string name="team_finish_clear">Сбросить</string>
+    <string name="team_finish_pending_header">Отложенные финиши</string>
+    <string name="team_finish_menu">Финиш</string>
+    <string name="team_finish_saved">Финиш сохранён</string>
+    <string name="team_finish_upload_ok">Финиши отправлены</string>
+    <string name="team_finish_upload_error">Не удалось отправить финиши</string>
+    <string name="team_finish_status_synced">отправлено</string>
+    <string name="team_finish_status_pending">не отправлено</string>
+    <string name="team_finish_entry_info">Локально: %1$s, интернет: %2$s</string>
 </resources>

@@ -97,6 +97,7 @@ class LegendsFragment : Fragment(), MenuProvider {
         val isAdmin = SettingsPreferences.isAdminMode(requireContext())
         menu.findItem(R.id.action_add_tag)?.isVisible = isAdmin
         menu.findItem(R.id.action_team_start)?.isVisible = isAdmin
+        menu.findItem(R.id.action_team_finish)?.isVisible = isAdmin
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -124,6 +125,15 @@ class LegendsFragment : Fragment(), MenuProvider {
                 }
             }
 
+            R.id.action_team_finish -> {
+                if (SettingsPreferences.isAdminMode(requireContext())) {
+                    findNavController().navigate(R.id.action_navigation_legends_to_teamFinishFragment)
+                    true
+                } else {
+                    false
+                }
+            }
+
             else -> false
         }
     }
@@ -132,6 +142,7 @@ class LegendsFragment : Fragment(), MenuProvider {
         val isAdmin = SettingsPreferences.isAdminMode(requireContext())
         menu.findItem(R.id.action_add_tag)?.isVisible = isAdmin
         menu.findItem(R.id.action_team_start)?.isVisible = isAdmin
+        menu.findItem(R.id.action_team_finish)?.isVisible = isAdmin
     }
 
     /**

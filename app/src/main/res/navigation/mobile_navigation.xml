@@ -29,6 +29,9 @@
         <action
             android:id="@+id/action_navigation_legends_to_teamStartFragment"
             app:destination="@id/teamStartFragment" />
+        <action
+            android:id="@+id/action_navigation_legends_to_teamFinishFragment"
+            app:destination="@id/teamFinishFragment" />
     </fragment>
 
     <!-- Settings Fragment -->
@@ -50,5 +53,11 @@
         android:name="ru.kolco24.kolco24.ui.start.TeamStartFragment"
         android:label="@string/team_start_button"
         tools:layout="@layout/fragment_team_start" />
+
+    <fragment
+        android:id="@+id/teamFinishFragment"
+        android:name="ru.kolco24.kolco24.ui.finish.TeamFinishFragment"
+        android:label="@string/team_finish_menu"
+        tools:layout="@layout/fragment_team_finish" />
 
 </navigation>

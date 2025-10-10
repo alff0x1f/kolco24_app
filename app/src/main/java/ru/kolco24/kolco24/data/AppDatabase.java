@@ -23,6 +23,7 @@ import ru.kolco24.kolco24.data.daos.CheckpointDao;
 import ru.kolco24.kolco24.data.daos.MemberTagDao;
 import ru.kolco24.kolco24.data.daos.NfcCheckDao;
 import ru.kolco24.kolco24.data.daos.TeamStartDao;
+import ru.kolco24.kolco24.data.daos.TeamFinishDao;
 import ru.kolco24.kolco24.data.daos.PhotoDao;
 import ru.kolco24.kolco24.data.daos.TeamDao;
 import ru.kolco24.kolco24.data.entities.NfcCheck;
@@ -32,13 +33,15 @@ import ru.kolco24.kolco24.data.entities.CheckpointTag;
 import ru.kolco24.kolco24.data.entities.Team;
 import ru.kolco24.kolco24.data.entities.MemberTag;
 import ru.kolco24.kolco24.data.entities.TeamStart;
+import ru.kolco24.kolco24.data.entities.TeamFinish;
 
 @Database(
         entities = {
                 Checkpoint.class, CheckpointTag.class, Photo.class,
-                Team.class, NfcCheck.class, MemberTag.class, TeamStart.class
+                Team.class, NfcCheck.class, MemberTag.class,
+                TeamStart.class, TeamFinish.class
         },
-        version = 2,
+        version = 3,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -55,6 +58,8 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract NfcCheckDao nfcCheckDao();
 
     public abstract TeamStartDao teamStartDao();
+
+    public abstract TeamFinishDao teamFinishDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final int NUMBER_OF_THREADS = 4;
@@ -74,7 +79,7 @@ public abstract class AppDatabase extends RoomDatabase {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
                                     AppDatabase.class, "kolco24_database_5")
                             .addCallback(new RoomDatabaseCallback(context)) // Pass context here
-                            .addMigrations(MIGRATION_1_2)
+                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                             .build();
                 }
             }
@@ -101,6 +106,22 @@ public abstract class AppDatabase extends RoomDatabase {
             database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_teamId ON team_starts(teamId)");
             database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_isSync ON team_starts(isSync)");
             database.execSQL("CREATE INDEX IF NOT EXISTS index_team_starts_isSyncLocal ON team_starts(isSyncLocal)");
+        }
+    };
+
+    private static final Migration MIGRATION_2_3 = new Migration(3, 4) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS team_finish (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "memberTagId INTEGER NOT NULL, " +
+                    "tagUid TEXT NOT NULL, " +
+                    "recordedAt INTEGER NOT NULL, " +
+                    "isSyncLocal INTEGER NOT NULL DEFAULT 0, " +
+                    "isSyncRemote INTEGER NOT NULL DEFAULT 0"
+                    + ")");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_team_finish_isSyncLocal ON team_finish(isSyncLocal)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_team_finish_isSyncRemote ON team_finish(isSyncRemote)");
         }
     };
 
