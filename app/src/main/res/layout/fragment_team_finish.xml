@@ -28,13 +28,6 @@
                 android:text="@string/team_finish_placeholder"
                 android:textAppearance="@style/TextAppearance.MaterialComponents.Body1" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/buttonClearFinish"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/small_padding"
-                android:text="@string/team_finish_clear" />
-
             <TextView
                 android:id="@+id/pendingFinishHeader"
                 android:layout_width="match_parent"

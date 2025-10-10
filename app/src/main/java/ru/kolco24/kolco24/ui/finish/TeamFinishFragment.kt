@@ -66,7 +66,6 @@ class TeamFinishFragment : Fragment(), NfcAdapter.ReaderCallback {
             binding.pendingFinishHeader.isVisible = items.isNotEmpty()
         }
 
-        binding.buttonClearFinish.setOnClickListener { clearCurrent() }
         binding.swipeToRefreshFinish.setOnRefreshListener { syncFinishes() }
         updateCurrentTag(null)
     }
@@ -139,10 +138,6 @@ class TeamFinishFragment : Fragment(), NfcAdapter.ReaderCallback {
                 Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    private fun clearCurrent() {
-        updateCurrentTag(null)
     }
 
     private fun updateCurrentTag(event: TeamFinish?) {

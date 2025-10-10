@@ -72,7 +72,6 @@
     <string name="team_start_toast_upload_ok">Старты отправлены</string>
     <string name="team_start_toast_upload_error">Не удалось отправить все старты</string>
     <string name="team_finish_placeholder">Метка не отсканирована</string>
-    <string name="team_finish_clear">Сбросить</string>
     <string name="team_finish_pending_header">Отложенные финиши</string>
     <string name="team_finish_menu">Финиш</string>
     <string name="team_finish_saved">Финиш сохранён</string>
