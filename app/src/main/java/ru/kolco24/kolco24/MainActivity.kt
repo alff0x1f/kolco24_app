@@ -68,7 +68,7 @@ private fun MainScreen() {
                         icon = {
                             Icon(
                                 imageVector = if (selectedTab == index) tab.selectedIcon else tab.unselectedIcon,
-                                contentDescription = tab.label,
+                                contentDescription = null,
                             )
                         },
                         label = { Text(tab.label) },
