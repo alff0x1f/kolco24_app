@@ -2,6 +2,7 @@
 /build
 **/build/
 /captures
+app/release/
 
 # Gradle
 .gradle/
