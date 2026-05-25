@@ -26,4 +26,4 @@ local.properties
 # Native build
 *.so
 
-assets
+/assets/
