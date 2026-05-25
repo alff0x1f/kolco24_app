@@ -2,6 +2,7 @@
 /build
 **/build/
 /captures
+app/release/
 
 # Gradle
 .gradle/
@@ -24,3 +25,5 @@ local.properties
 
 # Native build
 *.so
+
+/assets/
