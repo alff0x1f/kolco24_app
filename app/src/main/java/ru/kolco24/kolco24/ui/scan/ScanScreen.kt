@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.kolco24.kolco24.ui.theme.BrandRed
 
 data class ScanChip(
     val chipId: String?,
@@ -94,7 +96,7 @@ fun ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                 )
             }
             item("hero_timer") {
-                HeroTimerCard(seconds = 17f, total = 20f, remainingScans = remaining + 1)
+                HeroTimerCard(seconds = 17f, total = 20f, remainingScans = remaining)
             }
             item("nfc_banner") {
                 NfcBanner(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
@@ -108,6 +110,7 @@ private fun ScanTopBar(onClose: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -188,14 +191,14 @@ private fun CpBadgeEmpty(size: Dp) {
                 .fillMaxWidth()
                 .height(stripeHeight)
                 .align(Alignment.TopStart)
-                .background(Color(0xFFB3261E).copy(alpha = 0.78f))
+                .background(BrandRed.copy(alpha = 0.78f))
         )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(stripeHeight)
                 .align(Alignment.BottomStart)
-                .background(Color(0xFFB3261E).copy(alpha = 0.78f))
+                .background(BrandRed.copy(alpha = 0.78f))
         )
         Text(
             text = "?",
@@ -361,7 +364,7 @@ private fun WaitingChipIcon() {
 
 @Composable
 private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
-    val pct = (seconds / total).coerceIn(0f, 1f)
+    val pct = if (total > 0f) (seconds / total).coerceIn(0f, 1f) else 0f
     val ringColor = if (seconds < 5f) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
     val trackColor = Color.White.copy(alpha = 0.12f)
 

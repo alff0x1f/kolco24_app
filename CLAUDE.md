@@ -32,11 +32,11 @@ Single-activity Jetpack Compose app (minSdk 24, targetSdk 36). No ViewModel, no 
 - `OrangeCta` #C65A2E — FABs, active NavigationBar icon/text, NFC icon tint (not a theme token — used directly)
 - `tertiary` #1F7A3D — success/green (КП taken state)
 - `inverseSurface` #1D242D — dark hero cards (timer card in ScanScreen)
-- `surfaceContainerDefault` #FFFFFF — NavigationBar background (cool white)
+- `surfaceContainer` #FFFFFF — NavigationBar background (cool white; mapped from `SurfaceContainerDefault` in Color.kt)
 - `outlineVariant` #E2E6EB — cool divider/border color
 
 **Scan overlay pattern:**
-`MainActivity` wraps `Scaffold` in a `Box(Modifier.fillMaxSize())`. The `ScanScreen` is rendered after the Scaffold inside the same Box — when `showScan = true` it covers the entire screen. Dismiss via the close button sets `showScan = false`. No navigation component used.
+`MainActivity` wraps `Scaffold` in a `Box(Modifier.fillMaxSize())`. The `ScanScreen` is rendered after the Scaffold inside the same Box — when `showScan = true` it covers the entire screen. Dismiss via the close button or system back (handled by `BackHandler`) sets `showScan = false`. No navigation component used.
 
 **App assets:**
 - `app/src/main/assets/adi-registration.properties` — ADI registration token (tracked, do not expose value)

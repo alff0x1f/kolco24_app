@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -70,11 +71,11 @@ private fun Kolco24App() {
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                     NavigationBarItem(
-                        selected = pagerState.currentPage == 0,
+                        selected = pagerState.targetPage == 0,
                         onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                         icon = {
                             Icon(
-                                if (pagerState.currentPage == 0) Icons.Filled.Flag else Icons.Outlined.Flag,
+                                if (pagerState.targetPage == 0) Icons.Filled.Flag else Icons.Outlined.Flag,
                                 contentDescription = null,
                             )
                         },
@@ -82,11 +83,11 @@ private fun Kolco24App() {
                         colors = navItemColors,
                     )
                     NavigationBarItem(
-                        selected = pagerState.currentPage == 1,
+                        selected = pagerState.targetPage == 1,
                         onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                         icon = {
                             Icon(
-                                if (pagerState.currentPage == 1) Icons.Filled.Map else Icons.Outlined.Map,
+                                if (pagerState.targetPage == 1) Icons.Filled.Map else Icons.Outlined.Map,
                                 contentDescription = null,
                             )
                         },
@@ -94,11 +95,11 @@ private fun Kolco24App() {
                         colors = navItemColors,
                     )
                     NavigationBarItem(
-                        selected = pagerState.currentPage == 2,
+                        selected = pagerState.targetPage == 2,
                         onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                         icon = {
                             Icon(
-                                if (pagerState.currentPage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
+                                if (pagerState.targetPage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
                                 contentDescription = null,
                             )
                         },
@@ -124,6 +125,7 @@ private fun Kolco24App() {
             }
         }
         if (showScan) {
+            BackHandler { showScan = false }
             ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
         }
     }

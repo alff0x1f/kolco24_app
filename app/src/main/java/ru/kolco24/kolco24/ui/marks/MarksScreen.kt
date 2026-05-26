@@ -208,14 +208,14 @@ private fun MetricItem(
 private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     val rows = marks.chunked(4)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        rows.forEach { rowMarks ->
+        rows.forEachIndexed { rowIdx, rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                rowMarks.forEach { mark ->
+                rowMarks.forEachIndexed { colIdx, mark ->
                     Box(modifier = Modifier.weight(1f)) {
-                        MarkTile(mark = mark, gradientIndex = marks.indexOf(mark) % 3)
+                        MarkTile(mark = mark, gradientIndex = (rowIdx * 4 + colIdx) % 3)
                     }
                 }
                 repeat(4 - rowMarks.size) { Box(modifier = Modifier.weight(1f)) }
