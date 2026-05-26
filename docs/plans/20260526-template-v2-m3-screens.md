@@ -73,10 +73,10 @@ the light scheme compiles cleanly.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/theme/Theme.kt`
 
-- [ ] Confirm all `LightColorScheme` assignments still resolve (no compile errors after Task 1)
-- [ ] Remove `secondary`/`onSecondary`/`secondaryContainer`/`onSecondaryContainer` from `LightColorScheme`
-  if unused (they are not referenced by any screen; keep if lint requires)
-- [ ] Run `./gradlew assembleDebug` — must succeed with zero errors before Task 3
+- [x] Confirm all `LightColorScheme` assignments still resolve (no compile errors after Task 1)
+- [x] Remove `secondary`/`onSecondary`/`secondaryContainer`/`onSecondaryContainer` from `LightColorScheme`
+  if unused (they are not referenced by any screen; keep if lint requires) — kept, still used by MarksScreen and TeamScreen
+- [x] Run `./gradlew assembleDebug` — must succeed with zero errors before Task 3
 
 ---
 
