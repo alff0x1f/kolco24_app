@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,12 +132,12 @@ private fun ScanTopBar(onClose: () -> Unit) {
                 .weight(1f)
                 .padding(start = 4.dp),
         )
-        Text(
-            text = "Готово",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
+        TextButton(onClick = onClose) {
+            Text(
+                text = "Готово",
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 
