@@ -163,26 +163,26 @@ New full-screen composable. Uses the same mock chip data as TeamScreen.
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt`
 
-- [ ] Create package `ru.kolco24.kolco24.ui.scan`
-- [ ] Define `ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier)` composable
-- [ ] Top bar: `Row` with close `IconButton` (Icons.Filled.Close), title "Отметить КП" (bodyLarge),
+- [x] Create package `ru.kolco24.kolco24.ui.scan`
+- [x] Define `ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier)` composable
+- [x] Top bar: `Row` with close `IconButton` (Icons.Filled.Close), title "Отметить КП" (bodyLarge),
   disabled text "Готово" (labelLarge, `onSurfaceVariant` color)
-- [ ] `CpWaitingCard`: `Surface(shape=large, color=surfaceContainerLowest, border=outlineVariant)` with
+- [x] `CpWaitingCard`: `Surface(shape=large, color=surfaceContainerLowest, border=outlineVariant)` with
   large CP badge (white box, red top/bottom stripes, "?" text, `onSurfaceVariant` color) + text block
   ("КП не отсканирован", "Поднесите телефон к чипу на КП")
-- [ ] Section header "Чипы команды" + counter chip (e.g. "3 / 6")
-- [ ] `ChipGrid`: 2-column `LazyVerticalGrid` or manual 2-col `Column` of chip slots:
+- [x] Section header "Чипы команды" + counter chip (e.g. "3 / 6")
+- [x] `ChipGrid`: 2-column `LazyVerticalGrid` or manual 2-col `Column` of chip slots:
   - filled slot: `CheckCircle` icon + name + "Чип NNN" monospace sub-text
   - waiting slot: dashed circle outline + "Ожидание" + "NFC · scan" label
   - inset dividers between slots (match template's `outlineVariant` grid lines)
-- [ ] `HeroTimerCard`: dark `Surface(color=inverseSurface)` card:
+- [x] `HeroTimerCard`: dark `Surface(color=inverseSurface)` card:
   - Circular progress drawn with `Canvas` (or `drawWithContent`) — ring at 87 % (17 s / 20 s),
     amber ring color `Color(0xFFFFC98A)`, dark track `rgba(255,255,255,0.12)`
   - Center: seconds number (28sp monospace) + "сек" label
   - Right: "Сканируйте" overline, "КП и ещё 4 чипа" body, countdown-reset hint text
-- [ ] NFC banner (reuse same transparent-row pattern from MarksScreen)
-- [ ] Wrap everything in a `LazyColumn` inside a `Box(Modifier.fillMaxSize().background(surface))`
-- [ ] Run `./gradlew assembleDebug` — must succeed
+- [x] NFC banner (reuse same transparent-row pattern from MarksScreen)
+- [x] Wrap everything in a `LazyColumn` inside a `Box(Modifier.fillMaxSize().background(surface))`
+- [x] Run `./gradlew assembleDebug` — must succeed
 
 ---
 
