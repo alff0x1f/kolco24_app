@@ -216,7 +216,7 @@ private fun CpBadgeEmpty(size: Dp) {
 
 @Composable
 private fun ChipSectionHeader(scanned: Int, total: Int) {
-    val allScanned = scanned == total
+    val allScanned = total > 0 && scanned == total
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -370,7 +370,13 @@ private fun WaitingChipIcon() {
 private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
     val pct = if (total > 0f) (seconds / total).coerceIn(0f, 1f) else 0f
     val ringColor = if (seconds < 5f) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
-    val trackColor = Color.White.copy(alpha = 0.12f)
+    val trackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.12f)
+    val chipWord = when {
+        remainingScans % 100 in 11..14 -> "чипов"
+        remainingScans % 10 == 1 -> "чип"
+        remainingScans % 10 in 2..4 -> "чипа"
+        else -> "чипов"
+    }
 
     Surface(
         modifier = Modifier
@@ -431,7 +437,7 @@ private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                            .background(MaterialTheme.colorScheme.tertiary, CircleShape),
                     )
                     Text(
                         text = "Сканируйте",
@@ -441,7 +447,7 @@ private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "КП и ещё $remainingScans чипа",
+                    text = "КП и ещё $remainingScans $chipWord",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.inverseOnSurface,
                 )
