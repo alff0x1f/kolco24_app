@@ -48,20 +48,20 @@ Add `OrangeCta` for FABs and navigation.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/theme/Color.kt`
 
-- [ ] Replace `SurfaceLight` with `Color(0xFFEEF0F3)` (cool grey, was `#FFFBFF`)
-- [ ] Replace `OnSurfaceLight` with `Color(0xFF161A1F)` (cool dark ink, was `#201A19`)
-- [ ] Replace `OnSurfaceVariantLight` with `Color(0xFF6B7785)` (cool muted, was `#534341`)
-- [ ] Replace `SurfaceContainerLow` with `Color(0xFFFFFFFF)` (white cards, was warm `#FAEAEB`)
-- [ ] Replace `SurfaceContainerDefault` with `Color(0xFFFFFFFF)` (nav bar white, was warm `#F4E7E4`)
-- [ ] Replace `SurfaceContainerHigh` with `Color(0xFFF4F6F9)` (was `#EEE1DE`)
-- [ ] Replace `SurfaceContainerHighest` with `Color(0xFFE8ECF1)` (was `#E8DCD9`)
-- [ ] Replace `OutlineLight` with `Color(0xFF6B7785)` (was `#857370`)
-- [ ] Replace `OutlineVariantLight` with `Color(0xFFE2E6EB)` (cool divider, was `#D8C2BE`)
-- [ ] Replace `InverseSurface` with `Color(0xFF1D242D)` (dark charcoal, was `#362F2E`)
-- [ ] Replace `InverseOnSurface` with `Color(0xFFF4F6F9)` (was `#FBEEBB`)
-- [ ] Add `val OrangeCta = Color(0xFFC65A2E)` — used for FABs and active nav
-- [ ] Verify `SurfaceContainerLowest` stays `Color(0xFFFFFFFF)` (already white, no change needed)
-- [ ] Keep primary (`#B3261E`), tertiary (`#1F7A3D`) and dark-scheme tokens unchanged
+- [x] Replace `SurfaceLight` with `Color(0xFFEEF0F3)` (cool grey, was `#FFFBFF`)
+- [x] Replace `OnSurfaceLight` with `Color(0xFF161A1F)` (cool dark ink, was `#201A19`)
+- [x] Replace `OnSurfaceVariantLight` with `Color(0xFF6B7785)` (cool muted, was `#534341`)
+- [x] Replace `SurfaceContainerLow` with `Color(0xFFFFFFFF)` (white cards, was warm `#FAEAEB`)
+- [x] Replace `SurfaceContainerDefault` with `Color(0xFFFFFFFF)` (nav bar white, was warm `#F4E7E4`)
+- [x] Replace `SurfaceContainerHigh` with `Color(0xFFF4F6F9)` (was `#EEE1DE`)
+- [x] Replace `SurfaceContainerHighest` with `Color(0xFFE8ECF1)` (was `#E8DCD9`)
+- [x] Replace `OutlineLight` with `Color(0xFF6B7785)` (was `#857370`)
+- [x] Replace `OutlineVariantLight` with `Color(0xFFE2E6EB)` (cool divider, was `#D8C2BE`)
+- [x] Replace `InverseSurface` with `Color(0xFF1D242D)` (dark charcoal, was `#362F2E`)
+- [x] Replace `InverseOnSurface` with `Color(0xFFF4F6F9)` (was `#FBEEBB`)
+- [x] Add `val OrangeCta = Color(0xFFC65A2E)` — used for FABs and active nav
+- [x] Verify `SurfaceContainerLowest` stays `Color(0xFFFFFFFF)` (already white, no change needed)
+- [x] Keep primary (`#B3261E`), tertiary (`#1F7A3D`) and dark-scheme tokens unchanged
 
 ---
 
