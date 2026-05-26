@@ -104,18 +104,18 @@ the light scheme compiles cleanly.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] Add `onScanClick: () -> Unit` parameter to `MarksScreen` composable
-- [ ] Change `ExtendedFloatingActionButton` `containerColor` from `MaterialTheme.colorScheme.primary`
+- [x] Add `onScanClick: () -> Unit` parameter to `MarksScreen` composable
+- [x] Change `ExtendedFloatingActionButton` `containerColor` from `MaterialTheme.colorScheme.primary`
   to `OrangeCta`; set `contentColor = Color.White`
-- [ ] Replace the `FilledTonalButton` "Фото" with an `OutlinedButton`-style button:
+- [x] Replace the `FilledTonalButton` "Фото" with an `OutlinedButton`-style button:
   `containerColor = MaterialTheme.colorScheme.surfaceContainerLowest`,
   `contentColor = MaterialTheme.colorScheme.onSurface`,
   `border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)`,
   icon tint = `OrangeCta`
-- [ ] Wire `ExtendedFloatingActionButton` `onClick` to `onScanClick`
-- [ ] Update `NfcBanner`: remove `Surface` wrapper with `tertiaryContainer` fill — change to a plain
+- [x] Wire `ExtendedFloatingActionButton` `onClick` to `onScanClick`
+- [x] Update `NfcBanner`: remove `Surface` wrapper with `tertiaryContainer` fill — change to a plain
   `Row` with transparent background; remove trailing NFC icon; keep animated green dot + text only
-- [ ] Run `./gradlew assembleDebug` — must compile
+- [x] Run `./gradlew assembleDebug` — must compile
 
 ---
 

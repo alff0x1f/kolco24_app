@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.marks
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +25,9 @@ import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 data class Mark(
     val number: String,
@@ -114,21 +116,22 @@ fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FilledTonalButton(
+                OutlinedButton(
                     onClick = {},
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
                     Spacer(Modifier.width(8.dp))
                     Text("Фото")
                 }
                 ExtendedFloatingActionButton(
-                    onClick = {},
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    onClick = onScanClick,
+                    containerColor = OrangeCta,
+                    contentColor = Color.White,
                     icon = { Icon(Icons.Filled.Nfc, contentDescription = null) },
                     text = { Text("Отметить КП") },
                 )
@@ -295,45 +298,33 @@ private fun PhotoTile(mark: Mark, gradientIndex: Int) {
 
 @Composable
 private fun NfcBanner(modifier: Modifier = Modifier) {
-    Surface(
+    Row(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f), CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
-                    .size(22.dp)
-                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(MaterialTheme.colorScheme.tertiary, CircleShape)
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "NFC активен",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Text(
-                    text = "Приложите телефон к КП или чипу команды",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.78f),
-                )
-            }
-            Icon(
-                imageVector = Icons.Filled.Nfc,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(20.dp),
+                    .size(12.dp)
+                    .background(MaterialTheme.colorScheme.tertiary, CircleShape)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "NFC активен",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Приложите телефон к КП или чипу команды",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
