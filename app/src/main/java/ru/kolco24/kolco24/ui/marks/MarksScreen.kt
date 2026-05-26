@@ -71,7 +71,7 @@ private val RedBand = Color(0xFFB01528)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MarksScreen(modifier: Modifier = Modifier) {
+fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
     val totalKp = MOCK_MARKS.size
     val totalScore = MOCK_MARKS.sumOf { it.cost }
 

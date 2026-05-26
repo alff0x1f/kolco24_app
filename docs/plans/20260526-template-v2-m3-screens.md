@@ -85,17 +85,17 @@ the light scheme compiles cleanly.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] Import `OrangeCta` from theme, plus `NavigationBarItemDefaults`, `Color`
-- [ ] Add `var showScan by rememberSaveable { mutableStateOf(false) }` in `Kolco24App`
-- [ ] Add custom `NavigationBarItemColors` helper (or inline): `indicatorColor = Color.Transparent`,
+- [x] Import `OrangeCta` from theme, plus `NavigationBarItemDefaults`, `Color`
+- [x] Add `var showScan by rememberSaveable { mutableStateOf(false) }` in `Kolco24App`
+- [x] Add custom `NavigationBarItemColors` helper (or inline): `indicatorColor = Color.Transparent`,
   `selectedIconColor = OrangeCta`, `selectedTextColor = OrangeCta`,
   `unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant`,
   `unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant`
-- [ ] Apply custom colors to all three `NavigationBarItem` calls via `colors =` parameter
-- [ ] Add `onScanClick: () -> Unit` parameter to `MarksScreen(...)` call — wire to `{ showScan = true }`
-- [ ] After the `Scaffold { ... }` block, add: `if (showScan) { ScanScreen(onClose = { showScan = false }) }`
+- [x] Apply custom colors to all three `NavigationBarItem` calls via `colors =` parameter
+- [x] Add `onScanClick: () -> Unit` parameter to `MarksScreen(...)` call — wire to `{ showScan = true }`
+- [x] After the `Scaffold { ... }` block, add: `if (showScan) { ScanScreen(onClose = { showScan = false }) }`
   using `Box(Modifier.fillMaxSize())` overlay so it covers the scaffold
-- [ ] Run `./gradlew assembleDebug` — must compile (ScanScreen stub needed first, see Task 7)
+- [x] Run `./gradlew assembleDebug` — must compile (ScanScreen stub needed first, see Task 7)
 
 ---
 
