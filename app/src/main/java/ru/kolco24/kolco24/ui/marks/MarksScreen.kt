@@ -19,12 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -123,18 +124,28 @@ fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(start = 14.dp, end = 18.dp),
                 ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
+                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp), tint = OrangeCta)
                     Spacer(Modifier.width(8.dp))
-                    Text("Фото")
+                    Text("Фото", style = MaterialTheme.typography.labelLarge)
                 }
-                ExtendedFloatingActionButton(
+                Button(
                     onClick = onScanClick,
-                    containerColor = OrangeCta,
-                    contentColor = Color.White,
-                    icon = { Icon(Icons.Filled.Nfc, contentDescription = null) },
-                    text = { Text("Отметить КП") },
-                )
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OrangeCta,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier.height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 20.dp),
+                ) {
+                    Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Отметить КП", style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
     }
