@@ -191,10 +191,10 @@ New full-screen composable. Uses the same mock chip data as TeamScreen.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] Import `ScanScreen`
-- [ ] In `Kolco24App`, wrap existing `Scaffold` in a `Box(Modifier.fillMaxSize())`
-- [ ] After the scaffold, add `if (showScan) { ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize()) }`
-- [ ] Run `./gradlew assembleDebug` — full build must succeed
+- [x] Import `ScanScreen`
+- [x] In `Kolco24App`, wrap existing `Scaffold` in a `Box(Modifier.fillMaxSize())`
+- [x] After the scaffold, add `if (showScan) { ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize()) }`
+- [x] Run `./gradlew assembleDebug` — full build must succeed
 
 ---
 
