@@ -99,8 +99,8 @@ fun LegendScreen(modifier: Modifier = Modifier) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 8.dp),
+                        .padding(horizontal = 8.dp)
+                        .padding(bottom = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     LegendFilterChip(
@@ -135,7 +135,7 @@ private fun ScoreCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 8.dp, vertical = 12.dp),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -184,7 +184,7 @@ private fun ScoreCard(
 
 @Composable
 private fun CheckpointListCard(checkpoints: List<Checkpoint>) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
@@ -199,7 +199,7 @@ private fun CheckpointListCard(checkpoints: List<Checkpoint>) {
 
         Text(
             text = "Слева — стоимость и номер КП. Галочка = отметка засчитана.",
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -99,14 +99,14 @@ fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
                         text = "Сегодня · 10 окт",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
                 item("tile_grid") {
-                    TileGrid(marks = MOCK_MARKS, modifier = Modifier.padding(horizontal = 10.dp))
+                    TileGrid(marks = MOCK_MARKS, modifier = Modifier.padding(horizontal = 8.dp))
                 }
                 item("nfc_banner") {
-                    NfcBanner(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                    NfcBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
                 }
             }
 
@@ -156,7 +156,7 @@ private fun MetricsCard(kpCount: Int, score: Int, timeToKv: String) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
