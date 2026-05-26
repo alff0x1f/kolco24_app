@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Nfc
@@ -25,8 +26,8 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,16 +42,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 data class TeamMember(
     val name: String,
     val chipId: String?,
-    val isMe: Boolean = false,
-    val role: String? = null,
 )
 
 private val MOCK_MEMBERS = listOf(
-    TeamMember("Маленков А.", "597", isMe = true, role = "Капитан"),
+    TeamMember("Маленков А.", "597"),
     TeamMember("Иванов И.", "601"),
     TeamMember("Сидоров П.", "604"),
     TeamMember("Петрова О.", "611"),
@@ -245,46 +245,26 @@ private fun MemberRow(member: TeamMember, isLast: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            MonogramAvatar(name = member.name, isMe = member.isMe, isBound = isBound)
+            MonogramAvatar(name = member.name, isBound = isBound)
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = member.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (member.isMe) {
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Text(
-                                text = "Я",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                            )
-                        }
-                    }
-                    if (member.role != null) {
-                        Text(
-                            text = "· ${member.role}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                Text(
+                    text = member.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
                     if (isBound) {
-                        Box(modifier = Modifier.size(14.dp).background(MaterialTheme.colorScheme.tertiary, CircleShape))
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(14.dp),
+                        )
                         Text(
                             text = "Чип ${member.chipId}",
                             style = MaterialTheme.typography.labelSmall,
@@ -309,15 +289,16 @@ private fun MemberRow(member: TeamMember, isLast: Boolean) {
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                FilledTonalButton(
+                OutlinedButton(
                     onClick = {},
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
                     Spacer(Modifier.width(6.dp))
                     Text("Привязать", style = MaterialTheme.typography.labelMedium)
                 }
@@ -334,7 +315,7 @@ private fun MemberRow(member: TeamMember, isLast: Boolean) {
 }
 
 @Composable
-private fun MonogramAvatar(name: String, isMe: Boolean, isBound: Boolean) {
+private fun MonogramAvatar(name: String, isBound: Boolean) {
     if (!isBound) {
         Box(
             modifier = Modifier
@@ -359,8 +340,7 @@ private fun MonogramAvatar(name: String, isMe: Boolean, isBound: Boolean) {
             modifier = Modifier
                 .size(40.dp)
                 .background(
-                    color = if (isMe) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     shape = CircleShape,
                 ),
             contentAlignment = Alignment.Center,
@@ -368,8 +348,7 @@ private fun MonogramAvatar(name: String, isMe: Boolean, isBound: Boolean) {
             Text(
                 text = initials,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (isMe) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }

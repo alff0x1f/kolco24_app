@@ -141,18 +141,18 @@ the light scheme compiles cleanly.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 
-- [ ] In `MemberRow`: replace `FilledTonalButton` "Привязать" with a button using
+- [x] In `MemberRow`: replace `FilledTonalButton` "Привязать" with a button using
   `containerColor = MaterialTheme.colorScheme.surfaceContainerLowest`,
   `contentColor = MaterialTheme.colorScheme.onSurface`,
   `border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)`,
   NFC icon tint = `OrangeCta`
-- [ ] In `MonogramAvatar`: remove the `isMe` parameter and all `isMe`-conditional logic;
+- [x] In `MonogramAvatar`: remove the `isMe` parameter and all `isMe`-conditional logic;
   all bound members get `surfaceContainerHighest` background with `onSurface` text
-- [ ] In `MemberRow` bound sub-row: replace the filled dot `Box` with `Icon(Icons.Filled.CheckCircle)`
+- [x] In `MemberRow` bound sub-row: replace the filled dot `Box` with `Icon(Icons.Filled.CheckCircle)`
   tinted `MaterialTheme.colorScheme.tertiary`, size 14dp
-- [ ] Remove `isMe: Boolean = false` and `role: String? = null` from `TeamMember` data class
+- [x] Remove `isMe: Boolean = false` and `role: String? = null` from `TeamMember` data class
   (and all references in MOCK_MEMBERS and `MemberRow`)
-- [ ] Run `./gradlew assembleDebug` — must compile
+- [x] Run `./gradlew assembleDebug` — must compile
 
 ---
 
