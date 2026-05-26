@@ -125,8 +125,8 @@ private fun Kolco24App() {
                 }
             }
         }
+        BackHandler(enabled = showScan) { showScan = false }
         if (showScan) {
-            BackHandler { showScan = false }
             ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
         }
     }

@@ -99,11 +99,11 @@ fun ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-            item("nfc_banner") {
-                NfcBanner(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-            }
             item("hero_timer") {
                 HeroTimerCard(seconds = 17f, total = 20f, remainingScans = remaining)
+            }
+            item("nfc_banner") {
+                NfcBanner(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
             }
         }
     }
