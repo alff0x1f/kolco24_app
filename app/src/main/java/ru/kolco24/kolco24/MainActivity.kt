@@ -70,12 +70,13 @@ private fun Kolco24App() {
         Scaffold(
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    val activePage = pagerState.targetPage
                     NavigationBarItem(
-                        selected = pagerState.currentPage == 0,
+                        selected = activePage == 0,
                         onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                         icon = {
                             Icon(
-                                if (pagerState.currentPage == 0) Icons.Filled.Flag else Icons.Outlined.Flag,
+                                if (activePage == 0) Icons.Filled.Flag else Icons.Outlined.Flag,
                                 contentDescription = null,
                             )
                         },
@@ -83,11 +84,11 @@ private fun Kolco24App() {
                         colors = navItemColors,
                     )
                     NavigationBarItem(
-                        selected = pagerState.currentPage == 1,
+                        selected = activePage == 1,
                         onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                         icon = {
                             Icon(
-                                if (pagerState.currentPage == 1) Icons.Filled.Map else Icons.Outlined.Map,
+                                if (activePage == 1) Icons.Filled.Map else Icons.Outlined.Map,
                                 contentDescription = null,
                             )
                         },
@@ -95,11 +96,11 @@ private fun Kolco24App() {
                         colors = navItemColors,
                     )
                     NavigationBarItem(
-                        selected = pagerState.currentPage == 2,
+                        selected = activePage == 2,
                         onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                         icon = {
                             Icon(
-                                if (pagerState.currentPage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
+                                if (activePage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
                                 contentDescription = null,
                             )
                         },

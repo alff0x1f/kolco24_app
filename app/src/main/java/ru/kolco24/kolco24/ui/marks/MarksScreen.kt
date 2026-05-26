@@ -239,7 +239,7 @@ private fun NfcTile(mark: Mark) {
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
             .then(recentBorder),
         contentAlignment = Alignment.Center,
     ) {
@@ -261,7 +261,7 @@ private fun NfcTile(mark: Mark) {
             text = mark.number,
             style = MaterialTheme.typography.headlineMedium,
             fontFamily = FontFamily.Monospace,
-            color = Color(0xFF201A19),
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
