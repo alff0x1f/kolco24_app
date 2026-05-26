@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.legend
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,10 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,7 +32,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -101,15 +103,15 @@ fun LegendScreen(modifier: Modifier = Modifier) {
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    FilterChip(
+                    LegendFilterChip(
                         selected = !showOnlyOpen,
                         onClick = { showOnlyOpen = false },
-                        label = { Text("Все $totalCount") },
+                        label = "Все $totalCount",
                     )
-                    FilterChip(
+                    LegendFilterChip(
                         selected = showOnlyOpen,
                         onClick = { showOnlyOpen = true },
-                        label = { Text("Не взятые ${totalCount - takenCount}") },
+                        label = "Не взятые ${totalCount - takenCount}",
                     )
                 }
             }
@@ -205,6 +207,46 @@ private fun CheckpointListCard(checkpoints: List<Checkpoint>) {
 }
 
 @Composable
+private fun LegendFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+) {
+    val backgroundColor = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
+    val contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val border = if (selected) null else BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
+
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = backgroundColor,
+        border = border,
+        modifier = Modifier.height(40.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = contentColor,
+            )
+        }
+    }
+}
+
+@Composable
 private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
     val contentColor = if (cp.taken) MaterialTheme.colorScheme.onSurfaceVariant
                        else MaterialTheme.colorScheme.onSurface
@@ -237,13 +279,6 @@ private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = "Взято",
                     tint = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.size(24.dp),
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.RadioButtonUnchecked,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.size(24.dp),
                 )
             }

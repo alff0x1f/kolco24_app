@@ -124,15 +124,15 @@ the light scheme compiles cleanly.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/legend/LegendScreen.kt`
 
-- [ ] Replace `FilterChip` for "Все" with a custom `Button`/`Surface`-based chip:
+- [x] Replace `FilterChip` for "Все" with a custom `Button`/`Surface`-based chip:
   - when selected: `background = MaterialTheme.colorScheme.onSurface` (dark fill), `contentColor = Color.White`,
     leading check icon (`Icons.Filled.Check`, 18dp), height 40dp, bold text
   - when unselected: transparent background, `border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)`,
     `contentColor = MaterialTheme.colorScheme.onSurface`
-- [ ] Apply same custom chip style to "Не взятые" chip
-- [ ] In `CheckpointRow`: remove the `else` branch that renders `RadioButtonUnchecked` for non-taken CPs
+- [x] Apply same custom chip style to "Не взятые" chip
+- [x] In `CheckpointRow`: remove the `else` branch that renders `RadioButtonUnchecked` for non-taken CPs
   (trailing icon should only appear when `cp.taken == true`)
-- [ ] Run `./gradlew assembleDebug` — must compile
+- [x] Run `./gradlew assembleDebug` — must compile
 
 ---
 
