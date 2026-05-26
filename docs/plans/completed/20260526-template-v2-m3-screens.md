@@ -216,8 +216,8 @@ New full-screen composable. Uses the same mock chip data as TeamScreen.
 
 ### Task 10: [Final] Tidy up
 
-- [ ] Update `CLAUDE.md` if new patterns introduced (OrangeCta usage, Scan overlay pattern)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update `CLAUDE.md` if new patterns introduced (OrangeCta usage, Scan overlay pattern)
+- [x] Move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
