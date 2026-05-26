@@ -40,8 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.theme.RobotoMono
 
 data class Mark(
     val number: String,
@@ -103,7 +106,7 @@ fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
                     )
                 }
                 item("tile_grid") {
-                    TileGrid(marks = MOCK_MARKS, modifier = Modifier.padding(horizontal = 8.dp))
+                    TileGrid(marks = MOCK_MARKS)
                 }
                 item("nfc_banner") {
                     NfcBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
@@ -194,8 +197,8 @@ private fun MetricItem(
         ) {
             Text(
                 text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontFamily = if (isWarn) FontFamily.Monospace else null,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium),
+                fontFamily = if (isWarn) RobotoMono else null,
                 color = if (isWarn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             if (unit != null) {
@@ -270,8 +273,12 @@ private fun NfcTile(mark: Mark) {
         )
         Text(
             text = mark.number,
-            style = MaterialTheme.typography.headlineMedium,
-            fontFamily = FontFamily.Monospace,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.6).sp,
+            ),
+            fontFamily = RobotoMono,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
@@ -299,7 +306,7 @@ private fun PhotoTile(mark: Mark, gradientIndex: Int) {
             Text(
                 text = mark.number,
                 style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = RobotoMono,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             )

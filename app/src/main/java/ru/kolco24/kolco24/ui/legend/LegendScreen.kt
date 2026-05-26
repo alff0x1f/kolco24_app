@@ -33,10 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import ru.kolco24.kolco24.ui.theme.RobotoMono
 
 // Will become a Room @Entity in the next step
 data class Checkpoint(
@@ -151,8 +152,11 @@ private fun ScoreCard(
                 ) {
                     Text(
                         text = "$takenScore",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.sp,
+                        ),
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
@@ -165,7 +169,6 @@ private fun ScoreCard(
                 Text(
                     text = "$takenCount/$totalCount КП",
                     style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -261,14 +264,22 @@ private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
         ) {
             Text(
                 text = "${cp.cost}-${cp.number}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.sp,
+                ),
+                fontFamily = RobotoMono,
                 color = contentColor,
                 modifier = Modifier.width(48.dp),
             )
             Text(
                 text = cp.name,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 15.5.sp,
+                    fontWeight = if (cp.taken) FontWeight.Normal else FontWeight.Medium,
+                    letterSpacing = 0.sp,
+                ),
                 color = contentColor,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
