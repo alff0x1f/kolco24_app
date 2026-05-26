@@ -234,7 +234,7 @@ private fun MarkTile(mark: Mark, gradientIndex: Int) {
 
 @Composable
 private fun NfcTile(mark: Mark) {
-    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, Color(0xFF1F7A3D)) else Modifier
+    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary) else Modifier
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -269,7 +269,7 @@ private fun NfcTile(mark: Mark) {
 @Composable
 private fun PhotoTile(mark: Mark, gradientIndex: Int) {
     val gradient = PHOTO_GRADIENTS[gradientIndex]
-    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, Color(0xFF1F7A3D)) else Modifier
+    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary) else Modifier
     Box(
         modifier = Modifier
             .fillMaxWidth()

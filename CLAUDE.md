@@ -22,7 +22,7 @@ Single-activity Jetpack Compose app (minSdk 24, targetSdk 36). No ViewModel, no 
 - `ui/team/TeamScreen.kt` — Команда tab; outlined "Привязать" button, simplified avatars
 - `ui/scan/ScanScreen.kt` — full-screen overlay for NFC checkpoint marking (A3 screen)
 - `ui/theme/Color.kt` — full M3 light/dark token set; cool-grey light palette; `OrangeCta = #C65A2E`
-- `ui/theme/Theme.kt` — `Kolco24Theme`; dynamic color is **off by default** (`dynamicColor = false`) so brand palette is always used; dynamic path requires `Build.VERSION.SDK_INT >= Build.VERSION_CODES.S` gate
+- `ui/theme/Theme.kt` — `Kolco24Theme`; always uses the static brand palette (`LightColorScheme`/`DarkColorScheme`); no dynamic color wiring
 - `ui/theme/Type.kt` — typography (default system font for now)
 
 **Design reference:** `assets/template_v2.html` — hi-fi HTML mockup (M3 cool-grey variant). Screens: A1b (Отметки), A2 (Легенда), A3 (Отметить КП scan dialog), A4 (Команда).

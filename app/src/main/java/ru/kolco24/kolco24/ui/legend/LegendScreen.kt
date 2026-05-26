@@ -213,7 +213,7 @@ private fun LegendFilterChip(
     label: String,
 ) {
     val backgroundColor = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
-    val contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val contentColor = if (selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
     val border = if (selected) null else BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
 
     Surface(
