@@ -50,8 +50,8 @@ private val DarkColorScheme = darkColorScheme(
     surface              = SurfaceDark,
     onSurface            = OnSurfaceDark,
     onSurfaceVariant     = OnSurfaceVariantDark,
-    inverseSurface       = InverseSurface,
-    inverseOnSurface     = InverseOnSurface,
+    inverseSurface       = InverseSurfaceDark,
+    inverseOnSurface     = InverseOnSurfaceDark,
 )
 
 @Composable

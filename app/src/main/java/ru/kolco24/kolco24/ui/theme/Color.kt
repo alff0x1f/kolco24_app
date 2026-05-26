@@ -42,6 +42,9 @@ val ErrorContainer  = Color(0xFFFFDAD6)
 val OnErrorContainer = Color(0xFF410002)
 
 // Dark scheme
+val InverseSurfaceDark   = Color(0xFFEEF0F3)
+val InverseOnSurfaceDark = Color(0xFF1D242D)
+
 val BrandRedDark            = Color(0xFFFFB4AB)
 val OnBrandRedDark          = Color(0xFF690005)
 val BrandRedContainerDark   = Color(0xFF93000A)

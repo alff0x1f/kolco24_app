@@ -100,10 +100,7 @@ fun ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                 )
             }
             item("hero_timer") {
-                HeroTimerCard(seconds = 17f, total = 20f, remainingScans = remaining)
-            }
-            item("nfc_banner") {
-                NfcBanner(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                HeroTimerCard(seconds = 17f, total = 20f, remainingScans = remaining + 1)
             }
         }
     }
@@ -132,7 +129,7 @@ private fun ScanTopBar(onClose: () -> Unit) {
                 .weight(1f)
                 .padding(start = 4.dp),
         )
-        TextButton(onClick = onClose) {
+        TextButton(onClick = {}, enabled = false) {
             Text(
                 text = "Готово",
                 style = MaterialTheme.typography.labelLarge,
@@ -187,7 +184,7 @@ private fun CpBadgeEmpty(size: Dp) {
     Box(
         modifier = Modifier
             .size(width = size, height = height)
-            .background(Color.White, MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest, MaterialTheme.shapes.small)
             .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.small),
     ) {
         Box(
