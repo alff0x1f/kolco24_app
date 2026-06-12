@@ -218,10 +218,10 @@
 - [x] run tests - must pass before task 10
 
 ### Task 10: Verify acceptance criteria
-- [ ] все требования Overview реализованы (4 экрана + данные + сохранение выбора)
-- [ ] граничные случаи: офлайн с кэшем/без, пустой список команд, Forbidden, исчезнувшая команда, recreate
-- [ ] `./gradlew lintDebug testDebugUnitTest assembleDebug` — все зелёные
-- [ ] ручной smoke на устройстве/эмуляторе: пусто → соревнование → команда → подтверждение → таб с составом; повторный заход показывает «Сменить команду» и бейджи «Текущее»/«Текущая»; обновление приложения поверх установленной v1-БД не падает (миграция)
+- [x] все требования Overview реализованы (4 экрана + данные + сохранение выбора) — CompPicker/TeamPicker/TeamSwitchSheet/TeamEmptyContent + TeamRepository + Room + selectTeam/observeTeam в MainActivity
+- [x] граничные случаи: офлайн с кэшем (snackbar)/без (заглушка+Повторить), пустой список команд («Пока никто не зарегистрирован»), Forbidden («Обновите приложение»), исчезнувшая команда (teamMissing), recreate (rememberSaveable на всех трёх полях потока)
+- [x] `./gradlew lintDebug testDebugUnitTest assembleDebug` — все зелёные (BUILD SUCCESSFUL)
+- [x] ручной smoke на устройстве/эмуляторе (skipped - not automatable; см. Post-Completion)
 
 ### Task 11: [Final] Update documentation
 - [ ] обновить CLAUDE.md: teams-sync, новые таблицы/версия Room, TeamRepository, паттерн team-flow-оверлеев, generic FetchResult
