@@ -79,7 +79,8 @@
 - `raceStatusPill(race, today): RaceStatusPill` — `effectiveEnd < today` → Завершено; иначе `reg_status`: `open` → Регистрация, `upcoming` → Скоро, `sold_out` → Мест нет (в дизайне пилюли нет — серый стиль как «Скоро»). `effectiveEnd = dateEnd ?: date` (`RaceEntity.dateEnd` nullable — фолбэк на `date`).
 - `splitRaces(races, today): (актуальные, архив)` — актуальные: `effectiveEnd >= today`, сортировка как пришла из Room (новые первые); архив — прошедшие
 - `filterTeams(teams, query)` — подстрока в `teamname` ИЛИ в `start_number`, без учёта регистра; пустой query → все
-- `teamToken(team)` — текст для токена команды: `start_number`, при null/пустом — `initials(teamname)`
+- `teamToken(team)` — текст для токена команды: `start_number`, при null/**пустой строке** (Django `default=""`) — `initials(teamname)`
+- `displayTeamName(team)` — `teamname`, при пустом (`blank=True` в модели) — «Команда N» из `start_number`, иначе «Команда #id»; используется в списке, шите и hero-карте
 - `initials(text, max = 2)` — один общий хелпер: фолбэк-монограмма команды и инициалы участника (первые буквы слов); заменяет inline-код в `MonogramAvatar` (`TeamScreen.kt`)
 
 ### Состояние загрузки TeamPicker
@@ -103,7 +104,7 @@
 
 - [ ] создать `@Serializable` DTO `TeamsResponse` / `CategoryDto` / `TeamDto` / `MemberDto` со snake_case `@SerialName` (схема — Technical Details)
 - [ ] тест: парсинг реального ответа бэкенда (фикстура с `start_number: "201"`) → все поля корректны (включая `paid_people: 2.0` как Double и `startNumber`)
-- [ ] тест: рукописные фикстуры: `category2: null`, JSON **без** `start_number` → `null` (старый формат из API.md), пустые `teams`/`members`, незнакомые поля игнорируются (`ignoreUnknownKeys`)
+- [ ] тест: рукописные фикстуры: `category2: null`, `start_number: ""` (в Django-модели `default=""` — пустая строка, а не null, это основной кейс «номера нет»), JSON **без** `start_number` → `null` (старый формат из API.md), пустые `teams`/`members`, незнакомые поля игнорируются (`ignoreUnknownKeys`)
 - [ ] run tests - must pass before task 2
 
 ### Task 2: Обобщить FetchResult и добавить ApiClient.fetchTeams
@@ -159,9 +160,9 @@
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerLogicTest.kt`
 
 - [ ] `raceStatusPill(race, today)` и `splitRaces(races, today)` — правила в Technical Details; только лексикографическое сравнение ISO-строк (НЕ `LocalDate` — minSdk 24 без desugaring), фолбэк `dateEnd ?: date`
-- [ ] `filterTeams(teams, query)` (по названию или `start_number`), `teamToken(team)` (`start_number` → фолбэк `initials`), общий хелпер `initials(text, max = 2)` (заменяет inline-логику в `MonogramAvatar` из `TeamScreen`)
+- [ ] `filterTeams(teams, query)` (по названию или `start_number`), `teamToken(team)` (`start_number`, пустая строка = нет номера → фолбэк `initials`), `displayTeamName(team)` (фолбэк для пустого `teamname`), общий хелпер `initials(text, max = 2)` (заменяет inline-логику в `MonogramAvatar` из `TeamScreen`)
 - [ ] тесты `splitRaces`/`raceStatusPill`: гонка сегодня/завтра/вчера, `date_end` на границе, `dateEnd = null` → фолбэк на `date`, все три `reg_status`
-- [ ] тесты `filterTeams` (по названию, по номеру, регистр, пустой query, нет совпадений), `teamToken` (номер есть / null / пустой) и `initials` (одно слово, два слова, пустая строка)
+- [ ] тесты `filterTeams` (по названию, по номеру, регистр, пустой query, нет совпадений), `teamToken` (номер есть / null / пустая строка), `displayTeamName` (имя есть / пустое + номер / пустое без номера) и `initials` (одно слово, два слова, пустая строка)
 - [ ] run tests - must pass before task 6
 
 ### Task 6: Экран выбора соревнования (04b)
