@@ -8,6 +8,12 @@ plugins {
 }
 
 /**
+ * Escapes a raw string value so it is safe to embed inside a Java/Kotlin string literal
+ * (i.e. inside `"..."` in generated BuildConfig source). Handles backslash and double-quote.
+ */
+fun String.escapeJavaLiteral(): String = replace("\\", "\\\\").replace("\"", "\\\"")
+
+/**
  * Reads a secret first from `local.properties` (key `kolco24.<name>`), then falls back to the
  * environment variable `KOLCO24_<ENV>`. The env fallback keeps `lintDebug`/`testDebugUnitTest`
  * (the merge gate) working in CI / clean checkouts without a `local.properties` file.
@@ -58,9 +64,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
-        buildConfigField("String", "APP_KEY_ID", "\"$appKeyId\"")
-        buildConfigField("String", "APP_SECRET", "\"$appSecret\"")
+        buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl!!.escapeJavaLiteral()}\"")
+        buildConfigField("String", "APP_KEY_ID", "\"${appKeyId!!.escapeJavaLiteral()}\"")
+        buildConfigField("String", "APP_SECRET", "\"${appSecret!!.escapeJavaLiteral()}\"")
     }
 
     buildTypes {
