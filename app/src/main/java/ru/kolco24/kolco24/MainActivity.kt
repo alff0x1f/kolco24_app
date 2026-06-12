@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.TeamEntity
@@ -93,16 +94,16 @@ private fun Kolco24AppRoot() {
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
 
-    val teamState by produceState<SelectedTeamState>(
-        if (selectedTeamId == null) SelectedTeamState.None else SelectedTeamState.Loading,
-        selectedTeamId,
-    ) {
-        val id = selectedTeamId
-        if (id == null) {
-            value = SelectedTeamState.None
-        } else {
-            teamRepo.observeTeam(id).collect { team ->
-                value = if (team == null) SelectedTeamState.Missing else SelectedTeamState.Present(team)
+    val teamState by produceState<SelectedTeamState>(SelectedTeamState.Loading) {
+        teamRepo.selectedTeam.collectLatest { selection ->
+            val teamId = selection?.teamId
+            if (teamId == null) {
+                value = SelectedTeamState.None
+            } else {
+                value = SelectedTeamState.Loading
+                teamRepo.observeTeam(teamId).collect { team ->
+                    value = if (team == null) SelectedTeamState.Missing else SelectedTeamState.Present(team)
+                }
             }
         }
     }
