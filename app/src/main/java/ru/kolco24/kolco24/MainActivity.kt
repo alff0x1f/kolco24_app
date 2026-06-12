@@ -93,7 +93,10 @@ private fun Kolco24AppRoot() {
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
 
-    val teamState by produceState<SelectedTeamState>(SelectedTeamState.Loading, selectedTeamId) {
+    val teamState by produceState<SelectedTeamState>(
+        if (selectedTeamId == null) SelectedTeamState.None else SelectedTeamState.Loading,
+        selectedTeamId,
+    ) {
         val id = selectedTeamId
         if (id == null) {
             value = SelectedTeamState.None
@@ -207,7 +210,9 @@ private fun Kolco24AppRoot() {
         }
 
         // Team-selection flow overlays. Back steps down: sheet (own dismiss) > TeamPicker > CompPicker.
-        BackHandler(enabled = teamFlowStep != TeamFlowStep.None && confirmTeamId == null) {
+        // Guard !showScan so scan overlay's BackHandler is never masked by the team-flow handler
+        // (can co-exist after process-death restore when both states are independently non-default).
+        BackHandler(enabled = teamFlowStep != TeamFlowStep.None && confirmTeamId == null && !showScan) {
             teamFlowStep = when (teamFlowStep) {
                 TeamFlowStep.TeamPicker -> TeamFlowStep.CompPicker
                 else -> TeamFlowStep.None

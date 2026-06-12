@@ -96,7 +96,7 @@ fun TeamPickerScreen(
     var query by rememberSaveable(raceId) { mutableStateOf("") }
     var retryKey by remember(raceId) { mutableIntStateOf(0) }
     var load by remember(raceId) { mutableStateOf(PickerLoad.Loading) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarHostState = remember(raceId) { SnackbarHostState() }
 
     LaunchedEffect(raceId, retryKey) {
         load = PickerLoad.Loading

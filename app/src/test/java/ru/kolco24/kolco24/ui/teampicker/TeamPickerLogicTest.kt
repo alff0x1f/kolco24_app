@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.ui.teampicker
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 
@@ -236,9 +237,24 @@ class TeamPickerLogicTest {
 
     // --- peopleLine ---
 
+    private fun category(shortName: String = "Муж", name: String = "Мужская") = CategoryEntity(
+        id = 1, raceId = 1, code = "M", shortName = shortName, name = name, sortOrder = 0,
+    )
+
     @Test
     fun peopleLineWithoutCategory() {
         assertEquals("2 человека", peopleLine(null, 2))
         assertEquals("5 человек", peopleLine(null, 5))
+    }
+
+    @Test
+    fun peopleLineWithCategory() {
+        assertEquals("Категория Муж · 3 человека", peopleLine(category(), 3))
+        assertEquals("Категория Муж · 1 человек", peopleLine(category(), 1))
+    }
+
+    @Test
+    fun peopleLineUsesNameWhenShortNameBlank() {
+        assertEquals("Категория Мужская · 2 человека", peopleLine(category(shortName = ""), 2))
     }
 }
