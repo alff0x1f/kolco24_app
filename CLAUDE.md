@@ -25,6 +25,20 @@ Single-activity Jetpack Compose app (minSdk 24, targetSdk 36). No ViewModel, no 
 - `ui/theme/Theme.kt` — `Kolco24Theme`; always uses the static brand palette (`LightColorScheme`/`DarkColorScheme`); no dynamic color wiring
 - `ui/theme/Type.kt` — typography (default system font for now)
 
+**Data layer** (races sync — signed `GET /app/races/` with ETag, Room as single source of truth):
+- `Kolco24App.kt` — `Application`; builds `AppContainer`, fires `refreshRaces()` fire-and-forget on `onCreate` (logs the `RefreshResult`). Registered via `android:name=".Kolco24App"`. NB: the root composable in `MainActivity` is `Kolco24AppRoot()` (renamed to avoid clashing with this class).
+- `AppContainer.kt` — manual DI (no Hilt); lazy `installId`, `OkHttpClient` + `AppSignatureInterceptor`, `Json`, `ApiClient`, `AppDatabase`, `RaceRepository`, plus `applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)`. Reads secrets from `BuildConfig`.
+- `data/api/AppSignatureInterceptor.kt` — OkHttp interceptor; HMAC-SHA256 signs every request (canonical string from `docs/API.md`), adds the six `X-App-*`/`X-Install-Id` headers; `ts`/signature recomputed per call (survives retries). Pure `buildCanonical`/`sign` helpers live here.
+- `data/api/ApiClient.kt` — `fetchRaces(etag): FetchResult` (`Success`/`NotModified`/`Forbidden`/`Error`); GET on `Dispatchers.IO`, `If-None-Match` sent verbatim with quotes, 10s timeouts. `IOException`/`SerializationException` → `Error` (never throws).
+- `data/api/dto/RacesResponse.kt` — `@Serializable` DTOs with snake_case `@SerialName`; `Json { ignoreUnknownKeys = true }`.
+- `data/db/` — Room v1 (`AppDatabase`, no migrations): `RaceEntity` (table `races`, server `id` PK — also the domain model, no third layer), `SyncMetaEntity` (table `sync_meta`, composite PK `(origin, resource)`, stores ETag per origin). `RaceDao.replaceAll` is a `@Transaction` deleteAll+insertAll. DAOs are not unit-tested (trivial queries).
+- `data/RaceRepository.kt` — `races: Flow<List<RaceEntity>>` from Room; `refreshRaces(): RefreshResult` (`Updated`/`NotModified`/`Offline`/`Forbidden`/`HttpError`). On `Success`: `replaceAll(races)` **then** `upsert(etag)` as two separate transactions — order is deliberate, a crash between them keeps fresh data with a stale ETag so the next refresh re-fetches and self-heals.
+- `data/InstallId.kt` — pure `getOrCreate(load, save)` for the install UUID (≤64 chars, API requirement) over an injected key-value store; thin SharedPreferences adapter.
+
+**Config (secrets out of git):** `local.properties` keys `kolco24.apiBaseUrl` / `kolco24.appKeyId` / `kolco24.appSecret` → `BuildConfig` fields `API_BASE_URL` / `APP_KEY_ID` / `APP_SECRET` (see `app/build.gradle.kts`). Falls back to env `KOLCO24_API_BASE_URL` / `KOLCO24_APP_KEY_ID` / `KOLCO24_APP_SECRET` (so lint/test work in CI without the file); the build fails with a descriptive `error(...)` listing missing keys if neither is set. KSP + `kotlin.plugin.serialization` are applied on AGP 9's built-in Kotlin (do NOT apply `kotlin.android` on top — "plugin applied twice"); KSP version is pinned to `2.2.10-*`, and `android.disallowKotlinSourceSets=false` in `gradle.properties` lets KSP register generated sources.
+
+**API reference:** `docs/API.md` — HMAC signing scheme (6 headers, ±300s window), ETag/304 handling, debug checklist for 403s.
+
 **Design reference:** `assets/template_v2.html` — hi-fi HTML mockup (M3 cool-grey variant). Screens: A1b (Отметки), A2 (Легенда), A3 (Отметить КП scan dialog), A4 (Команда).
 
 **M3 color tokens used in the design** (defined in `Color.kt`):

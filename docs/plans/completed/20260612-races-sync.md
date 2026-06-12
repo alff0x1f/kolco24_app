@@ -188,8 +188,8 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - [x] run `./gradlew assembleDebug`
 
 ### Task 9: [Final] Update documentation
-- [ ] обновить CLAUDE.md: раздел архитектуры — слой данных (data/api, data/db, RaceRepository, AppContainer/Kolco24App), конфиг local.properties → BuildConfig
-- [ ] move this plan to `docs/plans/completed/`
+- [x] обновить CLAUDE.md: раздел архитектуры — слой данных (data/api, data/db, RaceRepository, AppContainer/Kolco24App), конфиг local.properties → BuildConfig
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
