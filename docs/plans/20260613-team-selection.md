@@ -161,11 +161,11 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerLogic.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerLogicTest.kt`
 
-- [ ] `raceStatusPill(race, today)` и `splitRaces(races, today)` — правила в Technical Details; только лексикографическое сравнение ISO-строк (НЕ `LocalDate` — minSdk 24 без desugaring), фолбэк `dateEnd ?: date`
-- [ ] `filterTeams(teams, query)` (по названию или `start_number`), `teamToken(team)` (`start_number`, пустая строка = нет номера → фолбэк `initials`), `displayTeamName(team)` (фолбэк для пустого `teamname`), общий хелпер `initials(text, max = 2)` (заменяет inline-логику в `MonogramAvatar` из `TeamScreen`)
-- [ ] тесты `splitRaces`/`raceStatusPill`: гонка сегодня/завтра/вчера, `date_end` на границе, `dateEnd = null` → фолбэк на `date`, все три `reg_status`
-- [ ] тесты `filterTeams` (по названию, по номеру, регистр, пустой query, нет совпадений), `teamToken` (номер есть / null / пустая строка), `displayTeamName` (имя есть / пустое + номер / пустое без номера) и `initials` (одно слово, два слова, пустая строка)
-- [ ] run tests - must pass before task 6
+- [x] `raceStatusPill(race, today)` и `splitRaces(races, today)` — правила в Technical Details; только лексикографическое сравнение ISO-строк (НЕ `LocalDate` — minSdk 24 без desugaring), фолбэк `dateEnd ?: date`
+- [x] `filterTeams(teams, query)` (по названию или `start_number`), `teamToken(team)` (`start_number`, пустая строка = нет номера → фолбэк `initials`), `displayTeamName(team)` (фолбэк для пустого `teamname`), общий хелпер `initials(text, max = 2)` (заменяет inline-логику в `MonogramAvatar` из `TeamScreen`)
+- [x] тесты `splitRaces`/`raceStatusPill`: гонка сегодня/завтра/вчера, `date_end` на границе, `dateEnd = null` → фолбэк на `date`, все три `reg_status`
+- [x] тесты `filterTeams` (по названию, по номеру, регистр, пустой query, нет совпадений), `teamToken` (номер есть / null / пустая строка), `displayTeamName` (имя есть / пустое + номер / пустое без номера) и `initials` (одно слово, два слова, пустая строка)
+- [x] run tests - must pass before task 6
 
 ### Task 6: Экран выбора соревнования (04b)
 
