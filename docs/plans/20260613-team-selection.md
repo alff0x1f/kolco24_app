@@ -184,11 +184,11 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerScreen.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/TeamSwitchSheet.kt`
 
-- [ ] `TeamPickerScreen(raceId, ...)`: back-bar («Сменить команду» / «Выбор команды» если ничего не выбрано), карточка соревнования с кнопкой «Изменить» (→ `onChangeRace`), поисковая строка (пилюля, `TextField`, placeholder «Название или номер команды»), секция «Зарегистрированные · N», строки команд (токен с `teamToken(team)` — стартовый номер или монограмма, название, бейдж «Текущая», «Категория X · N чел.» — категория из `categoriesForRace`)
-- [ ] загрузка: `LaunchedEffect(raceId)` → `refreshTeams` (composition scope ок — это read-refresh, отмена при закрытии безвредна); состояния по Technical Details (заглушка+Повторить / snackbar / «Обновите приложение» / «Пока никто не зарегистрирован»)
-- [ ] тап по команде → `onTeamTapped(teamId)`; `TeamSwitchSheet(team, category)` — `ModalBottomSheet`: токен (`teamToken`), название, «Категория X · N человек», поясняющий текст, `PrimaryButton`-стиль «Перейти в команду» (OrangeCta-логика как у FAB), «Отмена»
-- [ ] тестов нет (Compose; фильтр покрыт Task 5) — `./gradlew lintDebug`
-- [ ] run tests - must pass before task 8
+- [x] `TeamPickerScreen(raceId, ...)`: back-bar («Сменить команду» / «Выбор команды» если ничего не выбрано), карточка соревнования с кнопкой «Изменить» (→ `onChangeRace`), поисковая строка (пилюля, `TextField`, placeholder «Название или номер команды»), секция «Зарегистрированные · N», строки команд (токен с `teamToken(team)` — стартовый номер или монограмма, название, бейдж «Текущая», «Категория X · N чел.» — категория из `categoriesForRace`)
+- [x] загрузка: `LaunchedEffect(raceId)` → `refreshTeams` (composition scope ок — это read-refresh, отмена при закрытии безвредна); состояния по Technical Details (заглушка+Повторить / snackbar / «Обновите приложение» / «Пока никто не зарегистрирован»)
+- [x] тап по команде → `onTeamTapped(teamId)`; `TeamSwitchSheet(team, category)` — `ModalBottomSheet`: токен (`teamToken`), название, «Категория X · N человек», поясняющий текст, `PrimaryButton`-стиль «Перейти в команду» (OrangeCta-логика как у FAB), «Отмена»
+- [x] тестов нет (Compose; фильтр покрыт Task 5) — `./gradlew lintDebug`
+- [x] run tests - must pass before task 8
 
 ### Task 8: Таб «Команда» на реальных данных + пустое состояние (04)
 
