@@ -243,8 +243,8 @@ private fun Kolco24AppRoot() {
                 categories = pickerCategories,
                 selectedTeamId = selectedTeamId,
                 onRefresh = teamRepo::refreshTeams,
-                onBack = { teamFlowStep = TeamFlowStep.CompPicker },
-                onChangeRace = { teamFlowStep = TeamFlowStep.CompPicker },
+                onBack = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
+                onChangeRace = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
                 onTeamTapped = { confirmTeamId = it },
                 modifier = Modifier.fillMaxSize(),
             )

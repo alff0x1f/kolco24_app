@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.data.db
 
 import androidx.room.TypeConverter
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
@@ -11,7 +12,11 @@ class TeamMembersConverter {
     private val json = Json { ignoreUnknownKeys = true }
 
     @TypeConverter
-    fun fromJson(value: String): List<TeamMemberItem> = json.decodeFromString(value)
+    fun fromJson(value: String): List<TeamMemberItem> = try {
+        json.decodeFromString(value)
+    } catch (_: SerializationException) {
+        emptyList()
+    }
 
     @TypeConverter
     fun toJson(members: List<TeamMemberItem>): String = json.encodeToString(members)
