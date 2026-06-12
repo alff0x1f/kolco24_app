@@ -142,12 +142,12 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/SyncMetaDao.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/AppDatabase.kt`
 
-- [ ] `RaceEntity` (`@Entity(tableName = "races")`, PK = серверный `id`) и `SyncMetaEntity` (`@Entity(tableName = "sync_meta", primaryKeys = ["origin", "resource"])`)
-- [ ] `RaceDao`: `observeRaces(): Flow<List<RaceEntity>>` (`ORDER BY date DESC, id DESC`), `insertAll`, `deleteAll`, `@Transaction suspend fun replaceAll(races)` = deleteAll + insertAll
-- [ ] `SyncMetaDao`: `getEtag(origin, resource): String?`, `@Upsert upsert(SyncMetaEntity)`
-- [ ] `AppDatabase` (version = 1, entities = races + sync_meta) с companion-фабрикой `build(context)`
-- [ ] тесты: не пишем для DAO (решение brainstorm); проверка — `./gradlew assembleDebug` (KSP-генерация Room проходит без ошибок)
-- [ ] run build - must pass before task 6
+- [x] `RaceEntity` (`@Entity(tableName = "races")`, PK = серверный `id`) и `SyncMetaEntity` (`@Entity(tableName = "sync_meta", primaryKeys = ["origin", "resource"])`)
+- [x] `RaceDao`: `observeRaces(): Flow<List<RaceEntity>>` (`ORDER BY date DESC, id DESC`), `insertAll`, `deleteAll`, `@Transaction suspend fun replaceAll(races)` = deleteAll + insertAll
+- [x] `SyncMetaDao`: `getEtag(origin, resource): String?`, `@Upsert upsert(SyncMetaEntity)`
+- [x] `AppDatabase` (version = 1, entities = races + sync_meta) с companion-фабрикой `build(context)`
+- [x] тесты: не пишем для DAO (решение brainstorm); проверка — `./gradlew assembleDebug` (KSP-генерация Room проходит без ошибок)
+- [x] run build - must pass before task 6
 
 ### Task 6: RaceRepository
 
