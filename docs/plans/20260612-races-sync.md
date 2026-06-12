@@ -181,11 +181,11 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - [x] run `./gradlew assembleDebug testDebugUnitTest` - must pass before task 8
 
 ### Task 8: Verify acceptance criteria
-- [ ] все требования Overview реализованы: подписанный GET с ETag, офлайн-чтение из Room, полное замещение при 200, ETag по origin
-- [ ] edge cases: повторный запуск без изменений → `NotModified`; нет сети → `Offline`, кеш цел; 403 → `Forbidden`
-- [ ] run full test suite: `./gradlew testDebugUnitTest`
-- [ ] run `./gradlew lintDebug` — должен проходить (правило проекта)
-- [ ] run `./gradlew assembleDebug`
+- [x] все требования Overview реализованы: подписанный GET с ETag, офлайн-чтение из Room, полное замещение при 200, ETag по origin
+- [x] edge cases: повторный запуск без изменений → `NotModified`; нет сети → `Offline`, кеш цел; 403 → `Forbidden`
+- [x] run full test suite: `./gradlew testDebugUnitTest`
+- [x] run `./gradlew lintDebug` — должен проходить (правило проекта)
+- [x] run `./gradlew assembleDebug`
 
 ### Task 9: [Final] Update documentation
 - [ ] обновить CLAUDE.md: раздел архитектуры — слой данных (data/api, data/db, RaceRepository, AppContainer/Kolco24App), конфиг local.properties → BuildConfig
