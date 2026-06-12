@@ -86,7 +86,7 @@ private fun Kolco24AppRoot() {
     val container = remember { (context.applicationContext as Kolco24App).container }
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
-    val today = remember { todayIso() }
+    val today = todayIso()
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())

@@ -161,7 +161,7 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
             }
 
             Text(
-                text = peopleLine(category, team.ucount),
+                text = peopleLine(category, totalCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.70f),
             )
