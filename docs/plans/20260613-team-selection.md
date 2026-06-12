@@ -208,14 +208,14 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] состояние в `Kolco24AppRoot`: `teamFlowStep: TeamFlowStep` (None/CompPicker/TeamPicker), `pickerRaceId: Int?`, `confirmTeamId: Int?` — всё `rememberSaveable` (Kotlin enum — `java.io.Serializable`, кастомный `Saver` НЕ нужен; nullable `Int` сохраняется из коробки)
-- [ ] оверлеи в существующем `Box` после `Scaffold` (после `ScanScreen`): `CompPickerScreen` при `CompPicker`, `TeamPickerScreen` при `TeamPicker`; sheet поверх при `confirmTeamId != null`
-- [ ] `BackHandler`: приоритет sheet > TeamPicker > CompPicker > scan (несколько `BackHandler` — срабатывает последний зарегистрированный enabled, регистрировать team-flow-хендлер после scan-хендлера; sheet закрывается своим dismiss); «Изменить» в TeamPicker → шаг CompPicker
-- [ ] подтверждение: «Перейти в команду» → `teamRepository.selectTeam(...)` в `applicationScope` (запись должна дожить до конца, composition scope отменится при закрытии оверлея) → закрыть sheet и весь поток; «Отмена» → только sheet
-- [ ] collect `selectedTeam`/`observeTeam`/категории и прокинуть в `TeamScreen`; CTA пустого состояния → `CompPicker`
-- [ ] проверить recreate (поворот): шаг потока и sheet переживают пересоздание
-- [ ] тестов нет (Activity/Compose) — `./gradlew lintDebug testDebugUnitTest`
-- [ ] run tests - must pass before task 10
+- [x] состояние в `Kolco24AppRoot`: `teamFlowStep: TeamFlowStep` (None/CompPicker/TeamPicker), `pickerRaceId: Int?`, `confirmTeamId: Int?` — всё `rememberSaveable` (Kotlin enum — `java.io.Serializable`, кастомный `Saver` НЕ нужен; nullable `Int` сохраняется из коробки)
+- [x] оверлеи в существующем `Box` после `Scaffold` (после `ScanScreen`): `CompPickerScreen` при `CompPicker`, `TeamPickerScreen` при `TeamPicker`; sheet поверх при `confirmTeamId != null`
+- [x] `BackHandler`: приоритет sheet > TeamPicker > CompPicker > scan (несколько `BackHandler` — срабатывает последний зарегистрированный enabled, регистрировать team-flow-хендлер после scan-хендлера; sheet закрывается своим dismiss); «Изменить» в TeamPicker → шаг CompPicker
+- [x] подтверждение: «Перейти в команду» → `teamRepository.selectTeam(...)` в `applicationScope` (запись должна дожить до конца, composition scope отменится при закрытии оверлея) → закрыть sheet и весь поток; «Отмена» → только sheet
+- [x] collect `selectedTeam`/`observeTeam`/категории и прокинуть в `TeamScreen`; CTA пустого состояния → `CompPicker`
+- [x] проверить recreate (поворот): шаг потока и sheet переживают пересоздание — `rememberSaveable` для всех трёх полей; ручная проверка поворота в Post-Completion
+- [x] тестов нет (Activity/Compose) — `./gradlew lintDebug testDebugUnitTest`
+- [x] run tests - must pass before task 10
 
 ### Task 10: Verify acceptance criteria
 - [ ] все требования Overview реализованы (4 экрана + данные + сохранение выбора)

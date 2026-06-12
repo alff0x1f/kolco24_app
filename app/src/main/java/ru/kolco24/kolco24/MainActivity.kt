@@ -25,20 +25,32 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.team.TeamScreen
+import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
+import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
+import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,11 +64,65 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Step of the team-selection overlay flow, layered over the tab Scaffold (no navigation library). */
+private enum class TeamFlowStep { None, CompPicker, TeamPicker }
+
+/** Load state of the currently-selected team's row, so the tab can tell "loading" from "disappeared". */
+private sealed interface SelectedTeamState {
+    data object None : SelectedTeamState
+    data object Loading : SelectedTeamState
+    data object Missing : SelectedTeamState
+    data class Present(val team: TeamEntity) : SelectedTeamState
+}
+
 @Composable
 private fun Kolco24AppRoot() {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val container = remember { (context.applicationContext as Kolco24App).container }
+    val raceRepo = container.raceRepository
+    val teamRepo = container.teamRepository
+    val today = remember { todayIso() }
+
+    // Tab «Команда» data: which team is selected, its row, and the categories of its race.
+    val races by raceRepo.races.collectAsState(initial = emptyList())
+    val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
+    val selectedRaceId = selectedTeam?.raceId
+    val selectedTeamId = selectedTeam?.teamId
+
+    val teamState by produceState<SelectedTeamState>(SelectedTeamState.Loading, selectedTeamId) {
+        val id = selectedTeamId
+        if (id == null) {
+            value = SelectedTeamState.None
+        } else {
+            teamRepo.observeTeam(id).collect { team ->
+                value = if (team == null) SelectedTeamState.Missing else SelectedTeamState.Present(team)
+            }
+        }
+    }
+    val teamForTab = (teamState as? SelectedTeamState.Present)?.team
+    val teamMissing = teamState is SelectedTeamState.Missing
+
+    val tabCategories by remember(selectedRaceId) {
+        if (selectedRaceId != null) teamRepo.categoriesForRace(selectedRaceId) else flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    val tabCategory = teamForTab?.let { t -> tabCategories.find { it.id == t.categoryId } }
+
+    // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
+    var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
+    var pickerRaceId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var confirmTeamId by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
+    val pickerTeams by remember(pickerRaceId) {
+        pickerRaceId?.let { teamRepo.teamsForRace(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    val pickerCategories by remember(pickerRaceId) {
+        pickerRaceId?.let { teamRepo.categoriesForRace(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
 
     val navItemColors = NavigationBarItemDefaults.colors(
         indicatorColor = Color.Transparent,
@@ -122,18 +188,79 @@ private fun Kolco24AppRoot() {
                     )
                     1 -> LegendScreen(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()))
                     2 -> TeamScreen(
-                        team = null,
-                        category = null,
-                        onChooseTeam = {},
-                        onChangeTeam = {},
+                        team = teamForTab,
+                        category = tabCategory,
+                        onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
+                        onChangeTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
+                        teamMissing = teamMissing,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
             }
         }
+
+        // Scan overlay (registered first so the team-flow handler below takes priority when active).
         BackHandler(enabled = showScan) { showScan = false }
         if (showScan) {
             ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
         }
+
+        // Team-selection flow overlays. Back steps down: sheet (own dismiss) > TeamPicker > CompPicker.
+        BackHandler(enabled = teamFlowStep != TeamFlowStep.None && confirmTeamId == null) {
+            teamFlowStep = when (teamFlowStep) {
+                TeamFlowStep.TeamPicker -> TeamFlowStep.CompPicker
+                else -> TeamFlowStep.None
+            }
+        }
+
+        if (teamFlowStep == TeamFlowStep.CompPicker) {
+            CompPickerScreen(
+                races = races,
+                today = today,
+                selectedRaceId = selectedRaceId,
+                onBack = { teamFlowStep = TeamFlowStep.None },
+                onRaceSelected = { raceId ->
+                    pickerRaceId = raceId
+                    teamFlowStep = TeamFlowStep.TeamPicker
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        val activePickerRaceId = pickerRaceId
+        if (teamFlowStep == TeamFlowStep.TeamPicker && activePickerRaceId != null) {
+            TeamPickerScreen(
+                raceId = activePickerRaceId,
+                race = races.find { it.id == activePickerRaceId },
+                teams = pickerTeams,
+                categories = pickerCategories,
+                selectedTeamId = selectedTeamId,
+                onRefresh = teamRepo::refreshTeams,
+                onBack = { teamFlowStep = TeamFlowStep.CompPicker },
+                onChangeRace = { teamFlowStep = TeamFlowStep.CompPicker },
+                onTeamTapped = { confirmTeamId = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            val confirmTeam = confirmTeamId?.let { id -> pickerTeams.find { it.id == id } }
+            if (confirmTeam != null) {
+                TeamSwitchSheet(
+                    team = confirmTeam,
+                    category = pickerCategories.find { it.id == confirmTeam.categoryId },
+                    onConfirm = {
+                        container.applicationScope.launch {
+                            teamRepo.selectTeam(activePickerRaceId, confirmTeam.id)
+                        }
+                        confirmTeamId = null
+                        teamFlowStep = TeamFlowStep.None
+                    },
+                    onDismiss = { confirmTeamId = null },
+                )
+            }
+        }
     }
 }
+
+/** Today as a `YYYY-MM-DD` string (no `java.time` — minSdk 24 without core library desugaring). */
+private fun todayIso(): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
