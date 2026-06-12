@@ -114,10 +114,10 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/RacesResponse.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/api/dto/RacesResponseTest.kt`
 
-- [ ] `@Serializable` `RacesResponse(races: List<RaceDto>)` и `RaceDto(id, name, slug, date, dateEnd: String?, place, regStatus, isLegendVisible)` с `@SerialName` под snake_case поля API
-- [ ] тест: парсинг JSON-примера из `docs/API.md` → корректные значения всех полей
-- [ ] тест: лишнее неизвестное поле в JSON не ломает парсинг (`ignoreUnknownKeys`); отсутствие обязательного поля → исключение сериализации
-- [ ] run tests - must pass before task 4
+- [x] `@Serializable` `RacesResponse(races: List<RaceDto>)` и `RaceDto(id, name, slug, date, dateEnd: String?, place, regStatus, isLegendVisible)` с `@SerialName` под snake_case поля API
+- [x] тест: парсинг JSON-примера из `docs/API.md` → корректные значения всех полей
+- [x] тест: лишнее неизвестное поле в JSON не ломает парсинг (`ignoreUnknownKeys`); отсутствие обязательного поля → исключение сериализации
+- [x] run tests - must pass before task 4
 
 ### Task 4: ApiClient с ETag и обработкой ответов
 
