@@ -125,13 +125,13 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt`
 
-- [ ] sealed `FetchResult`: `Success(races, etag)` | `NotModified` | `Forbidden` | `Error(code: Int?)`
-- [ ] `ApiClient(baseUrl, okHttpClient, json)` c `suspend fun fetchRaces(etag: String?): FetchResult`: GET `/app/races/`, `If-None-Match` как сохранили; 200 → парсинг + ETag из заголовка, 304/403/прочее → соответствующие результаты; `IOException`/`SerializationException` → `Error(null)`; вызовы на `Dispatchers.IO`
-- [ ] собрать `OkHttpClient` с таймаутами 10 с и `AppSignatureInterceptor` (фабрика в ApiClient или AppContainer — решить по месту)
-- [ ] тесты с MockWebServer: 200 + ETag → `Success` с гонками и etag; в перехваченном запросе присутствуют все 6 заголовков подписи; `If-None-Match` уходит с кавычками
-- [ ] тест валидности подписи end-to-end: путь перехваченного запроса — ровно `/app/races/` (со слешем); пересчитать подпись в тесте из известного тестового секрета + перехваченных `path`/`X-App-Ts` и сравнить с `X-App-Sig` (ловит расхождение «подписали один путь — отправили другой», главную причину 403)
-- [ ] тесты с MockWebServer: 304 → `NotModified`; 403 → `Forbidden`; 500 → `Error(500)`; обрыв соединения → `Error(null)`; 200 с невалидным JSON → `Error`
-- [ ] run tests - must pass before task 5
+- [x] sealed `FetchResult`: `Success(races, etag)` | `NotModified` | `Forbidden` | `Error(code: Int?)`
+- [x] `ApiClient(baseUrl, okHttpClient, json)` c `suspend fun fetchRaces(etag: String?): FetchResult`: GET `/app/races/`, `If-None-Match` как сохранили; 200 → парсинг + ETag из заголовка, 304/403/прочее → соответствующие результаты; `IOException`/`SerializationException` → `Error(null)`; вызовы на `Dispatchers.IO`
+- [x] собрать `OkHttpClient` с таймаутами 10 с и `AppSignatureInterceptor` (фабрика `ApiClient.defaultOkHttpClient`)
+- [x] тесты с MockWebServer: 200 + ETag → `Success` с гонками и etag; в перехваченном запросе присутствуют все 6 заголовков подписи; `If-None-Match` уходит с кавычками
+- [x] тест валидности подписи end-to-end: путь перехваченного запроса — ровно `/app/races/` (со слешем); пересчитать подпись в тесте из известного тестового секрета + перехваченных `path`/`X-App-Ts` и сравнить с `X-App-Sig` (ловит расхождение «подписали один путь — отправили другой», главную причину 403)
+- [x] тесты с MockWebServer: 304 → `NotModified`; 403 → `Forbidden`; 500 → `Error(500)`; обрыв соединения → `Error(null)`; 200 с невалидным JSON → `Error`
+- [x] run tests - must pass before task 5
 
 ### Task 5: Room — entities, DAO, база
 
