@@ -50,7 +50,7 @@ class RaceRepository(
         val etag = syncMetaDao.getEtag(origin, RESOURCE_RACES)
         return when (val result = apiClient.fetchRaces(etag)) {
             is FetchResult.Success -> {
-                raceDao.replaceAll(result.races.map { it.toEntity() })
+                raceDao.replaceAll(result.data.map { it.toEntity() })
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(origin, RESOURCE_RACES, result.etag))
                 }

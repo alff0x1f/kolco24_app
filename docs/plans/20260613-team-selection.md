@@ -115,11 +115,11 @@
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/RaceRepositoryTest.kt`
 
-- [ ] обобщить `FetchResult` → `FetchResult<out T>` (`Success<T>(data, etag)`; объекты через `FetchResult<Nothing>`), общий приватный хелпер выполнения условного GET
-- [ ] адаптировать `fetchRaces(): FetchResult<List<RaceDto>>` и `RaceRepository` (поле `races` → `data`)
-- [ ] добавить `fetchTeams(raceId: Int, etag: String?): FetchResult<TeamsResponse>` — URL `/app/race/$raceId/teams/`, `If-None-Match` как в `fetchRaces`
-- [ ] обновить существующие тесты под generic (в `ApiClientTest` обращения `Success.races` → `Success.data`; `RaceRepositoryTest` через MockWebServer — должен скомпилироваться без правок по сути); тест `fetchTeams`: 200 → Success с разобранным телом и ETag, 304/403/500 → соответствующие ветки, IOException → `Error(null)`
-- [ ] run tests - must pass before task 3
+- [x] обобщить `FetchResult` → `FetchResult<out T>` (`Success<T>(data, etag)`; объекты через `FetchResult<Nothing>`), общий приватный хелпер выполнения условного GET
+- [x] адаптировать `fetchRaces(): FetchResult<List<RaceDto>>` и `RaceRepository` (поле `races` → `data`)
+- [x] добавить `fetchTeams(raceId: Int, etag: String?): FetchResult<TeamsResponse>` — URL `/app/race/$raceId/teams/`, `If-None-Match` как в `fetchRaces`
+- [x] обновить существующие тесты под generic (в `ApiClientTest` обращения `Success.races` → `Success.data`; `RaceRepositoryTest` через MockWebServer — должен скомпилироваться без правок по сути); тест `fetchTeams`: 200 → Success с разобранным телом и ETag, 304/403/500 → соответствующие ветки, IOException → `Error(null)`
+- [x] run tests - must pass before task 3
 
 ### Task 3: Room v2 — entities, DAO, миграция
 
