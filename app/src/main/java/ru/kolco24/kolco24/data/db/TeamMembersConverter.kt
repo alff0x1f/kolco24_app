@@ -8,9 +8,11 @@ import kotlinx.serialization.json.Json
  * round-trip preserves the member list as received.
  */
 class TeamMembersConverter {
-    @TypeConverter
-    fun fromJson(value: String): List<TeamMemberItem> = Json.decodeFromString(value)
+    private val json = Json { ignoreUnknownKeys = true }
 
     @TypeConverter
-    fun toJson(members: List<TeamMemberItem>): String = Json.encodeToString(members)
+    fun fromJson(value: String): List<TeamMemberItem> = json.decodeFromString(value)
+
+    @TypeConverter
+    fun toJson(members: List<TeamMemberItem>): String = json.encodeToString(members)
 }
