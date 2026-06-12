@@ -224,8 +224,8 @@
 - [x] ручной smoke на устройстве/эмуляторе (skipped - not automatable; см. Post-Completion)
 
 ### Task 11: [Final] Update documentation
-- [ ] обновить CLAUDE.md: teams-sync, новые таблицы/версия Room, TeamRepository, паттерн team-flow-оверлеев, generic FetchResult
-- [ ] переместить план в `docs/plans/completed/`
+- [x] обновить CLAUDE.md: teams-sync, новые таблицы/версия Room, TeamRepository, паттерн team-flow-оверлеев, generic FetchResult
+- [x] переместить план в `docs/plans/completed/`
 
 ## Post-Completion
 *Только информационно — внешние/ручные действия*
