@@ -30,6 +30,7 @@ class RaceRepositoryTest {
     private lateinit var origin: String
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val callLog = mutableListOf<String>()
 
     private fun racesJson(id: Int, name: String) = """
         {
@@ -61,8 +62,8 @@ class RaceRepositoryTest {
             nowSeconds = { 1718200000L },
         )
         val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
-        raceDao = FakeRaceDao()
-        syncMetaDao = FakeSyncMetaDao()
+        raceDao = FakeRaceDao(callLog)
+        syncMetaDao = FakeSyncMetaDao(callLog)
         repository = RaceRepository(apiClient, raceDao, syncMetaDao, origin)
     }
 
@@ -143,6 +144,39 @@ class RaceRepositoryTest {
         assertEquals(RefreshResult.HttpError(500), repository.refreshRaces())
     }
 
+    @Test
+    fun success_withoutEtag_storesRacesButSkipsEtagSave() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(racesJson(8, "Кольцо24")))
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        assertEquals(1, repository.races.first().size)
+        assertNull(syncMetaDao.getEtag(origin, "races"))
+    }
+
+    @Test
+    fun success_withEmptyList_clearsTable() = runTest {
+        raceDao.set(listOf(entity(99, "Stale race")))
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody("""{"races":[]}"""),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        assertEquals(0, repository.races.first().size)
+    }
+
+    @Test
+    fun success_writesDataBeforeEtag() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(racesJson(8, "Кольцо24")),
+        )
+
+        repository.refreshRaces()
+
+        assertEquals(listOf("replaceAll", "upsertEtag"), callLog)
+    }
+
     private fun entity(id: Int, name: String) = RaceEntity(
         id = id,
         name = name,
@@ -156,7 +190,7 @@ class RaceRepositoryTest {
 }
 
 /** In-memory [RaceDao] backed by a [MutableStateFlow] so [observeRaces] reflects writes. */
-private class FakeRaceDao : RaceDao {
+private class FakeRaceDao(private val callLog: MutableList<String> = mutableListOf()) : RaceDao {
     private val state = MutableStateFlow<List<RaceEntity>>(emptyList())
 
     fun set(races: List<RaceEntity>) {
@@ -172,15 +206,22 @@ private class FakeRaceDao : RaceDao {
     override suspend fun deleteAll() {
         state.value = emptyList()
     }
+
+    override suspend fun replaceAll(races: List<RaceEntity>) {
+        deleteAll()
+        insertAll(races)
+        callLog.add("replaceAll")
+    }
 }
 
 /** In-memory [SyncMetaDao] keyed by `(origin, resource)`. */
-private class FakeSyncMetaDao : SyncMetaDao {
+private class FakeSyncMetaDao(private val callLog: MutableList<String> = mutableListOf()) : SyncMetaDao {
     private val store = mutableMapOf<Pair<String, String>, String>()
 
     override suspend fun getEtag(origin: String, resource: String): String? = store[origin to resource]
 
     override suspend fun upsert(meta: SyncMetaEntity) {
         store[meta.origin to meta.resource] = meta.etag
+        callLog.add("upsertEtag")
     }
 }
