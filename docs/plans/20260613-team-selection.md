@@ -149,11 +149,11 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/TeamRepositoryTest.kt`
 
-- [ ] `TeamRepository` по Technical Details: flow-методы, `refreshTeams(raceId)` (resource `"race/$raceId/teams"`, порядок replaceAll → upsert ETag, ETag не пишем при null), `selectTeam(raceId, teamId)`, маппинг DTO → entity
-- [ ] подключить в `AppContainer` лениво (`teamRepository: TeamRepository by lazy`), по образцу `raceRepository`
-- [ ] тесты (фейковые DAO/ApiClient, как в `RaceRepositoryTest`): Success → replaceAllForRace вызван с замапленными entity, затем ETag upsert; Success без ETag → upsert не вызывается
-- [ ] тесты: NotModified → данные не трогаем; Error(null) → Offline; Error(code) → HttpError; Forbidden → Forbidden; разные raceId → разные ресурсы в sync_meta
-- [ ] run tests - must pass before task 5
+- [x] `TeamRepository` по Technical Details: flow-методы, `refreshTeams(raceId)` (resource `"race/$raceId/teams"`, порядок replaceAll → upsert ETag, ETag не пишем при null), `selectTeam(raceId, teamId)`, маппинг DTO → entity
+- [x] подключить в `AppContainer` лениво (`teamRepository: TeamRepository by lazy`), по образцу `raceRepository`
+- [x] тесты (фейковые DAO/ApiClient, как в `RaceRepositoryTest`): Success → replaceAllForRace вызван с замапленными entity, затем ETag upsert; Success без ETag → upsert не вызывается
+- [x] тесты: NotModified → данные не трогаем; Error(null) → Offline; Error(code) → HttpError; Forbidden → Forbidden; разные raceId → разные ресурсы в sync_meta
+- [x] run tests - must pass before task 5
 
 ### Task 5: Чистая UI-логика пикеров
 
