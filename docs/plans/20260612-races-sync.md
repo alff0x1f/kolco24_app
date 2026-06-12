@@ -102,11 +102,11 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/AppSignatureInterceptor.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/api/SigningTest.kt`
 
-- [ ] чистые функции `buildCanonical(method: String, fullPath: String, ts: String): String` и `sign(secret: String, canonical: String): String` (lower-case hex HMAC-SHA256); константа хэша пустого тела
-- [ ] `AppSignatureInterceptor(keyId, secret, installIdProvider, appVersion)`: на каждый запрос берёт свежий `ts`, строит канонную строку из `encodedPath` (+ `?query` если есть), подписывает и добавляет все шесть заголовков
-- [ ] тест `buildCanonical` против примера из `docs/API.md` (путь `/app/race/8/teams/`, ts `1718200000`, ожидаемая 4-строчная канонная строка)
-- [ ] тест `sign` против фиксированного тест-вектора (известный секрет + канонная строка → заранее посчитанный HMAC); вектор сгенерировать эталоном сервера `src/apps/mobile/signing.py` (репо kolco24) или, если сервер недоступен, независимым инструментом (`python hmac`/`openssl`) — не своей же реализацией
-- [ ] run tests - must pass before task 3
+- [x] чистые функции `buildCanonical(method: String, fullPath: String, ts: String): String` и `sign(secret: String, canonical: String): String` (lower-case hex HMAC-SHA256); константа хэша пустого тела
+- [x] `AppSignatureInterceptor(keyId, secret, installIdProvider, appVersion)`: на каждый запрос берёт свежий `ts`, строит канонную строку из `encodedPath` (+ `?query` если есть), подписывает и добавляет все шесть заголовков
+- [x] тест `buildCanonical` против примера из `docs/API.md` (путь `/app/race/8/teams/`, ts `1718200000`, ожидаемая 4-строчная канонная строка)
+- [x] тест `sign` против фиксированного тест-вектора (секрет `test-secret-123` + канонная строка из API.md → HMAC, посчитанный независимым `python3 hmac`, не своей реализацией)
+- [x] run tests - must pass before task 3
 
 ### Task 3: DTO и парсинг ответа races
 
