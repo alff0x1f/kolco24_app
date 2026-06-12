@@ -172,13 +172,13 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Create: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
 - Modify: `app/src/main/AndroidManifest.xml`
 
-- [ ] `InstallId`: логика «прочитать или сгенерировать UUID» как чистая функция над инжектируемым key-value-хранилищем (`getOrCreate(load: () -> String?, save: (String) -> Unit): String`); адаптер к SharedPreferences — тонкая обёртка
-- [ ] `AppContainer(context)`: lazy `installId` (через `InstallId` + SharedPreferences), `OkHttpClient` + интерцептор (значения из `BuildConfig`), `Json`, `ApiClient`, `AppDatabase`, `RaceRepository`; `applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)`
-- [ ] `Kolco24App : Application`: создаёт `AppContainer`, в `onCreate` — `applicationScope.launch { Log.i(..., container.raceRepository.refreshRaces().toString()) }`
-- [ ] зарегистрировать `android:name=".Kolco24App"` в манифесте
-- [ ] тесты `InstallId` (JVM, фейковое хранилище): генерирует один раз и сохраняет; при повторных вызовах возвращает то же значение; результат ≤64 символов (требование API)
-- [ ] остальной контейнер — связывание без ветвлений, юнит-тестов не требует; проверка — сборка + Task 8 (ручной прогон)
-- [ ] run `./gradlew assembleDebug testDebugUnitTest` - must pass before task 8
+- [x] `InstallId`: логика «прочитать или сгенерировать UUID» как чистая функция над инжектируемым key-value-хранилищем (`getOrCreate(load: () -> String?, save: (String) -> Unit): String`); адаптер к SharedPreferences — тонкая обёртка
+- [x] `AppContainer(context)`: lazy `installId` (через `InstallId` + SharedPreferences), `OkHttpClient` + интерцептор (значения из `BuildConfig`), `Json`, `ApiClient`, `AppDatabase`, `RaceRepository`; `applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)`
+- [x] `Kolco24App : Application`: создаёт `AppContainer`, в `onCreate` — `applicationScope.launch { Log.i(..., container.raceRepository.refreshRaces().toString()) }`
+- [x] зарегистрировать `android:name=".Kolco24App"` в манифесте; ⚠️ существующий корневой composable `Kolco24App()` в MainActivity переименован в `Kolco24AppRoot()` во избежание коллизии имён
+- [x] тесты `InstallId` (JVM, фейковое хранилище): генерирует один раз и сохраняет; при повторных вызовах возвращает то же значение; результат ≤64 символов (требование API)
+- [x] остальной контейнер — связывание без ветвлений, юнит-тестов не требует; проверка — сборка + Task 8 (ручной прогон)
+- [x] run `./gradlew assembleDebug testDebugUnitTest` - must pass before task 8
 
 ### Task 8: Verify acceptance criteria
 - [ ] все требования Overview реализованы: подписанный GET с ETag, офлайн-чтение из Room, полное замещение при 200, ETag по origin

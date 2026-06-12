@@ -46,14 +46,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Kolco24Theme {
-                Kolco24App()
+                Kolco24AppRoot()
             }
         }
     }
 }
 
 @Composable
-private fun Kolco24App() {
+private fun Kolco24AppRoot() {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
