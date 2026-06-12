@@ -108,9 +108,12 @@ fun TeamPickerScreen(
     }
 
     // Stale cache: show what we have and warn via snackbar instead of blocking the list.
+    // Guard with a flag so repeated failures (e.g. failed retry) don't re-show the snackbar.
     val staleCache = teams.isNotEmpty() && (load == PickerLoad.Offline || load == PickerLoad.HttpError)
+    var staleCacheSnackbarShown by remember(raceId) { mutableStateOf(false) }
     LaunchedEffect(staleCache) {
-        if (staleCache) {
+        if (staleCache && !staleCacheSnackbarShown) {
+            staleCacheSnackbarShown = true
             snackbarHostState.showSnackbar("Нет сети, показан сохранённый список")
         }
     }

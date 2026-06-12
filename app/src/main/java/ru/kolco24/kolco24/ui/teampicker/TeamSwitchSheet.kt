@@ -44,7 +44,7 @@ fun TeamSwitchSheet(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -135,8 +135,3 @@ fun TeamSwitchSheet(
     }
 }
 
-/** "Категория X · N человек" line for the confirmation sheet; full `человек` word. */
-private fun peopleLine(category: CategoryEntity?, ucount: Int): String {
-    val cat = category?.shortName?.takeIf { it.isNotBlank() } ?: category?.name?.takeIf { it.isNotBlank() }
-    return if (cat != null) "Категория $cat · $ucount человек" else "$ucount человек"
-}

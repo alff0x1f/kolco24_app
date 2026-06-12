@@ -47,6 +47,7 @@ import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
+import ru.kolco24.kolco24.ui.teampicker.peopleLine
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 /**
@@ -64,9 +65,12 @@ fun TeamScreen(
     onChangeTeam: () -> Unit,
     modifier: Modifier = Modifier,
     teamMissing: Boolean = false,
+    teamLoading: Boolean = false,
 ) {
     if (team == null) {
-        TeamEmptyContent(onChooseTeam = onChooseTeam, modifier = modifier, missing = teamMissing)
+        if (!teamLoading) {
+            TeamEmptyContent(onChooseTeam = onChooseTeam, modifier = modifier, missing = teamMissing)
+        }
         return
     }
 
@@ -108,12 +112,6 @@ fun TeamScreen(
             }
         }
     }
-}
-
-/** "Категория X · N человек" line for the hero card; full `человек` word. */
-private fun peopleLine(category: CategoryEntity?, ucount: Int): String {
-    val cat = category?.shortName?.takeIf { it.isNotBlank() } ?: category?.name?.takeIf { it.isNotBlank() }
-    return if (cat != null) "Категория $cat · $ucount человек" else "$ucount человек"
 }
 
 @Composable
@@ -163,7 +161,7 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
             }
 
             Text(
-                text = peopleLine(category, totalCount),
+                text = peopleLine(category, team.ucount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.70f),
             )

@@ -157,13 +157,14 @@ class TeamRepositoryTest {
     @Test
     fun offline_returnsOfflineAndLeavesDataUntouched() = runTest {
         teamDao.setTeams(listOf(teamEntity(201, raceId = 8, name = "Cached")))
+        syncMetaDao.upsert(SyncMetaEntity(origin, "race/8/teams", "\"existing\""))
         callLog.clear()
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
 
         assertEquals(RefreshResult.Offline, repository.refreshTeams(8))
 
         assertEquals(1, repository.teamsForRace(8).first().size)
-        assertNull(syncMetaDao.getEtag(origin, "race/8/teams"))
+        assertEquals("\"existing\"", syncMetaDao.getEtag(origin, "race/8/teams"))
         assertTrue(callLog.none { it == "replaceAllForRace" })
     }
 
@@ -196,9 +197,10 @@ class TeamRepositoryTest {
         assertEquals("\"a\"", syncMetaDao.getEtag(origin, "race/8/teams"))
         assertEquals("\"b\"", syncMetaDao.getEtag(origin, "race/9/teams"))
 
-        // The second refresh hits the path for race 9 and sends no stored ETag for it yet.
-        server.takeRequest()
+        // Both refreshes hit the correct race-specific paths.
+        val first = server.takeRequest()
         val second = server.takeRequest()
+        assertTrue(first.path!!.contains("/app/race/8/teams/"))
         assertTrue(second.path!!.contains("/app/race/9/teams/"))
     }
 

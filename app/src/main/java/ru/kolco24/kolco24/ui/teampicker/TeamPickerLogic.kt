@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.teampicker
 
+import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 
@@ -65,6 +66,12 @@ fun filterTeams(teams: List<TeamEntity>, query: String): List<TeamEntity> {
         team.teamname.lowercase().contains(lower) ||
             (team.startNumber?.lowercase()?.contains(lower) == true)
     }
+}
+
+/** "Категория X · N человек" line; full `человек` word. Used on the hero card and the confirm sheet. */
+fun peopleLine(category: CategoryEntity?, ucount: Int): String {
+    val cat = category?.shortName?.takeIf { it.isNotBlank() } ?: category?.name?.takeIf { it.isNotBlank() }
+    return if (cat != null) "Категория $cat · $ucount человек" else "$ucount человек"
 }
 
 /**

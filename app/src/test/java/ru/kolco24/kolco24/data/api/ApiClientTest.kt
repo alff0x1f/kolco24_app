@@ -227,4 +227,13 @@ class ApiClientTest {
 
         assertEquals(FetchResult.Error(null), apiClient.fetchTeams(8, null))
     }
+
+    @Test
+    fun fetchTeams_invalidJson_returnsError() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{ not json"))
+
+        val result = apiClient.fetchTeams(8, null)
+
+        assertTrue(result is FetchResult.Error)
+    }
 }

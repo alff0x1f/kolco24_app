@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TeamDao {
-    @Query("SELECT * FROM teams WHERE raceId = :raceId ORDER BY startNumber, id")
+    @Query("SELECT * FROM teams WHERE raceId = :raceId ORDER BY startNumber IS NULL, startNumber, id")
     fun observeTeamsForRace(raceId: Int): Flow<List<TeamEntity>>
 
     @Query("SELECT * FROM categories WHERE raceId = :raceId ORDER BY sortOrder, id")
