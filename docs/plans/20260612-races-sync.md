@@ -88,13 +88,13 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Modify: `app/build.gradle.kts`
 - Modify: `local.properties` (вне git — вручную/локально)
 
-- [ ] определить точную версию KSP под Kotlin 2.2.10 (`2.2.10-2.0.x`, последний релиз) и записать в `libs.versions.toml`; убедиться, что pluginManagement в `settings.gradle.kts` резолвит KSP (gradlePluginPortal/google)
-- [ ] добавить в `libs.versions.toml` версии и алиасы: ksp, kotlin-serialization (plugin, `version.ref = "kotlin"`), okhttp, mockwebserver, kotlinx-serialization-json, room (runtime/ktx/compiler), coroutines (android/test)
-- [ ] подключить в `app/build.gradle.kts` плагины `ksp` и `kotlin.plugin.serialization`; включить `buildFeatures { buildConfig = true }`
-- [ ] читать `kolco24.apiBaseUrl`, `kolco24.appKeyId`, `kolco24.appSecret` из `local.properties` с fallback на env `KOLCO24_*` → `buildConfigField("String", ..., "\"$value\"")` (экранирование в Java-литерал); если значения нет нигде — `error(...)` с перечислением недостающих свойств и обоих способов задать
-- [ ] добавить зависимости: okhttp, kotlinx-serialization-json, room-runtime/ktx + ksp room-compiler, coroutines-android; testImplementation: mockwebserver, coroutines-test
-- [ ] добавить `<uses-permission android:name="android.permission.INTERNET"/>` в `AndroidManifest.xml` (прямой потомок `<manifest>`, до `<application>`)
-- [ ] проверка: `./gradlew assembleDebug` проходит; падение при отсутствии свойств проверить, временно убрав строку из local.properties (и env). Примечание: KSP/serialization здесь только конфигурируются — полная валидация тулчейна произойдёт в Task 3 (`@Serializable`) и Task 5 (Room codegen)
+- [x] определить точную версию KSP под Kotlin 2.2.10 (`2.2.10-2.0.x`, последний релиз) и записать в `libs.versions.toml`; убедиться, что pluginManagement в `settings.gradle.kts` резолвит KSP (gradlePluginPortal/google) — выбран `2.2.10-2.0.2`; pluginManagement уже содержит gradlePluginPortal/google
+- [x] добавить в `libs.versions.toml` версии и алиасы: ksp, kotlin-serialization (plugin, `version.ref = "kotlin"`), okhttp, mockwebserver, kotlinx-serialization-json, room (runtime/ktx/compiler), coroutines (android/test)
+- [x] подключить в `app/build.gradle.kts` плагины `ksp` и `kotlin.plugin.serialization`; включить `buildFeatures { buildConfig = true }`
+- [x] читать `kolco24.apiBaseUrl`, `kolco24.appKeyId`, `kolco24.appSecret` из `local.properties` с fallback на env `KOLCO24_*` → `buildConfigField("String", ..., "\"$value\"")` (экранирование в Java-литерал); если значения нет нигде — `error(...)` с перечислением недостающих свойств и обоих способов задать
+- [x] добавить зависимости: okhttp, kotlinx-serialization-json, room-runtime/ktx + ksp room-compiler, coroutines-android; testImplementation: mockwebserver, coroutines-test
+- [x] добавить `<uses-permission android:name="android.permission.INTERNET"/>` в `AndroidManifest.xml` (прямой потомок `<manifest>`, до `<application>`)
+- [x] проверка: `./gradlew assembleDebug` проходит; падение при отсутствии свойств проверить, временно убрав строку из local.properties (и env). Примечание: KSP/serialization здесь только конфигурируются — полная валидация тулчейна произойдёт в Task 3 (`@Serializable`) и Task 5 (Room codegen). ⚠️ AGP 9 built-in Kotlin × KSP: потребовался `android.disallowKotlinSourceSets=false` в `gradle.properties` (KSP регистрирует генерируемые исходники через `kotlin.sourceSets`, что запрещено встроенным Kotlin)
 
 ### Task 2: Канонная строка и подпись + интерцептор
 
