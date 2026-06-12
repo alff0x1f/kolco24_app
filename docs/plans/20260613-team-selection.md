@@ -172,11 +172,11 @@
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/CompPickerScreen.kt`
 
-- [ ] каркас: TopAppBar с back-стрелкой «Соревнование», FilterChips «Актуальные · N» / «Архив · N» (стиль чипов — как в `LegendScreen`), список гонок из `raceRepository.races`
-- [ ] строка гонки по моку 04b: дата-токен (МЕС/день на `inverseSurface`-градиенте, моноширинный), название, статус-пилюля из `raceStatusPill`, подпись `place`, бейдж «Текущее» если `race.id == selectedTeam?.raceId`, chevron
-- [ ] подпись под списком «Выберите соревнование — откроется список его команд»; тап по строке → callback `onRaceSelected(raceId)`
-- [ ] тестов нет (чистый Compose; логика покрыта Task 5) — прогнать `./gradlew lintDebug`
-- [ ] run tests - must pass before task 7
+- [x] каркас: TopAppBar с back-стрелкой «Соревнование», FilterChips «Актуальные · N» / «Архив · N» (стиль чипов — как в `LegendScreen`), список гонок из `raceRepository.races`
+- [x] строка гонки по моку 04b: дата-токен (МЕС/день на `inverseSurface`-градиенте, моноширинный), название, статус-пилюля из `raceStatusPill`, подпись `place`, бейдж «Текущее» если `race.id == selectedTeam?.raceId`, chevron
+- [x] подпись под списком «Выберите соревнование — откроется список его команд»; тап по строке → callback `onRaceSelected(raceId)`
+- [x] тестов нет (чистый Compose; логика покрыта Task 5) — прогнать `./gradlew lintDebug`
+- [x] run tests - must pass before task 7
 
 ### Task 7: Экран выбора команды (04c) + bottom sheet (04d)
 
