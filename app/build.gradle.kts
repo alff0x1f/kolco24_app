@@ -7,6 +7,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Export Room schemas to a committed directory so the schema history is version-controlled and
+// MigrationTestHelper can validate migrations against the generated schema (see schemas/).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 /**
  * Escapes a raw string value so it is safe to embed inside a Java/Kotlin string literal
  * (i.e. inside `"..."` in generated BuildConfig source). Handles backslash and double-quote.
@@ -86,6 +92,8 @@ android {
         compose = true
         buildConfig = true
     }
+    // MigrationTestHelper reads the exported schema JSONs from the androidTest assets.
+    sourceSets["androidTest"].assets.srcDirs("$projectDir/schemas")
 }
 
 base {
@@ -115,6 +123,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

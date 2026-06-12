@@ -132,13 +132,15 @@
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/db/TeamMembersConverterTest.kt`
 - Create: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
 
-- [ ] включить `exportSchema = true` + `room.schemaLocation` (KSP arg) и собрать **до** бампа версии — закоммитить сгенерированный `schemas/.../1.json`
-- [ ] entities `categories` / `teams` / `selected_team` по Technical Details; `TypeConverter` members ↔ JSON (kotlinx.serialization)
-- [ ] `TeamDao` (`observeTeamsForRace`, `observeCategoriesForRace`, `observeTeamById`, `@Transaction replaceAllForRace`) и `SelectedTeamDao` (`observe`, `upsert`)
-- [ ] `AppDatabase`: version 2, новые entities/DAO, `@TypeConverters`, `Migration(1, 2)` с тремя `CREATE TABLE` + `CREATE INDEX index_teams_race_id` (SQL сверить с `2.json`), подключить в `build(...)`; закоммитить `2.json`
-- [ ] тест конвертера (JVM): round-trip списка участников, пустой список, порядок сохраняется (DAO не тестируем — решение из brainstorm)
-- [ ] instrumented-тест миграции (`MigrationTestHelper` + `androidx.room:room-testing`): создать v1 с races, прогнать `Migration(1,2)`, схема валидна и races на месте; прогнать `./gradlew connectedDebugAndroidTest` на эмуляторе
-- [ ] run tests - must pass before task 4
+- [x] включить `exportSchema = true` + `room.schemaLocation` (KSP arg) и собрать **до** бампа версии — закоммитить сгенерированный `schemas/.../1.json`
+- [x] entities `categories` / `teams` / `selected_team` по Technical Details; `TypeConverter` members ↔ JSON (kotlinx.serialization)
+- [x] `TeamDao` (`observeTeamsForRace`, `observeCategoriesForRace`, `observeTeamById`, `@Transaction replaceAllForRace`) и `SelectedTeamDao` (`observe`, `upsert`)
+- [x] `AppDatabase`: version 2, новые entities/DAO, `@TypeConverters`, `Migration(1, 2)` с тремя `CREATE TABLE` + `CREATE INDEX index_teams_raceId` (SQL сверена с `2.json`), подключить в `build(...)`; закоммитить `2.json`
+- [x] тест конвертера (JVM): round-trip списка участников, пустой список, порядок сохраняется (DAO не тестируем — решение из brainstorm)
+- [x] instrumented-тест миграции (`MigrationTestHelper` + `androidx.room:room-testing`) написан (`MigrationTest.kt`): создаёт v1 с races, прогоняет `Migration(1,2)`, валидирует схему и проверяет индекс. Запуск `./gradlew connectedDebugAndroidTest` требует эмулятор/устройство — не автоматизируется в этой среде, проверить вручную (Post-Completion)
+- [x] run tests - must pass before task 4 (`testDebugUnitTest` + `lintDebug` + `compileDebugAndroidTestKotlin` зелёные)
+
+  Примечание: индекс назван `index_teams_raceId` (колонка `raceId`, camelCase — Room не сужает в snake_case), а не `index_teams_race_id` как было в черновике Technical Details.
 
 ### Task 4: TeamRepository
 

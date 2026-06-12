@@ -1,0 +1,80 @@
+package ru.kolco24.kolco24.data.db
+
+import androidx.room.testing.MigrationTestHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class MigrationTest {
+
+    @get:Rule
+    val helper = MigrationTestHelper(
+        InstrumentationRegistry.getInstrumentation(),
+        AppDatabase::class.java,
+        emptyList(),
+        FrameworkSQLiteOpenHelperFactory(),
+    )
+
+    @Test
+    fun migrate1To2_keepsRacesAndAddsTeamTables() {
+        val dbName = "migration-test.db"
+
+        // Create v1 with one race row.
+        helper.createDatabase(dbName, 1).use { db ->
+            db.execSQL(
+                "INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus, isLegendVisible) " +
+                    "VALUES (7, 'Кольцо', 'kolco', '2026-08-01', NULL, 'Лес', 'open', 1)"
+            )
+        }
+
+        // Run the migration; MigrationTestHelper validates the resulting schema against 2.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            2,
+            true,
+            AppDatabase.MIGRATION_1_2,
+        )
+
+        db.query("SELECT name FROM races WHERE id = 7").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Кольцо", cursor.getString(0))
+        }
+
+        // New tables exist and are empty.
+        db.query("SELECT count(*) FROM teams").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT count(*) FROM categories").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT count(*) FROM selected_team").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.close()
+    }
+
+    @Test
+    fun migrate1To2_indexExists() {
+        val dbName = "migration-index-test.db"
+        helper.createDatabase(dbName, 1).close()
+
+        val db = helper.runMigrationsAndValidate(dbName, 2, true, AppDatabase.MIGRATION_1_2)
+
+        db.query("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'index_teams_raceId'")
+            .use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertFalse(cursor.isNull(0))
+            }
+        db.close()
+    }
+}
