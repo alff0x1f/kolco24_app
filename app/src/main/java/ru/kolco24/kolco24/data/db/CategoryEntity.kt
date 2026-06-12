@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 /**
  * A race category (distance/group). Belongs to a race via [raceId]. Mirrors `CategoryDto`.
- * The server field `order` is a reserved SQL word, so the column is named `sort_order`.
+ * The server field `order` is a reserved SQL word, so the column is named `sortOrder`.
  */
 @Entity(tableName = "categories")
 data class CategoryEntity(

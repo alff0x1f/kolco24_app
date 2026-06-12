@@ -195,7 +195,7 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
             if (!allBound && totalCount > 0) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "${totalCount - boundCount} чипа не привязаны",
+                    text = chipNotBoundText(totalCount - boundCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
                 )
@@ -367,5 +367,17 @@ private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: 
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
         }
+    }
+}
+
+/** Russian declension for "N чипов/чипа/чип не привязан/не привязаны". */
+private fun chipNotBoundText(n: Int): String {
+    val rem100 = n % 100
+    val rem10 = n % 10
+    return when {
+        rem100 in 11..19 -> "$n чипов не привязаны"
+        rem10 == 1 -> "$n чип не привязан"
+        rem10 in 2..4 -> "$n чипа не привязаны"
+        else -> "$n чипов не привязаны"
     }
 }

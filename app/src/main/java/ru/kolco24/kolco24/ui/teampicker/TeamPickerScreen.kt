@@ -111,7 +111,7 @@ fun TeamPickerScreen(
     // Stale cache: show what we have and warn via snackbar instead of blocking the list.
     // Guard with a flag so repeated failures (e.g. failed retry) don't re-show the snackbar.
     val staleCache = teams.isNotEmpty() && (load == PickerLoad.Offline || load == PickerLoad.HttpError)
-    var staleCacheSnackbarShown by remember(raceId) { mutableStateOf(false) }
+    var staleCacheSnackbarShown by rememberSaveable(raceId) { mutableStateOf(false) }
     LaunchedEffect(staleCache) {
         if (staleCache && !staleCacheSnackbarShown) {
             staleCacheSnackbarShown = true
@@ -119,7 +119,7 @@ fun TeamPickerScreen(
         }
     }
     val forbiddenWithCache = teams.isNotEmpty() && load == PickerLoad.Forbidden
-    var forbiddenSnackbarShown by remember(raceId) { mutableStateOf(false) }
+    var forbiddenSnackbarShown by rememberSaveable(raceId) { mutableStateOf(false) }
     LaunchedEffect(forbiddenWithCache) {
         if (forbiddenWithCache && !forbiddenSnackbarShown) {
             forbiddenSnackbarShown = true
