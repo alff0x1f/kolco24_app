@@ -155,13 +155,13 @@ GET \n full_path(+query, со слешем в конце) \n ts(секунды) 
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/RaceRepository.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/RaceRepositoryTest.kt`
 
-- [ ] sealed/enum `RefreshResult`: `Updated | NotModified | Offline | Forbidden | HttpError(code)`
-- [ ] `RaceRepository(apiClient, raceDao, syncMetaDao, origin)`: `val races = raceDao.observeRaces()`; `suspend fun refreshRaces()`: ETag из `sync_meta` → `fetchRaces` → `Success`: `raceDao.replaceAll`, затем `syncMetaDao.upsert(etag)`; маппинг `FetchResult` → `RefreshResult` (`Error(null)` → `Offline`, `Error(code)` → `HttpError`)
-- [ ] порядок «данные → etag» двумя отдельными транзакциями **намеренный** (не объединять и не менять местами): падение между ними оставит свежие данные со старым etag → следующий refresh получит 200 и самовосстановится; обратный порядок дал бы новый etag со старыми данными навсегда
-- [ ] маппер `RaceDto` → `RaceEntity`
-- [ ] тесты с фейковыми in-memory DAO + ApiClient на MockWebServer: 200 → таблица замещена целиком (старые записи исчезли), etag сохранён; 304 → база не тронута; второй refresh шлёт сохранённый etag
-- [ ] тесты: офлайн (обрыв) → `Offline`, база не тронута; 403 → `Forbidden`
-- [ ] run tests - must pass before task 7
+- [x] sealed/enum `RefreshResult`: `Updated | NotModified | Offline | Forbidden | HttpError(code)`
+- [x] `RaceRepository(apiClient, raceDao, syncMetaDao, origin)`: `val races = raceDao.observeRaces()`; `suspend fun refreshRaces()`: ETag из `sync_meta` → `fetchRaces` → `Success`: `raceDao.replaceAll`, затем `syncMetaDao.upsert(etag)`; маппинг `FetchResult` → `RefreshResult` (`Error(null)` → `Offline`, `Error(code)` → `HttpError`)
+- [x] порядок «данные → etag» двумя отдельными транзакциями **намеренный** (не объединять и не менять местами): падение между ними оставит свежие данные со старым etag → следующий refresh получит 200 и самовосстановится; обратный порядок дал бы новый etag со старыми данными навсегда
+- [x] маппер `RaceDto` → `RaceEntity`
+- [x] тесты с фейковыми in-memory DAO + ApiClient на MockWebServer: 200 → таблица замещена целиком (старые записи исчезли), etag сохранён; 304 → база не тронута; второй refresh шлёт сохранённый etag
+- [x] тесты: офлайн (обрыв) → `Offline`, база не тронута; 403 → `Forbidden`
+- [x] run tests - must pass before task 7
 
 ### Task 7: AppContainer, Application, запуск рефреша
 
