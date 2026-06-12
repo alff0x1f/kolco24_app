@@ -118,6 +118,14 @@ fun TeamPickerScreen(
             snackbarHostState.showSnackbar("Нет сети, показан сохранённый список")
         }
     }
+    val forbiddenWithCache = teams.isNotEmpty() && load == PickerLoad.Forbidden
+    var forbiddenSnackbarShown by remember(raceId) { mutableStateOf(false) }
+    LaunchedEffect(forbiddenWithCache) {
+        if (forbiddenWithCache && !forbiddenSnackbarShown) {
+            forbiddenSnackbarShown = true
+            snackbarHostState.showSnackbar("Требуется обновление приложения")
+        }
+    }
 
     val categoryById = remember(categories) { categories.associateBy { it.id } }
     val filtered = filterTeams(teams, query)
