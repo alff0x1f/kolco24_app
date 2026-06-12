@@ -196,12 +196,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/TeamEmptyContent.kt`
 
-- [ ] `TeamEmptyContent(onChooseTeam)` по моку 04: иллюстрация (круг `inverseSurface` + пунктирное оранжевое кольцо + красное свечение), «Команда не выбрана», подзаголовок, карточка «почему» (2 строки: NFC-чипы / общий счёт), CTA «Выбрать команду» + подпись «Сначала соревнование, затем команда из списка»
-- [ ] `TeamScreen`: принимает `selectedTeam: TeamEntity?`/`category` (state hoisting — collect в MainActivity, как сделано с другими данными) и `onChooseTeam`/`onChangeTeam`; `null` → `TeamEmptyContent`; иначе текущая вёрстка, но: hero-карта = `start_number` (моноширинный, на месте захардкоженного «342»; скрыть при null) + название + «Категория X · N человек», состав из `team.members`, «Изменить» в шапке секции → `onChangeTeam`
-- [ ] кейс «команда исчезла с сервера»: selection есть, `observeTeam` вернул null → `TeamEmptyContent` с подписью «Команда больше не зарегистрирована» (selection не трём)
-- [ ] чип-статусы участников (привязка NFC) — вне скоупа: пока все «Чип не привязан», `MOCK_MEMBERS` удалить
-- [ ] тестов нет (Compose) — `./gradlew lintDebug`
-- [ ] run tests - must pass before task 9
+- [x] `TeamEmptyContent(onChooseTeam)` по моку 04: иллюстрация (круг `inverseSurface` + пунктирное оранжевое кольцо + красное свечение), «Команда не выбрана», подзаголовок, карточка «почему» (2 строки: NFC-чипы / общий счёт), CTA «Выбрать команду» + подпись «Сначала соревнование, затем команда из списка»
+- [x] `TeamScreen`: принимает `selectedTeam: TeamEntity?`/`category` (state hoisting — collect в MainActivity, как сделано с другими данными) и `onChooseTeam`/`onChangeTeam`; `null` → `TeamEmptyContent`; иначе текущая вёрстка, но: hero-карта = `start_number` (моноширинный, на месте захардкоженного «342»; скрыть при null) + название + «Категория X · N человек», состав из `team.members`, «Изменить» в шапке секции → `onChangeTeam`
+- [x] кейс «команда исчезла с сервера»: selection есть, `observeTeam` вернул null → `TeamEmptyContent` с подписью «Команда больше не зарегистрирована» (selection не трём) — `TeamEmptyContent(missing = true)`, флаг `teamMissing` прокидывается из хоста (Task 9)
+- [x] чип-статусы участников (привязка NFC) — вне скоупа: пока все «Чип не привязан», `MOCK_MEMBERS` удалить
+- [x] тестов нет (Compose) — `./gradlew lintDebug`
+- [x] run tests - must pass before task 9
 
 ### Task 9: Навигация потока в MainActivity
 

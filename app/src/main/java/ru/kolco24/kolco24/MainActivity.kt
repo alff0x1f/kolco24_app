@@ -121,7 +121,13 @@ private fun Kolco24AppRoot() {
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()))
-                    2 -> TeamScreen(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()))
+                    2 -> TeamScreen(
+                        team = null,
+                        category = null,
+                        onChooseTeam = {},
+                        onChangeTeam = {},
+                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                    )
                 }
             }
         }
