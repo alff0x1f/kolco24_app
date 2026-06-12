@@ -102,10 +102,10 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/TeamsResponse.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/api/dto/TeamsResponseTest.kt`
 
-- [ ] создать `@Serializable` DTO `TeamsResponse` / `CategoryDto` / `TeamDto` / `MemberDto` со snake_case `@SerialName` (схема — Technical Details)
-- [ ] тест: парсинг реального ответа бэкенда (фикстура с `start_number: "201"`) → все поля корректны (включая `paid_people: 2.0` как Double и `startNumber`)
-- [ ] тест: рукописные фикстуры: `category2: null`, `start_number: ""` (в Django-модели `default=""` — пустая строка, а не null, это основной кейс «номера нет»), JSON **без** `start_number` → `null` (старый формат из API.md), пустые `teams`/`members`, незнакомые поля игнорируются (`ignoreUnknownKeys`)
-- [ ] run tests - must pass before task 2
+- [x] создать `@Serializable` DTO `TeamsResponse` / `CategoryDto` / `TeamDto` / `MemberDto` со snake_case `@SerialName` (схема — Technical Details)
+- [x] тест: парсинг реального ответа бэкенда (фикстура с `start_number: "201"`) → все поля корректны (включая `paid_people: 2.0` как Double и `startNumber`)
+- [x] тест: рукописные фикстуры: `category2: null`, `start_number: ""` (в Django-модели `default=""` — пустая строка, а не null, это основной кейс «номера нет»), JSON **без** `start_number` → `null` (старый формат из API.md), пустые `teams`/`members`, незнакомые поля игнорируются (`ignoreUnknownKeys`)
+- [x] run tests - must pass before task 2
 
 ### Task 2: Обобщить FetchResult и добавить ApiClient.fetchTeams
 
