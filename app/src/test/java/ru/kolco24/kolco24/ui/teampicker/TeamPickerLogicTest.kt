@@ -167,6 +167,11 @@ class TeamPickerLogicTest {
         assertEquals("ЛТ", teamToken(team(teamname = "Лесные тропы", startNumber = "")))
     }
 
+    @Test
+    fun tokenFallsBackToIdWhenBothBlank() {
+        assertEquals("#42", teamToken(team(id = 42, teamname = "", startNumber = null)))
+    }
+
     // --- displayTeamName ---
 
     @Test

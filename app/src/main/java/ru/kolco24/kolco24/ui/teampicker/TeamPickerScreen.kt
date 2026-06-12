@@ -128,7 +128,7 @@ fun TeamPickerScreen(
     }
 
     val categoryById = remember(categories) { categories.associateBy { it.id } }
-    val filtered = filterTeams(teams, query)
+    val filtered = remember(teams, query) { filterTeams(teams, query) }
 
     Scaffold(
         modifier = modifier

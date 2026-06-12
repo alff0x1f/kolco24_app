@@ -88,7 +88,7 @@ internal fun peopleWord(n: Int): String {
  */
 fun teamToken(team: TeamEntity): String {
     val number = team.startNumber
-    return if (number.isNullOrBlank()) initials(team.teamname) else number
+    return if (number.isNullOrBlank()) initials(team.teamname).ifEmpty { "#${team.id}" } else number
 }
 
 /**
