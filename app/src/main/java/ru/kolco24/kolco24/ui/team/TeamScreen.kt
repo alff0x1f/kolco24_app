@@ -75,7 +75,6 @@ fun TeamScreen(
     }
 
     val members = team.members
-    val totalCount = members.size
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -90,11 +89,11 @@ fun TeamScreen(
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
             item("hero") {
-                TeamHeroCard(team = team, category = category, totalCount = totalCount)
+                TeamHeroCard(team = team, category = category, totalCount = team.ucount)
             }
             item("members") {
                 SectionCard(
-                    title = "Состав · $totalCount",
+                    title = "Состав · ${members.size}",
                     action = "Изменить",
                     onAction = onChangeTeam,
                     supporting = "Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.",

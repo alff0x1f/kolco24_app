@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data.db
 
+import android.util.Log
 import androidx.room.TypeConverter
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -14,9 +15,11 @@ class TeamMembersConverter {
     @TypeConverter
     fun fromJson(value: String): List<TeamMemberItem> = try {
         json.decodeFromString(value)
-    } catch (_: SerializationException) {
+    } catch (e: SerializationException) {
+        Log.e("TeamMembersConverter", "Failed to decode members JSON", e)
         emptyList()
-    } catch (_: IllegalArgumentException) {
+    } catch (e: IllegalArgumentException) {
+        Log.e("TeamMembersConverter", "Failed to decode members JSON", e)
         emptyList()
     }
 
