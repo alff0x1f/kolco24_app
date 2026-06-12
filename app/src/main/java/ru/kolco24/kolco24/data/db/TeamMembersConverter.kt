@@ -16,6 +16,8 @@ class TeamMembersConverter {
         json.decodeFromString(value)
     } catch (_: SerializationException) {
         emptyList()
+    } catch (_: IllegalArgumentException) {
+        emptyList()
     }
 
     @TypeConverter

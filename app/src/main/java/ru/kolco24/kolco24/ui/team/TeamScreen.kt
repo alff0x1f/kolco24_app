@@ -90,7 +90,7 @@ fun TeamScreen(
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
             item("hero") {
-                TeamHeroCard(team = team, category = category, totalCount = team.ucount)
+                TeamHeroCard(team = team, category = category, totalCount = totalCount)
             }
             item("members") {
                 SectionCard(

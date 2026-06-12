@@ -86,7 +86,7 @@ private fun Kolco24AppRoot() {
     val container = remember { (context.applicationContext as Kolco24App).container }
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
-    val today = remember { todayIso() }
+    val today = todayIso()
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -204,7 +204,9 @@ private fun Kolco24AppRoot() {
             }
         }
 
-        // Scan overlay (registered first so the team-flow handler below takes priority when active).
+        // Scan overlay. The team-flow handler is registered after this one, so without the !showScan
+        // guard it would win (Compose gives priority to the last registered enabled BackHandler).
+        // The guard ensures scan overlay's back press is never masked when both are active.
         BackHandler(enabled = showScan) { showScan = false }
         if (showScan) {
             ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
