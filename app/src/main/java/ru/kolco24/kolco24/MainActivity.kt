@@ -85,7 +85,7 @@ private fun Kolco24AppRoot() {
     val container = remember { (context.applicationContext as Kolco24App).container }
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
-    val today = todayIso()
+    val today = remember { todayIso() }
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -183,7 +183,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { showScan = true },
+                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()))

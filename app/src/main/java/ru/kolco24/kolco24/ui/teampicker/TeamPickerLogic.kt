@@ -68,10 +68,18 @@ fun filterTeams(teams: List<TeamEntity>, query: String): List<TeamEntity> {
     }
 }
 
-/** "Категория X · N человек" line; full `человек` word. Used on the hero card and the confirm sheet. */
+/** "Категория X · N человек/человека" line. Used on the hero card and the confirm sheet. */
 fun peopleLine(category: CategoryEntity?, ucount: Int): String {
     val cat = category?.shortName?.takeIf { it.isNotBlank() } ?: category?.name?.takeIf { it.isNotBlank() }
-    return if (cat != null) "Категория $cat · $ucount человек" else "$ucount человек"
+    val word = peopleWord(ucount)
+    return if (cat != null) "Категория $cat · $ucount $word" else "$ucount $word"
+}
+
+/** Russian declension for "человек": "человека" for 2-4 (not 12-14), "человек" otherwise. */
+internal fun peopleWord(n: Int): String {
+    val rem100 = n % 100
+    val rem10 = n % 10
+    return if (rem100 !in 11..19 && rem10 in 2..4) "человека" else "человек"
 }
 
 /**

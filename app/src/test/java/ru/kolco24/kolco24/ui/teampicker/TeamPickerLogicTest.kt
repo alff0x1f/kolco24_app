@@ -206,4 +206,39 @@ class TeamPickerLogicTest {
         assertEquals("", initials(""))
         assertEquals("", initials("   "))
     }
+
+    // --- peopleWord ---
+
+    @Test
+    fun peopleWordSingular() {
+        assertEquals("человек", peopleWord(1))
+        assertEquals("человек", peopleWord(21))
+    }
+
+    @Test
+    fun peopleWordFewForm() {
+        assertEquals("человека", peopleWord(2))
+        assertEquals("человека", peopleWord(3))
+        assertEquals("человека", peopleWord(4))
+        assertEquals("человека", peopleWord(22))
+        assertEquals("человека", peopleWord(24))
+    }
+
+    @Test
+    fun peopleWordManyForm() {
+        assertEquals("человек", peopleWord(5))
+        assertEquals("человек", peopleWord(11))
+        assertEquals("человек", peopleWord(12))
+        assertEquals("человек", peopleWord(14))
+        assertEquals("человек", peopleWord(20))
+        assertEquals("человек", peopleWord(100))
+    }
+
+    // --- peopleLine ---
+
+    @Test
+    fun peopleLineWithoutCategory() {
+        assertEquals("2 человека", peopleLine(null, 2))
+        assertEquals("5 человек", peopleLine(null, 5))
+    }
 }
