@@ -262,10 +262,10 @@
 - [x] run `./gradlew connectedDebugAndroidTest` — migration guard must pass. (skipped — no device/emulator in this environment; androidTest sources verified to compile via compileDebugAndroidTestKotlin)
 
 ### Task 12: [Final] Update documentation
-- [ ] update `CLAUDE.md` Data-layer section: add the `checkpoints` table / Room v3 /
+- [x] update `CLAUDE.md` Data-layer section: add the `checkpoints` table / Room v3 /
       `MIGRATION_2_3` / `LegendRepository` / `fetchLegend` notes, and the LegendScreen
       states, in the same voice as the existing teams-sync entry.
-- [ ] move this plan to `docs/plans/completed/`.
+- [x] move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
