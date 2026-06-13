@@ -6,6 +6,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import ru.kolco24.kolco24.data.api.dto.LegendResponse
 import ru.kolco24.kolco24.data.api.dto.RaceDto
 import ru.kolco24.kolco24.data.api.dto.RacesResponse
 import ru.kolco24.kolco24.data.api.dto.TeamsResponse
@@ -53,6 +54,16 @@ class ApiClient(
     suspend fun fetchTeams(raceId: Int, etag: String?): FetchResult<TeamsResponse> =
         conditionalGet("$baseUrl/app/race/$raceId/teams/", etag) {
             json.decodeFromString<TeamsResponse>(it)
+        }
+
+    /**
+     * `GET /app/race/<raceId>/legend/`. Same conditional-request semantics as [fetchRaces];
+     * `200` → [FetchResult.Success] with the parsed [LegendResponse] and the response ETag. A
+     * hidden legend still returns `200` with an empty `checkpoints` list.
+     */
+    suspend fun fetchLegend(raceId: Int, etag: String?): FetchResult<LegendResponse> =
+        conditionalGet("$baseUrl/app/race/$raceId/legend/", etag) {
+            json.decodeFromString<LegendResponse>(it)
         }
 
     /**

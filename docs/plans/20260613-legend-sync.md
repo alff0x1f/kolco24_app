@@ -159,10 +159,10 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 
-- [ ] add `suspend fun fetchLegend(raceId: Int, etag: String?): FetchResult<LegendResponse>`
+- [x] add `suspend fun fetchLegend(raceId: Int, etag: String?): FetchResult<LegendResponse>`
       delegating to `conditionalGet("$baseUrl/app/race/$raceId/legend/", etag) { json.decodeFromString<LegendResponse>(it) }`.
-- [ ] match the KDoc style of `fetchTeams`.
-- [ ] no unit test (no network in unit scope; conditionalGet already exercised by existing
+- [x] match the KDoc style of `fetchTeams`.
+- [x] no unit test (no network in unit scope; conditionalGet already exercised by existing
       tests if any — keep parity with `fetchTeams`, which has none).
 
 ### Task 6: Add LegendRepository
