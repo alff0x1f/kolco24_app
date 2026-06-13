@@ -25,7 +25,7 @@ Single-activity Jetpack Compose app (minSdk 24, targetSdk 36). No ViewModel, no 
 - `ui/scan/ScanScreen.kt` — full-screen overlay for NFC checkpoint marking (A3 screen)
 - `ui/theme/Color.kt` — full M3 light/dark token set; cool-grey light palette; `OrangeCta = #C65A2E`
 - `ui/theme/Theme.kt` — `Kolco24Theme`; always uses the static brand palette (`LightColorScheme`/`DarkColorScheme`); no dynamic color wiring
-- `ui/theme/Type.kt` — typography (default system font for now)
+- `ui/theme/Type.kt` — typography; `RobotoMono` (`FontFamily`, `res/font/roboto_mono_bold.ttf`) is used directly for all mono-number labels (КП row labels, «ДО СТАРТА» badge text, score tokens). The M3 `Typography` object still uses the platform default for prose text.
 
 **Data layer** (races + teams + legend sync — signed `GET` with ETag, Room as single source of truth):
 - `Kolco24App.kt` — `Application`; builds `AppContainer`, fires `refreshRaces()` fire-and-forget on `onCreate` (logs the `RefreshResult`). A second `launch` `collectLatest`s `teamRepository.selectedTeam` and on each non-null `raceId` calls `legendRepository.refreshLegend(raceId)` (`collectLatest` so a team switch cancels the in-flight fetch; the persisted selection emits immediately on subscribe, so a cold start refreshes exactly once with no extra wiring). Registered via `android:name=".Kolco24App"`. NB: the root composable in `MainActivity` is `Kolco24AppRoot()` (renamed to avoid clashing with this class).
@@ -52,6 +52,7 @@ Single-activity Jetpack Compose app (minSdk 24, targetSdk 36). No ViewModel, no 
 - `inverseSurface` #1D242D — dark hero cards (timer card in ScanScreen)
 - `surfaceContainer` #FFFFFF — NavigationBar background (cool white; mapped from `SurfaceContainerDefault` in Color.kt)
 - `outlineVariant` #E2E6EB — cool divider/border color
+- `LegendAmber` #F2B36B — amber accent on dark hero cards («ДО СТАРТА» badge dot in LegendLocked); file-private to `LegendScreen.kt`, matches the design's `AMBER` token
 
 **Scan overlay pattern:**
 `MainActivity` wraps `Scaffold` in a `Box(Modifier.fillMaxSize())`. The `ScanScreen` is rendered after the Scaffold inside the same Box — when `showScan = true` it covers the entire screen. Dismiss via the close button or system back (handled by `BackHandler`) sets `showScan = false`. No navigation component used.

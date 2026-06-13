@@ -121,6 +121,23 @@ class MigrationTest {
             assertTrue(cursor.moveToFirst())
             assertEquals(0, cursor.getInt(0))
         }
+
+        // Column set matches CheckpointEntity — a camelCase/snake_case mismatch only surfaces here.
+        db.execSQL(
+            "INSERT INTO checkpoints (id, raceId, number, cost, type, description, taken) " +
+                "VALUES (1, 7, 5, 10, 'kp', 'У пня', 0)"
+        )
+        db.query("SELECT id, raceId, number, cost, type, description, taken FROM checkpoints WHERE id = 1")
+            .use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+                assertEquals(7, cursor.getInt(1))
+                assertEquals(5, cursor.getInt(2))
+                assertEquals(10, cursor.getInt(3))
+                assertEquals("kp", cursor.getString(4))
+                assertEquals("У пня", cursor.getString(5))
+                assertEquals(0, cursor.getInt(6))
+            }
         db.close()
     }
 
@@ -137,11 +154,13 @@ class MigrationTest {
             AppDatabase.MIGRATION_2_3,
         )
 
-        db.query("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'index_checkpoints_raceId'")
-            .use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertFalse(cursor.isNull(0))
-            }
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' " +
+                "AND name = 'index_checkpoints_raceId' AND tbl_name = 'checkpoints'"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertFalse(cursor.isNull(0))
+        }
         db.close()
     }
 }
