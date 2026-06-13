@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.ui.legend
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,9 +14,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,49 +39,44 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 
-// Will become a Room @Entity in the next step
-data class Checkpoint(
-    val number: String,
-    val cost: Int,
-    val name: String,
-    val taken: Boolean,
-)
+/** Amber accent for the "before start" badge — not a theme token, matches the design's `AMBER`. */
+private val LegendAmber = Color(0xFFF2B36B)
 
-private val MOCK_CHECKPOINTS = listOf(
-    Checkpoint("00", 0, "Тест", taken = true),
-    Checkpoint("01", 5, "Дерево в 20м на северо-восток от геоглифа", taken = false),
-    Checkpoint("02", 2, "Отдельно стоящая сухая берёза", taken = true),
-    Checkpoint("03", 4, "Дерево в лощине под скалами", taken = false),
-    Checkpoint("04", 3, "Дерево в лесополосе", taken = true),
-    Checkpoint("05", 2, "Дерево на слиянии двух рек", taken = false),
-    Checkpoint("06", 3, "Отдельно стоящая берёза", taken = false),
-    Checkpoint("07", 4, "Триангулятор на вершине", taken = true),
-    Checkpoint("08", 4, "Четырёхствольная берёза в 20м от подножия скал, на курумнике", taken = false),
-    Checkpoint("09", 4, "Горизонтальное дерево в 40м от подножия", taken = false),
-    Checkpoint("10", 5, "Скальный останец на хребте", taken = false),
-    Checkpoint("11", 5, "Слияние ручья и реки", taken = false),
-)
-
+/**
+ * Screen 02 — the «Легенда» tab. Stateless: it renders one of three states from the data passed in.
+ * - [hasTeam] `false` → **02c LegendNoTeam** (no team/race selected yet) with a CTA to pick a team;
+ * - [hasTeam] `true` but [legendVisible] `false` → **02b LegendLocked** (race not started, the API
+ *   returns an empty legend) — charcoal "before start" hero card only;
+ * - otherwise → the **02** checkpoint list backed by [checkpoints] (real data from Room).
+ *
+ * [checkpoints] doubles as the model (no domain layer); [CheckpointEntity.taken] is always `false`
+ * this iteration (marks not built yet) but the score card, filter and dim/strike row styling stay so
+ * the future marks feature flips data, not UI.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LegendScreen(modifier: Modifier = Modifier) {
-    var showOnlyOpen by rememberSaveable { mutableStateOf(false) }
-
-    val checkpoints = MOCK_CHECKPOINTS.sortedBy { it.number }
-    val visible = if (showOnlyOpen) checkpoints.filter { !it.taken } else checkpoints
-
-    val takenCount = checkpoints.count { it.taken }
-    val totalCount = checkpoints.size
-    val takenScore = checkpoints.filter { it.taken }.sumOf { it.cost }
-    val totalScore = checkpoints.sumOf { it.cost }
-
+fun LegendScreen(
+    checkpoints: List<CheckpointEntity>,
+    legendVisible: Boolean,
+    hasTeam: Boolean,
+    onChooseTeam: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Легенда") },
@@ -83,43 +85,61 @@ fun LegendScreen(modifier: Modifier = Modifier) {
             ),
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp),
-        ) {
-            item("score") {
-                ScoreCard(
-                    takenScore = takenScore,
-                    totalScore = totalScore,
-                    takenCount = takenCount,
-                    totalCount = totalCount,
+        when {
+            !hasTeam -> LegendNoTeam(onChooseTeam = onChooseTeam)
+            !legendVisible -> LegendLocked()
+            else -> LegendList(checkpoints = checkpoints)
+        }
+    }
+}
+
+@Composable
+private fun LegendList(checkpoints: List<CheckpointEntity>) {
+    var showOnlyOpen by rememberSaveable { mutableStateOf(false) }
+
+    val visible = if (showOnlyOpen) checkpoints.filter { !it.taken } else checkpoints
+
+    val takenCount = checkpoints.count { it.taken }
+    val totalCount = checkpoints.size
+    val takenScore = checkpoints.filter { it.taken }.sumOf { it.cost }
+    val totalScore = checkpoints.sumOf { it.cost }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp),
+    ) {
+        item("score") {
+            ScoreCard(
+                takenScore = takenScore,
+                totalScore = totalScore,
+                takenCount = takenCount,
+                totalCount = totalCount,
+            )
+        }
+
+        item("chips") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .padding(bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LegendFilterChip(
+                    selected = !showOnlyOpen,
+                    onClick = { showOnlyOpen = false },
+                    label = "Все $totalCount",
+                )
+                LegendFilterChip(
+                    selected = showOnlyOpen,
+                    onClick = { showOnlyOpen = true },
+                    label = "Не взятые ${totalCount - takenCount}",
                 )
             }
+        }
 
-            item("chips") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .padding(bottom = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    LegendFilterChip(
-                        selected = !showOnlyOpen,
-                        onClick = { showOnlyOpen = false },
-                        label = "Все $totalCount",
-                    )
-                    LegendFilterChip(
-                        selected = showOnlyOpen,
-                        onClick = { showOnlyOpen = true },
-                        label = "Не взятые ${totalCount - takenCount}",
-                    )
-                }
-            }
-
-            item("list") {
-                CheckpointListCard(checkpoints = visible)
-            }
+        item("list") {
+            CheckpointListCard(checkpoints = visible)
         }
     }
 }
@@ -186,7 +206,7 @@ private fun ScoreCard(
 }
 
 @Composable
-private fun CheckpointListCard(checkpoints: List<Checkpoint>) {
+private fun CheckpointListCard(checkpoints: List<CheckpointEntity>) {
     Column(modifier = Modifier.padding(horizontal = 8.dp)) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -250,7 +270,7 @@ private fun LegendFilterChip(
 }
 
 @Composable
-private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
+private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
     val contentColor = if (cp.taken) MaterialTheme.colorScheme.onSurfaceVariant
                        else MaterialTheme.colorScheme.onSurface
 
@@ -263,7 +283,7 @@ private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "${cp.cost}-${cp.number}",
+                text = "${cp.cost}-${cp.number.toString().padStart(2, '0')}",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -274,7 +294,7 @@ private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
                 modifier = Modifier.width(48.dp),
             )
             Text(
-                text = cp.name,
+                text = cp.description,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 15.5.sp,
                     fontWeight = if (cp.taken) FontWeight.Normal else FontWeight.Medium,
@@ -299,6 +319,183 @@ private fun CheckpointRow(cp: Checkpoint, isLast: Boolean) {
             HorizontalDivider(
                 modifier = Modifier.padding(start = 76.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
+            )
+        }
+    }
+}
+
+/**
+ * 02b — legend locked before the race starts. The API returns an empty legend while hidden, so there
+ * is no real CP count to show: this is the charcoal "before start" hero card only (the design's
+ * skeleton placeholder rows are deferred — no data to size them against).
+ */
+@Composable
+private fun LegendLocked() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.inverseSurface,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .drawBehind {
+                        drawCircle(color = Color.White.copy(alpha = 0.07f))
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.inverseOnSurface,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .drawBehind { drawCircle(color = LegendAmber) },
+                    )
+                    Text(
+                        text = "ДО СТАРТА",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.3.sp,
+                        ),
+                        fontFamily = RobotoMono,
+                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.70f),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Легенда откроется на старте",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Стоимость и описания КП появятся автоматически в момент сигнала",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.58f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 02c — no team (and therefore no race) selected: the legend is tied to a race, so there is nothing
+ * to show. Map-glyph illustration in the rhyme of the empty «Команда» state, plus the CTA that opens
+ * the team-selection flow via [onChooseTeam].
+ */
+@Composable
+private fun LegendNoTeam(onChooseTeam: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 26.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.height(18.dp))
+            MapIllustration()
+
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Легенда пока недоступна",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Список КП привязан к соревнованию. Выберите соревнование и команду — легенда появится здесь.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Button(
+                onClick = onChooseTeam,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OrangeCta,
+                    contentColor = Color.White,
+                ),
+            ) {
+                Icon(Icons.Filled.Groups, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.size(8.dp))
+                Text("Выбрать команду", style = MaterialTheme.typography.titleSmall)
+            }
+        }
+    }
+}
+
+/** Charcoal map core circle wrapped in a dashed orange "to fill" ring (rhymes with the empty team state). */
+@Composable
+private fun MapIllustration() {
+    val ringColor = OrangeCta.copy(alpha = 0.45f)
+    val coreBrush = Brush.linearGradient(
+        listOf(Color(0xFF1D242D), Color(0xFF2A333E)),
+    )
+    Box(
+        modifier = Modifier
+            .size(132.dp)
+            .drawBehind {
+                drawCircle(
+                    color = ringColor,
+                    radius = size.minDimension / 2 - 1.dp.toPx(),
+                    style = Stroke(
+                        width = 2.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(6.dp.toPx(), 6.dp.toPx()),
+                        ),
+                    ),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(104.dp)
+                .clip(CircleShape)
+                .drawBehind { drawRect(brush = coreBrush) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Map,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(50.dp),
             )
         }
     }

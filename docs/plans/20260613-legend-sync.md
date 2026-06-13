@@ -211,30 +211,30 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/legend/LegendScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] change `LegendScreen` signature to
+- [x] change `LegendScreen` signature to
       `LegendScreen(checkpoints: List<CheckpointEntity>, legendVisible: Boolean, hasTeam: Boolean, onChooseTeam: () -> Unit, modifier: Modifier)`.
-- [ ] delete `MOCK_CHECKPOINTS` and the local `Checkpoint` data class; use `CheckpointEntity`
+- [x] delete `MOCK_CHECKPOINTS` and the local `Checkpoint` data class; use `CheckpointEntity`
       throughout (score/filter math reads `taken`/`cost` off the entity).
-- [ ] **number formatting:** the mock's `number` was a zero-padded `String` ("01"); the entity's
+- [x] **number formatting:** the mock's `number` was a zero-padded `String` ("01"); the entity's
       is `Int`. The row mono-label (README 02 line 125, format `<стоимость>-<номер>` e.g. `5-01`)
       must pad: `cp.number.toString().padStart(2, '0')` — otherwise `5-01` regresses to `5-1`.
-- [ ] **retain the existing `taken`-based row styling** (dim + strike, README 02 line 128) as-is.
+- [x] **retain the existing `taken`-based row styling** (dim + strike, README 02 line 128) as-is.
       It's simply never `true` this iteration; the future marks feature flips data, not UI — do
       not strip it as dead code.
-- [ ] branch: `!hasTeam` → **LegendNoTeam** (map glyph, "Легенда пока недоступна", text per
+- [x] branch: `!hasTeam` → **LegendNoTeam** (map glyph, "Легенда пока недоступна", text per
       README 02c, "Выбрать команду" button → `onChooseTeam`); `hasTeam && !legendVisible` →
       **LegendLocked** (charcoal hero card, "ДО СТАРТА" badge, "Легенда откроется на старте";
       **no** "N КП" count); else → existing list UI fed from `checkpoints`.
-- [ ] **02b scope (YAGNI):** implement LegendLocked as the hero card **only** — defer the
+- [x] **02b scope (YAGNI):** implement LegendLocked as the hero card **only** — defer the
       README's skeleton `LockedLegendRow` placeholder list (no count and no real data to size
       them against; revisit if the locked state needs more substance later).
-- [ ] in `MainActivity`, hoist: `selectedRace = races.find { it.id == selectedRaceId }`;
+- [x] in `MainActivity`, hoist: `selectedRace = races.find { it.id == selectedRaceId }`;
       `checkpoints` from `remember(selectedRaceId) { selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList()) }.collectAsState(emptyList())`;
       pass `legendVisible = selectedRace?.isLegendVisible == true`, `hasTeam = selectedRaceId != null`,
       `onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker }`
       (same callback the Команда/Отметки empty states use).
-- [ ] add `val legendRepo = container.legendRepository` near `teamRepo`.
-- [ ] no automated UI test (Compose UI not currently unit-tested in this repo); manual
+- [x] add `val legendRepo = container.legendRepository` near `teamRepo`.
+- [x] no automated UI test (Compose UI not currently unit-tested in this repo); manual
       verification listed under Post-Completion.
 
 ### Task 10: Guard the migration with an instrumented test

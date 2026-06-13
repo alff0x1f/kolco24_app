@@ -86,6 +86,7 @@ private fun Kolco24AppRoot() {
     val container = remember { (context.applicationContext as Kolco24App).container }
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
+    val legendRepo = container.legendRepository
     val today = todayIso()
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
@@ -114,6 +115,12 @@ private fun Kolco24AppRoot() {
         if (selectedRaceId != null) teamRepo.categoriesForRace(selectedRaceId) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val tabCategory = teamForTab?.let { t -> tabCategories.find { it.id == t.categoryId } }
+
+    // Tab «Легенда» data: the selected team's race + its checkpoints (offline-readable from Room).
+    val selectedRace = races.find { it.id == selectedRaceId }
+    val legendCheckpoints by remember(selectedRaceId) {
+        selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
@@ -190,7 +197,13 @@ private fun Kolco24AppRoot() {
                         onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
-                    1 -> LegendScreen(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()))
+                    1 -> LegendScreen(
+                        checkpoints = legendCheckpoints,
+                        legendVisible = selectedRace?.isLegendVisible == true,
+                        hasTeam = selectedRaceId != null,
+                        onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
+                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                    )
                     2 -> TeamScreen(
                         team = teamForTab,
                         category = tabCategory,
