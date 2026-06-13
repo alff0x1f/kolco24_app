@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -291,7 +292,7 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
                 ),
                 fontFamily = RobotoMono,
                 color = contentColor,
-                modifier = Modifier.width(48.dp),
+                modifier = Modifier.widthIn(min = 48.dp),
             )
             Text(
                 text = cp.description,
