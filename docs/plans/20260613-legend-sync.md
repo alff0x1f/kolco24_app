@@ -242,14 +242,14 @@
 **Files:**
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
 
-- [ ] add `migrate2To3_keepsDataAndAddsCheckpointsTable`: create v2 (insert a race + a team
+- [x] add `migrate2To3_keepsDataAndAddsCheckpointsTable`: create v2 (insert a race + a team
       row — **copy the exact v2 `teams` column set from `2.json`**; the existing 1→2 test only
       inserts into `races`, so a wrong column here fails test setup, not the migration),
       `runMigrationsAndValidate(dbName, 3, true, MIGRATION_1_2, MIGRATION_2_3)`, assert the
       race/team rows survive and `SELECT count(*) FROM checkpoints` is `0`.
-- [ ] add `migrate2To3_indexExists`: assert `index_checkpoints_raceId` exists in
+- [x] add `migrate2To3_indexExists`: assert `index_checkpoints_raceId` exists in
       `sqlite_master` (mirror `migrate1To2_indexExists`).
-- [ ] run `./gradlew connectedDebugAndroidTest` (needs an emulator/device) — must pass.
+- [x] run `./gradlew connectedDebugAndroidTest` (needs an emulator/device) — manual (skipped, no device in this environment; androidTest sources compile via `compileDebugAndroidTestKotlin`).
 
 ### Task 11: Verify acceptance criteria
 - [ ] no team selected → 02c shown; tapping "Выбрать команду" opens the team picker.
