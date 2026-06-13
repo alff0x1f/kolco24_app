@@ -195,15 +195,15 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
 
-- [ ] in `onCreate`, in `applicationScope`, `collectLatest` on
+- [x] in `onCreate`, in `applicationScope`, `collectLatest` on
       `container.teamRepository.selectedTeam`; on each non-null `raceId` call
       `container.legendRepository.refreshLegend(raceId)` and log the `RefreshResult`
       (`collectLatest` so a team switch cancels the in-flight fetch).
-- [ ] keep the existing startup `refreshRaces()` launch as-is (separate `launch`).
-- [ ] **cold start:** `selectedTeam` emits its persisted value immediately on subscribe, so a
+- [x] keep the existing startup `refreshRaces()` launch as-is (separate `launch`).
+- [x] **cold start:** `selectedTeam` emits its persisted value immediately on subscribe, so a
       team chosen in a previous session triggers exactly one `refreshLegend` on launch — no
       separate "refresh on first selection" wiring needed.
-- [ ] no test (fire-and-forget side effect; the repository logic is what's tested).
+- [x] no test (fire-and-forget side effect; the repository logic is what's tested).
 
 ### Task 9: Make LegendScreen stateless + add the three states
 
