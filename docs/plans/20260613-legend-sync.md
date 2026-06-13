@@ -171,17 +171,16 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/LegendRepository.kt`
 - Create (only if mapping warrants): `app/src/test/java/ru/kolco24/kolco24/data/LegendMappingTest.kt`
 
-- [ ] `LegendRepository(apiClient, checkpointDao, syncMetaDao, origin)` with
+- [x] `LegendRepository(apiClient, checkpointDao, syncMetaDao, origin)` with
       `legendResource(raceId) = "race/$raceId/legend"`.
-- [ ] `checkpointsForRace(raceId): Flow<List<CheckpointEntity>>` delegating to the DAO.
-- [ ] `refreshLegend(raceId): RefreshResult` mirroring `refreshTeams`: get stored ETag,
+- [x] `checkpointsForRace(raceId): Flow<List<CheckpointEntity>>` delegating to the DAO.
+- [x] `refreshLegend(raceId): RefreshResult` mirroring `refreshTeams`: get stored ETag,
       `fetchLegend`, on `Success` → `replaceAllForRace(raceId, checkpoints.map { toEntity })`
       **then** `if (etag != null) syncMetaDao.upsert(...)`; map `NotModified`/`Forbidden`/
       `Error` to the same `RefreshResult` values.
-- [ ] private `CheckpointDto.toEntity(raceId)` mapping (`taken = false`).
-- [ ] write a unit test for the DTO→entity mapping **only if** the mapping is non-trivial
-      (e.g. defaulting/derivation); if it's a flat 1:1 copy, skip per repo convention and
-      note that here.
+- [x] private `CheckpointDto.toEntity(raceId)` mapping (`taken = false`).
+- [x] no unit test: the mapping is a flat 1:1 field copy plus the `taken = false` default,
+      so per repo convention (trivial mapping) no test was added.
 
 ### Task 7: Wire LegendRepository into AppContainer
 
