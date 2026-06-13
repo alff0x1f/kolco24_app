@@ -72,7 +72,11 @@ fun CompPickerScreen(
     val split = splitRaces(races, today)
     val list = if (showArchive) split.archive else split.current
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
         TopAppBar(
             title = { Text("Соревнование") },
             navigationIcon = {
