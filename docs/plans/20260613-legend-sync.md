@@ -132,12 +132,12 @@
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/CheckpointDao.kt`
 
-- [ ] `observeCheckpointsForRace(raceId): Flow<List<CheckpointEntity>>`,
+- [x] `observeCheckpointsForRace(raceId): Flow<List<CheckpointEntity>>`,
       `@Query("SELECT * FROM checkpoints WHERE raceId = :raceId ORDER BY number, id")`.
-- [ ] `@Insert(REPLACE) insertCheckpoints(...)` + `@Query` `deleteCheckpointsForRace`.
-- [ ] `@Transaction replaceAllForRace(raceId, checkpoints)` = delete-by-race then insert
+- [x] `@Insert(REPLACE) insertCheckpoints(...)` + `@Query` `deleteCheckpointsForRace`.
+- [x] `@Transaction replaceAllForRace(raceId, checkpoints)` = delete-by-race then insert
       (mirror `TeamDao.replaceAllForRace`).
-- [ ] no unit test (trivial Room wiring, per repo convention).
+- [x] no unit test (trivial Room wiring, per repo convention).
 
 ### Task 4: Bump Room to v3 + MIGRATION_2_3 + schema JSON
 
