@@ -121,11 +121,11 @@
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/CheckpointEntity.kt`
 
-- [ ] create `@Entity(tableName = "checkpoints", indices = [Index("raceId")])` with
+- [x] create `@Entity(tableName = "checkpoints", indices = [Index("raceId")])` with
       `@PrimaryKey id`, `raceId`, `number`, `cost`, `type`, `description`,
       `taken: Boolean = false`.
-- [ ] mirror the doc-comment style of `RaceEntity`/`TeamEntity` (entity doubles as model).
-- [ ] no standalone test (plain data class; validated via migration + mapping tests).
+- [x] mirror the doc-comment style of `RaceEntity`/`TeamEntity` (entity doubles as model).
+- [x] no standalone test (plain data class; validated via migration + mapping tests).
 
 ### Task 3: Add the CheckpointDao
 
