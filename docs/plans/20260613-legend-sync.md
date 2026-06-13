@@ -110,11 +110,11 @@
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/LegendResponse.kt`
 
-- [ ] create `LegendResponse(race: Int, checkpoints: List<CheckpointDto>)` `@Serializable`.
-- [ ] create `CheckpointDto(id, number, cost, type, description)` `@Serializable`; all
+- [x] create `LegendResponse(race: Int, checkpoints: List<CheckpointDto>)` `@Serializable`.
+- [x] create `CheckpointDto(id, number, cost, type, description)` `@Serializable`; all
       `@SerialName` are already snake-case-free except none needed (fields are flat) — match
       the `RacesResponse.kt` style, rely on `Json { ignoreUnknownKeys = true }`.
-- [ ] no test for the DTO alone (covered by the repository mapping test in Task 6).
+- [x] no test for the DTO alone (covered by the repository mapping test in Task 6).
 
 ### Task 2: Add the CheckpointEntity
 
