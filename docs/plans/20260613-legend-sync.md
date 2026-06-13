@@ -145,14 +145,14 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/AppDatabase.kt`
 - Create (generated, commit): `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/3.json`
 
-- [ ] add `CheckpointEntity::class` to `entities`, bump `version = 3`, add
+- [x] add `CheckpointEntity::class` to `entities`, bump `version = 3`, add
       `abstract fun checkpointDao(): CheckpointDao`.
-- [ ] add `MIGRATION_2_3` (one `CREATE TABLE checkpoints` + one
+- [x] add `MIGRATION_2_3` (one `CREATE TABLE checkpoints` + one
       `CREATE INDEX index_checkpoints_raceId`) and register it in `.addMigrations(...)`.
-- [ ] run `./gradlew assembleDebug` (or KSP) to generate `3.json`; **copy the generated
+- [x] run `./gradlew assembleDebug` (or KSP) to generate `3.json`; **copy the generated
       table SQL verbatim** into `MIGRATION_2_3` so it matches exactly (camelCase columns).
-- [ ] commit `3.json`.
-- [ ] migration test added in Task 10 (kept separate so this task stays focused).
+- [x] commit `3.json`.
+- [x] migration test added in Task 10 (kept separate so this task stays focused).
 
 ### Task 5: Add ApiClient.fetchLegend
 

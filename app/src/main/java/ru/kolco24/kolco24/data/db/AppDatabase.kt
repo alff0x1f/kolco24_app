@@ -15,8 +15,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryEntity::class,
         TeamEntity::class,
         SelectedTeamEntity::class,
+        CheckpointEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class)
@@ -25,6 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun syncMetaDao(): SyncMetaDao
     abstract fun teamDao(): TeamDao
     abstract fun selectedTeamDao(): SelectedTeamDao
+    abstract fun checkpointDao(): CheckpointDao
 
     companion object {
         /**
@@ -54,13 +56,32 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the `checkpoints` table (race legend). Existing tables are untouched, so races /
+         * teams / selected-team survive the upgrade. The SQL must match Room's generated schema
+         * (see schemas/.../3.json) exactly, or the validation check fails at runtime.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `checkpoints` (`id` INTEGER NOT NULL, " +
+                        "`raceId` INTEGER NOT NULL, `number` INTEGER NOT NULL, " +
+                        "`cost` INTEGER NOT NULL, `type` TEXT NOT NULL, " +
+                        "`description` TEXT NOT NULL, `taken` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_checkpoints_raceId` ON `checkpoints` (`raceId`)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }
