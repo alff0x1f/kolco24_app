@@ -187,8 +187,8 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] add `val legendRepository: LegendRepository by lazy { LegendRepository(apiClient, database.checkpointDao(), database.syncMetaDao(), origin = baseUrl) }`.
-- [ ] no test (DI wiring).
+- [x] add `val legendRepository: LegendRepository by lazy { LegendRepository(apiClient, database.checkpointDao(), database.syncMetaDao(), origin = baseUrl) }`.
+- [x] no test (DI wiring).
 
 ### Task 8: Fire the reactive refresh in Kolco24App
 

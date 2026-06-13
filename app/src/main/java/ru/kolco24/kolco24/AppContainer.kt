@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.InstallId
+import ru.kolco24.kolco24.data.LegendRepository
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.TeamRepository
 import ru.kolco24.kolco24.data.api.ApiClient
@@ -54,6 +55,15 @@ class AppContainer(private val context: Context) {
             apiClient = apiClient,
             teamDao = database.teamDao(),
             selectedTeamDao = database.selectedTeamDao(),
+            syncMetaDao = database.syncMetaDao(),
+            origin = baseUrl,
+        )
+    }
+
+    val legendRepository: LegendRepository by lazy {
+        LegendRepository(
+            apiClient = apiClient,
+            checkpointDao = database.checkpointDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
         )
