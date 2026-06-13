@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.InstallId
 import ru.kolco24.kolco24.data.RaceRepository
+import ru.kolco24.kolco24.data.TeamRepository
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
@@ -43,6 +44,16 @@ class AppContainer(private val context: Context) {
         RaceRepository(
             apiClient = apiClient,
             raceDao = database.raceDao(),
+            syncMetaDao = database.syncMetaDao(),
+            origin = baseUrl,
+        )
+    }
+
+    val teamRepository: TeamRepository by lazy {
+        TeamRepository(
+            apiClient = apiClient,
+            teamDao = database.teamDao(),
+            selectedTeamDao = database.selectedTeamDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
         )

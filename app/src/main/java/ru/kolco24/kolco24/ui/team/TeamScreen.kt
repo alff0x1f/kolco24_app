@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.ui.team
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,18 +19,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -42,27 +43,39 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import ru.kolco24.kolco24.data.db.CategoryEntity
+import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.db.TeamMemberItem
+import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
+import ru.kolco24.kolco24.ui.teampicker.displayTeamName
+import ru.kolco24.kolco24.ui.teampicker.peopleLine
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
-data class TeamMember(
-    val name: String,
-    val chipId: String?,
-)
-
-private val MOCK_MEMBERS = listOf(
-    TeamMember("Маленков А.", "597"),
-    TeamMember("Иванов И.", "601"),
-    TeamMember("Сидоров П.", "604"),
-    TeamMember("Петрова О.", "611"),
-    TeamMember("Кузьмин Д.", null),
-    TeamMember("Смирнов Я.", null),
-)
-
+/**
+ * Screen 04 — the «Команда» tab. With no selected [team] it shows [TeamEmptyContent] (onboarding,
+ * or the "team disappeared" notice when [teamMissing]); otherwise it renders the selected team's
+ * hero card and roster. State is hoisted: the host collects the selection and passes it in.
+ * NFC chip binding is out of scope, so every member shows as "Чип не привязан".
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TeamScreen(modifier: Modifier = Modifier) {
-    val boundCount = MOCK_MEMBERS.count { it.chipId != null }
-    val totalCount = MOCK_MEMBERS.size
+fun TeamScreen(
+    team: TeamEntity?,
+    category: CategoryEntity?,
+    onChooseTeam: () -> Unit,
+    onChangeTeam: () -> Unit,
+    modifier: Modifier = Modifier,
+    teamMissing: Boolean = false,
+    teamLoading: Boolean = false,
+) {
+    if (team == null) {
+        if (!teamLoading) {
+            TeamEmptyContent(onChooseTeam = onChooseTeam, modifier = modifier, missing = teamMissing)
+        }
+        return
+    }
+
+    val members = team.members
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -77,16 +90,26 @@ fun TeamScreen(modifier: Modifier = Modifier) {
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
             item("hero") {
-                TeamHeroCard(boundCount = boundCount, totalCount = totalCount)
+                TeamHeroCard(team = team, category = category, totalCount = team.ucount)
+            }
+            item("switch") {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                    SwitchTeamRow(onClick = onChangeTeam)
+                }
             }
             item("members") {
                 SectionCard(
-                    title = "Состав · $totalCount",
-                    action = "Изменить",
+                    title = "Состав · ${members.size}",
                     supporting = "Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.",
                 ) {
-                    MOCK_MEMBERS.forEachIndexed { index, member ->
-                        MemberRow(member = member, isLast = index == MOCK_MEMBERS.lastIndex)
+                    members.forEachIndexed { index, member ->
+                        MemberRow(member = member, isLast = index == members.lastIndex)
                     }
                 }
             }
@@ -101,8 +124,10 @@ fun TeamScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TeamHeroCard(boundCount: Int, totalCount: Int) {
-    val allBound = boundCount == totalCount
+private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount: Int) {
+    val boundCount = 0
+    val allBound = totalCount > 0 && boundCount == totalCount
+    val number = team.startNumber?.takeIf { it.isNotBlank() }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -128,22 +153,24 @@ private fun TeamHeroCard(boundCount: Int, totalCount: Int) {
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (number != null) {
+                    Text(
+                        text = number,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                    )
+                }
                 Text(
-                    text = "342",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                )
-                Text(
-                    text = "Бронь",
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = displayTeamName(team),
+                    style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.inverseOnSurface,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
             }
 
             Text(
-                text = "Категория 12 ч · $totalCount человек",
+                text = peopleLine(category, totalCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.70f),
             )
@@ -174,10 +201,10 @@ private fun TeamHeroCard(boundCount: Int, totalCount: Int) {
                 }
             }
 
-            if (!allBound) {
+            if (!allBound && totalCount > 0) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "${totalCount - boundCount} чипа не привязаны",
+                    text = chipNotBoundText(totalCount - boundCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
                 )
@@ -186,34 +213,63 @@ private fun TeamHeroCard(boundCount: Int, totalCount: Int) {
     }
 }
 
+/** Entry point to the team-selection flow — the design's «Сменить команду» row (charcoal swap icon). */
+@Composable
+private fun SwitchTeamRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.SwapHoriz,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Сменить команду",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Выбрать другую команду соревнования",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun SectionCard(
     title: String,
-    action: String? = null,
     supporting: String? = null,
     content: @Composable () -> Unit,
 ) {
     Column(modifier = Modifier.padding(bottom = 18.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (action != null) {
-                Text(
-                    text = action,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
+        Text(
+            text = title,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -235,8 +291,7 @@ private fun SectionCard(
 }
 
 @Composable
-private fun MemberRow(member: TeamMember, isLast: Boolean) {
-    val isBound = member.chipId != null
+private fun MemberRow(member: TeamMemberItem, isLast: Boolean) {
     Column {
         Row(
             modifier = Modifier
@@ -245,7 +300,7 @@ private fun MemberRow(member: TeamMember, isLast: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            MonogramAvatar(name = member.name, isBound = isBound)
+            MonogramAvatar()
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -258,50 +313,27 @@ private fun MemberRow(member: TeamMember, isLast: Boolean) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
-                    if (isBound) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Text(
-                            text = "Чип ${member.chipId}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Box(modifier = Modifier.size(14.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
-                        Text(
-                            text = "Чип не привязан",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    Box(modifier = Modifier.size(14.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+                    Text(
+                        text = "Чип не привязан",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
 
-            if (isBound) {
-                Icon(
-                    imageVector = Icons.Filled.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                OutlinedButton(
-                    onClick = {},
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Привязать", style = MaterialTheme.typography.labelMedium)
-                }
+            OutlinedButton(
+                onClick = {},
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
+                Spacer(Modifier.width(6.dp))
+                Text("Привязать", style = MaterialTheme.typography.labelMedium)
             }
         }
 
@@ -315,42 +347,20 @@ private fun MemberRow(member: TeamMember, isLast: Boolean) {
 }
 
 @Composable
-private fun MonogramAvatar(name: String, isBound: Boolean) {
-    if (!isBound) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                .clip(CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PersonAdd,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    } else {
-        val initials = name.split(" ")
-            .filter { it.isNotEmpty() }
-            .mapNotNull { it.firstOrNull()?.toString() }
-            .take(2).joinToString("")
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shape = CircleShape,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = initials,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+private fun MonogramAvatar() {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+            .clip(CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PersonAdd,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -393,5 +403,17 @@ private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: 
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
         }
+    }
+}
+
+/** Russian declension for "N чипов/чипа/чип не привязан/не привязаны". */
+private fun chipNotBoundText(n: Int): String {
+    val rem100 = n % 100
+    val rem10 = n % 10
+    return when {
+        rem100 in 11..19 -> "$n чипов не привязаны"
+        rem10 == 1 -> "$n чип не привязан"
+        rem10 in 2..4 -> "$n чипа не привязаны"
+        else -> "$n чипов не привязаны"
     }
 }

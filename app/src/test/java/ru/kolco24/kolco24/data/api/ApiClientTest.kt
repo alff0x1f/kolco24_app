@@ -79,9 +79,9 @@ class ApiClientTest {
 
         assertTrue(result is FetchResult.Success)
         result as FetchResult.Success
-        assertEquals(1, result.races.size)
-        assertEquals(8, result.races[0].id)
-        assertEquals("Кольцо24 2026", result.races[0].name)
+        assertEquals(1, result.data.size)
+        assertEquals(8, result.data[0].id)
+        assertEquals("Кольцо24 2026", result.data[0].name)
         assertEquals("\"a1b2c3d4e5f6a7b8\"", result.etag)
 
         val recorded = server.takeRequest()
@@ -147,6 +147,92 @@ class ApiClientTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("{ not json"))
 
         val result = apiClient.fetchRaces(null)
+
+        assertTrue(result is FetchResult.Error)
+    }
+
+    private val teamsJson = """
+        {
+          "race": 8,
+          "categories": [
+            { "id": 1, "code": "M", "short_name": "Муж", "name": "Мужская", "order": 1 }
+          ],
+          "teams": [
+            {
+              "id": 42,
+              "teamname": "Лоси",
+              "start_number": "201",
+              "category2": 1,
+              "ucount": 2,
+              "paid_people": 2.0,
+              "start_time": 1718200000,
+              "finish_time": 0,
+              "members": [
+                { "name": "Иван", "number_in_team": 1 }
+              ]
+            }
+          ]
+        }
+    """.trimIndent()
+
+    @Test
+    fun fetchTeams_success_returnsParsedBodyAndEtag() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("ETag", "\"teams-v1\"")
+                .setBody(teamsJson),
+        )
+
+        val result = apiClient.fetchTeams(8, "\"old\"")
+
+        assertTrue(result is FetchResult.Success)
+        result as FetchResult.Success
+        assertEquals(8, result.data.race)
+        assertEquals(1, result.data.categories.size)
+        assertEquals(1, result.data.teams.size)
+        assertEquals("Лоси", result.data.teams[0].teamname)
+        assertEquals("201", result.data.teams[0].startNumber)
+        assertEquals("\"teams-v1\"", result.etag)
+
+        val recorded = server.takeRequest()
+        assertEquals("/app/race/8/teams/", recorded.path)
+        assertEquals("\"old\"", recorded.getHeader("If-None-Match"))
+    }
+
+    @Test
+    fun fetchTeams_notModified_returnsNotModified() = runTest {
+        server.enqueue(MockResponse().setResponseCode(304))
+
+        assertEquals(FetchResult.NotModified, apiClient.fetchTeams(8, "\"e\""))
+    }
+
+    @Test
+    fun fetchTeams_forbidden_returnsForbidden() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        assertEquals(FetchResult.Forbidden, apiClient.fetchTeams(8, null))
+    }
+
+    @Test
+    fun fetchTeams_serverError_returnsErrorWithCode() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        assertEquals(FetchResult.Error(500), apiClient.fetchTeams(8, null))
+    }
+
+    @Test
+    fun fetchTeams_connectionDrop_returnsErrorWithNullCode() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertEquals(FetchResult.Error(null), apiClient.fetchTeams(8, null))
+    }
+
+    @Test
+    fun fetchTeams_invalidJson_returnsError() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{ not json"))
+
+        val result = apiClient.fetchTeams(8, null)
 
         assertTrue(result is FetchResult.Error)
     }
