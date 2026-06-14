@@ -2,7 +2,7 @@ package ru.kolco24.kolco24
 
 import android.app.Application
 import android.util.Log
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -42,11 +42,12 @@ class Kolco24App : Application() {
         container.applicationScope.launch {
             // `selectedTeam` emits its persisted value immediately on subscribe, so a team chosen in
             // a previous session refreshes both legend and teams exactly once on cold start.
-            // `coroutineScope` ties both child launches to the `collectLatest` block, so a team
-            // switch cancels the in-flight fetches for the previous race before starting new ones.
+            // `supervisorScope` ties both child launches to the `collectLatest` block so a team
+            // switch cancels in-flight fetches, while isolating child failures from each other and
+            // from the enclosing `collectLatest` block (so one failing refresh can't kill the loop).
             container.teamRepository.selectedTeam.collectLatest { selected ->
                 val raceId = selected?.raceId ?: return@collectLatest
-                coroutineScope {
+                supervisorScope {
                     launch {
                         val result = container.legendRepository.refreshLegend(raceId)
                         Log.i(TAG, "Legend refresh for race $raceId: $result")
