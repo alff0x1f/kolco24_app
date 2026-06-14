@@ -240,6 +240,11 @@ private fun Kolco24AppRoot() {
                 selectedRaceId = selectedRaceId,
                 onBack = { teamFlowStep = TeamFlowStep.None },
                 onRaceSelected = { raceId ->
+                    // Warm Room ahead of the screen transition so the team list is ready when the
+                    // picker opens. Use applicationScope so it outlives the closing comp picker.
+                    // A duplicate GET with TeamPickerScreen's own onRefresh is accepted (idempotent).
+                    container.applicationScope.launch { teamRepo.refreshTeams(raceId) }
+                    container.applicationScope.launch { legendRepo.refreshLegend(raceId) }
                     pickerRaceId = raceId
                     teamFlowStep = TeamFlowStep.TeamPicker
                 },

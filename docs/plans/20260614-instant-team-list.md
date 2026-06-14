@@ -153,13 +153,13 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] in `onRaceSelected = { raceId -> ... }` (around line 244), before setting `pickerRaceId` /
+- [x] in `onRaceSelected = { raceId -> ... }` (around line 244), before setting `pickerRaceId` /
       `teamFlowStep`, fire `container.applicationScope.launch { teamRepo.refreshTeams(raceId) }` and
       `container.applicationScope.launch { legendRepo.refreshLegend(raceId) }`.
-- [ ] use `container.applicationScope` (NOT the composition `scope`) so the work outlives the closing
+- [x] use `container.applicationScope` (NOT the composition `scope`) so the work outlives the closing
       comp picker; keep `onRefresh = teamRepo::refreshTeams` on `TeamPickerScreen` unchanged.
-- [ ] build check: `./gradlew assembleDebug` compiles.
-- [ ] (no new unit test — composition glue; duplicate GET with the screen's own refresh is accepted
+- [x] build check: `./gradlew assembleDebug` compiles.
+- [x] (no new unit test — composition glue; duplicate GET with the screen's own refresh is accepted
       and harmless per design.)
 
 ### Task 5: Non-blocking cold state in `TeamPickerScreen`
