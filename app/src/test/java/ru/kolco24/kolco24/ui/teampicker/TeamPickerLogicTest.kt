@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.teampicker
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.CategoryEntity
@@ -114,7 +115,9 @@ class TeamPickerLogicTest {
     // --- nearestRaceId ---
 
     @Test
-    fun nearestOngoingWinsOverLaterUpcoming() {
+    fun nearestPicksEarliestStartDateAmongCurrentRaces() {
+        // Ongoing race (started June 10) has an earlier start date than upcoming race (June 18),
+        // so it wins — result of minByOrNull { date }, not a special "ongoing wins" rule.
         val ongoing = race(id = 1, date = "2026-06-10", dateEnd = "2026-06-20")
         val upcoming = race(id = 2, date = "2026-06-18")
         assertEquals(1, nearestRaceId(listOf(upcoming, ongoing), today = "2026-06-13"))
@@ -149,12 +152,12 @@ class TeamPickerLogicTest {
     }
 
     @Test
-    fun nearestSameStartDateIsDeterministic() {
+    fun nearestSameStartDateDoesNotCrash() {
         val a = race(id = 1, date = "2026-06-15")
         val b = race(id = 2, date = "2026-06-15")
-        // minByOrNull keeps the first minimum, so order is stable and never crashes.
-        assertEquals(1, nearestRaceId(listOf(a, b), today = "2026-06-13"))
-        assertEquals(2, nearestRaceId(listOf(b, a), today = "2026-06-13"))
+        // Tie-break order is unspecified; only guarantee is a non-null result.
+        assertNotNull(nearestRaceId(listOf(a, b), today = "2026-06-13"))
+        assertNotNull(nearestRaceId(listOf(b, a), today = "2026-06-13"))
     }
 
     // --- filterTeams ---

@@ -2,6 +2,7 @@ package ru.kolco24.kolco24
 
 import android.app.Application
 import android.util.Log
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -10,8 +11,9 @@ import ru.kolco24.kolco24.ui.teampicker.nearestRaceId
 
 /**
  * Process entry point. Owns the [AppContainer] and kicks off fire-and-forget syncs on startup;
- * the results are only logged (no UI here). Two independent launches: a one-shot race refresh and
- * a reactive legend refresh that follows the selected team.
+ * results are only logged (no UI here). Two independent launches: Launch A does a one-shot race
+ * refresh then prefetches the nearest race's teams + legend; Launch B reactively refreshes both
+ * teams and legend whenever the selected team changes.
  */
 class Kolco24App : Application() {
 
@@ -39,17 +41,20 @@ class Kolco24App : Application() {
         }
         container.applicationScope.launch {
             // `selectedTeam` emits its persisted value immediately on subscribe, so a team chosen in
-            // a previous session refreshes the legend exactly once on cold start. `collectLatest`
-            // cancels an in-flight fetch when the team switches to another race.
+            // a previous session refreshes both legend and teams exactly once on cold start.
+            // `coroutineScope` ties both child launches to the `collectLatest` block, so a team
+            // switch cancels the in-flight fetches for the previous race before starting new ones.
             container.teamRepository.selectedTeam.collectLatest { selected ->
                 val raceId = selected?.raceId ?: return@collectLatest
-                launch {
-                    val result = container.legendRepository.refreshLegend(raceId)
-                    Log.i(TAG, "Legend refresh for race $raceId: $result")
-                }
-                launch {
-                    val teams = container.teamRepository.refreshTeams(raceId)
-                    Log.i(TAG, "Teams refresh for selected race $raceId: $teams")
+                coroutineScope {
+                    launch {
+                        val result = container.legendRepository.refreshLegend(raceId)
+                        Log.i(TAG, "Legend refresh for race $raceId: $result")
+                    }
+                    launch {
+                        val teams = container.teamRepository.refreshTeams(raceId)
+                        Log.i(TAG, "Teams refresh for selected race $raceId: $teams")
+                    }
                 }
             }
         }
