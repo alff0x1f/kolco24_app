@@ -104,16 +104,16 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerLogic.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerLogicTest.kt`
 
-- [ ] add `fun nearestRaceId(races: List<RaceEntity>, today: String): Int?` reusing the existing
+- [x] add `fun nearestRaceId(races: List<RaceEntity>, today: String): Int?` reusing the existing
       private `RaceEntity.effectiveEnd()`; filter `effectiveEnd() >= today`, `minByOrNull { it.date }`,
       map to `id` (KDoc: "soonest-starting current race; ongoing race wins; null when none current").
-- [ ] write test: ongoing race wins (`date <= today <= dateEnd`) over a later upcoming race.
-- [ ] write test: two overlapping ongoing races → earliest **start** date is chosen (pins the
+- [x] write test: ongoing race wins (`date <= today <= dateEnd`) over a later upcoming race.
+- [x] write test: two overlapping ongoing races → earliest **start** date is chosen (pins the
       start-date tie-break, since the filter is `effectiveEnd`-based but selection is `date`-based).
-- [ ] write test: among multiple future races, the soonest start is chosen.
-- [ ] write test: all-archived list → `null`; empty list → `null`.
-- [ ] write test: same-start-date sanity (deterministic pick, no crash).
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 2.
+- [x] write test: among multiple future races, the soonest start is chosen.
+- [x] write test: all-archived list → `null`; empty list → `null`.
+- [x] write test: same-start-date sanity (deterministic pick, no crash).
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 2.
 
 ### Task 2: Extract shared `todayIso()` helper
 

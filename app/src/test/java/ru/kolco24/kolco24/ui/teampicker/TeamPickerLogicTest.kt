@@ -111,6 +111,52 @@ class TeamPickerLogicTest {
         assertTrue(result.archive.isEmpty())
     }
 
+    // --- nearestRaceId ---
+
+    @Test
+    fun nearestOngoingWinsOverLaterUpcoming() {
+        val ongoing = race(id = 1, date = "2026-06-10", dateEnd = "2026-06-20")
+        val upcoming = race(id = 2, date = "2026-06-18")
+        assertEquals(1, nearestRaceId(listOf(upcoming, ongoing), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestPicksEarliestStartAmongOverlappingOngoing() {
+        // Both ongoing today; selection is by start date, so the earlier start wins.
+        val earlierStart = race(id = 1, date = "2026-06-10", dateEnd = "2026-06-20")
+        val laterStart = race(id = 2, date = "2026-06-12", dateEnd = "2026-06-18")
+        assertEquals(1, nearestRaceId(listOf(laterStart, earlierStart), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestPicksSoonestFutureStart() {
+        val soon = race(id = 1, date = "2026-06-15")
+        val later = race(id = 2, date = "2026-06-20")
+        val latest = race(id = 3, date = "2026-07-01")
+        assertEquals(1, nearestRaceId(listOf(latest, later, soon), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestNullWhenAllArchived() {
+        val past1 = race(id = 1, date = "2026-06-01", dateEnd = "2026-06-02")
+        val past2 = race(id = 2, date = "2026-05-10")
+        assertEquals(null, nearestRaceId(listOf(past1, past2), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestNullWhenEmpty() {
+        assertEquals(null, nearestRaceId(emptyList(), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestSameStartDateIsDeterministic() {
+        val a = race(id = 1, date = "2026-06-15")
+        val b = race(id = 2, date = "2026-06-15")
+        // minByOrNull keeps the first minimum, so order is stable and never crashes.
+        assertEquals(1, nearestRaceId(listOf(a, b), today = "2026-06-13"))
+        assertEquals(2, nearestRaceId(listOf(b, a), today = "2026-06-13"))
+    }
+
     // --- filterTeams ---
 
     @Test
