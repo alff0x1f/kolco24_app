@@ -136,16 +136,16 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
 
-- [ ] in Launch A: after `refreshRaces()`, read `raceRepository.races.first()`
+- [x] in Launch A: after `refreshRaces()`, read `raceRepository.races.first()`
       (`kotlinx.coroutines.flow.first`), compute `nearestRaceId(races, todayIso())`; if non-null,
       `launch { teamRepository.refreshTeams(nearest) }` and
       `launch { legendRepository.refreshLegend(nearest) }` as concurrent child launches; `Log.i` results.
-- [ ] in Launch B (existing `selectedTeam.collectLatest` legend refresh): add a child
+- [x] in Launch B (existing `selectedTeam.collectLatest` legend refresh): add a child
       `launch { teamRepository.refreshTeams(raceId) }` alongside the legend refresh so the selected
       race's roster also refreshes on cold start.
-- [ ] confirm offline/empty path: `nearest == null` → `return@launch` (no-op), no crash.
-- [ ] build check: `./gradlew assembleDebug` compiles.
-- [ ] (no new unit test — fire-and-forget App glue, per project convention; `refreshTeams`/
+- [x] confirm offline/empty path: `nearest == null` → `return@launch` (no-op), no crash.
+- [x] build check: `./gradlew assembleDebug` compiles.
+- [x] (no new unit test — fire-and-forget App glue, per project convention; `refreshTeams`/
       `refreshLegend` already covered by `TeamRepositoryTest`/`LegendRepositoryTest`.)
 
 ### Task 4: On-tap prefetch in `MainActivity.onRaceSelected`
