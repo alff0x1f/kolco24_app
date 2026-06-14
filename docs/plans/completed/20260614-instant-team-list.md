@@ -192,10 +192,10 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 - [x] run lint: `./gradlew lintDebug`.
 
 ### Task 7: [Final] Documentation
-- [ ] update `CLAUDE.md` — note the startup nearest-race prefetch (`Kolco24App`), the on-tap prefetch
+- [x] update `CLAUDE.md` — note the startup nearest-race prefetch (`Kolco24App`), the on-tap prefetch
       in `MainActivity.onRaceSelected`, the shared `data/DateUtils.todayIso()`, the new
       `nearestRaceId` helper, and the team picker's non-blocking thin-progress cold state.
-- [ ] move this plan to `docs/plans/completed/` (create dir if needed).
+- [x] move this plan to `docs/plans/completed/` (create dir if needed).
 
 ## Post-Completion
 *Manual / informational — no checkboxes.*
