@@ -167,22 +167,22 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/teampicker/TeamPickerScreen.kt`
 
-- [ ] remove the `teams.isEmpty() && load == PickerLoad.Loading -> Box { CircularProgressIndicator }`
+- [x] remove the `teams.isEmpty() && load == PickerLoad.Loading -> Box { CircularProgressIndicator }`
       branch (~lines 173–179) so the normal `LazyColumn` (with `CompContextCard`) renders immediately
       in the cold-loading case.
-- [ ] **gate the "Пока никто не зарегистрирован" empty text** (the `if (teams.isEmpty())` item branch
+- [x] **gate the "Пока никто не зарегистрирован" empty text** (the `if (teams.isEmpty())` item branch
       ~lines 191–199) on `load != PickerLoad.Loading`, so a cold open (empty `teams` + `Loading`) shows
       **only** the comp card + progress bar — never a false "nobody registered" message. When
       `teams.isEmpty() && load == Loading`, render nothing in that slot (rows pop in when Room emits).
-- [ ] add a slim `LinearProgressIndicator(Modifier.fillMaxWidth())` shown when
+- [x] add a slim `LinearProgressIndicator(Modifier.fillMaxWidth())` shown when
       `load == PickerLoad.Loading`, placed by wrapping the `Scaffold` `topBar` `TopAppBar` in a
       `Column` so the bar sits flush under the app bar and does **not** scroll away inside the
       `LazyColumn`.
-- [ ] verify the empty/`Offline`/`HttpError`/`Forbidden`/retry placeholder branches and the
+- [x] verify the empty/`Offline`/`HttpError`/`Forbidden`/retry placeholder branches and the
       `staleCache`/`forbidden` snackbar `LaunchedEffect`s are unchanged and still trigger when loading
       finishes with no data.
-- [ ] remove the now-unused `CircularProgressIndicator` import if nothing else uses it.
-- [ ] build check: `./gradlew assembleDebug` compiles.
+- [x] remove the now-unused `CircularProgressIndicator` import if nothing else uses it.
+- [x] build check: `./gradlew assembleDebug` compiles.
 
 ### Task 6: Verify acceptance criteria
 - [ ] `nearestRaceId` picks soonest-starting current race; ongoing wins; null when none current.

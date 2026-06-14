@@ -20,10 +20,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -136,20 +136,25 @@ fun TeamPickerScreen(
             .background(MaterialTheme.colorScheme.surface),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            TopAppBar(
-                title = { Text(if (selectedTeamId != null) "Сменить команду" else "Выбор команды") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
+            Column {
+                TopAppBar(
+                    title = { Text(if (selectedTeamId != null) "Сменить команду" else "Выбор команды") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Назад",
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+                if (load == PickerLoad.Loading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
@@ -170,14 +175,6 @@ fun TeamPickerScreen(
                     onRetry = { retryKey++ },
                 )
 
-            teams.isEmpty() && load == PickerLoad.Loading ->
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-
             else -> LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -189,13 +186,17 @@ fun TeamPickerScreen(
                 }
 
                 if (teams.isEmpty()) {
-                    item("empty") {
-                        Text(
-                            text = "Пока никто не зарегистрирован",
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    // Cold open (empty + still loading) shows only the comp card + top progress bar —
+                    // never a false "nobody registered". The message appears once loading settles empty.
+                    if (load != PickerLoad.Loading) {
+                        item("empty") {
+                            Text(
+                                text = "Пока никто не зарегистрирован",
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 } else {
                     item("search") {
