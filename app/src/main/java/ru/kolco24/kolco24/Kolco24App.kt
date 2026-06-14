@@ -43,8 +43,9 @@ class Kolco24App : Application() {
             // `selectedTeam` emits its persisted value immediately on subscribe, so a team chosen in
             // a previous session refreshes both legend and teams exactly once on cold start.
             // `supervisorScope` ties both child launches to the `collectLatest` block so a team
-            // switch cancels in-flight fetches, while isolating child failures from each other and
-            // from the enclosing `collectLatest` block (so one failing refresh can't kill the loop).
+            // switch cancels in-flight fetches, while isolating sibling failures from each other
+            // (a failing refresh does not cancel its sibling). Repos return RefreshResult and never
+            // throw, so exceptions never propagate out of supervisorScope in practice.
             container.teamRepository.selectedTeam.collectLatest { selected ->
                 val raceId = selected?.raceId ?: return@collectLatest
                 supervisorScope {

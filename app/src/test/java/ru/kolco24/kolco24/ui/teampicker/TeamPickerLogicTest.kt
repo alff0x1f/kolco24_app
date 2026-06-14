@@ -141,6 +141,13 @@ class TeamPickerLogicTest {
     }
 
     @Test
+    fun nearestIncludesRaceEndingToday() {
+        // effectiveEnd >= today is inclusive; a race ending exactly today must still be selected.
+        val endingToday = race(id = 1, date = "2026-06-13", dateEnd = "2026-06-13")
+        assertEquals(1, nearestRaceId(listOf(endingToday), today = "2026-06-13"))
+    }
+
+    @Test
     fun nearestNullWhenAllArchived() {
         val past1 = race(id = 1, date = "2026-06-01", dateEnd = "2026-06-02")
         val past2 = race(id = 2, date = "2026-05-10")
