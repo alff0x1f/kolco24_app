@@ -236,4 +236,90 @@ class ApiClientTest {
 
         assertTrue(result is FetchResult.Error)
     }
+
+    private val legendJson = """
+        {
+          "race": 8,
+          "checkpoints": [
+            {
+              "id": 101,
+              "number": 5,
+              "cost": 10,
+              "type": "kp",
+              "description": "У пня"
+            }
+          ]
+        }
+    """.trimIndent()
+
+    @Test
+    fun fetchLegend_success_returnsParsedBodyAndEtag() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("ETag", "\"legend-v1\"")
+                .setBody(legendJson),
+        )
+
+        val result = apiClient.fetchLegend(8, "\"old\"")
+
+        assertTrue(result is FetchResult.Success)
+        result as FetchResult.Success
+        assertEquals(8, result.data.race)
+        assertEquals(1, result.data.checkpoints.size)
+        assertEquals(101, result.data.checkpoints[0].id)
+        assertEquals(5, result.data.checkpoints[0].number)
+        assertEquals(10, result.data.checkpoints[0].cost)
+        assertEquals("kp", result.data.checkpoints[0].type)
+        assertEquals("У пня", result.data.checkpoints[0].description)
+        assertEquals("\"legend-v1\"", result.etag)
+
+        val recorded = server.takeRequest()
+        assertEquals("/app/race/8/legend/", recorded.path)
+        assertEquals("\"old\"", recorded.getHeader("If-None-Match"))
+    }
+
+    @Test
+    fun fetchLegend_emptyCheckpoints_returnsSuccessWithEmptyList() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"race":8,"checkpoints":[]}"""),
+        )
+
+        val result = apiClient.fetchLegend(8, null)
+
+        assertTrue(result is FetchResult.Success)
+        result as FetchResult.Success
+        assertEquals(8, result.data.race)
+        assertTrue(result.data.checkpoints.isEmpty())
+    }
+
+    @Test
+    fun fetchLegend_notModified_returnsNotModified() = runTest {
+        server.enqueue(MockResponse().setResponseCode(304))
+
+        assertEquals(FetchResult.NotModified, apiClient.fetchLegend(8, "\"e\""))
+    }
+
+    @Test
+    fun fetchLegend_forbidden_returnsForbidden() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        assertEquals(FetchResult.Forbidden, apiClient.fetchLegend(8, null))
+    }
+
+    @Test
+    fun fetchLegend_serverError_returnsErrorWithCode() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        assertEquals(FetchResult.Error(500), apiClient.fetchLegend(8, null))
+    }
+
+    @Test
+    fun fetchLegend_connectionDrop_returnsErrorWithNullCode() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertEquals(FetchResult.Error(null), apiClient.fetchLegend(8, null))
+    }
 }
