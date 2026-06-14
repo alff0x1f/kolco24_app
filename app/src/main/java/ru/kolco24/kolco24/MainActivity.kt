@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
@@ -49,9 +50,6 @@ import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -282,7 +280,3 @@ private fun Kolco24AppRoot() {
         }
     }
 }
-
-/** Today as a `YYYY-MM-DD` string (no `java.time` — minSdk 24 without core library desugaring). */
-private fun todayIso(): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())

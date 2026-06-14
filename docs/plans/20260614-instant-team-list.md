@@ -121,15 +121,15 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/DateUtils.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] create `data/DateUtils.kt` in `package ru.kolco24.kolco24.data` with top-level
+- [x] create `data/DateUtils.kt` in `package ru.kolco24.kolco24.data` with top-level
       `fun todayIso(): String` using `SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())`
       (move impl verbatim).
-- [ ] remove the private `todayIso()` from `MainActivity.kt`; add
+- [x] remove the private `todayIso()` from `MainActivity.kt`; add
       `import ru.kolco24.kolco24.data.todayIso`; drop now-unused `SimpleDateFormat`/`Date`/`Locale`
       imports if no longer referenced there. (`Kolco24App` is in `ru.kolco24.kolco24` and imports the
       same.)
-- [ ] build check: `./gradlew assembleDebug` compiles (no behavior change; pure refactor).
-- [ ] (no new unit test — pure move of a trivial date formatter; covered indirectly by build.)
+- [x] build check: `./gradlew assembleDebug` compiles (no behavior change; pure refactor).
+- [x] (no new unit test — pure move of a trivial date formatter; covered indirectly by build.)
 
 ### Task 3: Startup prefetch in `Kolco24App`
 
