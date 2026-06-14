@@ -9,6 +9,9 @@ import ru.kolco24.kolco24.data.db.RaceEntity
 fun todayIso(): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
+/** Last day a race is relevant: [RaceEntity.dateEnd] when present, otherwise the start [RaceEntity.date]. */
+internal fun RaceEntity.effectiveEnd(): String = dateEnd ?: date
+
 /**
  * Id of the soonest-starting current race; `null` when none is current.
  * "Current" means `effectiveEnd >= today` (still relevant, just like `splitRaces`); among those the
@@ -16,4 +19,4 @@ fun todayIso(): String =
  * Used to warm the team/legend cache at startup; offline/empty → `null` → no-op.
  */
 fun nearestRaceId(races: List<RaceEntity>, today: String): Int? =
-    races.filter { (it.dateEnd ?: it.date) >= today }.minByOrNull { it.date }?.id
+    races.filter { it.effectiveEnd() >= today }.minByOrNull { it.date }?.id
