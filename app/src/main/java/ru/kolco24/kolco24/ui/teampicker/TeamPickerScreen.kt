@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -47,6 +49,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -214,34 +218,36 @@ fun TeamPickerScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    item("teams") {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        ) {
-                            if (filtered.isEmpty()) {
+                    if (filtered.isEmpty()) {
+                        item("empty-filter") {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            ) {
                                 Text(
                                     text = "Ничего не найдено",
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                            } else {
-                                Column {
-                                    filtered.forEachIndexed { index, team ->
-                                        TeamPickRow(
-                                            team = team,
-                                            category = categoryById[team.categoryId],
-                                            isCurrent = team.id == selectedTeamId,
-                                            isLast = index == filtered.lastIndex,
-                                            onClick = { onTeamTapped(team.id) },
-                                        )
-                                    }
-                                }
                             }
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = filtered,
+                            key = { _, team -> team.id },
+                        ) { index, team ->
+                            TeamPickRowCard(
+                                team = team,
+                                category = categoryById[team.categoryId],
+                                isCurrent = team.id == selectedTeamId,
+                                isLast = index == filtered.lastIndex,
+                                shape = teamPickRowShape(index, filtered.lastIndex),
+                                onClick = { onTeamTapped(team.id) },
+                            )
                         }
                     }
                     item("hint") {
@@ -256,6 +262,39 @@ fun TeamPickerScreen(
             }
         }
     }
+}
+
+@Composable
+private fun TeamPickRowCard(
+    team: TeamEntity,
+    category: CategoryEntity?,
+    isCurrent: Boolean,
+    isLast: Boolean,
+    shape: Shape,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        TeamPickRow(
+            team = team,
+            category = category,
+            isCurrent = isCurrent,
+            isLast = isLast,
+            onClick = onClick,
+        )
+    }
+}
+
+private fun teamPickRowShape(index: Int, lastIndex: Int): Shape = when {
+    lastIndex == 0 -> RoundedCornerShape(16.dp)
+    index == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    index == lastIndex -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+    else -> RectangleShape
 }
 
 /** Competition context card with race name, date · place and a text "Изменить" action. */

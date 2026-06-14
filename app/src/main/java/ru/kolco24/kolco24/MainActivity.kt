@@ -245,6 +245,7 @@ private fun Kolco24AppRoot() {
                     // A duplicate GET with TeamPickerScreen's own onRefresh is accepted (idempotent).
                     container.applicationScope.launch { teamRepo.refreshTeams(raceId) }
                     container.applicationScope.launch { legendRepo.refreshLegend(raceId) }
+                    confirmTeamId = null
                     pickerRaceId = raceId
                     teamFlowStep = TeamFlowStep.TeamPicker
                 },
@@ -254,11 +255,18 @@ private fun Kolco24AppRoot() {
 
         val activePickerRaceId = pickerRaceId
         if (teamFlowStep == TeamFlowStep.TeamPicker && activePickerRaceId != null) {
+            val activePickerTeams = remember(activePickerRaceId, pickerTeams) {
+                pickerTeams.filter { it.raceId == activePickerRaceId }
+            }
+            val activePickerCategories = remember(activePickerRaceId, pickerCategories) {
+                pickerCategories.filter { it.raceId == activePickerRaceId }
+            }
+
             TeamPickerScreen(
                 raceId = activePickerRaceId,
                 race = races.find { it.id == activePickerRaceId },
-                teams = pickerTeams,
-                categories = pickerCategories,
+                teams = activePickerTeams,
+                categories = activePickerCategories,
                 selectedTeamId = selectedTeamId,
                 onRefresh = teamRepo::refreshTeams,
                 onBack = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
@@ -267,11 +275,11 @@ private fun Kolco24AppRoot() {
                 modifier = Modifier.fillMaxSize(),
             )
 
-            val confirmTeam = confirmTeamId?.let { id -> pickerTeams.find { it.id == id } }
+            val confirmTeam = confirmTeamId?.let { id -> activePickerTeams.find { it.id == id } }
             if (confirmTeam != null) {
                 TeamSwitchSheet(
                     team = confirmTeam,
-                    category = pickerCategories.find { it.id == confirmTeam.categoryId },
+                    category = activePickerCategories.find { it.id == confirmTeam.categoryId },
                     onConfirm = {
                         container.applicationScope.launch {
                             teamRepo.selectTeam(activePickerRaceId, confirmTeam.id)
