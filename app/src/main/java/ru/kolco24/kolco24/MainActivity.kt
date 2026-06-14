@@ -74,6 +74,12 @@ private sealed interface SelectedTeamState {
     data class Present(val team: TeamEntity) : SelectedTeamState
 }
 
+private data class PickerTeamsState(
+    val raceId: Int? = null,
+    val teams: List<TeamEntity> = emptyList(),
+    val loaded: Boolean = false,
+)
+
 @Composable
 private fun Kolco24AppRoot() {
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -126,9 +132,17 @@ private fun Kolco24AppRoot() {
     var confirmTeamId by rememberSaveable { mutableStateOf<Int?>(null) }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
-    val pickerTeams by remember(pickerRaceId) {
-        pickerRaceId?.let { teamRepo.teamsForRace(it) } ?: flowOf(emptyList())
-    }.collectAsState(initial = emptyList())
+    val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
+        val raceId = pickerRaceId
+        if (raceId == null) {
+            value = PickerTeamsState()
+        } else {
+            value = PickerTeamsState(raceId = raceId)
+            teamRepo.teamsForRace(raceId).collect { teams ->
+                value = PickerTeamsState(raceId = raceId, teams = teams, loaded = true)
+            }
+        }
+    }
     val pickerCategories by remember(pickerRaceId) {
         pickerRaceId?.let { teamRepo.categoriesForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
@@ -255,9 +269,15 @@ private fun Kolco24AppRoot() {
 
         val activePickerRaceId = pickerRaceId
         if (teamFlowStep == TeamFlowStep.TeamPicker && activePickerRaceId != null) {
-            val activePickerTeams = remember(activePickerRaceId, pickerTeams) {
-                pickerTeams.filter { it.raceId == activePickerRaceId }
+            val activePickerTeams = remember(activePickerRaceId, pickerTeamsState) {
+                if (pickerTeamsState.raceId == activePickerRaceId) {
+                    pickerTeamsState.teams.filter { it.raceId == activePickerRaceId }
+                } else {
+                    emptyList()
+                }
             }
+            val activePickerTeamsLoaded =
+                pickerTeamsState.raceId == activePickerRaceId && pickerTeamsState.loaded
             val activePickerCategories = remember(activePickerRaceId, pickerCategories) {
                 pickerCategories.filter { it.raceId == activePickerRaceId }
             }
@@ -266,6 +286,7 @@ private fun Kolco24AppRoot() {
                 raceId = activePickerRaceId,
                 race = races.find { it.id == activePickerRaceId },
                 teams = activePickerTeams,
+                teamsLoaded = activePickerTeamsLoaded,
                 categories = activePickerCategories,
                 selectedTeamId = selectedTeamId,
                 onRefresh = teamRepo::refreshTeams,

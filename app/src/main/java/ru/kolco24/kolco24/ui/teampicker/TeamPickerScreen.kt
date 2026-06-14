@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,10 +77,8 @@ private enum class PickerLoad { Loading, Loaded, Offline, HttpError, Forbidden }
  * Tapping a team raises [onTeamTapped] so the host can show the confirmation sheet ([TeamSwitchSheet]).
  *
  * Cached rows render immediately; [onRefresh] runs in the composition scope (a read-only refresh,
- * safe to cancel on exit). The empty/error states follow the plan: a full placeholder + retry when
- * the cache is empty and offline, a snackbar when a stale cache is shown, "обновите приложение" on
- * `Forbidden`, and "никто не зарегистрирован" on an empty successful list. Filtering is the
- * unit-tested [filterTeams].
+ * safe to cancel on exit). Cached rows render as soon as Room emits for [raceId]; until then the
+ * screen keeps only the race context + progress so stale/empty intermediate values do not flash.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +86,7 @@ fun TeamPickerScreen(
     raceId: Int,
     race: RaceEntity?,
     teams: List<TeamEntity>,
+    teamsLoaded: Boolean,
     categories: List<CategoryEntity>,
     selectedTeamId: Int?,
     onRefresh: suspend (Int) -> RefreshResult,
@@ -99,7 +97,7 @@ fun TeamPickerScreen(
 ) {
     var query by rememberSaveable(raceId) { mutableStateOf("") }
     var retryKey by rememberSaveable(raceId) { mutableIntStateOf(0) }
-    var load by rememberSaveable(raceId) { mutableStateOf(PickerLoad.Loading) }
+    var load by remember(raceId) { mutableStateOf(PickerLoad.Loading) }
     val snackbarHostState = remember(raceId) { SnackbarHostState() }
 
     LaunchedEffect(raceId, retryKey) {
@@ -155,109 +153,115 @@ fun TeamPickerScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),
                 )
-                if (load == PickerLoad.Loading) {
+                if (load == PickerLoad.Loading || !teamsLoaded) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        when {
-            load == PickerLoad.Forbidden && teams.isEmpty() ->
-                PickerPlaceholder(
-                    modifier = Modifier.padding(padding),
-                    title = "Обновите приложение",
-                    message = "Текущая версия больше не поддерживается сервером.",
-                )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            item("comp") {
+                CompContextCard(race = race, onChangeRace = onChangeRace)
+            }
 
-            teams.isEmpty() && (load == PickerLoad.Offline || load == PickerLoad.HttpError) ->
-                PickerPlaceholder(
-                    modifier = Modifier.padding(padding),
-                    title = "Не удалось загрузить команды",
-                    message = "Проверьте соединение и попробуйте ещё раз.",
-                    retryLabel = "Повторить",
-                    onRetry = { retryKey++ },
-                )
+            if (teams.isEmpty()) {
+                if (teamsLoaded && load != PickerLoad.Loading) {
+                    when (load) {
+                        PickerLoad.Forbidden -> {
+                            item("forbidden") {
+                                PickerStatusMessage(
+                                    title = "Обновите приложение",
+                                    message = "Текущая версия больше не поддерживается сервером.",
+                                )
+                            }
+                        }
 
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(bottom = 24.dp),
-            ) {
-                item("comp") {
-                    CompContextCard(race = race, onChangeRace = onChangeRace)
+                        PickerLoad.Offline, PickerLoad.HttpError -> {
+                            item("load-error") {
+                                PickerStatusMessage(
+                                    title = "Не удалось загрузить команды",
+                                    message = "Проверьте соединение и попробуйте ещё раз.",
+                                    retryLabel = "Повторить",
+                                    onRetry = { retryKey++ },
+                                )
+                            }
+                        }
+
+                        PickerLoad.Loaded -> {
+                            item("empty") {
+                                Text(
+                                    text = "Пока никто не зарегистрирован",
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        PickerLoad.Loading -> Unit
+                    }
                 }
-
-                if (teams.isEmpty()) {
-                    // Cold open (empty + still loading) shows only the comp card + top progress bar —
-                    // never a false "nobody registered". The message appears once loading settles empty.
-                    if (load != PickerLoad.Loading) {
-                        item("empty") {
+            } else {
+                item("search") {
+                    TeamSearchBar(
+                        query = query,
+                        onQueryChange = { query = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
+                item("header") {
+                    Text(
+                        text = "Зарегистрированные · ${teams.size}",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (filtered.isEmpty()) {
+                    item("empty-filter") {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        ) {
                             Text(
-                                text = "Пока никто не зарегистрирован",
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                                text = "Ничего не найдено",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 } else {
-                    item("search") {
-                        TeamSearchBar(
-                            query = query,
-                            onQueryChange = { query = it },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    itemsIndexed(
+                        items = filtered,
+                        key = { _, team -> team.id },
+                    ) { index, team ->
+                        TeamPickRowCard(
+                            team = team,
+                            category = categoryById[team.categoryId],
+                            isCurrent = team.id == selectedTeamId,
+                            isLast = index == filtered.lastIndex,
+                            shape = teamPickRowShape(index, filtered.lastIndex),
+                            onClick = { onTeamTapped(team.id) },
                         )
                     }
-                    item("header") {
-                        Text(
-                            text = "Зарегистрированные · ${teams.size}",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (filtered.isEmpty()) {
-                        item("empty-filter") {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                shape = MaterialTheme.shapes.large,
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            ) {
-                                Text(
-                                    text = "Ничего не найдено",
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    } else {
-                        itemsIndexed(
-                            items = filtered,
-                            key = { _, team -> team.id },
-                        ) { index, team ->
-                            TeamPickRowCard(
-                                team = team,
-                                category = categoryById[team.categoryId],
-                                isCurrent = team.id == selectedTeamId,
-                                isLast = index == filtered.lastIndex,
-                                shape = teamPickRowShape(index, filtered.lastIndex),
-                                onClick = { onTeamTapped(team.id) },
-                            )
-                        }
-                    }
-                    item("hint") {
-                        Text(
-                            text = "Выбор определяет, чьи NFC-чипы засчитываются на КП.",
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                }
+                item("hint") {
+                    Text(
+                        text = "Выбор определяет, чьи NFC-чипы засчитываются на КП.",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -466,37 +470,41 @@ private fun CurrentTeamBadge() {
     }
 }
 
-/** Full-screen placeholder for the blocking error states (no cache to fall back on). */
 @Composable
-private fun PickerPlaceholder(
+private fun PickerStatusMessage(
     title: String,
     message: String,
-    modifier: Modifier = Modifier,
     retryLabel: String? = null,
     onRetry: (() -> Unit)? = null,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (retryLabel != null && onRetry != null) {
-            Spacer(Modifier.height(16.dp))
-            TextButton(onClick = onRetry) {
-                Text(retryLabel)
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (retryLabel != null && onRetry != null) {
+                TextButton(
+                    onClick = onRetry,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(retryLabel)
+                }
             }
         }
     }
