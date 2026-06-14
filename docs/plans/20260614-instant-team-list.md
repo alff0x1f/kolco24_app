@@ -185,11 +185,11 @@ harmless) rather than add single-flight/dedupe complexity. The screen's `onRefre
 - [x] build check: `./gradlew assembleDebug` compiles.
 
 ### Task 6: Verify acceptance criteria
-- [ ] `nearestRaceId` picks soonest-starting current race; ongoing wins; null when none current.
-- [ ] startup warms nearest race + selected race; on-tap warms the tapped race.
-- [ ] team screen opens with `CompContextCard` + thin progress bar (no centered spinner) when cold.
-- [ ] run full suite: `./gradlew testDebugUnitTest`.
-- [ ] run lint: `./gradlew lintDebug`.
+- [x] `nearestRaceId` picks soonest-starting current race; ongoing wins; null when none current.
+- [x] startup warms nearest race + selected race; on-tap warms the tapped race.
+- [x] team screen opens with `CompContextCard` + thin progress bar (no centered spinner) when cold.
+- [x] run full suite: `./gradlew testDebugUnitTest`.
+- [x] run lint: `./gradlew lintDebug`.
 
 ### Task 7: [Final] Documentation
 - [ ] update `CLAUDE.md` — note the startup nearest-race prefetch (`Kolco24App`), the on-tap prefetch
