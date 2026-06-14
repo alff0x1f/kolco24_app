@@ -7,6 +7,7 @@ import org.junit.Test
 import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.nearestRaceId
 
 class TeamPickerLogicTest {
 

@@ -45,15 +45,6 @@ fun raceStatusPill(race: RaceEntity, today: String): RaceStatusPill {
 }
 
 /**
- * Id of the soonest-starting current race; an ongoing race wins; `null` when none is current.
- * "Current" means `effectiveEnd >= today` (still relevant, just like [splitRaces]); among those the
- * one with the earliest start [RaceEntity.date] is chosen. Used to warm the team/legend cache at
- * startup, so an offline/empty race table simply returns `null` and the prefetch no-ops.
- */
-fun nearestRaceId(races: List<RaceEntity>, today: String): Int? =
-    races.filter { it.effectiveEnd() >= today }.minByOrNull { it.date }?.id
-
-/**
  * Split [races] into current (`effectiveEnd >= today`) and archive (already past), keeping the
  * order Room returned them in (newest first).
  */

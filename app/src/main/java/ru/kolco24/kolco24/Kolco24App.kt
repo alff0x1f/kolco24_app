@@ -6,8 +6,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ru.kolco24.kolco24.data.nearestRaceId
 import ru.kolco24.kolco24.data.todayIso
-import ru.kolco24.kolco24.ui.teampicker.nearestRaceId
 
 /**
  * Process entry point. Owns the [AppContainer] and kicks off fire-and-forget syncs on startup;
