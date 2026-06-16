@@ -234,9 +234,9 @@ private fun Kolco24AppRoot() {
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
         // !showScan guards on both of them they would win (Compose gives priority to the last registered
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
-        BackHandler(enabled = showScan) { showScan = false }
+        BackHandler(enabled = showScan) { showScan = false; showSettings = false }
         if (showScan) {
-            ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
+            ScanScreen(onClose = { showScan = false; showSettings = false }, modifier = Modifier.fillMaxSize())
         }
 
         // Settings overlay — sits beneath the picker/scan overlays (rendered before them, so they draw
@@ -244,7 +244,7 @@ private fun Kolco24AppRoot() {
         BackHandler(
             enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
         ) { showSettings = false }
-        if (showSettings && !showScan) {
+        if (showSettings && teamFlowStep == TeamFlowStep.None && !showScan) {
             SettingsScreen(
                 onBack = { showSettings = false },
                 onChangeTeam = {
@@ -278,7 +278,7 @@ private fun Kolco24AppRoot() {
                 races = races,
                 today = today,
                 selectedRaceId = selectedRaceId,
-                onBack = { teamFlowStep = TeamFlowStep.None },
+                onBack = { showSettings = false; teamFlowStep = TeamFlowStep.None },
                 onRaceSelected = { raceId ->
                     // Warm Room ahead of the screen transition so the team list is ready when the
                     // picker opens. Use applicationScope so it outlives the closing comp picker.
@@ -332,6 +332,7 @@ private fun Kolco24AppRoot() {
                             teamRepo.selectTeam(activePickerRaceId, confirmTeam.id)
                         }
                         confirmTeamId = null
+                        showSettings = false
                         teamFlowStep = TeamFlowStep.None
                     },
                     onDismiss = { confirmTeamId = null },
