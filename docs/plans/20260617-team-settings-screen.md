@@ -61,10 +61,10 @@ A new stateless `SettingsScreen` composable is added and rendered as a full-scre
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 
-- [ ] create `SettingsScreen(onBack, onChangeTeam, modifier)` — `Column(Modifier.fillMaxSize())` with a `TopAppBar(title = { Text("Настройки") })` and a navigation back arrow (`Icons.AutoMirrored.Filled.ArrowBack`) → `onBack`
-- [ ] add a single inset section card titled «Команда» containing a swap-team row (charcoal `SwapHoriz` icon avatar, «Сменить команду» / «Выбрать другую команду соревнования», trailing `ChevronRight`), `clickable` → `onChangeTeam` — copy the ~15-line row locally (no shared file; duplication accepted per design)
-- [ ] match existing visual tokens (`surfaceContainerLow` card, `shapes.large`, padding mirroring `TeamScreen`'s `SectionCard`/`SwitchTeamRow`)
-- [ ] (no unit tests — stateless UI, see Testing Strategy)
+- [x] create `SettingsScreen(onBack, onChangeTeam, modifier)` — `Column(Modifier.fillMaxSize())` with a `TopAppBar(title = { Text("Настройки") })` and a navigation back arrow (`Icons.AutoMirrored.Filled.ArrowBack`) → `onBack`
+- [x] add a single inset section card titled «Команда» containing a swap-team row (charcoal `SwapHoriz` icon avatar, «Сменить команду» / «Выбрать другую команду соревнования», trailing `ChevronRight`), `clickable` → `onChangeTeam` — copy the ~15-line row locally (no shared file; duplication accepted per design)
+- [x] match existing visual tokens (`surfaceContainerLow` card, `shapes.large`, padding mirroring `TeamScreen`'s `SectionCard`/`SwitchTeamRow`)
+- [x] (no unit tests — stateless UI, see Testing Strategy)
 
 ### Task 2: Remove the standalone swap row from the «Команда» tab
 
