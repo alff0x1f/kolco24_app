@@ -44,6 +44,7 @@ import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
+import ru.kolco24.kolco24.ui.settings.SettingsScreen
 import ru.kolco24.kolco24.ui.team.TeamScreen
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
@@ -85,6 +86,7 @@ private fun Kolco24AppRoot() {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
@@ -206,7 +208,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showScan = true },
+                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -220,7 +222,7 @@ private fun Kolco24AppRoot() {
                         team = teamForTab,
                         category = tabCategory,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
-                        onChangeTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
+                        onOpenSettings = { showSettings = true },
                         teamMissing = teamMissing,
                         teamLoading = teamState is SelectedTeamState.Loading,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
@@ -235,6 +237,23 @@ private fun Kolco24AppRoot() {
         BackHandler(enabled = showScan) { showScan = false }
         if (showScan) {
             ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
+        }
+
+        // Settings overlay — sits beneath the picker/scan overlays (rendered before them, so they draw
+        // on top when both are active). Its BackHandler only fires when nothing else is layered above it.
+        BackHandler(
+            enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
+        ) { showSettings = false }
+        if (showSettings) {
+            SettingsScreen(
+                onBack = { showSettings = false },
+                onChangeTeam = {
+                    showSettings = false
+                    pickerRaceId = selectedRaceId
+                    teamFlowStep = TeamFlowStep.CompPicker
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         // Team-selection flow overlays. Back steps down: sheet (own dismiss) > TeamPicker > CompPicker.

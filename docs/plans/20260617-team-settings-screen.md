@@ -83,12 +83,12 @@ A new stateless `SettingsScreen` composable is added and rendered as a full-scre
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `var showSettings by rememberSaveable { mutableStateOf(false) }`
-- [ ] update the `TeamScreen(...)` call: drop `onChangeTeam`, add `onOpenSettings = { showSettings = true }`
-- [ ] render `SettingsScreen(onBack = { showSettings = false }, onChangeTeam = { showSettings = false; pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker })` **before** the CompPicker/TeamPicker/TeamSwitchSheet blocks
-- [ ] add `BackHandler(enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) { showSettings = false }`
-- [ ] add `showSettings = false` to the `onScanClick` reset; add the `SettingsScreen` import
-- [ ] (no unit tests — host wiring)
+- [x] add `var showSettings by rememberSaveable { mutableStateOf(false) }`
+- [x] update the `TeamScreen(...)` call: drop `onChangeTeam`, add `onOpenSettings = { showSettings = true }`
+- [x] render `SettingsScreen(onBack = { showSettings = false }, onChangeTeam = { showSettings = false; pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker })` **before** the CompPicker/TeamPicker/TeamSwitchSheet blocks
+- [x] add `BackHandler(enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) { showSettings = false }`
+- [x] add `showSettings = false` to the `onScanClick` reset; add the `SettingsScreen` import
+- [x] (no unit tests — host wiring)
 
 ### Task 4: Verify acceptance criteria
 - [ ] «Команда» tab no longer shows the standalone «Сменить команду» row; «Настройки» row present with subtitle «Сменить команду»
