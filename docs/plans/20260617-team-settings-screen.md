@@ -71,12 +71,12 @@ A new stateless `SettingsScreen` composable is added and rendered as a full-scre
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 
-- [ ] delete the `item("switch") { ... }` block (the `Surface` wrapping `SwitchTeamRow`)
-- [ ] delete the `SwitchTeamRow` private composable
-- [ ] remove the now-unused `onChangeTeam` parameter from `TeamScreen` and add `onOpenSettings: () -> Unit`
-- [ ] add `onClick: () -> Unit = {}` to `MiscRow` **and apply `.clickable(onClick = onClick)` to its `Row` modifier** (the row is static today — the param alone won't make it tappable); wire the «Настройки» `MiscRow` to `onOpenSettings`, leave «Справка» default
-- [ ] change the «Настройки» subtitle "Соревнование, сервер, NFC" → "Сменить команду"; remove only the now-unused `SwapHoriz` import — **keep `ChevronRight` and `clickable`** (still used by `MiscRow`)
-- [ ] (no unit tests — stateless UI)
+- [x] delete the `item("switch") { ... }` block (the `Surface` wrapping `SwitchTeamRow`)
+- [x] delete the `SwitchTeamRow` private composable
+- [x] remove the now-unused `onChangeTeam` parameter from `TeamScreen` and add `onOpenSettings: () -> Unit`
+- [x] add `onClick: () -> Unit = {}` to `MiscRow` **and apply `.clickable(onClick = onClick)` to its `Row` modifier** (the row is static today — the param alone won't make it tappable); wire the «Настройки» `MiscRow` to `onOpenSettings`, leave «Справка» default
+- [x] change the «Настройки» subtitle "Соревнование, сервер, NFC" → "Сменить команду"; remove only the now-unused `SwapHoriz` import — **keep `ChevronRight` and `clickable`** (still used by `MiscRow`)
+- [x] (no unit tests — stateless UI)
 
 ### Task 3: Wire the Settings overlay into MainActivity
 
