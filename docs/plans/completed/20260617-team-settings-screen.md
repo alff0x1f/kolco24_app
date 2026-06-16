@@ -97,8 +97,8 @@ A new stateless `SettingsScreen` composable is added and rendered as a full-scre
 - [x] confirm no leftover references to the removed `onChangeTeam` param / `SwitchTeamRow` (only remaining `onChangeTeam` is `SettingsScreen`'s own param — expected)
 
 ### Task 5: [Final] Update documentation
-- [ ] update `CLAUDE.md` (`MainActivity.kt` overlay description + `ui/team`/new `ui/settings` bullets) to document the Settings overlay, `showSettings` state, and the relocated «Сменить команду»
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md` (`MainActivity.kt` overlay description + `ui/team`/new `ui/settings` bullets) to document the Settings overlay, `showSettings` state, and the relocated «Сменить команду»
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention — no checkboxes, informational only*
