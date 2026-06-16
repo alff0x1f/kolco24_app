@@ -309,12 +309,12 @@ private fun MonogramAvatar() {
 }
 
 @Composable
-private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: Boolean, onClick: () -> Unit = {}) {
+private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: Boolean, onClick: (() -> Unit)? = null) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),

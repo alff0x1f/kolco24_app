@@ -244,7 +244,7 @@ private fun Kolco24AppRoot() {
         BackHandler(
             enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
         ) { showSettings = false }
-        if (showSettings) {
+        if (showSettings && !showScan) {
             SettingsScreen(
                 onBack = { showSettings = false },
                 onChangeTeam = {
