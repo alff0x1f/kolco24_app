@@ -231,9 +231,9 @@ private fun Kolco24AppRoot() {
             }
         }
 
-        // Scan overlay. The team-flow handler is registered after this one, so without the !showScan
-        // guard it would win (Compose gives priority to the last registered enabled BackHandler).
-        // The guard ensures scan overlay's back press is never masked when both are active.
+        // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
+        // !showScan guards on both of them they would win (Compose gives priority to the last registered
+        // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
         BackHandler(enabled = showScan) { showScan = false }
         if (showScan) {
             ScanScreen(onClose = { showScan = false }, modifier = Modifier.fillMaxSize())
@@ -249,6 +249,7 @@ private fun Kolco24AppRoot() {
                 onBack = { showSettings = false },
                 onChangeTeam = {
                     showSettings = false
+                    confirmTeamId = null
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
                 },
@@ -262,7 +263,13 @@ private fun Kolco24AppRoot() {
         BackHandler(enabled = teamFlowStep != TeamFlowStep.None && confirmTeamId == null && !showScan) {
             teamFlowStep = when (teamFlowStep) {
                 TeamFlowStep.TeamPicker -> TeamFlowStep.CompPicker
-                else -> TeamFlowStep.None
+                else -> {
+                    // Also clear showSettings so that a process-death restore of both
+                    // showSettings=true + teamFlowStep!=None doesn't resurface Settings
+                    // after the user backs all the way out of the picker.
+                    showSettings = false
+                    TeamFlowStep.None
+                }
             }
         }
 
