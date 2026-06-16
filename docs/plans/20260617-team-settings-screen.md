@@ -91,10 +91,10 @@ A new stateless `SettingsScreen` composable is added and rendered as a full-scre
 - [x] (no unit tests — host wiring)
 
 ### Task 4: Verify acceptance criteria
-- [ ] «Команда» tab no longer shows the standalone «Сменить команду» row; «Настройки» row present with subtitle «Сменить команду»
-- [ ] run `./gradlew lintDebug` — must pass
-- [ ] run `./gradlew assembleDebug` — must pass
-- [ ] confirm no leftover references to the removed `onChangeTeam` param / `SwitchTeamRow`
+- [x] «Команда» tab no longer shows the standalone «Сменить команду» row; «Настройки» row present with subtitle «Сменить команду»
+- [x] run `./gradlew lintDebug` — must pass
+- [x] run `./gradlew assembleDebug` — must pass
+- [x] confirm no leftover references to the removed `onChangeTeam` param / `SwitchTeamRow` (only remaining `onChangeTeam` is `SettingsScreen`'s own param — expected)
 
 ### Task 5: [Final] Update documentation
 - [ ] update `CLAUDE.md` (`MainActivity.kt` overlay description + `ui/team`/new `ui/settings` bullets) to document the Settings overlay, `showSettings` state, and the relocated «Сменить команду»
