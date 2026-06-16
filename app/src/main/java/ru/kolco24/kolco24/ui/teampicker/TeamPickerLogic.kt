@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.ui.teampicker
 import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.effectiveEnd
 
 /**
  * Pure, testable logic shared by the comp/team picker screens. No Android or Compose imports —
@@ -25,9 +26,6 @@ data class SplitRaces(
     val current: List<RaceEntity>,
     val archive: List<RaceEntity>,
 )
-
-/** Last day the race is relevant: [RaceEntity.dateEnd] when present, otherwise the start [date]. */
-private fun RaceEntity.effectiveEnd(): String = dateEnd ?: date
 
 /**
  * Status pill for a race: finished if its last day is before [today]; otherwise derived from

@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
@@ -49,9 +50,6 @@ import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,6 +73,12 @@ private sealed interface SelectedTeamState {
     data object Missing : SelectedTeamState
     data class Present(val team: TeamEntity) : SelectedTeamState
 }
+
+private data class PickerTeamsState(
+    val raceId: Int? = null,
+    val teams: List<TeamEntity> = emptyList(),
+    val loaded: Boolean = false,
+)
 
 @Composable
 private fun Kolco24AppRoot() {
@@ -128,9 +132,17 @@ private fun Kolco24AppRoot() {
     var confirmTeamId by rememberSaveable { mutableStateOf<Int?>(null) }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
-    val pickerTeams by remember(pickerRaceId) {
-        pickerRaceId?.let { teamRepo.teamsForRace(it) } ?: flowOf(emptyList())
-    }.collectAsState(initial = emptyList())
+    val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
+        val raceId = pickerRaceId
+        if (raceId == null) {
+            value = PickerTeamsState()
+        } else {
+            value = PickerTeamsState(raceId = raceId)
+            teamRepo.teamsForRace(raceId).collect { teams ->
+                value = PickerTeamsState(raceId = raceId, teams = teams, loaded = true)
+            }
+        }
+    }
     val pickerCategories by remember(pickerRaceId) {
         pickerRaceId?.let { teamRepo.categoriesForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
@@ -242,6 +254,12 @@ private fun Kolco24AppRoot() {
                 selectedRaceId = selectedRaceId,
                 onBack = { teamFlowStep = TeamFlowStep.None },
                 onRaceSelected = { raceId ->
+                    // Warm Room ahead of the screen transition so the team list is ready when the
+                    // picker opens. Use applicationScope so it outlives the closing comp picker.
+                    // A duplicate GET with TeamPickerScreen's own onRefresh is accepted (idempotent).
+                    container.applicationScope.launch { teamRepo.refreshTeams(raceId) }
+                    container.applicationScope.launch { legendRepo.refreshLegend(raceId) }
+                    confirmTeamId = null
                     pickerRaceId = raceId
                     teamFlowStep = TeamFlowStep.TeamPicker
                 },
@@ -251,11 +269,25 @@ private fun Kolco24AppRoot() {
 
         val activePickerRaceId = pickerRaceId
         if (teamFlowStep == TeamFlowStep.TeamPicker && activePickerRaceId != null) {
+            val activePickerTeams = remember(activePickerRaceId, pickerTeamsState) {
+                if (pickerTeamsState.raceId == activePickerRaceId) {
+                    pickerTeamsState.teams.filter { it.raceId == activePickerRaceId }
+                } else {
+                    emptyList()
+                }
+            }
+            val activePickerTeamsLoaded =
+                pickerTeamsState.raceId == activePickerRaceId && pickerTeamsState.loaded
+            val activePickerCategories = remember(activePickerRaceId, pickerCategories) {
+                pickerCategories.filter { it.raceId == activePickerRaceId }
+            }
+
             TeamPickerScreen(
                 raceId = activePickerRaceId,
                 race = races.find { it.id == activePickerRaceId },
-                teams = pickerTeams,
-                categories = pickerCategories,
+                teams = activePickerTeams,
+                teamsLoaded = activePickerTeamsLoaded,
+                categories = activePickerCategories,
                 selectedTeamId = selectedTeamId,
                 onRefresh = teamRepo::refreshTeams,
                 onBack = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
@@ -264,11 +296,11 @@ private fun Kolco24AppRoot() {
                 modifier = Modifier.fillMaxSize(),
             )
 
-            val confirmTeam = confirmTeamId?.let { id -> pickerTeams.find { it.id == id } }
+            val confirmTeam = confirmTeamId?.let { id -> activePickerTeams.find { it.id == id } }
             if (confirmTeam != null) {
                 TeamSwitchSheet(
                     team = confirmTeam,
-                    category = pickerCategories.find { it.id == confirmTeam.categoryId },
+                    category = activePickerCategories.find { it.id == confirmTeam.categoryId },
                     onConfirm = {
                         container.applicationScope.launch {
                             teamRepo.selectTeam(activePickerRaceId, confirmTeam.id)
@@ -282,7 +314,3 @@ private fun Kolco24AppRoot() {
         }
     }
 }
-
-/** Today as a `YYYY-MM-DD` string (no `java.time` — minSdk 24 without core library desugaring). */
-private fun todayIso(): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())

@@ -1,11 +1,13 @@
 package ru.kolco24.kolco24.ui.teampicker
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.nearestRaceId
 
 class TeamPickerLogicTest {
 
@@ -109,6 +111,61 @@ class TeamPickerLogicTest {
         val result = splitRaces(emptyList(), today = "2026-06-13")
         assertTrue(result.current.isEmpty())
         assertTrue(result.archive.isEmpty())
+    }
+
+    // --- nearestRaceId ---
+
+    @Test
+    fun nearestPicksEarliestStartDateAmongCurrentRaces() {
+        // Ongoing race (started June 10) has an earlier start date than upcoming race (June 18),
+        // so it wins — result of minByOrNull { date }, not a special "ongoing wins" rule.
+        val ongoing = race(id = 1, date = "2026-06-10", dateEnd = "2026-06-20")
+        val upcoming = race(id = 2, date = "2026-06-18")
+        assertEquals(1, nearestRaceId(listOf(upcoming, ongoing), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestPicksEarliestStartAmongOverlappingOngoing() {
+        // Both ongoing today; selection is by start date, so the earlier start wins.
+        val earlierStart = race(id = 1, date = "2026-06-10", dateEnd = "2026-06-20")
+        val laterStart = race(id = 2, date = "2026-06-12", dateEnd = "2026-06-18")
+        assertEquals(1, nearestRaceId(listOf(laterStart, earlierStart), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestPicksSoonestFutureStart() {
+        val soon = race(id = 1, date = "2026-06-15")
+        val later = race(id = 2, date = "2026-06-20")
+        val latest = race(id = 3, date = "2026-07-01")
+        assertEquals(1, nearestRaceId(listOf(latest, later, soon), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestIncludesRaceEndingToday() {
+        // effectiveEnd >= today is inclusive; a race ending exactly today must still be selected.
+        val endingToday = race(id = 1, date = "2026-06-13", dateEnd = "2026-06-13")
+        assertEquals(1, nearestRaceId(listOf(endingToday), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestNullWhenAllArchived() {
+        val past1 = race(id = 1, date = "2026-06-01", dateEnd = "2026-06-02")
+        val past2 = race(id = 2, date = "2026-05-10")
+        assertEquals(null, nearestRaceId(listOf(past1, past2), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestNullWhenEmpty() {
+        assertEquals(null, nearestRaceId(emptyList(), today = "2026-06-13"))
+    }
+
+    @Test
+    fun nearestSameStartDateDoesNotCrash() {
+        val a = race(id = 1, date = "2026-06-15")
+        val b = race(id = 2, date = "2026-06-15")
+        // Tie-break order is unspecified; only guarantee is a non-null result.
+        assertNotNull(nearestRaceId(listOf(a, b), today = "2026-06-13"))
+        assertNotNull(nearestRaceId(listOf(b, a), today = "2026-06-13"))
     }
 
     // --- filterTeams ---
