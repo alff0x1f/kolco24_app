@@ -6,8 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,8 +72,8 @@ class CheckpointDaoTest {
         val cp10 = rows[10]!!
         assertEquals(40, cp10.cost)
         assertEquals("Под мостом", cp10.description)
-        // The enc envelope + locked flag are untouched.
-        assertTrue(cp10.locked)
+        // reveal() clears locked; the enc envelope is retained for reference.
+        assertFalse(cp10.locked)
         assertEquals("iv10", cp10.encIv)
     }
 

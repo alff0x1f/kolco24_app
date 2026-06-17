@@ -23,10 +23,13 @@ interface CheckpointDao {
     @Query("SELECT * FROM checkpoints WHERE raceId = :raceId AND cost IS NOT NULL")
     suspend fun revealedForRace(raceId: Int): List<CheckpointEntity>
 
-    /** Persist an offline-unlocked checkpoint's plaintext. [locked] stays true (the row keeps its
-     *  enc envelope); only the revealed [cost]/[description] are written. */
-    @Query("UPDATE checkpoints SET cost = :cost, description = :description WHERE id = :id")
+    /** Persist an offline-unlocked checkpoint's plaintext and mark the row as revealed. */
+    @Query("UPDATE checkpoints SET cost = :cost, description = :description, locked = 0 WHERE id = :id")
     suspend fun reveal(id: Int, cost: Int, description: String?)
+
+    /** One-shot snapshot of all checkpoints for a race — used for point-in-time reads (e.g. crypto). */
+    @Query("SELECT * FROM checkpoints WHERE raceId = :raceId ORDER BY number, id")
+    suspend fun getCheckpointsForRace(raceId: Int): List<CheckpointEntity>
 
     /**
      * Full replacement of one race's checkpoints on a `200`, **preserving prior reveals**

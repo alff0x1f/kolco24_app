@@ -262,7 +262,7 @@ class LegendRepositoryTest {
         val cp = repository.checkpointsForRace(8).first().single()
         assertEquals(7, cp.cost)
         assertEquals("Грот", cp.description)
-        assertTrue("reveal must not clear locked", cp.locked)
+        assertFalse("reveal must clear locked", cp.locked)
     }
 
     @Test
@@ -385,9 +385,12 @@ private class FakeCheckpointDao(private val callLog: MutableList<String>) : Chec
 
     override suspend fun reveal(id: Int, cost: Int, description: String?) {
         checkpoints.value = checkpoints.value.map {
-            if (it.id == id) it.copy(cost = cost, description = description) else it
+            if (it.id == id) it.copy(cost = cost, description = description, locked = false) else it
         }
     }
+
+    override suspend fun getCheckpointsForRace(raceId: Int): List<CheckpointEntity> =
+        checkpoints.value.filter { it.raceId == raceId }
 
     override suspend fun replaceAllForRace(raceId: Int, checkpoints: List<CheckpointEntity>) {
         deleteCheckpointsForRace(raceId)

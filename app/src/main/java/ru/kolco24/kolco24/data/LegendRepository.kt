@@ -1,7 +1,6 @@
 package ru.kolco24.kolco24.data
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.FetchResult
@@ -94,7 +93,7 @@ class LegendRepository(
         val tagEntity = tagDao.getByBid(bid, raceId) ?: return UnlockOutcome.Unknown
         if (tagEntity.iv == null && tagEntity.ct == null) return UnlockOutcome.IdentityOnly(tagEntity.point)
         if (tagEntity.iv == null || tagEntity.ct == null) return UnlockOutcome.Failed("malformed tag envelope")
-        val encById = checkpointDao.observeCheckpointsForRace(raceId).first()
+        val encById = checkpointDao.getCheckpointsForRace(raceId)
             .mapNotNull { cp ->
                 val iv = cp.encIv
                 val ct = cp.encCt
