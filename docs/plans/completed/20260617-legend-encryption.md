@@ -358,11 +358,12 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 
 ### Task 9: [Final] Update documentation
 
-- [ ] update `CLAUDE.md`: new legend contract (always-returned, per-CP `enc`, `tags`),
+- [x] update `CLAUDE.md`: new legend contract (always-returned, per-CP `enc`, `tags`),
   `CheckpointEntity` nullable/`locked`/enc + `TagEntity`/`TagDao`, Room **v4** + `MIGRATION_3_4`,
   `LegendCrypto`, `LegendRepository.unlock`, removal of `is_legend_visible`/`LegendLocked`.
-- [ ] note any new pattern discovered (e.g. okio Base64 for crypto, preserve-on-resync DAO).
-- [ ] move this plan to `docs/plans/completed/`.
+- [x] note any new pattern discovered (e.g. okio Base64 for crypto, preserve-on-resync DAO).
+  (okio Base64 documented in the `LegendCrypto` line; preserve-on-resync in the `data/db/` line.)
+- [x] move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 
