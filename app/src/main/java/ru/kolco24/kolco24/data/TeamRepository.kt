@@ -78,6 +78,14 @@ class TeamRepository(
     suspend fun selectTeam(raceId: Int, teamId: Int) {
         selectedTeamDao.upsert(SelectedTeamEntity(raceId = raceId, teamId = teamId))
     }
+
+    /**
+     * Clears the selected team, returning the app to the no-team state. Debug/testing only —
+     * leaves cached teams/legend/ETags intact, so it is a fast reset rather than a full wipe.
+     */
+    suspend fun clearSelectedTeam() {
+        selectedTeamDao.clear()
+    }
 }
 
 /** Maps a network DTO to the persisted entity, stamping the owning [raceId]. */
