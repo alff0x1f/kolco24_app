@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 4,
-    "identityHash": "5f8946e9117bea1d6babe08a9fd7ef37",
+    "identityHash": "575e2331cb140c575f8da7349c254c31",
     "entities": [
       {
         "tableName": "races",
@@ -328,18 +328,18 @@
       },
       {
         "tableName": "tags",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bid` TEXT NOT NULL, `raceId` INTEGER NOT NULL, `point` INTEGER NOT NULL, `checkMethod` TEXT NOT NULL, `iv` TEXT, `ct` TEXT, PRIMARY KEY(`bid`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`raceId` INTEGER NOT NULL, `bid` TEXT NOT NULL, `point` INTEGER NOT NULL, `checkMethod` TEXT NOT NULL, `iv` TEXT, `ct` TEXT, PRIMARY KEY(`raceId`, `bid`))",
         "fields": [
-          {
-            "fieldPath": "bid",
-            "columnName": "bid",
-            "affinity": "TEXT",
-            "notNull": true
-          },
           {
             "fieldPath": "raceId",
             "columnName": "raceId",
             "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bid",
+            "columnName": "bid",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -368,6 +368,7 @@
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
+            "raceId",
             "bid"
           ]
         },
@@ -395,7 +396,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5f8946e9117bea1d6babe08a9fd7ef37')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '575e2331cb140c575f8da7349c254c31')"
     ]
   }
 }

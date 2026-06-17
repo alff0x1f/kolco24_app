@@ -125,11 +125,12 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("DROP TABLE `races`")
                 db.execSQL("ALTER TABLE `races_new` RENAME TO `races`")
 
-                // New `tags` table + indices.
+                // New `tags` table + indices. Composite PK (raceId, bid) keeps each race's tags
+                // isolated so physical NFC tags shared across races cannot overwrite each other.
                 db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS `tags` (`bid` TEXT NOT NULL, " +
-                        "`raceId` INTEGER NOT NULL, `point` INTEGER NOT NULL, " +
-                        "`checkMethod` TEXT NOT NULL, `iv` TEXT, `ct` TEXT, PRIMARY KEY(`bid`))"
+                    "CREATE TABLE IF NOT EXISTS `tags` (`raceId` INTEGER NOT NULL, " +
+                        "`bid` TEXT NOT NULL, `point` INTEGER NOT NULL, " +
+                        "`checkMethod` TEXT NOT NULL, `iv` TEXT, `ct` TEXT, PRIMARY KEY(`raceId`, `bid`))"
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_raceId` ON `tags` (`raceId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_point` ON `tags` (`point`)")

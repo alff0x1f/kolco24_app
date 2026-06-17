@@ -94,6 +94,13 @@ class LegendCryptoSanityTest {
     }
 
     @Test
+    fun unlockFailsOnPartialEnvelope() {
+        val tag = UnlockTag(point = 101, iv = "someIv", ct = null)
+        val result = LegendCrypto.unlock(ByteArray(16), tag, emptyMap(), json)
+        assertTrue(result is UnlockResult.Failed)
+    }
+
+    @Test
     fun unlockFailsOnTamperedCiphertext() {
         val code = ByteArray(16) { 9 }
         val wrapKey = LegendCrypto.deriveWrapKey(code)

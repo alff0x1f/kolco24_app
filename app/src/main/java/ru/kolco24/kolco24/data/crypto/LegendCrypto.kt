@@ -76,7 +76,8 @@ object LegendCrypto {
     /**
      * Full offline unlock for a scanned tag. Pure — no I/O, never throws:
      *
-     * - `tag.iv == null` (open-CP tag, nothing to decrypt) → [UnlockResult.IdentityOnly].
+     * - `tag.iv == null && tag.ct == null` (open-CP tag, nothing to decrypt) → [UnlockResult.IdentityOnly].
+     * - exactly one of `iv`/`ct` is null (malformed envelope) → [UnlockResult.Failed].
      * - else: open the `bundle_blob` (`aad = bid`) → `{ "<cpId>": "<b64 content_key>" }`, then for
      *   each `cpId` present in [encById], open its `enc` (`aad = str(cpId)`) → `{cost, description}`,
      *   yielding [UnlockResult.Revealed].
@@ -88,9 +89,8 @@ object LegendCrypto {
         encById: Map<Int, EncBlob>,
         json: Json,
     ): UnlockResult {
-        if (tag.iv == null || tag.ct == null) {
-            return UnlockResult.IdentityOnly(tag.point)
-        }
+        if (tag.iv == null && tag.ct == null) return UnlockResult.IdentityOnly(tag.point)
+        if (tag.iv == null || tag.ct == null) return UnlockResult.Failed("malformed tag envelope: exactly one of iv/ct is null")
         return try {
             val bidStr = bid(code)
             val wrapKey = deriveWrapKey(code)

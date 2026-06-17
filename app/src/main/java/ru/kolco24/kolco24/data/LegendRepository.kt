@@ -92,9 +92,8 @@ class LegendRepository(
     suspend fun unlock(raceId: Int, code: ByteArray): UnlockOutcome {
         val bid = LegendCrypto.bid(code)
         val tagEntity = tagDao.getByBid(bid, raceId) ?: return UnlockOutcome.Unknown
-        if (tagEntity.iv == null || tagEntity.ct == null) {
-            return UnlockOutcome.IdentityOnly(tagEntity.point)
-        }
+        if (tagEntity.iv == null && tagEntity.ct == null) return UnlockOutcome.IdentityOnly(tagEntity.point)
+        if (tagEntity.iv == null || tagEntity.ct == null) return UnlockOutcome.Failed("malformed tag envelope")
         val encById = checkpointDao.observeCheckpointsForRace(raceId).first()
             .mapNotNull { cp ->
                 val iv = cp.encIv

@@ -291,6 +291,24 @@ class LegendRepositoryTest {
     }
 
     @Test
+    fun unlock_partialEnvelopeReturnsFailed() = runTest {
+        val code = ByteArray(16) { 4 }
+        tagDao.setTags(
+            listOf(
+                TagEntity(
+                    bid = LegendCrypto.bid(code),
+                    raceId = 8,
+                    point = 101,
+                    checkMethod = "nfc",
+                    iv = "someIv",
+                    ct = null,
+                ),
+            ),
+        )
+        assertTrue(repository.unlock(8, code) is UnlockOutcome.Failed)
+    }
+
+    @Test
     fun unlock_tamperedCiphertextReturnsFailed() = runTest {
         val code = ByteArray(16) { 3 }
         val wrapKey = LegendCrypto.deriveWrapKey(code)
