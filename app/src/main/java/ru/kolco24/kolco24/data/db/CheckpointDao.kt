@@ -26,7 +26,7 @@ interface CheckpointDao {
     /** Persist an offline-unlocked checkpoint's plaintext. [locked] stays true (the row keeps its
      *  enc envelope); only the revealed [cost]/[description] are written. */
     @Query("UPDATE checkpoints SET cost = :cost, description = :description WHERE id = :id")
-    suspend fun reveal(id: Int, cost: Int, description: String)
+    suspend fun reveal(id: Int, cost: Int, description: String?)
 
     /**
      * Full replacement of one race's checkpoints on a `200`, **preserving prior reveals**
@@ -42,10 +42,10 @@ interface CheckpointDao {
         deleteCheckpointsForRace(raceId)
         insertCheckpoints(checkpoints)
         for (incoming in checkpoints) {
-            if (incoming.locked && incoming.cost == null) {
+            if (incoming.cost == null) {
                 val prior = previouslyRevealed[incoming.id] ?: continue
                 val cost = prior.cost ?: continue
-                reveal(incoming.id, cost, prior.description.orEmpty())
+                reveal(incoming.id, cost, prior.description)
             }
         }
     }

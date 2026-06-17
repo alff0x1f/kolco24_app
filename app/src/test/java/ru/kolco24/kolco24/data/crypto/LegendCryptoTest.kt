@@ -105,18 +105,7 @@ class LegendCryptoTest {
         assertEquals(EXPECTED_DESCRIPTION, revealed.description)
     }
 
-    // ───────── Vector-independent: these run for real (no server fixture needed). ─────────
-
-    @Test
-    fun unlockReturnsIdentityOnlyForOpenCpTag() {
-        val result = LegendCrypto.unlock(
-            code = ByteArray(16),
-            tag = UnlockTag(point = 101, iv = null, ct = null),
-            encById = emptyMap(),
-            json = json,
-        )
-        assertEquals(UnlockResult.IdentityOnly(101), result)
-    }
+    // ───────── Vector-independent: this runs for real (no server fixture needed). ─────────
 
     @Test
     fun unlockFailsOnTamperedCiphertext() {

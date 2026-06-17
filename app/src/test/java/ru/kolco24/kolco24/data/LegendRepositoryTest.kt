@@ -365,7 +365,7 @@ private class FakeCheckpointDao(private val callLog: MutableList<String>) : Chec
     override suspend fun revealedForRace(raceId: Int): List<CheckpointEntity> =
         checkpoints.value.filter { it.raceId == raceId && it.cost != null }
 
-    override suspend fun reveal(id: Int, cost: Int, description: String) {
+    override suspend fun reveal(id: Int, cost: Int, description: String?) {
         checkpoints.value = checkpoints.value.map {
             if (it.id == id) it.copy(cost = cost, description = description) else it
         }
@@ -388,7 +388,8 @@ private class FakeTagDao(private val callLog: MutableList<String>) : TagDao {
     override fun observeTagsForRace(raceId: Int): Flow<List<TagEntity>> =
         tags.map { list -> list.filter { it.raceId == raceId } }
 
-    override suspend fun getByBid(bid: String): TagEntity? = tags.value.firstOrNull { it.bid == bid }
+    override suspend fun getByBid(bid: String, raceId: Int): TagEntity? =
+        tags.value.firstOrNull { it.bid == bid && it.raceId == raceId }
 
     override suspend fun insertTags(tags: List<TagEntity>) {
         this.tags.value = this.tags.value + tags

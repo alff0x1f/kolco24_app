@@ -122,8 +122,7 @@ private fun Kolco24AppRoot() {
     }.collectAsState(initial = emptyList())
     val tabCategory = teamForTab?.let { t -> tabCategories.find { it.id == t.categoryId } }
 
-    // Tab «Легенда» data: the selected team's race + its checkpoints (offline-readable from Room).
-    val selectedRace = races.find { it.id == selectedRaceId }
+    // Tab «Легенда» data: the selected team's race checkpoints (offline-readable from Room).
     val legendCheckpoints by remember(selectedRaceId) {
         selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())

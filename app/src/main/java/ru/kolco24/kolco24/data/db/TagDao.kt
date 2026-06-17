@@ -12,9 +12,9 @@ interface TagDao {
     @Query("SELECT * FROM tags WHERE raceId = :raceId ORDER BY point, bid")
     fun observeTagsForRace(raceId: Int): Flow<List<TagEntity>>
 
-    /** Looks up a scanned tag by its derived [bid]; `null` when the tag is unknown to this race set. */
-    @Query("SELECT * FROM tags WHERE bid = :bid")
-    suspend fun getByBid(bid: String): TagEntity?
+    /** Looks up a scanned tag by its derived [bid] within [raceId]; `null` when the tag is unknown. */
+    @Query("SELECT * FROM tags WHERE bid = :bid AND raceId = :raceId")
+    suspend fun getByBid(bid: String, raceId: Int): TagEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTags(tags: List<TagEntity>)

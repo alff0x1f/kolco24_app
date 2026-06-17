@@ -117,7 +117,7 @@ class LegendResponseTest {
     }
 
     @Test
-    fun emptyCheckpointsList_parsesAsHiddenLegend() {
+    fun emptyCheckpointsList_parsesCorrectly() {
         val payload = """{"race": 5, "checkpoints": []}"""
 
         val response = json.decodeFromString<LegendResponse>(payload)

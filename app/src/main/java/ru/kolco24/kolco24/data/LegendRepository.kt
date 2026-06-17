@@ -91,7 +91,7 @@ class LegendRepository(
      */
     suspend fun unlock(raceId: Int, code: ByteArray): UnlockOutcome {
         val bid = LegendCrypto.bid(code)
-        val tagEntity = tagDao.getByBid(bid) ?: return UnlockOutcome.Unknown
+        val tagEntity = tagDao.getByBid(bid, raceId) ?: return UnlockOutcome.Unknown
         if (tagEntity.iv == null || tagEntity.ct == null) {
             return UnlockOutcome.IdentityOnly(tagEntity.point)
         }
