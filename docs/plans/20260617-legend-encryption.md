@@ -319,22 +319,25 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/legend/LegendScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `LegendScreen`: drop the `legendVisible` param and delete `LegendLocked`; `when` becomes
-  `!hasTeam → LegendNoTeam` else `LegendList`. Update the KDoc.
-- [ ] `CheckpointRow`: branch on `cp.cost == null` → masked (Lock glyph in label slot, mono
+- [x] `LegendScreen`: drop the `legendVisible` param and delete `LegendLocked`; `when` becomes
+  `!hasTeam → LegendNoTeam` else `LegendList`. Update the KDoc. (`LegendAmber` removed too — it was
+  only used by `LegendLocked`.)
+- [x] `CheckpointRow`: branch on `cp.cost == null` → masked (Lock glyph in label slot, mono
   `?-${number.padStart(2,'0')}`, subtitle «Откроется на КП», muted `onSurfaceVariant`, no check
   icon); else current open/revealed row.
-- [ ] `LegendList`/`ScoreCard`: `cost` is now nullable, so **both** score sums need `mapNotNull` —
+- [x] `LegendList`/`ScoreCard`: `cost` is now nullable, so **both** score sums need `mapNotNull` —
   `totalScore = checkpoints.mapNotNull { it.cost }.sum()` and
-  `takenScore = checkpoints.filter { it.taken }.mapNotNull { it.cost }.sum()` (line ~105 breaks
-  otherwise). If any locked-unrevealed CP remains, show a quiet «+N закрытых КП» hint under the
-  progress bar. Filter/`totalCount` unchanged.
-- [ ] `MainActivity`: remove the `legendVisible = selectedRace?.isLegendVisible == true` argument.
-- [ ] grep-sweep `isLegendVisible` / `legendVisible` across `app/src/main` — confirm zero
-  stragglers.
-- [ ] (no automated UI test harness) verify via build + a manual run that locked rows mask and open
-  rows render; lint clean.
-- [ ] run `./gradlew lintDebug` — must pass.
+  `takenScore = checkpoints.filter { it.taken }.mapNotNull { it.cost }.sum()` (already in place from
+  prior task). A `lockedCount = checkpoints.count { it.cost == null }` drives a quiet «+N закрытых КП»
+  hint under the progress bar (shown only when `> 0`). Filter/`totalCount` unchanged.
+- [x] `MainActivity`: remove the `legendVisible = true` argument (the value was already a constant —
+  `is_legend_visible` had been dropped from the entity in Task 2/3, so no `selectedRace?.…` read existed).
+- [x] grep-sweep `isLegendVisible` / `legendVisible` across `app/src/main` — confirm zero
+  stragglers. (Only two remaining hits are `MIGRATION_3_4` comments describing the dropped column.)
+- [x] (no automated UI test harness) verify via build + a manual run that locked rows mask and open
+  rows render; lint clean. (Build + `compileDebugKotlin` green; manual run skipped — no
+  device/emulator in this environment.)
+- [x] run `./gradlew lintDebug` — must pass. (green; `testDebugUnitTest` also green.)
 
 ### Task 8: Verify acceptance criteria
 

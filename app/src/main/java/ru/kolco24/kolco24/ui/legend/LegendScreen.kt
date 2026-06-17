@@ -55,15 +55,14 @@ import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 
-/** Amber accent for the "before start" badge — not a theme token, matches the design's `AMBER`. */
-private val LegendAmber = Color(0xFFF2B36B)
-
 /**
- * Screen 02 — the «Легенда» tab. Stateless: it renders one of three states from the data passed in.
+ * Screen 02 — the «Легенда» tab. Stateless: it renders one of two states from the data passed in.
  * - [hasTeam] `false` → **02c LegendNoTeam** (no team/race selected yet) with a CTA to pick a team;
- * - [hasTeam] `true` but [legendVisible] `false` → **02b LegendLocked** (race not started, the API
- *   returns an empty legend) — charcoal "before start" hero card only;
  * - otherwise → the **02** checkpoint list backed by [checkpoints] (real data from Room).
+ *
+ * The legend is now **always** served (per-CP encryption replaced the race-level `is_legend_visible`
+ * flag), so there is no "before start" state: locked CPs arrive in [checkpoints] with `cost == null`
+ * and render as masked rows ([CheckpointRow]) until an NFC scan reveals them.
  *
  * [checkpoints] doubles as the model (no domain layer); [CheckpointEntity.taken] is always `false`
  * this iteration (marks not built yet) but the score card, filter and dim/strike row styling stay so
@@ -73,7 +72,6 @@ private val LegendAmber = Color(0xFFF2B36B)
 @Composable
 fun LegendScreen(
     checkpoints: List<CheckpointEntity>,
-    legendVisible: Boolean,
     hasTeam: Boolean,
     onChooseTeam: () -> Unit,
     modifier: Modifier = Modifier,
@@ -88,7 +86,6 @@ fun LegendScreen(
 
         when {
             !hasTeam -> LegendNoTeam(onChooseTeam = onChooseTeam)
-            !legendVisible -> LegendLocked()
             else -> LegendList(checkpoints = checkpoints)
         }
     }
@@ -102,10 +99,11 @@ private fun LegendList(checkpoints: List<CheckpointEntity>) {
 
     val takenCount = checkpoints.count { it.taken }
     val totalCount = checkpoints.size
-    // cost is nullable now (locked CPs hide it until unlocked); sum only the known costs. Task 7
-    // adds the masked-row rendering + «+N закрытых КП» hint.
+    // cost is nullable now (locked CPs hide it until unlocked); sum only the known costs. Locked-
+    // unrevealed CPs are surfaced as a «+N закрытых КП» hint instead of skewing the score.
     val takenScore = checkpoints.filter { it.taken }.mapNotNull { it.cost }.sum()
     val totalScore = checkpoints.mapNotNull { it.cost }.sum()
+    val lockedCount = checkpoints.count { it.cost == null }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -117,6 +115,7 @@ private fun LegendList(checkpoints: List<CheckpointEntity>) {
                 totalScore = totalScore,
                 takenCount = takenCount,
                 totalCount = totalCount,
+                lockedCount = lockedCount,
             )
         }
 
@@ -153,6 +152,7 @@ private fun ScoreCard(
     totalScore: Int,
     takenCount: Int,
     totalCount: Int,
+    lockedCount: Int,
 ) {
     val progress = if (totalScore > 0) takenScore.toFloat() / totalScore else 0f
 
@@ -204,6 +204,15 @@ private fun ScoreCard(
                 color = MaterialTheme.colorScheme.tertiary,
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
+
+            if (lockedCount > 0) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "+$lockedCount закрытых КП",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -274,8 +283,13 @@ private fun LegendFilterChip(
 
 @Composable
 private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
-    val contentColor = if (cp.taken) MaterialTheme.colorScheme.onSurfaceVariant
-                       else MaterialTheme.colorScheme.onSurface
+    // A locked CP arrives with `cost == null` (and no description) — the plaintext stays on the
+    // server until an NFC scan unlocks it, so the row is masked instead of showing a real label.
+    val locked = cp.cost == null
+    val contentColor = when {
+        locked || cp.taken -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurface
+    }
 
     Column {
         Row(
@@ -285,22 +299,47 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (locked) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.widthIn(min = 48.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = "?-${cp.number.toString().padStart(2, '0')}",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.sp,
+                        ),
+                        fontFamily = RobotoMono,
+                        color = contentColor,
+                    )
+                }
+            } else {
+                Text(
+                    text = "${cp.cost}-${cp.number.toString().padStart(2, '0')}",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.sp,
+                    ),
+                    fontFamily = RobotoMono,
+                    color = contentColor,
+                    modifier = Modifier.widthIn(min = 48.dp),
+                )
+            }
             Text(
-                text = "${cp.cost}-${cp.number.toString().padStart(2, '0')}",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.sp,
-                ),
-                fontFamily = RobotoMono,
-                color = contentColor,
-                modifier = Modifier.widthIn(min = 48.dp),
-            )
-            Text(
-                text = cp.description.orEmpty(),
+                text = if (locked) "Откроется на КП" else cp.description.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 15.5.sp,
-                    fontWeight = if (cp.taken) FontWeight.Normal else FontWeight.Medium,
+                    fontWeight = if (locked || cp.taken) FontWeight.Normal else FontWeight.Medium,
                     letterSpacing = 0.sp,
                 ),
                 color = contentColor,
@@ -308,7 +347,7 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (cp.taken) {
+            if (cp.taken && !locked) {
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = "Взято",
@@ -323,82 +362,6 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
                 modifier = Modifier.padding(start = 76.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
-        }
-    }
-}
-
-/**
- * 02b — legend locked before the race starts. The API returns an empty legend while hidden, so there
- * is no real CP count to show: this is the charcoal "before start" hero card only (the design's
- * skeleton placeholder rows are deferred — no data to size them against).
- */
-@Composable
-private fun LegendLocked() {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.inverseSurface,
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .drawBehind {
-                        drawCircle(color = Color.White.copy(alpha = 0.07f))
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Lock,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.inverseOnSurface,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .drawBehind { drawCircle(color = LegendAmber) },
-                    )
-                    Text(
-                        text = "ДО СТАРТА",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.3.sp,
-                        ),
-                        fontFamily = RobotoMono,
-                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.70f),
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Легенда откроется на старте",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Стоимость и описания КП появятся автоматически в момент сигнала",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.58f),
-                )
-            }
         }
     }
 }
