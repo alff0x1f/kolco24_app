@@ -341,13 +341,20 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify all Overview requirements: new legend/tags parsed; locked CPs masked; crypto engine
-  present + (vector-gated) verified; `is_legend_visible` fully removed; `sync` untouched.
-- [ ] verify edge cases: unmatched bid → `Unknown`; tampered ct → `Failed`; open-CP tag →
-  identity-only; refresh after reveal keeps the CP revealed.
-- [ ] run full unit suite: `./gradlew testDebugUnitTest`.
-- [ ] run `./gradlew lintDebug`.
-- [ ] run `./gradlew connectedDebugAndroidTest` (migration) if a device/emulator is available.
+- [x] verify all Overview requirements: new legend/tags parsed (`LegendResponseTest`,
+  `success_mapsLockedCheckpointAndTags`); locked CPs masked (`LegendScreen` Task 7); crypto engine
+  present + (vector-gated) verified (`LegendCrypto` + `@Ignore`d `LegendCryptoTest`);
+  `is_legend_visible` fully removed (only `MIGRATION_3_4` comments remain); `sync` untouched
+  (absent from `ApiClient`).
+- [x] verify edge cases: unmatched bid → `Unknown` (`unlock_unknownBidReturnsUnknown`); tampered ct
+  → `Failed` (`unlock_tamperedCiphertextReturnsFailed`); open-CP tag → identity-only
+  (`unlock_openCpTagReturnsIdentityOnly`); refresh after reveal keeps the CP revealed
+  (`CheckpointDaoTest` preserve-on-resync).
+- [x] run full unit suite: `./gradlew testDebugUnitTest`. (green)
+- [x] run `./gradlew lintDebug`. (green)
+- [x] manual test (skipped — not automatable): `./gradlew connectedDebugAndroidTest` (migration)
+  needs a device/emulator, unavailable in this environment; test compiles and is the real gate when
+  a device is attached.
 
 ### Task 9: [Final] Update documentation
 
