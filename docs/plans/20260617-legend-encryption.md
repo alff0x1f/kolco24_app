@@ -292,24 +292,25 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/RaceRepositoryTest.kt` (drop
   `isLegendVisible = true` from the fixture at ~:188 — otherwise the entity change won't compile)
 
-- [ ] `refreshLegend`: map + persist both arrays on `200` — `checkpointDao.replaceAllForRace(...)`
+- [x] `refreshLegend`: map + persist both arrays on `200` — `checkpointDao.replaceAllForRace(...)`
   then `tagDao.replaceAllForRace(...)` then ETag upsert. `CheckpointDto.toEntity`:
   `locked = (enc != null)`, `encIv/encCt = enc?.iv/ct`, cost/description pass through.
-  `TagDto.toEntity`: 1:1.
-- [ ] add `LegendRepository.unlock(raceId, code: ByteArray): UnlockOutcome`: `bid` →
+  `TagDto.toEntity`: 1:1. (`LegendRepository` now takes `tagDao` + `json`; `AppContainer` wires both.)
+- [x] add `LegendRepository.unlock(raceId, code: ByteArray): UnlockOutcome`: `bid` →
   `tagDao.getByBid`; null → `Unknown`; `tag.iv==null` → `IdentityOnly(point)`; else build the
   `id→EncBlob` map from the race's checkpoints, call `LegendCrypto.unlock(...)`, **map
   its `UnlockResult` → `UnlockOutcome`** (`Revealed`→persist + `Revealed(point, ids)`, `Failed`→
   `Failed`), persisting each revealed CP via `checkpointDao.reveal(id, cost, description)` (`locked`
-  stays true). Do NOT touch `taken`. (Define `UnlockOutcome` here; the `UnlockResult`→
-  `UnlockOutcome` translation is the repo's job — the engine stays persistence-free.)
-- [ ] `RaceRepository`: drop `isLegendVisible` from the DTO→entity map.
-- [ ] update `RaceRepositoryTest` — remove `isLegendVisible` from the fixture/assertions so the
-  existing test compiles.
-- [ ] write test: `unlock` against the fed server vector returns `Revealed` and persists `cost`/
-  `description` (`FakeCheckpointDao`/`FakeTagDao`); `Unknown` for an unmatched bid; `IdentityOnly`
-  for an iv-null tag. (Vector-dependent parts share the Task 5 fixture / `@Ignore` gate.)
-- [ ] run tests — must pass before next task.
+  stays true). Do NOT touch `taken`. (`UnlockOutcome` defined in `LegendRepository.kt`.)
+- [x] `RaceRepository`: drop `isLegendVisible` from the DTO→entity map. (Already absent — removed
+  with the `RaceEntity` column in Task 2/3; the map never referenced it.)
+- [x] update `RaceRepositoryTest` — remove `isLegendVisible` from the fixture/assertions so the
+  existing test compiles. (No references present — already clean from Task 2/3.)
+- [x] write test: `unlock` returns `Revealed` and persists `cost`/`description` (self-sealed fixture
+  via a test-only `seal`, since the server vector is unavailable — see Task 5); `Unknown` for an
+  unmatched bid; `IdentityOnly` for an iv-null tag; `Failed` for tampered ct. Plus a
+  `refreshLegend` test asserting a locked CP maps to `enc`/`locked` and both tag shapes persist.
+- [x] run tests — must pass before next task. (`testDebugUnitTest` + `lintDebug` green.)
 
 ### Task 7: Legend UI masked rows + races cleanup in UI
 

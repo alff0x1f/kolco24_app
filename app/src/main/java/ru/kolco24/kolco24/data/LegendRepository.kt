@@ -1,29 +1,44 @@
 package ru.kolco24.kolco24.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.FetchResult
 import ru.kolco24.kolco24.data.api.dto.CheckpointDto
+import ru.kolco24.kolco24.data.api.dto.TagDto
+import ru.kolco24.kolco24.data.crypto.EncBlob
+import ru.kolco24.kolco24.data.crypto.LegendCrypto
+import ru.kolco24.kolco24.data.crypto.UnlockResult
+import ru.kolco24.kolco24.data.crypto.UnlockTag
 import ru.kolco24.kolco24.data.db.CheckpointDao
 import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.SyncMetaDao
 import ru.kolco24.kolco24.data.db.SyncMetaEntity
+import ru.kolco24.kolco24.data.db.TagDao
+import ru.kolco24.kolco24.data.db.TagEntity
 
 /** Per-race `sync_meta` resource for the legend endpoint (see [SyncMetaEntity]). */
 private fun legendResource(raceId: Int): String = "race/$raceId/legend"
 
 /**
- * Single source of truth for one race's legend (checkpoints). Room holds the data; the network only
- * updates it. The UI reads [checkpointsForRace]; [refreshLegend] performs a conditional fetch and,
- * on `200`, fully replaces that race's local checkpoint rows.
+ * Single source of truth for one race's legend (checkpoints + NFC tags). Room holds the data; the
+ * network only updates it. The UI reads [checkpointsForRace]; [refreshLegend] performs a conditional
+ * fetch and, on `200`, fully replaces that race's local checkpoint and tag rows.
+ *
+ * Locked checkpoints can be revealed **offline** via [unlock]: the scanned tag's `code` runs through
+ * [LegendCrypto] and the decrypted `{cost, description}` is persisted onto the matching checkpoint
+ * rows (the row stays `locked` — only its content fills in).
  *
  * @param origin base URL the data is associated with — used as the ETag partition key in `sync_meta`.
  */
 class LegendRepository(
     private val apiClient: ApiClient,
     private val checkpointDao: CheckpointDao,
+    private val tagDao: TagDao,
     private val syncMetaDao: SyncMetaDao,
     private val origin: String,
+    private val json: Json,
 ) {
     /** Offline-readable checkpoints of one race, ordered by number then id. */
     fun checkpointsForRace(raceId: Int): Flow<List<CheckpointEntity>> =
@@ -31,9 +46,9 @@ class LegendRepository(
 
     /**
      * Fetches `/app/race/<raceId>/legend/` with the stored ETag and, on `200`, replaces that race's
-     * checkpoints then saves the new ETag. Like [TeamRepository.refreshTeams], the data write and the
-     * ETag write are two **separate** transactions on purpose: a crash between them leaves fresh data
-     * with a stale ETag, so the next refresh gets another `200` and self-heals.
+     * checkpoints **and** tags, then saves the new ETag. Like [TeamRepository.refreshTeams], the data
+     * writes and the ETag write are separate transactions on purpose: a crash between them leaves
+     * fresh data with a stale ETag, so the next refresh gets another `200` and self-heals.
      */
     suspend fun refreshLegend(raceId: Int): RefreshResult {
         val resource = legendResource(raceId)
@@ -44,6 +59,10 @@ class LegendRepository(
                 checkpointDao.replaceAllForRace(
                     raceId = raceId,
                     checkpoints = response.checkpoints.map { it.toEntity(raceId) },
+                )
+                tagDao.replaceAllForRace(
+                    raceId = raceId,
+                    tags = response.tags.map { it.toEntity(raceId) },
                 )
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(origin, resource, result.etag))
@@ -56,16 +75,93 @@ class LegendRepository(
                 if (result.code == null) RefreshResult.Offline else RefreshResult.HttpError(result.code)
         }
     }
+
+    /**
+     * Offline-decrypts a scanned tag and persists any revealed checkpoint plaintext.
+     *
+     * The 16-byte NFC [code] is hashed to a `bid` and looked up in [TagDao]; the [LegendCrypto] engine
+     * does the actual crypto (this method only owns the DB lookup, the entity→[EncBlob] map, and
+     * persistence). Each revealed CP is written via [CheckpointDao.reveal] — `locked` and `taken` are
+     * left untouched (the unbuilt marks feature owns `taken`).
+     *
+     * @return an [UnlockOutcome]: [UnlockOutcome.Unknown] when no tag matches the `bid`,
+     *   [UnlockOutcome.IdentityOnly] for an open-CP tag (nothing to decrypt),
+     *   [UnlockOutcome.Revealed] (with the persisted CP ids) on success, or [UnlockOutcome.Failed] on
+     *   any crypto/parse error.
+     */
+    suspend fun unlock(raceId: Int, code: ByteArray): UnlockOutcome {
+        val bid = LegendCrypto.bid(code)
+        val tagEntity = tagDao.getByBid(bid) ?: return UnlockOutcome.Unknown
+        if (tagEntity.iv == null || tagEntity.ct == null) {
+            return UnlockOutcome.IdentityOnly(tagEntity.point)
+        }
+        val encById = checkpointDao.observeCheckpointsForRace(raceId).first()
+            .mapNotNull { cp ->
+                val iv = cp.encIv
+                val ct = cp.encCt
+                if (iv != null && ct != null) cp.id to EncBlob(iv, ct) else null
+            }
+            .toMap()
+        val result = LegendCrypto.unlock(
+            code = code,
+            tag = UnlockTag(tagEntity.point, tagEntity.iv, tagEntity.ct),
+            encById = encById,
+            json = json,
+        )
+        return when (result) {
+            is UnlockResult.Revealed -> {
+                for (cp in result.checkpoints) {
+                    checkpointDao.reveal(cp.id, cp.cost, cp.description)
+                }
+                UnlockOutcome.Revealed(result.point, result.checkpoints.map { it.id })
+            }
+            is UnlockResult.IdentityOnly -> UnlockOutcome.IdentityOnly(result.point)
+            is UnlockResult.Failed -> UnlockOutcome.Failed(result.reason)
+        }
+    }
 }
 
-/** Maps a network DTO to the persisted entity, stamping the owning [raceId]. `taken` starts `false`. */
+/**
+ * Persistence-aware outcome of [LegendRepository.unlock] (the repo's translation of the engine's
+ * [UnlockResult]). [Unknown] has no engine counterpart — it means the scanned `bid` matched no tag.
+ */
+sealed interface UnlockOutcome {
+    /** Revealed [checkpointIds] were decrypted and persisted; the tag belongs to [point]. */
+    data class Revealed(val point: Int, val checkpointIds: List<Int>) : UnlockOutcome
+
+    /** Open-CP tag: only identifies its [point], nothing to decrypt. */
+    data class IdentityOnly(val point: Int) : UnlockOutcome
+
+    /** No tag matched the scanned `bid` (unknown tag for this race set). */
+    data object Unknown : UnlockOutcome
+
+    /** A crypto or parse failure (wrong key, tamper, malformed bundle). */
+    data class Failed(val reason: String) : UnlockOutcome
+}
+
+/**
+ * Maps a network DTO to the persisted entity, stamping the owning [raceId]. A locked CP arrives with
+ * an `enc` envelope and no `cost`/`description`; an open CP carries its content directly.
+ * `taken` starts `false`. [CheckpointDao.replaceAllForRace] preserves any prior offline reveal.
+ */
 private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEntity(
     id = id,
     raceId = raceId,
     number = number,
-    // cost/description are now nullable on the DTO (locked CPs omit them). CheckpointEntity gains
-    // nullable columns + locked/enc in Task 2; until then fall back so this compiles.
-    cost = cost ?: 0,
+    cost = cost,
     type = type,
-    description = description.orEmpty(),
+    description = description,
+    locked = enc != null,
+    encIv = enc?.iv,
+    encCt = enc?.ct,
+)
+
+/** Maps a `tags[]` DTO to its persisted entity (1:1), stamping the owning [raceId]. */
+private fun TagDto.toEntity(raceId: Int): TagEntity = TagEntity(
+    bid = bid,
+    raceId = raceId,
+    point = point,
+    checkMethod = checkMethod,
+    iv = iv,
+    ct = ct,
 )

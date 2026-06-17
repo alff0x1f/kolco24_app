@@ -17,17 +17,27 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import okio.ByteString.Companion.toByteString
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
+import ru.kolco24.kolco24.data.crypto.EncBlob
+import ru.kolco24.kolco24.data.crypto.LegendCrypto
 import ru.kolco24.kolco24.data.db.CheckpointDao
 import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.SyncMetaDao
 import ru.kolco24.kolco24.data.db.SyncMetaEntity
+import ru.kolco24.kolco24.data.db.TagDao
+import ru.kolco24.kolco24.data.db.TagEntity
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class LegendRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var checkpointDao: FakeCheckpointDao
+    private lateinit var tagDao: FakeTagDao
     private lateinit var syncMetaDao: FakeLegendSyncMetaDao
     private lateinit var repository: LegendRepository
     private lateinit var origin: String
@@ -58,8 +68,9 @@ class LegendRepositoryTest {
         )
         val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
         checkpointDao = FakeCheckpointDao(callLog)
+        tagDao = FakeTagDao(callLog)
         syncMetaDao = FakeLegendSyncMetaDao(callLog)
-        repository = LegendRepository(apiClient, checkpointDao, syncMetaDao, origin)
+        repository = LegendRepository(apiClient, checkpointDao, tagDao, syncMetaDao, origin, json)
     }
 
     @After
@@ -97,7 +108,7 @@ class LegendRepositoryTest {
 
         repository.refreshLegend(8)
 
-        assertEquals(listOf("replaceAllForRace", "upsertEtag"), callLog)
+        assertEquals(listOf("replaceAllForRace", "replaceAllTags", "upsertEtag"), callLog)
     }
 
     @Test
@@ -108,7 +119,7 @@ class LegendRepositoryTest {
 
         assertEquals(1, repository.checkpointsForRace(8).first().size)
         assertNull(syncMetaDao.getEtag(origin, "race/8/legend"))
-        assertEquals(listOf("replaceAllForRace"), callLog)
+        assertEquals(listOf("replaceAllForRace", "replaceAllTags"), callLog)
     }
 
     @Test
@@ -187,6 +198,130 @@ class LegendRepositoryTest {
         assertTrue(repository.checkpointsForRace(8).first().isEmpty())
     }
 
+    @Test
+    fun success_mapsLockedCheckpointAndTags() = runTest {
+        val body = """
+            {"race":8,"checkpoints":[
+              {"id":101,"number":1,"cost":10,"type":"kp","description":"open"},
+              {"id":102,"number":2,"type":"kp","enc":{"iv":"AAAA","ct":"BBBB"}}
+            ],"tags":[
+              {"bid":"abc123","point":101,"check_method":"nfc"},
+              {"bid":"def456","point":102,"check_method":"nfc","iv":"IV","ct":"CT"}
+            ]}
+        """.trimIndent()
+        server.enqueue(MockResponse().setResponseCode(200).setBody(body))
+
+        assertEquals(RefreshResult.Updated, repository.refreshLegend(8))
+
+        val checkpoints = repository.checkpointsForRace(8).first()
+        val locked = checkpoints.single { it.id == 102 }
+        assertTrue(locked.locked)
+        assertNull(locked.cost)
+        assertNull(locked.description)
+        assertEquals("AAAA", locked.encIv)
+        assertEquals("BBBB", locked.encCt)
+        val open = checkpoints.single { it.id == 101 }
+        assertFalse(open.locked)
+        assertEquals(10, open.cost)
+
+        val tags = tagDao.observeTagsForRace(8).first()
+        assertEquals(2, tags.size)
+        assertNull(tags.single { it.bid == "abc123" }.iv)
+        assertEquals("IV", tags.single { it.bid == "def456" }.iv)
+    }
+
+    @Test
+    fun unlock_revealsAndPersistsCheckpointPlaintext() = runTest {
+        val code = ByteArray(16) { (it * 5).toByte() }
+        val cpId = 102
+        val contentKey = ByteArray(32) { (it + 2).toByte() }
+        val enc = seal(contentKey, """{"cost":7,"description":"Грот"}""".toByteArray(), cpId.toString().toByteArray(Charsets.US_ASCII))
+        val bundleJson = """{"$cpId":"${contentKey.toByteString().base64()}"}"""
+        val wrapKey = LegendCrypto.deriveWrapKey(code)
+        val bundle = seal(wrapKey, bundleJson.toByteArray(), LegendCrypto.bid(code).toByteArray(Charsets.US_ASCII))
+
+        checkpointDao.setCheckpoints(
+            listOf(lockedCheckpoint(id = cpId, raceId = 8, encIv = enc.iv, encCt = enc.ct)),
+        )
+        tagDao.setTags(
+            listOf(
+                TagEntity(
+                    bid = LegendCrypto.bid(code),
+                    raceId = 8,
+                    point = cpId,
+                    checkMethod = "nfc",
+                    iv = bundle.iv,
+                    ct = bundle.ct,
+                ),
+            ),
+        )
+
+        val outcome = repository.unlock(8, code)
+
+        assertEquals(UnlockOutcome.Revealed(cpId, listOf(cpId)), outcome)
+        val cp = repository.checkpointsForRace(8).first().single()
+        assertEquals(7, cp.cost)
+        assertEquals("Грот", cp.description)
+        assertTrue("reveal must not clear locked", cp.locked)
+    }
+
+    @Test
+    fun unlock_unknownBidReturnsUnknown() = runTest {
+        val outcome = repository.unlock(8, ByteArray(16) { 1 })
+        assertEquals(UnlockOutcome.Unknown, outcome)
+    }
+
+    @Test
+    fun unlock_openCpTagReturnsIdentityOnly() = runTest {
+        val code = ByteArray(16) { 2 }
+        tagDao.setTags(
+            listOf(
+                TagEntity(
+                    bid = LegendCrypto.bid(code),
+                    raceId = 8,
+                    point = 101,
+                    checkMethod = "nfc",
+                    iv = null,
+                    ct = null,
+                ),
+            ),
+        )
+
+        assertEquals(UnlockOutcome.IdentityOnly(101), repository.unlock(8, code))
+    }
+
+    @Test
+    fun unlock_tamperedCiphertextReturnsFailed() = runTest {
+        val code = ByteArray(16) { 3 }
+        val wrapKey = LegendCrypto.deriveWrapKey(code)
+        val bundle = seal(wrapKey, """{"102":"AAAA"}""".toByteArray(), LegendCrypto.bid(code).toByteArray(Charsets.US_ASCII))
+        val tamperedCt = (if (bundle.ct[0] == 'A') 'B' else 'A') + bundle.ct.substring(1)
+        tagDao.setTags(
+            listOf(
+                TagEntity(
+                    bid = LegendCrypto.bid(code),
+                    raceId = 8,
+                    point = 102,
+                    checkMethod = "nfc",
+                    iv = bundle.iv,
+                    ct = tamperedCt,
+                ),
+            ),
+        )
+
+        assertTrue(repository.unlock(8, code) is UnlockOutcome.Failed)
+    }
+
+    /** Test-only AES-256-GCM seal, mirroring [LegendCrypto.open]'s decrypt direction. */
+    private fun seal(key: ByteArray, plaintext: ByteArray, aad: ByteArray): EncBlob {
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+        cipher.updateAAD(aad)
+        val ct = cipher.doFinal(plaintext)
+        return EncBlob(iv = iv.toByteString().base64(), ct = ct.toByteString().base64())
+    }
+
     private fun checkpointEntity(id: Int, raceId: Int) = CheckpointEntity(
         id = id,
         raceId = raceId,
@@ -194,6 +329,18 @@ class LegendRepositoryTest {
         cost = 10,
         type = "kp",
         description = "test",
+    )
+
+    private fun lockedCheckpoint(id: Int, raceId: Int, encIv: String, encCt: String) = CheckpointEntity(
+        id = id,
+        raceId = raceId,
+        number = 1,
+        cost = null,
+        type = "kp",
+        description = null,
+        locked = true,
+        encIv = encIv,
+        encCt = encCt,
     )
 }
 
@@ -228,6 +375,33 @@ private class FakeCheckpointDao(private val callLog: MutableList<String>) : Chec
         deleteCheckpointsForRace(raceId)
         insertCheckpoints(checkpoints)
         callLog.add("replaceAllForRace")
+    }
+}
+
+private class FakeTagDao(private val callLog: MutableList<String>) : TagDao {
+    private val tags = MutableStateFlow<List<TagEntity>>(emptyList())
+
+    fun setTags(value: List<TagEntity>) {
+        tags.value = value
+    }
+
+    override fun observeTagsForRace(raceId: Int): Flow<List<TagEntity>> =
+        tags.map { list -> list.filter { it.raceId == raceId } }
+
+    override suspend fun getByBid(bid: String): TagEntity? = tags.value.firstOrNull { it.bid == bid }
+
+    override suspend fun insertTags(tags: List<TagEntity>) {
+        this.tags.value = this.tags.value + tags
+    }
+
+    override suspend fun deleteTagsForRace(raceId: Int) {
+        tags.value = tags.value.filterNot { it.raceId == raceId }
+    }
+
+    override suspend fun replaceAllForRace(raceId: Int, tags: List<TagEntity>) {
+        deleteTagsForRace(raceId)
+        insertTags(tags)
+        callLog.add("replaceAllTags")
     }
 }
 

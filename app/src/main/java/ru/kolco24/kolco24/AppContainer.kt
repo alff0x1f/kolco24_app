@@ -64,8 +64,10 @@ class AppContainer(private val context: Context) {
         LegendRepository(
             apiClient = apiClient,
             checkpointDao = database.checkpointDao(),
+            tagDao = database.tagDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            json = json,
         )
     }
 
