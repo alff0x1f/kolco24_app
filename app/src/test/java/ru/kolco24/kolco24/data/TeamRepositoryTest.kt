@@ -298,6 +298,10 @@ private class FakeSelectedTeamDao : SelectedTeamDao {
     override suspend fun upsert(selected: SelectedTeamEntity) {
         state.value = selected
     }
+
+    override suspend fun clear() {
+        state.value = null
+    }
 }
 
 /** In-memory [SyncMetaDao] keyed by `(origin, resource)`. */

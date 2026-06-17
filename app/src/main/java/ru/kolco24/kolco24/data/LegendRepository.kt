@@ -63,7 +63,9 @@ private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEn
     id = id,
     raceId = raceId,
     number = number,
-    cost = cost,
+    // cost/description are now nullable on the DTO (locked CPs omit them). CheckpointEntity gains
+    // nullable columns + locked/enc in Task 2; until then fall back so this compiles.
+    cost = cost ?: 0,
     type = type,
-    description = description,
+    description = description.orEmpty(),
 )

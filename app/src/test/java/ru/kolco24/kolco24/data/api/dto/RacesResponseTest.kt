@@ -5,7 +5,6 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RacesResponseTest {
@@ -25,8 +24,7 @@ class RacesResponseTest {
                   "date": "2026-06-20",
                   "date_end": "2026-06-21",
                   "place": "Сосновый бор",
-                  "reg_status": "open",
-                  "is_legend_visible": true
+                  "reg_status": "open"
                 }
               ]
             }
@@ -43,7 +41,30 @@ class RacesResponseTest {
         assertEquals("2026-06-21", race.dateEnd)
         assertEquals("Сосновый бор", race.place)
         assertEquals("open", race.regStatus)
-        assertTrue(race.isLegendVisible)
+    }
+
+    @Test
+    fun parsesWithoutLegendVisibleField() {
+        // The new contract dropped is_legend_visible from /app/races/ entirely.
+        val payload = """
+            {
+              "races": [
+                {
+                  "id": 8,
+                  "name": "Кольцо24 2026",
+                  "slug": "kolco24-2026",
+                  "date": "2026-06-20",
+                  "date_end": "2026-06-21",
+                  "place": "Сосновый бор",
+                  "reg_status": "open"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<RacesResponse>(payload)
+
+        assertEquals(8, response.races[0].id)
     }
 
     @Test

@@ -147,19 +147,19 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/dto/RacesResponseTest.kt` (drop the
   `assertTrue(race.isLegendVisible)` assertion at ~:46 — otherwise the DTO change won't compile)
 
-- [ ] `LegendResponse`: add `tags: List<TagDto> = emptyList()`.
-- [ ] `CheckpointDto`: make `cost: Int? = null`, `description: String? = null`; add
+- [x] `LegendResponse`: add `tags: List<TagDto> = emptyList()`.
+- [x] `CheckpointDto`: make `cost: Int? = null`, `description: String? = null`; add
   `enc: EncDto? = null`. Add `EncDto(iv: String, ct: String)`.
-- [ ] Add
+- [x] Add
   `TagDto(bid, point, @SerialName("check_method") checkMethod, iv: String? = null, ct: String? = null)`.
-- [ ] `RacesResponse`: delete the `@SerialName("is_legend_visible") isLegendVisible` field.
-- [ ] update `RacesResponseTest` — remove the `isLegendVisible` assertion so the existing test still
+- [x] `RacesResponse`: delete the `@SerialName("is_legend_visible") isLegendVisible` field.
+- [x] update `RacesResponseTest` — remove the `isLegendVisible` assertion so the existing test still
   compiles.
-- [ ] write test: parse the doc's sample legend JSON (mixed open + locked CP, two tag shapes) via a
+- [x] write test: parse the doc's sample legend JSON (mixed open + locked CP, two tag shapes) via a
   `Json { ignoreUnknownKeys = true }`; assert locked CP has `cost==null`/`enc!=null`, open CP has
   `enc==null`, open-CP tag has `iv==null`.
-- [ ] write test: parse a `/app/races/` sample WITHOUT `is_legend_visible`; assert it succeeds.
-- [ ] run tests — must pass before next task.
+- [x] write test: parse a `/app/races/` sample WITHOUT `is_legend_visible`; assert it succeeds.
+- [x] run tests — must pass before next task.
 
 ### Task 2: Checkpoint entity (nullable + enc/locked) and TagEntity/TagDao
 
