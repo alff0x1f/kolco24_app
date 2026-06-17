@@ -324,7 +324,7 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
                 }
             } else {
                 Text(
-                    text = "${cp.cost}-${cp.number.toString().padStart(2, '0')}",
+                    text = "${cp.cost ?: 0}-${cp.number.toString().padStart(2, '0')}",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,

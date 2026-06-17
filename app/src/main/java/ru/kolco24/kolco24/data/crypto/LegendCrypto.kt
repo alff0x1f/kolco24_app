@@ -56,7 +56,7 @@ object LegendCrypto {
         mac.init(SecretKeySpec(prk, "HmacSHA256"))
         mac.update(WRAP_INFO.toByteArray(Charsets.US_ASCII))
         mac.update(byteArrayOf(0x01))
-        return mac.doFinal().copyOf(SHA256_LEN)
+        return mac.doFinal()
     }
 
     /**
