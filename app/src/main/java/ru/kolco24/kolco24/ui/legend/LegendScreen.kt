@@ -103,7 +103,7 @@ private fun LegendList(checkpoints: List<CheckpointEntity>) {
     // unrevealed CPs are surfaced as a «+N закрытых КП» hint instead of skewing the score.
     val takenScore = checkpoints.filter { it.taken }.mapNotNull { it.cost }.sum()
     val totalScore = checkpoints.mapNotNull { it.cost }.sum()
-    val lockedCount = checkpoints.count { it.cost == null }
+    val lockedCount = checkpoints.count { it.locked }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -283,9 +283,9 @@ private fun LegendFilterChip(
 
 @Composable
 private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
-    // A locked CP arrives with `cost == null` (and no description) — the plaintext stays on the
-    // server until an NFC scan unlocks it, so the row is masked instead of showing a real label.
-    val locked = cp.cost == null
+    // A locked CP has `locked = true` — the plaintext stays on the server until an NFC scan
+    // unlocks it, so the row is masked instead of showing a real label.
+    val locked = cp.locked
     val contentColor = when {
         locked || cp.taken -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface

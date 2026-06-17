@@ -110,6 +110,9 @@ object LegendCrypto {
                 )
                 RevealedCheckpoint(cpId, plain.cost, plain.description)
             }
+            if (revealed.isEmpty() && bundle.isNotEmpty()) {
+                return UnlockResult.Failed("no matching checkpoints in local cache — legend may be stale")
+            }
             UnlockResult.Revealed(tag.point, revealed)
         } catch (e: GeneralSecurityException) {
             UnlockResult.Failed(e.message ?: e.javaClass.simpleName)

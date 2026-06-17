@@ -45,7 +45,7 @@ interface CheckpointDao {
         deleteCheckpointsForRace(raceId)
         insertCheckpoints(checkpoints)
         for (incoming in checkpoints) {
-            if (incoming.cost == null) {
+            if (incoming.locked) {
                 val prior = previouslyRevealed[incoming.id] ?: continue
                 val cost = prior.cost ?: continue
                 reveal(incoming.id, cost, prior.description)
