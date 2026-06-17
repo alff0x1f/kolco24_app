@@ -253,6 +253,24 @@ private fun Kolco24AppRoot() {
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
                 },
+                onResetTeam = if (BuildConfig.DEBUG) {
+                    {
+                        // applicationScope (not composition scope) so the delete outlives the
+                        // closing overlay — same reasoning as selectTeam below.
+                        container.applicationScope.launch { teamRepo.clearSelectedTeam() }
+                        showSettings = false
+                    }
+                } else {
+                    null
+                },
+                onClearDatabase = if (BuildConfig.DEBUG) {
+                    {
+                        container.applicationScope.launch { container.clearDatabase() }
+                        showSettings = false
+                    }
+                } else {
+                    null
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

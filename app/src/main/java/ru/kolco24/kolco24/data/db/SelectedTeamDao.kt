@@ -12,4 +12,7 @@ interface SelectedTeamDao {
 
     @Upsert
     suspend fun upsert(selected: SelectedTeamEntity)
+
+    @Query("DELETE FROM selected_team")
+    suspend fun clear()
 }

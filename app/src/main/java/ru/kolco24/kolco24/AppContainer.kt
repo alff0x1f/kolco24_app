@@ -71,4 +71,11 @@ class AppContainer(private val context: Context) {
 
     /** Long-lived scope for fire-and-forget background work (e.g. startup refresh). */
     val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Debug/testing only — wipes every Room table (races, categories, teams, selected_team,
+     * checkpoints) plus the `sync_meta` ETags, so the next refresh re-fetches everything from
+     * scratch. Blocking; call from a background dispatcher.
+     */
+    fun clearDatabase() = database.clearAllTables()
 }
