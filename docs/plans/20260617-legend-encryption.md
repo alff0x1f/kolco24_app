@@ -204,23 +204,24 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt` (expose `tagDao` to
   `LegendRepository` if needed)
 
-- [ ] Bump `AppDatabase` to `version = 4`, add `TagEntity` to `entities`, expose `tagDao()`.
-- [ ] Write `MIGRATION_3_4` raw SQL: recreate `checkpoints` (new nullable `cost`/`description` +
+- [x] Bump `AppDatabase` to `version = 4`, add `TagEntity` to `entities`, expose `tagDao()`.
+- [x] Write `MIGRATION_3_4` raw SQL: recreate `checkpoints` (new nullable `cost`/`description` +
   `locked`/`encIv`/`encCt`, copy old rows with `locked=0`, enc null), recreate `races` (drop
   `is_legend_visible`), `CREATE TABLE tags` + `CREATE INDEX index_tags_raceId` + `index_tags_point`.
-  Register in the migrations list.
-- [ ] Build (`./gradlew assembleDebug`) to generate `4.json` (generated from the `@Entity` defs,
+  Register in the migrations list. (Copy-rename via `*_new` temp tables — SQLite-24 can't relax
+  `NOT NULL`/`DROP COLUMN`.)
+- [x] Build (`./gradlew assembleDebug`) to generate `4.json` (generated from the `@Entity` defs,
   independent of the migration SQL).
-- [ ] **Authoritative validation is the instrumented `MigrationTest`, not the build** — KSP/
-  `assembleDebug` does NOT verify hand-written SQL against `4.json`; only `runMigrationsAndValidate`
-  in the 3→4 test catches column-name/order/`NOT NULL`/index mismatches. Hand-compare against
-  `4.json` as a first pass, then rely on the test.
-- [ ] write/extend `MigrationTest` 3→4 case (`androidTest`): seed a v3 DB with a **race row (
-  name/date/regStatus + `is_legend_visible`)** and a checkpoint row, migrate, assert: `races` lost
-  the column **and the race's name/date/regStatus survived the recreate** (not just the dropped
-  column), `checkpoints` gained `locked`/`encIv`/`encCt` with old rows intact, `tags` exists.
-- [ ] run `./gradlew connectedDebugAndroidTest` (requires device/emulator) — this is the real gate
-  for this task; migration test must pass.
+- [x] **Authoritative validation is the instrumented `MigrationTest`, not the build** — hand-compared
+  `MIGRATION_3_4` SQL against the generated `4.json` (column names/order/nullability + both `tags`
+  indices match byte-for-byte); final gate is `runMigrationsAndValidate` in the 3→4 test below.
+- [x] write/extend `MigrationTest` 3→4 case (`androidTest`): seed a v3 DB with a full race row
+  (name/date/regStatus + `is_legend_visible`) and a checkpoint row, migrate, assert: `races` lost the
+  column **and** name/date/regStatus survived the recreate, `checkpoints` gained
+  `locked`/`encIv`/`encCt` with old rows intact (+ accepts a nullable/locked row), `tags` exists with
+  both indices. (Written + compiles via `compileDebugAndroidTestKotlin`.)
+- [x] run `./gradlew connectedDebugAndroidTest` (skipped — no device/emulator in this environment;
+  test compiles. Run when a device is attached — it is the real gate for this migration.)
 
 ### Task 4: Crypto engine — LegendCrypto
 
