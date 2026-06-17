@@ -260,17 +260,27 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/crypto/LegendCryptoTest.kt`
 - Create: test fixture (constants or `app/src/test/resources/legend_vector.json`)
 
-- [ ] ⚠️ obtain the server-generated vector (see Prerequisite). Until then, write the test against
-  placeholder constants with a TODO and `@Ignore`/skip the vector assertions.
-- [ ] assert `bid(code)` → expected 16-hex.
-- [ ] assert `deriveWrapKey(code)` → expected 32 bytes (hex).
-- [ ] assert `open(...)` on the tag envelope → expected bundle JSON.
-- [ ] assert full `unlock(code, tag, checkpoints)` → exact `cost` + `description` for each opened
-  CP (incl. a content-key-indirection CP).
-- [ ] assert tampered `ct` → `Failed`; open-CP tag (`iv==null`) → `IdentityOnly`.
-- [ ] `[x] write tests ... (vector assertions @Ignore until server fixture lands)` — remove the
-  TODO/`@Ignore` and verify green once the fixture is provided.
-- [ ] run tests.
+- [x] ⚠️ obtain the server-generated vector (see Prerequisite) — BLOCKED: fixture does not exist in
+  this repo (the design doc shows only truncated `8f3a…` samples). Wrote `LegendCryptoTest.kt`
+  against clearly-marked placeholder constants (`CODE_HEX`/`EXPECTED_BID`/`EXPECTED_WRAP_KEY_HEX`/
+  tag+enc Base64/expected plaintext) with a `TODO(server-vector)` and `@Ignore` on the vector
+  assertions, so the suite stays green without passing on fake data.
+- [x] assert `bid(code)` → expected 16-hex. (`bidMatchesServerVector`, `@Ignore`d until fixture.)
+- [x] assert `deriveWrapKey(code)` → expected 32 bytes (hex). (`deriveWrapKeyMatchesServerVector`,
+  `@Ignore`d.)
+- [x] assert `open(...)` on the tag envelope → expected bundle JSON.
+  (`openDecryptsTagBundleToContentKeyMap`, `@Ignore`d.)
+- [x] assert full `unlock(code, tag, checkpoints)` → exact `cost` + `description` for each opened
+  CP (incl. a content-key-indirection CP). (`unlockRevealsCheckpointPlaintextFromVector`,
+  `@Ignore`d.)
+- [x] assert tampered `ct` → `Failed`; open-CP tag (`iv==null`) → `IdentityOnly`.
+  (`unlockFailsOnTamperedCiphertext` + `unlockReturnsIdentityOnlyForOpenCpTag` — vector-independent,
+  these RUN for real and pass.)
+- [x] `write tests ... (vector assertions @Ignore until server fixture lands)` — done; removing the
+  TODO/`@Ignore` and verifying green is deferred to when the fixture is provided (see Post-Completion
+  "Blocking external artifact").
+- [x] run tests. (`./gradlew testDebugUnitTest --tests ru.kolco24.kolco24.data.crypto.*`: 6 tests,
+  4 skipped/`@Ignore`d, 2 live green, 0 failures; `lintDebug` green.)
 
 ### Task 6: LegendRepository — persist tags + unlock path
 
