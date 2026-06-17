@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -63,7 +62,7 @@ fun TeamScreen(
     team: TeamEntity?,
     category: CategoryEntity?,
     onChooseTeam: () -> Unit,
-    onChangeTeam: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     teamMissing: Boolean = false,
     teamLoading: Boolean = false,
@@ -92,17 +91,6 @@ fun TeamScreen(
             item("hero") {
                 TeamHeroCard(team = team, category = category, totalCount = team.ucount)
             }
-            item("switch") {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    SwitchTeamRow(onClick = onChangeTeam)
-                }
-            }
             item("members") {
                 SectionCard(
                     title = "Состав · ${members.size}",
@@ -115,7 +103,7 @@ fun TeamScreen(
             }
             item("misc") {
                 SectionCard(title = "Прочее") {
-                    MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Соревнование, сервер, NFC", isLast = false)
+                    MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = false, onClick = onOpenSettings)
                     MiscRow(icon = Icons.AutoMirrored.Filled.Help, label = "Справка и правила", subtitle = "Регламент, FAQ, контакты оргкомитета", isLast = true)
                 }
             }
@@ -210,50 +198,6 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
                 )
             }
         }
-    }
-}
-
-/** Entry point to the team-selection flow — the design's «Сменить команду» row (charcoal swap icon). */
-@Composable
-private fun SwitchTeamRow(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.SwapHoriz,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Сменить команду",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = "Выбрать другую команду соревнования",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Icon(
-            imageVector = Icons.Filled.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -365,11 +309,12 @@ private fun MonogramAvatar() {
 }
 
 @Composable
-private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: Boolean) {
+private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: Boolean, onClick: (() -> Unit)? = null) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
