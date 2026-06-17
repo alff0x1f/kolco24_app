@@ -229,25 +229,29 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/crypto/LegendCrypto.kt`
 
-- [ ] `bid(code: ByteArray): String` = `MessageDigest("SHA-256")` → hex → `.take(16)`.
-- [ ] `deriveWrapKey(code: ByteArray): ByteArray` = hand-rolled HKDF-SHA256 over
+- [x] `bid(code: ByteArray): String` = `MessageDigest("SHA-256")` → hex → `.take(16)`.
+- [x] `deriveWrapKey(code: ByteArray): ByteArray` = hand-rolled HKDF-SHA256 over
   `Mac("HmacSHA256")` (extract with 32 zero-byte salt, expand with `info="kp-wrap-v1"` US_ASCII, len
   32).
-- [ ] `open(key: ByteArray, ivB64: String, ctB64: String, aad: ByteArray): ByteArray` =
+- [x] `open(key: ByteArray, ivB64: String, ctB64: String, aad: ByteArray): ByteArray` =
   `Cipher("AES/GCM/NoPadding")` + `GCMParameterSpec(128, iv)` + `updateAAD` + `doFinal`; Base64 via
   okio `ByteString.decodeBase64()`.
-- [ ] `unlock(code, tag, encById): UnlockResult` per doc: `tag.iv==null` → identity-only; else open
+- [x] `unlock(code, tag, encById): UnlockResult` per doc: `tag.iv==null` → identity-only; else open
   bundle (aad=bid), then per cpId open `enc` (aad=str(cpId)) → `Revealed(cpId, cost, description)`
   map. Catch `AEADBadTagException`/serialization → typed `Failed` (never throw). **Keep the engine
   pure:** it consumes a minimal `Map<Int, EncBlob>` (id → `{iv, ct}`) and a small `tag` value type,
-  NOT `CheckpointEntity`/DTOs — the repository builds those maps in Task 6.
-- [ ] define result types (`UnlockResult` with `Revealed`/`IdentityOnly`/`Failed` cases) + the
-  `EncBlob`/`tag` value types in this file; JSON parsing via an injected/passed `Json`.
-- [ ] write tests for `bid` shape + `open` round-trip on locally-sealed data (internal sanity). *
+  NOT `CheckpointEntity`/DTOs — the repository builds those maps in Task 6. (Catches
+  `GeneralSecurityException`/`SerializationException`/`IllegalArgumentException`; takes a passed `Json`.)
+- [x] define result types (`UnlockResult` with `Revealed`/`IdentityOnly`/`Failed` cases) + the
+  `EncBlob`/`tag` value types in this file; JSON parsing via an injected/passed `Json`. (`EncBlob`,
+  `UnlockTag`, `RevealedCheckpoint`, `UnlockResult` are top-level in `LegendCrypto.kt`.)
+- [x] write tests for `bid` shape + `open` round-trip on locally-sealed data (internal sanity). *
   *Note:** a self-sealed round-trip proves the AES-GCM wiring only — HKDF (`salt=None`→32 zero
   bytes), `bid`, and AAD interop with the server are UNVERIFIED until Task 5's vector; Task 4 is
-  not "crypto verified".
-- [ ] run tests — must pass before next task.
+  not "crypto verified". (`LegendCryptoSanityTest`: bid shape/determinism, wrap-key length, `open`
+  round-trip, full bundle-indirection unlock, identity-only, tampered-ct→Failed.)
+- [x] run tests — must pass before next task. (`./gradlew testDebugUnitTest --tests
+  ru.kolco24.kolco24.data.crypto.*` green.)
 
 ### Task 5: Crypto vector test (gated on server fixture)
 
