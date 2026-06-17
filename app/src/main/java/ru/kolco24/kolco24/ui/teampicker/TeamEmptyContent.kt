@@ -1,10 +1,9 @@
 package ru.kolco24.kolco24.ui.teampicker
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,15 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,7 +33,7 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
 /**
  * Screen 04 — empty state for the «Команда» tab shown when no team is selected (or the selected team
  * is gone from the server). Charcoal illustration with a dashed orange "to fill" ring and a red glow,
- * a heading, a short explanation, a "why" card and the orange CTA that opens the competition picker.
+ * a heading, a short explanation and the orange CTA that opens the competition picker.
  * [missing] swaps the copy for the "team disappeared from the server" case (selection is kept).
  */
 @Composable
@@ -46,8 +41,8 @@ fun TeamEmptyContent(
     onChooseTeam: () -> Unit,
     modifier: Modifier = Modifier,
     missing: Boolean = false,
+    footer: @Composable ColumnScope.() -> Unit = {},
 ) {
-    val green = MaterialTheme.colorScheme.tertiary
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -77,43 +72,21 @@ fun TeamEmptyContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-
-            Spacer(Modifier.height(20.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                Column {
-                    WhyRow(
-                        icon = Icons.Filled.Nfc,
-                        iconTint = green,
-                        iconBg = green.copy(alpha = 0.12f),
-                        text = "Засчитываются только отметки чипами вашей команды",
-                        isLast = false,
-                    )
-                    WhyRow(
-                        icon = Icons.Filled.Flag,
-                        iconTint = OrangeCta,
-                        iconBg = OrangeCta.copy(alpha = 0.12f),
-                        text = "Общий счёт и бронь считаются на команду",
-                        isLast = true,
-                    )
-                }
-            }
         }
 
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 20.dp),
+                .padding(vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            footer()
             Button(
                 onClick = onChooseTeam,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
                     .height(52.dp),
                 shape = MaterialTheme.shapes.extraLarge,
                 colors = ButtonDefaults.buttonColors(
@@ -125,12 +98,6 @@ fun TeamEmptyContent(
                 Spacer(Modifier.size(8.dp))
                 Text("Выбрать команду", style = MaterialTheme.typography.titleSmall)
             }
-            Spacer(Modifier.height(9.dp))
-            Text(
-                text = "Сначала соревнование, затем команда из списка",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -187,46 +154,6 @@ private fun EmptyIllustration() {
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.inverseOnSurface,
                 modifier = Modifier.size(50.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun WhyRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconTint: Color,
-    iconBg: Color,
-    text: String,
-    isLast: Boolean,
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(iconBg, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(16.dp))
-            }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        if (!isLast) {
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 60.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
             )
         }
     }

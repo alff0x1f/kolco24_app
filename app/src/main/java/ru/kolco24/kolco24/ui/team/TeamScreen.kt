@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonAdd
@@ -69,7 +68,14 @@ fun TeamScreen(
 ) {
     if (team == null) {
         if (!teamLoading) {
-            TeamEmptyContent(onChooseTeam = onChooseTeam, modifier = modifier, missing = teamMissing)
+            Column(modifier = modifier.fillMaxSize()) {
+                TeamTopBar()
+                TeamEmptyContent(
+                    onChooseTeam = onChooseTeam,
+                    missing = teamMissing,
+                    footer = { MiscSection(onOpenSettings) },
+                )
+            }
         }
         return
     }
@@ -77,12 +83,7 @@ fun TeamScreen(
     val members = team.members
 
     Column(modifier = modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Команда") },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-        )
+        TeamTopBar()
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -102,13 +103,28 @@ fun TeamScreen(
                 }
             }
             item("misc") {
-                SectionCard(title = "Прочее") {
-                    MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = false, onClick = onOpenSettings)
-                    MiscRow(icon = Icons.AutoMirrored.Filled.Help, label = "Справка и правила", subtitle = "Регламент, FAQ, контакты оргкомитета", isLast = true)
-                }
+                MiscSection(onOpenSettings = onOpenSettings)
             }
         }
     }
+}
+
+@Composable
+private fun MiscSection(onOpenSettings: () -> Unit) {
+    SectionCard(title = "Прочее") {
+        MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = true, onClick = onOpenSettings)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TeamTopBar() {
+    TopAppBar(
+        title = { Text("Команда") },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    )
 }
 
 @Composable
