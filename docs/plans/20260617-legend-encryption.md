@@ -173,24 +173,26 @@ match `schemas/.../4.json` byte-for-byte (camelCase columns).
 - Create: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/CheckpointDaoTest.kt` (
   preserve-on-resync, real Room)
 
-- [ ] `CheckpointEntity`: `cost: Int?`, `description: String?`; add `locked: Boolean`,
+- [x] `CheckpointEntity`: `cost: Int?`, `description: String?`; add `locked: Boolean`,
   `encIv: String?`, `encCt: String?` (keep `taken: Boolean = false`).
-- [ ] `CheckpointDao`: add `@Query` update `reveal(id, cost, description)` (sets the two columns);
+- [x] `CheckpointDao`: add `@Query` update `reveal(id, cost, description)` (sets the two columns);
   revise `replaceAllForRace` to **preserve-on-resync** (option A) — within the `@Transaction`,
   capture existing non-null `cost`/`description` for ids that remain `locked`, re-apply after
   insert (e.g. read prior revealed rows for `raceId`, then after insert re-issue `reveal(...)` for
   any incoming locked id whose prior `cost` was non-null).
-- [ ] `RaceEntity`: delete the `isLegendVisible` column.
-- [ ] Create `TagEntity` (table `tags`, `@PrimaryKey bid`, `@Index("raceId")`, `@Index("point")`):
+- [x] `RaceEntity`: delete the `isLegendVisible` column.
+- [x] Create `TagEntity` (table `tags`, `@PrimaryKey bid`, `@Index("raceId")`, `@Index("point")`):
   `point: Int`, `checkMethod: String`, `iv: String?`, `ct: String?`.
-- [ ] Create `TagDao` mirroring `CheckpointDao`: `observeTagsForRace(raceId)`,
+- [x] Create `TagDao` mirroring `CheckpointDao`: `observeTagsForRace(raceId)`,
   `getByBid(bid): TagEntity?`, `@Transaction replaceAllForRace(raceId, tags)`.
-- [ ] write **instrumented** test `CheckpointDaoTest` against **real Room** (`androidTest`,
+- [x] write **instrumented** test `CheckpointDaoTest` against **real Room** (`androidTest`,
   consistent with `MigrationTest` — Robolectric is NOT on the classpath, so a JVM Room test is not
   an option, and the JVM `FakeCheckpointDao` can't exercise a `@Transaction` body): reveal a CP,
   re-run `replaceAllForRace` with the same locked payload, assert revealed `cost`/`description`
-  survive; also assert a NOT-locked incoming row overwrites cleanly.
-- [ ] run instrumented tests (needs device/emulator) — must pass before next task.
+  survive; also assert a NOT-locked incoming row overwrites cleanly. (Written + compiles via
+  `compileDebugAndroidTestKotlin`; four cases incl. never-unlocked stays locked + drop-on-resync.)
+- [x] run instrumented tests (skipped — no device/emulator in this environment; test compiles. Run
+  via `./gradlew connectedDebugAndroidTest` when a device is attached, alongside Task 3's migration.)
 
 ### Task 3: Room v3→v4 migration + schema JSON + database wiring
 

@@ -213,7 +213,9 @@ private fun Kolco24AppRoot() {
                     )
                     1 -> LegendScreen(
                         checkpoints = legendCheckpoints,
-                        legendVisible = selectedRace?.isLegendVisible == true,
+                        // is_legend_visible was removed (per-CP encryption); the legend is always
+                        // served now. Task 7 drops this param and the LegendLocked branch entirely.
+                        legendVisible = true,
                         hasTeam = teamState !is SelectedTeamState.None,
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),

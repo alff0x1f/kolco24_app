@@ -215,6 +215,15 @@ private class FakeCheckpointDao(private val callLog: MutableList<String>) : Chec
         checkpoints.value = checkpoints.value.filterNot { it.raceId == raceId }
     }
 
+    override suspend fun revealedForRace(raceId: Int): List<CheckpointEntity> =
+        checkpoints.value.filter { it.raceId == raceId && it.cost != null }
+
+    override suspend fun reveal(id: Int, cost: Int, description: String) {
+        checkpoints.value = checkpoints.value.map {
+            if (it.id == id) it.copy(cost = cost, description = description) else it
+        }
+    }
+
     override suspend fun replaceAllForRace(raceId: Int, checkpoints: List<CheckpointEntity>) {
         deleteCheckpointsForRace(raceId)
         insertCheckpoints(checkpoints)

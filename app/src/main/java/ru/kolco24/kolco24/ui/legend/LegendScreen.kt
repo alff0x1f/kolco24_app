@@ -102,8 +102,10 @@ private fun LegendList(checkpoints: List<CheckpointEntity>) {
 
     val takenCount = checkpoints.count { it.taken }
     val totalCount = checkpoints.size
-    val takenScore = checkpoints.filter { it.taken }.sumOf { it.cost }
-    val totalScore = checkpoints.sumOf { it.cost }
+    // cost is nullable now (locked CPs hide it until unlocked); sum only the known costs. Task 7
+    // adds the masked-row rendering + «+N закрытых КП» hint.
+    val takenScore = checkpoints.filter { it.taken }.mapNotNull { it.cost }.sum()
+    val totalScore = checkpoints.mapNotNull { it.cost }.sum()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -295,7 +297,7 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
                 modifier = Modifier.widthIn(min = 48.dp),
             )
             Text(
-                text = cp.description,
+                text = cp.description.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 15.5.sp,
                     fontWeight = if (cp.taken) FontWeight.Normal else FontWeight.Medium,

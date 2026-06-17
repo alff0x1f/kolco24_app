@@ -73,7 +73,4 @@ private fun RaceDto.toEntity(): RaceEntity = RaceEntity(
     dateEnd = dateEnd,
     place = place,
     regStatus = regStatus,
-    // is_legend_visible was removed from the API (per-CP encryption replaces it). The entity
-    // column is dropped in Task 2/Task 6; until then keep a stable default so this compiles.
-    isLegendVisible = false,
 )

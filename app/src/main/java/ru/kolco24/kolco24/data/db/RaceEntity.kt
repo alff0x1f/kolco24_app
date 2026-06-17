@@ -17,5 +17,4 @@ data class RaceEntity(
     val dateEnd: String?,
     val place: String,
     val regStatus: String,
-    val isLegendVisible: Boolean,
 )
