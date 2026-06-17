@@ -27,7 +27,7 @@ private fun legendResource(raceId: Int): String = "race/$raceId/legend"
  *
  * Locked checkpoints can be revealed **offline** via [unlock]: the scanned tag's `code` runs through
  * [LegendCrypto] and the decrypted `{cost, description}` is persisted onto the matching checkpoint
- * rows (the row stays `locked` — only its content fills in).
+ * rows (the row's `locked` flag is cleared to `false` and its content fills in).
  *
  * @param origin base URL the data is associated with — used as the ETag partition key in `sync_meta`.
  */
@@ -80,8 +80,8 @@ class LegendRepository(
      *
      * The 16-byte NFC [code] is hashed to a `bid` and looked up in [TagDao]; the [LegendCrypto] engine
      * does the actual crypto (this method only owns the DB lookup, the entity→[EncBlob] map, and
-     * persistence). Each revealed CP is written via [CheckpointDao.reveal] — `locked` and `taken` are
-     * left untouched (the unbuilt marks feature owns `taken`).
+     * persistence). Each revealed CP is written via [CheckpointDao.reveal] — `locked` is cleared to
+     * `false`; `taken` is left untouched (the unbuilt marks feature owns `taken`).
      *
      * @return an [UnlockOutcome]: [UnlockOutcome.Unknown] when no tag matches the `bid`,
      *   [UnlockOutcome.IdentityOnly] for an open-CP tag (nothing to decrypt),

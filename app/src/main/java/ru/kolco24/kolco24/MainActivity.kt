@@ -212,7 +212,7 @@ private fun Kolco24AppRoot() {
                     )
                     1 -> LegendScreen(
                         checkpoints = legendCheckpoints,
-                        hasTeam = teamState is SelectedTeamState.Present || teamState is SelectedTeamState.Missing,
+                        hasTeam = teamState !is SelectedTeamState.None,
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
