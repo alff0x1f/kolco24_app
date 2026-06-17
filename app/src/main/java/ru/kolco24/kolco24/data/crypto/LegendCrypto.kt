@@ -135,7 +135,7 @@ data class EncBlob(val iv: String, val ct: String)
 data class UnlockTag(val point: Int, val iv: String?, val ct: String?)
 
 /** A checkpoint whose `{cost, description}` was just decrypted. */
-data class RevealedCheckpoint(val id: Int, val cost: Int, val description: String)
+data class RevealedCheckpoint(val id: Int, val cost: Int, val description: String?)
 
 /** Outcome of [LegendCrypto.unlock]. */
 sealed interface UnlockResult {
@@ -151,4 +151,4 @@ sealed interface UnlockResult {
 
 /** Decrypted plaintext of a locked checkpoint's `enc` envelope. */
 @Serializable
-private data class RevealedPlain(val cost: Int, val description: String)
+private data class RevealedPlain(val cost: Int, val description: String? = null)
