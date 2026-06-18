@@ -254,12 +254,12 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/NfcUid.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/NfcUidTest.kt`
 
-- [ ] create a single pure `fun normalizeNfcUid(raw: ByteArray): String` — hex-encode each byte
+- [x] create a single pure `fun normalizeNfcUid(raw: ByteArray): String` — hex-encode each byte
       (zero-padded, e.g. `0x04` → `"04"`) then `.uppercase()`. (No `String` overload — the byte→hex
       path is the only real logic; pool values arrive already normalized from the server.)
-- [ ] write tests: bytes → uppercase hex (incl. leading-zero byte like `0x04`); multi-byte UID;
+- [x] write tests: bytes → uppercase hex (incl. leading-zero byte like `0x04`); multi-byte UID;
       empty array → empty string
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 9: NFC reading infra in MainActivity + manifest
 
