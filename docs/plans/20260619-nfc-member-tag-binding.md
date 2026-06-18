@@ -301,18 +301,18 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/team/BindChipSheet.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/team/BindChipDecisionTest.kt`
 
-- [ ] extract a pure decision function, e.g.
+- [x] extract a pure decision function, e.g.
       `decideBind(uid, poolNumber: Int?, existing: MemberChipBindingEntity?, currentSlot): BindOutcome`
       returning `NotInPool` / `AlreadyBound(otherSlot)` / `ReadyToBind(participantNumber)` /
       `AlreadyOnThisSlot`
-- [ ] build `BindChipSheet(member: TeamMemberItem, ...)` (`ModalBottomSheet` mirroring
+- [x] build `BindChipSheet(member: TeamMemberItem, ...)` (`ModalBottomSheet` mirroring
       `TeamSwitchSheet`) rendering states `Waiting` (+ NFC-disabled prompt with
       `Settings.ACTION_NFC_SETTINGS`), `NotInPool`, `AlreadyBound(otherSlot)` + «Перепривязать»,
       `Success` (auto-dismiss). The sheet takes the resolved `member` so it can show the name; the
       host (Task 12) resolves it from `bindSlot`.
-- [ ] write tests for `decideBind`: uid not in pool → `NotInPool`; uid in pool, unbound → `ReadyToBind`;
+- [x] write tests for `decideBind`: uid not in pool → `NotInPool`; uid in pool, unbound → `ReadyToBind`;
       uid bound to another slot → `AlreadyBound`; uid already on this slot → `AlreadyOnThisSlot`
-- [ ] run `./gradlew testDebugUnitTest lintDebug` — must pass before next task
+- [x] run `./gradlew testDebugUnitTest lintDebug` — must pass before next task
 
 ### Task 12: MainActivity wiring (sheet + bindings + NFC routing)
 
