@@ -240,13 +240,13 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
 
-- [ ] add lazy `memberTagsRepository` + `memberChipBindingRepository` to `AppContainer`
-- [ ] in `Kolco24App` Launch A, add a concurrent child `launch { refreshMemberTags(nearest) }`
+- [x] add lazy `memberTagsRepository` + `memberChipBindingRepository` to `AppContainer`
+- [x] in `Kolco24App` Launch A, add a concurrent child `launch { refreshMemberTags(nearest) }`
       alongside teams + legend (log result)
-- [ ] in `Kolco24App` Launch B `supervisorScope`, add a `launch { refreshMemberTags(raceId) }`
+- [x] in `Kolco24App` Launch B `supervisorScope`, add a `launch { refreshMemberTags(raceId) }`
       alongside teams + legend
-- [ ] (DI/warm-up wiring is integration-level; covered by existing repo tests — note in commit)
-- [ ] run `./gradlew lintDebug testDebugUnitTest` — must pass before next task
+- [x] (DI/warm-up wiring is integration-level; covered by existing repo tests — note in commit)
+- [x] run `./gradlew lintDebug testDebugUnitTest` — must pass before next task
 
 ### Task 8: NFC UID helper (pure)
 
