@@ -103,7 +103,9 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             !adapter.isEnabled -> NfcState.Disabled
             else -> NfcState.Available
         }
-        adapter?.enableReaderMode(this, this, READER_FLAGS, null)
+        if (nfcState == NfcState.Available) {
+            adapter?.enableReaderMode(this, this, READER_FLAGS, null)
+        }
     }
 
     override fun onPause() {
@@ -286,7 +288,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; showScan = true },
+                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
