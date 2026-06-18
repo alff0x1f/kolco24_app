@@ -1,6 +1,10 @@
 package ru.kolco24.kolco24
 
+import android.nfc.NfcAdapter
+import android.nfc.Tag
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,6 +44,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
@@ -52,7 +57,24 @@ import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
-class MainActivity : ComponentActivity() {
+/** Whether the device can currently read NFC tags, readable by composables for the bind UI. */
+enum class NfcState { NoHardware, Disabled, Available }
+
+class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
+
+    /** Lazily resolved once; null when the device has no NFC hardware. */
+    private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
+
+    /** Main-thread handler so tag reads (delivered on a binder thread) hop to the UI thread. */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
+    var onTagScanned: ((String) -> Unit)? = null
+
+    /** Recomputed on every resume; composables observe it to render the bind affordances. */
+    var nfcState by mutableStateOf(NfcState.NoHardware)
+        private set
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -61,6 +83,37 @@ class MainActivity : ComponentActivity() {
                 Kolco24AppRoot()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val adapter = nfcAdapter
+        nfcState = when {
+            adapter == null -> NfcState.NoHardware
+            !adapter.isEnabled -> NfcState.Disabled
+            else -> NfcState.Available
+        }
+        adapter?.enableReaderMode(this, this, READER_FLAGS, null)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nfcAdapter?.disableReaderMode(this)
+    }
+
+    /** Reader-mode callback (binder thread): normalize the UID and route it to the UI thread. */
+    override fun onTagDiscovered(tag: Tag) {
+        val uid = normalizeNfcUid(tag.id)
+        mainHandler.post { onTagScanned?.invoke(uid) }
+    }
+
+    private companion object {
+        const val READER_FLAGS =
+            NfcAdapter.FLAG_READER_NFC_A or
+                NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_NFC_F or
+                NfcAdapter.FLAG_READER_NFC_V or
+                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
     }
 }
 

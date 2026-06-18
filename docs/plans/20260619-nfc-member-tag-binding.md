@@ -267,17 +267,17 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - Modify: `app/src/main/AndroidManifest.xml`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] manifest: add `<uses-permission android:name="android.permission.NFC"/>` and
+- [x] manifest: add `<uses-permission android:name="android.permission.NFC"/>` and
       `<uses-feature android:name="android.hardware.nfc" android:required="false"/>`
-- [ ] `MainActivity`: lazy `NfcAdapter`; implement `NfcAdapter.ReaderCallback`; `enableReaderMode` in
+- [x] `MainActivity`: lazy `NfcAdapter`; implement `NfcAdapter.ReaderCallback`; `enableReaderMode` in
       `onResume` / `disableReaderMode` in `onPause` with the reader flags; on tag → `normalizeNfcUid(tag.id)`,
       post to main thread, invoke `onTagScanned?.invoke(uid)`
-- [ ] expose `var onTagScanned: ((String) -> Unit)? = null` and an `nfcState`
+- [x] expose `var onTagScanned: ((String) -> Unit)? = null` and an `nfcState`
       (`NoHardware` / `Disabled` / `Available`) readable by composables; recompute `Disabled/Available`
       on resume
-- [ ] (NFC hardware path is device-only — manual verification; no unit test. The hex/normalize logic
+- [x] (NFC hardware path is device-only — manual verification; no unit test. The hex/normalize logic
       is already unit-tested in Task 8)
-- [ ] run `./gradlew lintDebug` — must pass before next task
+- [x] run `./gradlew lintDebug` — must pass before next task
 
 ### Task 10: `TeamScreen` bound/unbound rows + live counter
 
