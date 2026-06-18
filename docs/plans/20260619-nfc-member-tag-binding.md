@@ -162,13 +162,14 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MemberChipBindingEntity.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MemberChipBindingDao.kt`
 
-- [ ] create `@Entity(tableName = "member_chip_bindings", primaryKeys = ["teamId","numberInTeam"], indices = [Index("nfcUid")])`
+- [x] create `@Entity(tableName = "member_chip_bindings", primaryKeys = ["teamId","numberInTeam"], indices = [Index("nfcUid")])`
       `MemberChipBindingEntity(teamId: Int, numberInTeam: Int, nfcUid: String, participantNumber: Int)`
-- [ ] create `MemberChipBindingDao`: `observeForTeam(teamId): Flow<List<MemberChipBindingEntity>>`,
+- [x] create `MemberChipBindingDao`: `observeForTeam(teamId): Flow<List<MemberChipBindingEntity>>`,
       `suspend findByUid(nfcUid): MemberChipBindingEntity?`, `@Upsert suspend upsert(binding)`,
-      `suspend deleteSlot(teamId, numberInTeam)`
-- [ ] (no separate unit test — DAO behavior covered by repo + migration tests)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+      `suspend deleteSlot(teamId, numberInTeam)` (also `deleteByUid` + atomic `@Transaction reassign`,
+      pulled forward from Task 6)
+- [x] (no separate unit test — DAO behavior covered by repo + migration tests)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 4: Room v3→v4 migration + schema + register DAOs/entities
 
