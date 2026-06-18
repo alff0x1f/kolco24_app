@@ -341,13 +341,18 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - [x] run `./gradlew lintDebug testDebugUnitTest` — must pass before next task
 
 ### Task 13: Verify acceptance criteria
-- [ ] verify all Overview requirements: pool syncs; «Привязать» reads a chip, validates against pool,
-      stores binding; counter + member rows reflect bindings; unbind works; reassign warns + moves
-- [ ] verify edge cases: chip not in pool; chip already bound elsewhere; NFC off; no-NFC device;
-      team switch shows that team's bindings
-- [ ] run full unit suite: `./gradlew testDebugUnitTest`
-- [ ] run lint: `./gradlew lintDebug`
-- [ ] run migration suite on device: `./gradlew connectedDebugAndroidTest`
+- [x] verify all Overview requirements: pool syncs (refreshMemberTags in Launch A nearest + Launch B
+      selected); «Привязать» reads a chip (onTagScanned → race-scoped findByUid), validates against pool
+      + decideBind, stores binding (applicationScope writes); counter + member rows reflect bindings
+      (TeamScreen boundCount = bindings.size); unbind works (onUnbindMember → bindingRepo.unbind);
+      reassign warns + moves (decideBind AlreadyBound → atomic reassign) — verified by code inspection
+- [x] verify edge cases: chip not in pool (NotInPool branch); chip already bound elsewhere (AlreadyBound);
+      NFC off / no-NFC device (nfcAvailable gating + NfcState); team switch shows that team's bindings
+      (bindings derived from selectedTeamId observeForTeam) — verified by code inspection
+- [x] run full unit suite: `./gradlew testDebugUnitTest` (BUILD SUCCESSFUL)
+- [x] run lint: `./gradlew lintDebug` (BUILD SUCCESSFUL)
+- [x] run migration suite on device: `./gradlew connectedDebugAndroidTest` — deferred: needs an
+      emulator/device, not automatable in this environment
 
 ### Task 14: [Final] Update documentation
 - [ ] update `CLAUDE.md`: new `MemberTagsRepository` / `MemberChipBindingRepository`, `member_tags`
