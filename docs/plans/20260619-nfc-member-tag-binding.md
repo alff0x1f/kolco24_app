@@ -223,16 +223,16 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/MemberChipBindingRepository.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/MemberChipBindingRepositoryTest.kt`
 
-- [ ] create `MemberChipBindingRepository(bindingDao)`: `observeForTeam(teamId)`,
+- [x] create `MemberChipBindingRepository(bindingDao)`: `observeForTeam(teamId)`,
       `suspend findByUid(uid)`, `suspend bind(teamId, numberInTeam, nfcUid, participantNumber)`,
       `suspend unbind(teamId, numberInTeam)`. Implement the reassign (warn+allow) case as a single
       **atomic** `@Transaction` DAO method `reassign(...)` (`deleteByUid(uid)` then `upsert(binding)`)
       so a chip is never momentarily on two slots; the repo just calls it. The warn+allow *decision*
       stays in the sheet (`decideBind`); the repo only performs writes.
-- [ ] write tests with a fake DAO: bind then observe; rebind same slot overwrites; unbind removes;
+- [x] write tests with a fake DAO: bind then observe; rebind same slot overwrites; unbind removes;
       `findByUid` returns the owning slot; reassign atomically moves a chip between slots (old slot
       gone, new slot present)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 7: Wire repositories into DI + startup warm-up
 
