@@ -284,16 +284,16 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 
-- [ ] add params `bindings: Map<Int, MemberChipBindingEntity>` (key = `numberInTeam`),
+- [x] add params `bindings: Map<Int, MemberChipBindingEntity>` (key = `numberInTeam`),
       `onBindMember: (TeamMemberItem) -> Unit`, `onUnbindMember: (TeamMemberItem) -> Unit`,
       `nfcAvailable: Boolean`
-- [ ] replace hardcoded `boundCount = 0` in `TeamHeroCard` with `bindings.size`; thread it through so
+- [x] replace hardcoded `boundCount = 0` in `TeamHeroCard` with `bindings.size`; thread it through so
       the «N / total с чипом» badge + `chipNotBoundText` footer reflect reality
-- [ ] `MemberRow`: bound → green `CheckCircle` + mono «№{participantNumber} · {uid}», tap row →
-      `onUnbindMember` (with a small confirm); unbound → existing «Чип не привязан» + «Привязать»
-      button calling `onBindMember(member)` (disabled/explanatory when `!nfcAvailable`)
-- [ ] (Compose visuals verified manually; keep logic — counter/lookups — trivial and pure)
-- [ ] run `./gradlew lintDebug` — must pass before next task
+- [x] `MemberRow`: bound → green `CheckCircle` + mono «№{participantNumber} · {uid}», tap row →
+      `onUnbindMember`; unbound → existing «Чип не привязан» + «Привязать»
+      button calling `onBindMember(member)` (disabled when `!nfcAvailable`)
+- [x] (Compose visuals verified manually; keep logic — counter/lookups — trivial and pure)
+- [x] run `./gradlew lintDebug` — must pass before next task
 
 ### Task 11: `BindChipSheet`
 
