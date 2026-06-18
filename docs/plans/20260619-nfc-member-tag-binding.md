@@ -204,18 +204,18 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/MemberTagsRepository.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/MemberTagsRepositoryTest.kt`
 
-- [ ] create `MemberTagsRepository(apiClient, memberTagDao, syncMetaDao, origin)` mirroring
+- [x] create `MemberTagsRepository(apiClient, memberTagDao, syncMetaDao, origin)` mirroring
       `LegendRepository`: `observeForRace(raceId)`, `suspend findByUid(raceId, uid)`,
       `suspend refreshMemberTags(raceId): RefreshResult` (per-race resource key
       `"race/$raceId/member_tags"`; `replaceAllForRace` **then** ETag upsert as two transactions,
       ETag skipped when null)
-- [ ] add a private `MemberTagDto.toEntity(raceId)` mapping (`raceId`, `nfcUid`, `number`)
-- [ ] write repo tests mirroring `LegendRepositoryTest`: success maps + stores ETag under
+- [x] add a private `MemberTagDto.toEntity(raceId)` mapping (`raceId`, `nfcUid`, `number`)
+- [x] write repo tests mirroring `LegendRepositoryTest`: success maps + stores ETag under
       `"race/$raceId/member_tags"`; write-before-ETag ordering via `callLog`; success-without-ETag
       skips ETag save; 304 leaves data; offline; 403; 500 → `HttpError`; empty list replaces that
       race's rows; two different `raceId`s use **different** ETag resource keys and write disjoint rows
       (mirror `LegendRepositoryTest.differentRaceIds_useDifferentSyncResources`)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 6: `MemberChipBindingRepository`
 
