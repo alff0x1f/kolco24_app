@@ -221,6 +221,9 @@ private fun Kolco24AppRoot() {
 
     // Bind-chip overlay: which member slot (numberInTeam) is being bound, or null when the sheet is closed.
     var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
+    // Clear the bind slot on team change so a stale slot from a previous team cannot accidentally
+    // re-open the sheet for an unrelated member on the newly selected team.
+    LaunchedEffect(selectedTeamId) { bindSlot = null }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
@@ -489,8 +492,8 @@ private fun Kolco24AppRoot() {
                 val host = activity
                 host?.onTagScanned = { uid ->
                     // Suspending DAO lookups run off the main thread internally; launch on the UI scope so
-                    // state writes land on the main thread. Binding writes go to applicationScope so they
-                    // outlive the closing sheet (per selectTeam convention).
+                    // state writes land on the main thread. Binding writes use the same scope — they are
+                    // fast Room inserts that finish well before the 900ms auto-dismiss window.
                     scope.launch {
                         // Ignore stray scans during the 900ms auto-dismiss animation after a successful bind.
                         if (sheetState is BindSheetState.Success) return@launch
