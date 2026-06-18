@@ -251,6 +251,115 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate4To5_keepsDataAndAddsMemberTables() {
+        val dbName = "migration-4to5-test.db"
+
+        // Reach v4, then seed a race + a checkpoint so we can assert existing data survives.
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(
+            dbName,
+            4,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus) " +
+                    "VALUES (7, 'Кольцо', 'kolco', '2026-08-01', NULL, 'Лес', 'open')"
+            )
+            db.execSQL(
+                "INSERT INTO checkpoints (id, raceId, number, cost, type, description, locked, encIv, encCt, taken) " +
+                    "VALUES (1, 7, 5, 10, 'kp', 'У пня', 0, NULL, NULL, 0)"
+            )
+        }
+
+        // Run 4→5; MigrationTestHelper validates the resulting schema against 5.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            5,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+        )
+
+        // Existing rows survive the additive migration.
+        db.query("SELECT name FROM races WHERE id = 7").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Кольцо", cursor.getString(0))
+        }
+        db.query("SELECT description FROM checkpoints WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("У пня", cursor.getString(0))
+        }
+
+        // New tables exist, are empty, and accept the entity column sets — a camelCase/snake_case
+        // mismatch only surfaces here.
+        db.query("SELECT count(*) FROM member_tags").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.execSQL(
+            "INSERT INTO member_tags (raceId, nfcUid, number) VALUES (7, '04A2B3C4', 101)"
+        )
+        db.query("SELECT number FROM member_tags WHERE raceId = 7 AND nfcUid = '04A2B3C4'")
+            .use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(101, cursor.getInt(0))
+            }
+
+        db.query("SELECT count(*) FROM member_chip_bindings").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.execSQL(
+            "INSERT INTO member_chip_bindings (teamId, numberInTeam, nfcUid, participantNumber) " +
+                "VALUES (3, 1, '04A2B3C4', 101)"
+        )
+        db.query(
+            "SELECT participantNumber FROM member_chip_bindings WHERE teamId = 3 AND numberInTeam = 1"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(101, cursor.getInt(0))
+        }
+        db.close()
+    }
+
+    @Test
+    fun migrate4To5_memberIndicesExist() {
+        val dbName = "migration-4to5-index-test.db"
+        helper.createDatabase(dbName, 1).close()
+
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            5,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+        )
+
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' " +
+                "AND name = 'index_member_tags_raceId' AND tbl_name = 'member_tags'"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertFalse(cursor.isNull(0))
+        }
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' " +
+                "AND name = 'index_member_chip_bindings_nfcUid' AND tbl_name = 'member_chip_bindings'"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertFalse(cursor.isNull(0))
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate2To3_indexExists() {
         val dbName = "migration-2to3-index-test.db"
         helper.createDatabase(dbName, 1).close()

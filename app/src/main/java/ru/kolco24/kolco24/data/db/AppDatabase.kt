@@ -17,8 +17,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SelectedTeamEntity::class,
         CheckpointEntity::class,
         TagEntity::class,
+        MemberTagEntity::class,
+        MemberChipBindingEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class)
@@ -29,6 +31,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun selectedTeamDao(): SelectedTeamDao
     abstract fun checkpointDao(): CheckpointDao
     abstract fun tagDao(): TagDao
+    abstract fun memberTagDao(): MemberTagDao
+    abstract fun memberChipBindingDao(): MemberChipBindingDao
 
     companion object {
         /**
@@ -137,13 +141,46 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * NFC member-tag binding. Purely additive — existing tables are untouched, so races / teams /
+         * checkpoints / tags survive the upgrade:
+         *  - `member_tags` is the per-race NFC pool (`nfc_uid → participant number`), composite PK
+         *    `(raceId, nfcUid)` because the feed carries no internal id and the same uid may appear in
+         *    two races' pools; indexed on `raceId` for wholesale per-race replacement.
+         *  - `member_chip_bindings` is the local-only binding of a chip to a `(teamId, numberInTeam)`
+         *    member slot; indexed on `nfcUid` for the "already bound elsewhere?" duplicate check.
+         * SQL must match Room's generated schema (see schemas/.../5.json) exactly, or the validation
+         * check fails at runtime.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `member_tags` (`raceId` INTEGER NOT NULL, " +
+                        "`nfcUid` TEXT NOT NULL, `number` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`raceId`, `nfcUid`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_member_tags_raceId` ON `member_tags` (`raceId`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `member_chip_bindings` (`teamId` INTEGER NOT NULL, " +
+                        "`numberInTeam` INTEGER NOT NULL, `nfcUid` TEXT NOT NULL, " +
+                        "`participantNumber` INTEGER NOT NULL, PRIMARY KEY(`teamId`, `numberInTeam`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_member_chip_bindings_nfcUid` " +
+                        "ON `member_chip_bindings` (`nfcUid`)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

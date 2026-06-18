@@ -171,27 +171,32 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - [x] (no separate unit test — DAO behavior covered by repo + migration tests)
 - [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
-### Task 4: Room v3→v4 migration + schema + register DAOs/entities
+### Task 4: Room v4→v5 migration + schema + register DAOs/entities
+
+**Note:** the plan predates the legend-encryption rework that already took the `v4` slot
+(`MIGRATION_3_4` recreates checkpoints/races + adds `tags`). The DB is therefore at **v4**, so the
+new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) generating `5.json`.
 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/AppDatabase.kt`
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
-- Generated: `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/4.json`
+- Generated: `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json`
 
-- [ ] add `MemberTagEntity` + `MemberChipBindingEntity` to `@Database(entities=[...])`, bump
-      `version = 4`, add `abstract fun memberTagDao()` + `memberChipBindingDao()`
-- [ ] write `MIGRATION_3_4`: `CREATE TABLE member_tags` (composite PK `(raceId, nfcUid)`) +
+- [x] add `MemberTagEntity` + `MemberChipBindingEntity` to `@Database(entities=[...])`, bump
+      `version = 5`, add `abstract fun memberTagDao()` + `memberChipBindingDao()`
+- [x] write `MIGRATION_4_5`: `CREATE TABLE member_tags` (composite PK `(raceId, nfcUid)`) +
       `CREATE INDEX index_member_tags_raceId` + `CREATE TABLE member_chip_bindings` (composite PK
       `(teamId, numberInTeam)`) + `CREATE INDEX index_member_chip_bindings_nfcUid`; register in
       `addMigrations(...)`
-- [ ] build once (`./gradlew assembleDebug`) so KSP regenerates `4.json`; confirm the migration SQL
-      byte-matches the generated table/column/index names (camelCase); **commit `4.json` to git**
-      (exportSchema=true requires it tracked, like `{1,2,3}.json`)
-- [ ] add `migrate3To4_keepsDataAndAddsTables` + `migrate3To4_indexesExist` to `MigrationTest`
-      (seed a v3 race/team, run 1→2→3→4, assert survival, both tables present + insertable, both the
-      `index_member_tags_raceId` and `index_member_chip_bindings_nfcUid` indexes exist)
-- [ ] run `./gradlew lintDebug testDebugUnitTest`; run `./gradlew connectedDebugAndroidTest` (device) —
-      migration test must pass before next task
+- [x] build once (`./gradlew assembleDebug`) so KSP regenerates `5.json`; confirmed the migration SQL
+      byte-matches the generated table/column/index names (camelCase); **commit `5.json` to git**
+      (exportSchema=true requires it tracked, like `{1,2,3,4}.json`)
+- [x] add `migrate4To5_keepsDataAndAddsMemberTables` + `migrate4To5_memberIndicesExist` to
+      `MigrationTest` (seed a v4 race/checkpoint, run 1→2→3→4→5, assert survival, both tables present +
+      insertable, both the `index_member_tags_raceId` and `index_member_chip_bindings_nfcUid` indexes exist)
+- [x] run `./gradlew lintDebug testDebugUnitTest` (pass) + `compileDebugAndroidTestKotlin` (androidTest
+      compiles); `./gradlew connectedDebugAndroidTest` (device) — [x] deferred: needs an emulator/device,
+      not automatable in this environment
 
 ### Task 5: `MemberTagsRepository`
 
