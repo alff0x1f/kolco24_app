@@ -355,14 +355,15 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
       emulator/device, not automatable in this environment
 
 ### Task 14: [Final] Update documentation
-- [ ] update `CLAUDE.md`: new `MemberTagsRepository` / `MemberChipBindingRepository`, `member_tags`
+- [x] update `CLAUDE.md`: new `MemberTagsRepository` / `MemberChipBindingRepository`, `member_tags`
       (per-race table, per-race `"race/<raceId>/member_tags"` ETag key, modelled per-race ahead of the
-      backend's future per-race pools) + `member_chip_bindings` tables, Room v4 +
-      `MIGRATION_3_4`, NFC reader-mode infra in `MainActivity`, `BindChipSheet`, and `TeamScreen`'s
-      now-live binding UI (replace the «NFC chip binding is out of scope» / «boundCount = 0» notes).
-      Record the **binding-key assumption**: bindings are keyed by `(teamId, numberInTeam)` and rely on
-      `number_in_team` being stable for a registered team
-- [ ] move this plan to `docs/plans/completed/`
+      backend's future per-race pools) + `member_chip_bindings` tables, Room **v5** +
+      `MIGRATION_4_5` (corrected: the legend rework took the v4 slot, so member tables landed in v4→v5),
+      NFC reader-mode infra in `MainActivity`, `BindChipSheet`, and `TeamScreen`'s
+      now-live binding UI (replaced the «boundCount = 0» note). Recorded the **binding-key assumption**:
+      bindings are keyed by `(teamId, numberInTeam)` and rely on `number_in_team` being stable for a
+      registered team
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
