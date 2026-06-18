@@ -319,26 +319,26 @@ new member tables go in an additive **v4→v5** migration (`MIGRATION_4_5`) gene
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] derive `bindings` with the existing null-guarded keyed-`remember` flow pattern (cf.
+- [x] derive `bindings` with the existing null-guarded keyed-`remember` flow pattern (cf.
       MainActivity lines 127-129):
       `remember(selectedTeamId) { selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList()) }`
       `.collectAsState(initial = emptyList())`, mapped to `Map<Int, MemberChipBindingEntity>` keyed by
       `numberInTeam`; pass `bindings` + `nfcAvailable` into `TeamScreen`
-- [ ] add `var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }` (keep `Int?` — saveable
+- [x] add `var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }` (keep `Int?` — saveable
       without a custom Saver, consistent with the existing `confirmTeamId`/enum approach). `onBindMember`
       sets `bindSlot = member.numberInTeam`. Render `BindChipSheet` only when `bindSlot != null` **and**
       the member resolves: `val bindMember = teamForTab?.members?.find { it.numberInTeam == bindSlot }`
-- [ ] register/clear the NFC hook with a `DisposableEffect(bindSlot)` (NOT scattered imperative
+- [x] register/clear the NFC hook with a `DisposableEffect(bindSlot)` (NOT scattered imperative
       set/clear): on enter set `(context as MainActivity).onTagScanned = { uid -> ... }`; in `onDispose`
       set it back to `null`. This guarantees the hook is cleared on **every** exit path (dismiss,
       BackHandler, success auto-dismiss, team switch, recomposition). The callback runs on the main
       thread (Task 9 posts there); it does the **race-scoped** pool lookup
-      (`memberTagDao.findByUid(selectedRaceId, uid)`) + `decideBind` + writes via
+      (`memberTagsRepo.findByUid(selectedRaceId, uid)`) + `decideBind` + writes via
       `container.applicationScope` (outlives the closing sheet)
-- [ ] `onUnbindMember` deletes the slot via `container.applicationScope.launch { bindingRepo.unbind(selectedTeamId, member.numberInTeam) }`
-- [ ] add `BackHandler(enabled = bindSlot != null && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null)`
+- [x] `onUnbindMember` deletes the slot via `container.applicationScope.launch { bindingRepo.unbind(selectedTeamId, member.numberInTeam) }`
+- [x] add `BackHandler(enabled = bindSlot != null && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null)`
       clearing `bindSlot`, layered consistently with the existing overlay guards
-- [ ] run `./gradlew lintDebug testDebugUnitTest` — must pass before next task
+- [x] run `./gradlew lintDebug testDebugUnitTest` — must pass before next task
 
 ### Task 13: Verify acceptance criteria
 - [ ] verify all Overview requirements: pool syncs; «Привязать» reads a chip, validates against pool,

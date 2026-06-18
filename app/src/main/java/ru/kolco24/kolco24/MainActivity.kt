@@ -1,10 +1,12 @@
 package ru.kolco24.kolco24
 
+import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,6 +31,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -50,6 +55,11 @@ import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
+import ru.kolco24.kolco24.ui.team.BindChipSheet
+import ru.kolco24.kolco24.ui.team.BindOutcome
+import ru.kolco24.kolco24.ui.team.BindSheetState
+import ru.kolco24.kolco24.ui.team.SlotKey
+import ru.kolco24.kolco24.ui.team.decideBind
 import ru.kolco24.kolco24.ui.team.TeamScreen
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
@@ -146,7 +156,14 @@ private fun Kolco24AppRoot() {
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
     val legendRepo = container.legendRepository
+    val memberTagsRepo = container.memberTagsRepository
+    val bindingRepo = container.memberChipBindingRepository
     val today = todayIso()
+
+    // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
+    val activity = context as? MainActivity
+    val nfcState = activity?.nfcState ?: NfcState.NoHardware
+    val nfcAvailable = nfcState == NfcState.Available
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -180,10 +197,19 @@ private fun Kolco24AppRoot() {
         selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
 
+    // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
+    val bindingsList by remember(selectedTeamId) {
+        selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    val bindings = remember(bindingsList) { bindingsList.associateBy { it.numberInTeam } }
+
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
     var pickerRaceId by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirmTeamId by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    // Bind-chip overlay: which member slot (numberInTeam) is being bound, or null when the sheet is closed.
+    var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
@@ -276,6 +302,16 @@ private fun Kolco24AppRoot() {
                         onOpenSettings = { showSettings = true },
                         teamMissing = teamMissing,
                         teamLoading = teamState is SelectedTeamState.Loading,
+                        bindings = bindings,
+                        onBindMember = { member -> bindSlot = member.numberInTeam },
+                        onUnbindMember = { member ->
+                            val teamId = selectedTeamId
+                            if (teamId != null) {
+                                // applicationScope so the delete outlives the composition (consistent with selectTeam).
+                                container.applicationScope.launch { bindingRepo.unbind(teamId, member.numberInTeam) }
+                            }
+                        },
+                        nfcAvailable = nfcAvailable,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
@@ -407,6 +443,87 @@ private fun Kolco24AppRoot() {
                     onDismiss = { confirmTeamId = null },
                 )
             }
+        }
+
+        // Bind-chip overlay (ModalBottomSheet). Shown when a member slot is selected and resolves to a
+        // member of the current team; NFC is armed app-wide, so the sheet only needs to route each read.
+        // Back press is handled by the sheet's own onDismissRequest plus this guarded BackHandler.
+        val activeBindSlot = bindSlot
+        val activeTeamId = selectedTeamId
+        val activeRaceId = selectedRaceId
+        val bindMember = if (activeBindSlot != null) {
+            teamForTab?.members?.find { it.numberInTeam == activeBindSlot }
+        } else {
+            null
+        }
+        BackHandler(
+            enabled = bindSlot != null && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+        ) { bindSlot = null }
+        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null) {
+            val currentSlot = SlotKey(activeTeamId, activeBindSlot)
+            // Reset per opened slot; survives recomposition while the same slot stays open.
+            var sheetState by remember(activeBindSlot) { mutableStateOf<BindSheetState>(BindSheetState.Waiting) }
+            // Pending chip for the AlreadyBound → «Перепривязать» path.
+            var pendingUid by remember(activeBindSlot) { mutableStateOf<String?>(null) }
+            var pendingNumber by remember(activeBindSlot) { mutableStateOf<Int?>(null) }
+
+            // Arm/clear the NFC read hook for exactly this open sheet. onDispose covers every exit path
+            // (dismiss, BackHandler, success auto-dismiss, team switch, recomposition).
+            DisposableEffect(activeBindSlot) {
+                val host = activity
+                host?.onTagScanned = { uid ->
+                    // Suspending DAO lookups run off the main thread internally; launch on the UI scope so
+                    // state writes land on the main thread. Binding writes go to applicationScope so they
+                    // outlive the closing sheet (per selectTeam convention).
+                    scope.launch {
+                        val poolNumber = memberTagsRepo.findByUid(activeRaceId, uid)?.number
+                        val existing = bindingRepo.findByUid(uid)
+                        when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {
+                            BindOutcome.NotInPool -> sheetState = BindSheetState.NotInPool(uid)
+                            BindOutcome.AlreadyOnThisSlot ->
+                                sheetState = BindSheetState.Success(existing!!.participantNumber, uid)
+                            is BindOutcome.AlreadyBound -> {
+                                pendingUid = uid
+                                pendingNumber = outcome.participantNumber
+                                sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
+                            }
+                            is BindOutcome.ReadyToBind -> {
+                                container.applicationScope.launch {
+                                    bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
+                                }
+                                sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                            }
+                        }
+                    }
+                }
+                onDispose { host?.onTagScanned = null }
+            }
+
+            // Auto-dismiss shortly after a successful bind so the confirmation is visible briefly.
+            LaunchedEffect(sheetState) {
+                if (sheetState is BindSheetState.Success) {
+                    delay(900)
+                    bindSlot = null
+                }
+            }
+
+            BindChipSheet(
+                member = bindMember,
+                state = sheetState,
+                nfcDisabled = nfcState == NfcState.Disabled,
+                onReassign = {
+                    val uid = pendingUid
+                    val number = pendingNumber
+                    if (uid != null && number != null) {
+                        container.applicationScope.launch {
+                            bindingRepo.bind(activeTeamId, activeBindSlot, uid, number)
+                        }
+                        sheetState = BindSheetState.Success(number, uid)
+                    }
+                },
+                onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
+                onDismiss = { bindSlot = null },
+            )
         }
     }
 }
