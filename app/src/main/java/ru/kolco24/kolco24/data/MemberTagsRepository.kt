@@ -13,6 +13,13 @@ import ru.kolco24.kolco24.data.db.SyncMetaEntity
 private fun memberTagsResource(raceId: Int): String = "race/$raceId/member_tags"
 
 /**
+ * Separate sync-marker resource written on every successful `200` fetch, even when the server
+ * omits the `ETag` header. [MemberTagsRepository.hasBeenSynced] checks this key so that an
+ * empty pool served without an ETag is still recognised as "synced" after activity recreation.
+ */
+private fun memberTagsSyncedResource(raceId: Int): String = "race/$raceId/member_tags/synced"
+
+/**
  * Single source of truth for one race's NFC member-tag pool (`number → nfc_uid`). Room holds the
  * data; the network only updates it. The UI/bind flow reads [observeForRace]/[findByUid];
  * [refreshMemberTags] performs a conditional fetch and, on `200`, fully replaces that race's local
@@ -40,6 +47,20 @@ class MemberTagsRepository(
         memberTagDao.findByUid(raceId, nfcUid)
 
     /**
+     * Returns `true` if the member-tag pool for [raceId] has been successfully fetched at least once.
+     * Used by the bind sheet to distinguish "pool not yet synced" from "pool is genuinely empty",
+     * surviving activity recreation and cases where the startup warm-up synced the pool before the
+     * bind sheet composition existed.
+     *
+     * Checks **either** the ETag resource (written when the server includes an `ETag` header) **or**
+     * the sync-marker resource (written on every successful `200`, even when the server omits `ETag`).
+     * Both are absent only when no successful fetch has ever occurred for this race.
+     */
+    suspend fun hasBeenSynced(raceId: Int): Boolean =
+        syncMetaDao.getEtag(origin, memberTagsResource(raceId)) != null ||
+            syncMetaDao.getEtag(origin, memberTagsSyncedResource(raceId)) != null
+
+    /**
      * Fetches `/app/race/<raceId>/member_tags/` with the stored ETag and, on `200`, replaces that
      * race's member-tag rows, then saves the new ETag. Like [LegendRepository.refreshLegend], the
      * data write and the ETag write are separate transactions on purpose: a crash between them leaves
@@ -56,6 +77,11 @@ class MemberTagsRepository(
                 )
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(origin, resource, result.etag))
+                } else {
+                    // No ETag from the server: write a sync-marker so hasBeenSynced() returns true
+                    // after activity recreation even when the pool is empty (an ETag-less empty-pool
+                    // response is a legitimate server response, not a "not yet synced" condition).
+                    syncMetaDao.upsert(SyncMetaEntity(origin, memberTagsSyncedResource(raceId), "1"))
                 }
                 RefreshResult.Updated
             }

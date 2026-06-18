@@ -44,10 +44,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.todayIso
@@ -165,7 +169,10 @@ private fun Kolco24AppRoot() {
     // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
     val activity = context as? MainActivity
     val nfcState = activity?.nfcState ?: NfcState.NoHardware
-    val nfcAvailable = nfcState == NfcState.Available
+    // Enable bind affordances whenever NFC hardware is present (even if currently disabled).
+    // The bind sheet shows an NFC-settings deep-link when nfcState == Disabled; disabling the
+    // button on NoHardware only (not Disabled) makes that recovery UI reachable.
+    val nfcAvailable = nfcState != NfcState.NoHardware
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -461,6 +468,10 @@ private fun Kolco24AppRoot() {
         BackHandler(
             enabled = bindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { bindSlot = null }
+        // Keyed by race; caches within this composition whether the pool is known-synced, so repeated
+        // offline opens within a session skip the DB lookup. Durable state (across activity recreation
+        // and startup warm-ups) is tracked in sync_meta via memberTagsRepo.hasBeenSynced().
+        val hasSyncedPool = remember(activeRaceId) { booleanArrayOf(false) }
         if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null) {
             val currentSlot = SlotKey(activeTeamId, activeBindSlot)
             // Reset per opened slot; survives recomposition while the same slot stays open.
@@ -471,6 +482,7 @@ private fun Kolco24AppRoot() {
 
             // Arm/clear the NFC read hook for exactly this open sheet. onDispose covers every exit path
             // (dismiss, BackHandler, success auto-dismiss, team switch, recomposition).
+            val scanMutex = remember(activeBindSlot) { Mutex() }
             DisposableEffect(activeBindSlot) {
                 val host = activity
                 host?.onTagScanned = { uid ->
@@ -480,23 +492,74 @@ private fun Kolco24AppRoot() {
                     scope.launch {
                         // Ignore stray scans during the 900ms auto-dismiss animation after a successful bind.
                         if (sheetState is BindSheetState.Success) return@launch
-                        val poolNumber = memberTagsRepo.findByUid(activeRaceId, uid)?.number
-                        val existing = bindingRepo.findByUid(uid)
-                        when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {
-                            BindOutcome.NotInPool -> sheetState = BindSheetState.NotInPool(uid)
-                            is BindOutcome.AlreadyOnThisSlot ->
-                                sheetState = BindSheetState.Success(outcome.participantNumber, uid)
-                            is BindOutcome.AlreadyBound -> {
-                                pendingUid = uid
-                                pendingNumber = outcome.participantNumber
-                                sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
-                            }
-                            is BindOutcome.ReadyToBind -> {
-                                container.applicationScope.launch {
-                                    bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
+                        // Serialize concurrent scan events (e.g. rapid re-presentation of the same chip):
+                        // skip any scan that arrives while one is already being processed.
+                        if (!scanMutex.tryLock()) return@launch
+                        try {
+                            // Fetch the full pool so we can distinguish "pool not yet synced" (empty table)
+                            // from "uid genuinely absent from the pool" (non-empty table, uid missing).
+                            // Using findByUid alone would conflate these two cases.
+                            var pool = memberTagsRepo.observeForRace(activeRaceId).first()
+                            if (pool.isEmpty() && !hasSyncedPool[0]) {
+                                // Pool is empty and not yet confirmed in this composition: check the
+                                // durable sync_meta record first (covers activity recreation and cases
+                                // where the startup warm-up synced an empty pool before the sheet opened).
+                                if (memberTagsRepo.hasBeenSynced(activeRaceId)) {
+                                    // Pool is known-synced but empty; cache the flag and fall through so
+                                    // the scan produces NotInPool rather than PoolNotReady.
+                                    hasSyncedPool[0] = true
+                                } else {
+                                    // No prior sync record: attempt an inline refresh. If the server is
+                                    // unreachable stay in PoolNotReady; on success mark synced and re-read
+                                    // (a still-empty pool will produce NotInPool on this and all subsequent
+                                    // scans).
+                                    sheetState = BindSheetState.PoolNotReady
+                                    val refreshResult = memberTagsRepo.refreshMemberTags(activeRaceId)
+                                    if (refreshResult == RefreshResult.Offline ||
+                                        refreshResult is RefreshResult.HttpError ||
+                                        refreshResult == RefreshResult.Forbidden
+                                    ) {
+                                        return@launch
+                                    }
+                                    hasSyncedPool[0] = true
+                                    pool = memberTagsRepo.observeForRace(activeRaceId).first()
                                 }
-                                sheetState = BindSheetState.Success(outcome.participantNumber, uid)
                             }
+                            val poolNumber = pool.find { it.nfcUid == uid }?.number
+                            val existing = bindingRepo.findByUid(uid)
+                            when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {
+                                BindOutcome.NotInPool -> sheetState = BindSheetState.NotInPool(uid)
+                                is BindOutcome.AlreadyOnThisSlot -> {
+                                    // Refresh the stored participantNumber from the authoritative pool
+                                    // in case it changed since the original bind.
+                                    try {
+                                        container.applicationScope.async {
+                                            bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
+                                        }.await()
+                                        sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                                    } catch (_: Exception) {
+                                        sheetState = BindSheetState.Waiting
+                                    }
+                                }
+                                is BindOutcome.AlreadyBound -> {
+                                    pendingUid = uid
+                                    pendingNumber = outcome.participantNumber
+                                    sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
+                                }
+                                is BindOutcome.ReadyToBind -> {
+                                    // Await the write so success is only shown after persistence completes.
+                                    try {
+                                        container.applicationScope.async {
+                                            bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
+                                        }.await()
+                                        sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                                    } catch (_: Exception) {
+                                        sheetState = BindSheetState.Waiting
+                                    }
+                                }
+                            }
+                        } finally {
+                            scanMutex.unlock()
                         }
                     }
                 }
@@ -519,10 +582,19 @@ private fun Kolco24AppRoot() {
                     val uid = pendingUid
                     val number = pendingNumber
                     if (uid != null && number != null) {
-                        container.applicationScope.launch {
-                            bindingRepo.bind(activeTeamId, activeBindSlot, uid, number)
+                        scope.launch {
+                            if (!scanMutex.tryLock()) return@launch
+                            try {
+                                container.applicationScope.async {
+                                    bindingRepo.bind(activeTeamId, activeBindSlot, uid, number)
+                                }.await()
+                                sheetState = BindSheetState.Success(number, uid)
+                            } catch (_: Exception) {
+                                sheetState = BindSheetState.AlreadyBound(uid, number)
+                            } finally {
+                                scanMutex.unlock()
+                            }
                         }
-                        sheetState = BindSheetState.Success(number, uid)
                     }
                 },
                 onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },

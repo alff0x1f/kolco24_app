@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -94,6 +95,9 @@ sealed interface BindSheetState {
 
     /** Bound [participantNumber] / [uid] to this slot — auto-dismisses. */
     data class Success(val participantNumber: Int, val uid: String) : BindSheetState
+
+    /** Pool hasn't synced yet — a background refresh was triggered; user should rescan shortly. */
+    object PoolNotReady : BindSheetState
 }
 
 /**
@@ -147,6 +151,7 @@ fun BindChipSheet(
             Spacer(Modifier.height(20.dp))
             when (state) {
                 is BindSheetState.Waiting -> WaitingContent(nfcDisabled, onOpenNfcSettings)
+                is BindSheetState.PoolNotReady -> PoolNotReadyContent()
                 is BindSheetState.NotInPool -> StatusContent(
                     icon = Icons.Filled.ErrorOutline,
                     tint = MaterialTheme.colorScheme.error,
@@ -205,6 +210,35 @@ fun BindChipSheet(
             Spacer(Modifier.height(16.dp))
         }
     }
+}
+
+@Composable
+private fun PoolNotReadyContent() {
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(36.dp),
+            color = OrangeCta,
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+    Text(
+        text = "Загружаем список участников",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = "Данные ещё не загружены. Поднесите чип снова через несколько секунд.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

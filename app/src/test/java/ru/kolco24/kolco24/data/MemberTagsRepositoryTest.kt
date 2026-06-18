@@ -12,6 +12,8 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -97,14 +99,17 @@ class MemberTagsRepositoryTest {
     }
 
     @Test
-    fun success_withoutEtag_storesTagsButSkipsEtagSave() = runTest {
+    fun success_withoutEtag_storesTagsAndWritesSyncMarker() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody(memberTagsJson()))
 
         assertEquals(RefreshResult.Updated, repository.refreshMemberTags(8))
 
         assertEquals(1, repository.observeForRace(8).first().size)
+        // ETag resource stays null (server sent no ETag), but sync-marker is written.
         assertNull(syncMetaDao.getEtag(origin, "race/8/member_tags"))
-        assertEquals(listOf("replaceAllForRace"), callLog)
+        assertNotNull(syncMetaDao.getEtag(origin, "race/8/member_tags/synced"))
+        // replaceAllForRace is written first, sync-marker second.
+        assertEquals(listOf("replaceAllForRace", "upsertEtag"), callLog)
     }
 
     @Test
@@ -156,6 +161,46 @@ class MemberTagsRepositoryTest {
         assertEquals(RefreshResult.Updated, repository.refreshMemberTags(8))
 
         assertTrue(repository.observeForRace(8).first().isEmpty())
+    }
+
+    @Test
+    fun hasBeenSynced_falseBeforeFirstSync() = runTest {
+        assertFalse(repository.hasBeenSynced(8))
+    }
+
+    @Test
+    fun hasBeenSynced_trueAfterSuccessfulSyncWithEtag() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(memberTagsJson()),
+        )
+        repository.refreshMemberTags(8)
+        assertTrue(repository.hasBeenSynced(8))
+    }
+
+    @Test
+    fun hasBeenSynced_trueAfterSuccessfulSyncWithoutEtag() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(memberTagsJson()))
+        repository.refreshMemberTags(8)
+        // A valid 200 with no ETag still marks the pool as synced via the sync-marker resource.
+        assertTrue(repository.hasBeenSynced(8))
+    }
+
+    @Test
+    fun hasBeenSynced_trueAfterNotModified() = runTest {
+        syncMetaDao.upsert(SyncMetaEntity(origin, "race/8/member_tags", "\"v1\""))
+        server.enqueue(MockResponse().setResponseCode(304))
+        repository.refreshMemberTags(8)
+        assertTrue(repository.hasBeenSynced(8))
+    }
+
+    @Test
+    fun hasBeenSynced_scoped_toRace() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"a\"").setBody(memberTagsJson()),
+        )
+        repository.refreshMemberTags(8)
+        assertTrue(repository.hasBeenSynced(8))
+        assertFalse(repository.hasBeenSynced(9))
     }
 
     @Test
