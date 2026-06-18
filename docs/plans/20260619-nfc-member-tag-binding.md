@@ -146,15 +146,15 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MemberTagEntity.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MemberTagDao.kt`
 
-- [ ] create `@Entity(tableName = "member_tags", primaryKeys = ["raceId","nfcUid"], indices = [Index("raceId")])`
+- [x] create `@Entity(tableName = "member_tags", primaryKeys = ["raceId","nfcUid"], indices = [Index("raceId")])`
       `MemberTagEntity(val raceId: Int, val nfcUid: String, val number: Int)` (mirrors `CheckpointEntity`'s
       per-race shape)
-- [ ] create `MemberTagDao` (mirror `CheckpointDao`): `observeForRace(raceId): Flow<List<MemberTagEntity>>`,
+- [x] create `MemberTagDao` (mirror `CheckpointDao`): `observeForRace(raceId): Flow<List<MemberTagEntity>>`,
       `suspend findByUid(raceId: Int, nfcUid: String): MemberTagEntity?`,
       `@Transaction suspend replaceAllForRace(raceId, tags)` (`deleteForRace(raceId)` + `insertAll(tags)`,
       plus the `deleteForRace`/`insertAll` helpers)
-- [ ] (no separate unit test — trivial DAO, covered by repo + migration tests; note in commit)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] (no separate unit test — trivial DAO, covered by repo + migration tests; note in commit)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 3: `MemberChipBindingEntity` + `MemberChipBindingDao`
 
