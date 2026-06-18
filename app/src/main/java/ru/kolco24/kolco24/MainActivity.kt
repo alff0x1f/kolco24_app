@@ -476,6 +476,8 @@ private fun Kolco24AppRoot() {
                     // state writes land on the main thread. Binding writes go to applicationScope so they
                     // outlive the closing sheet (per selectTeam convention).
                     scope.launch {
+                        // Ignore stray scans during the 900ms auto-dismiss animation after a successful bind.
+                        if (sheetState is BindSheetState.Success) return@launch
                         val poolNumber = memberTagsRepo.findByUid(activeRaceId, uid)?.number
                         val existing = bindingRepo.findByUid(uid)
                         when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {

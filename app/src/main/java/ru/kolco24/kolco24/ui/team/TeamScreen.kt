@@ -59,7 +59,8 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  * Each member slot carries an optional local NFC chip [bindings] entry (keyed by `numberInTeam`):
  * bound members render their participant number + uid and tapping the row unbinds; unbound members
  * show «Чип не привязан» + a «Привязать» button (enabled only when [nfcAvailable]). The hero card's
- * «N / total с чипом» counter is driven by [bindings]`.size`.
+ * «N / total с чипом» counter is driven by `members.count { bindings.containsKey(it.numberInTeam) }`
+ * (counts only current roster members with bindings, so stale entries for removed members are ignored).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
