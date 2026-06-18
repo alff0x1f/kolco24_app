@@ -77,7 +77,9 @@ enum class NfcState { NoHardware, Disabled, Available }
 class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /** Lazily resolved once; null when the device has no NFC hardware. */
-    private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
+    private val nfcAdapter: NfcAdapter? by lazy {
+        getSystemService(android.nfc.NfcManager::class.java)?.defaultAdapter
+    }
 
     /** Main-thread handler so tag reads (delivered on a binder thread) hop to the UI thread. */
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -519,6 +521,7 @@ private fun Kolco24AppRoot() {
                                         refreshResult is RefreshResult.HttpError ||
                                         refreshResult == RefreshResult.Forbidden
                                     ) {
+                                        sheetState = BindSheetState.Waiting
                                         return@launch
                                     }
                                     hasSyncedPool[0] = true
