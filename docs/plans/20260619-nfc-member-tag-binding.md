@@ -132,13 +132,13 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/api/dto/MemberTagsResponseTest.kt`
 
-- [ ] create `MemberTagsResponse(@SerialName("member_tags") val memberTags: List<MemberTagDto>)` and
+- [x] create `MemberTagsResponse(@SerialName("member_tags") val memberTags: List<MemberTagDto>)` and
       `MemberTagDto(val number: Int, @SerialName("nfc_uid") val nfcUid: String)` (`@Serializable`)
-- [ ] add `suspend fun fetchMemberTags(raceId: Int, etag: String?): FetchResult<MemberTagsResponse>`
+- [x] add `suspend fun fetchMemberTags(raceId: Int, etag: String?): FetchResult<MemberTagsResponse>`
       delegating to `conditionalGet("$baseUrl/app/race/$raceId/member_tags/", etag) { json.decodeFromString(it) }`
-- [ ] write tests for `MemberTagsResponse` parsing (success: list maps; `ignoreUnknownKeys`; empty list)
-- [ ] add an `ApiClientTest` case for `fetchMemberTags` (200 + ETag, 304, 403) mirroring the legend case
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] write tests for `MemberTagsResponse` parsing (success: list maps; `ignoreUnknownKeys`; empty list)
+- [x] add an `ApiClientTest` case for `fetchMemberTags` (200 + ETag, 304, 403) mirroring the legend case
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 2: `MemberTagEntity` + `MemberTagDao`
 

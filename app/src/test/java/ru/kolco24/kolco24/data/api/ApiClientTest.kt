@@ -322,4 +322,64 @@ class ApiClientTest {
 
         assertEquals(FetchResult.Error(null), apiClient.fetchLegend(8, null))
     }
+
+    private val memberTagsJson = """
+        {
+          "member_tags": [
+            {"number": 101, "nfc_uid": "04A2B3C4D5E680"},
+            {"number": 102, "nfc_uid": "0489AB12CD34EF"}
+          ]
+        }
+    """.trimIndent()
+
+    @Test
+    fun fetchMemberTags_success_returnsParsedBodyAndEtag() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("ETag", "\"tags-v1\"")
+                .setBody(memberTagsJson),
+        )
+
+        val result = apiClient.fetchMemberTags(8, "\"old\"")
+
+        assertTrue(result is FetchResult.Success)
+        result as FetchResult.Success
+        assertEquals(2, result.data.memberTags.size)
+        assertEquals(101, result.data.memberTags[0].number)
+        assertEquals("04A2B3C4D5E680", result.data.memberTags[0].nfcUid)
+        assertEquals("\"tags-v1\"", result.etag)
+
+        val recorded = server.takeRequest()
+        assertEquals("/app/race/8/member_tags/", recorded.path)
+        assertEquals("\"old\"", recorded.getHeader("If-None-Match"))
+    }
+
+    @Test
+    fun fetchMemberTags_notModified_returnsNotModified() = runTest {
+        server.enqueue(MockResponse().setResponseCode(304))
+
+        assertEquals(FetchResult.NotModified, apiClient.fetchMemberTags(8, "\"e\""))
+    }
+
+    @Test
+    fun fetchMemberTags_forbidden_returnsForbidden() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        assertEquals(FetchResult.Forbidden, apiClient.fetchMemberTags(8, null))
+    }
+
+    @Test
+    fun fetchMemberTags_serverError_returnsErrorWithCode() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        assertEquals(FetchResult.Error(500), apiClient.fetchMemberTags(8, null))
+    }
+
+    @Test
+    fun fetchMemberTags_connectionDrop_returnsErrorWithNullCode() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertEquals(FetchResult.Error(null), apiClient.fetchMemberTags(8, null))
+    }
 }
