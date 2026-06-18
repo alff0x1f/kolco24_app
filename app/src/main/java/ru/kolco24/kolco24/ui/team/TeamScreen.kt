@@ -104,7 +104,7 @@ fun TeamScreen(
                     team = team,
                     category = category,
                     totalCount = team.ucount,
-                    boundCount = bindings.size,
+                    boundCount = members.count { bindings.containsKey(it.numberInTeam) },
                 )
             }
             item("members") {

@@ -79,6 +79,20 @@ class MemberChipBindingRepositoryTest {
         assertEquals(2, bindings.single().numberInTeam)
         assertEquals("AABB", repository.findByUid("AABB")?.nfcUid)
     }
+
+    @Test
+    fun observeForTeam_doesNotReturnBindingsOfOtherTeams() = runTest {
+        repository.bind(teamId = 7, numberInTeam = 1, nfcUid = "AABB", participantNumber = 101)
+        repository.bind(teamId = 8, numberInTeam = 1, nfcUid = "CCDD", participantNumber = 202)
+
+        val team7 = repository.observeForTeam(7).first()
+        val team8 = repository.observeForTeam(8).first()
+
+        assertEquals(1, team7.size)
+        assertEquals("AABB", team7.single().nfcUid)
+        assertEquals(1, team8.size)
+        assertEquals("CCDD", team8.single().nfcUid)
+    }
 }
 
 private class FakeMemberChipBindingDao : MemberChipBindingDao {

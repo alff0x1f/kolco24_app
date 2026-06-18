@@ -457,7 +457,7 @@ private fun Kolco24AppRoot() {
             null
         }
         BackHandler(
-            enabled = bindSlot != null && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+            enabled = bindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { bindSlot = null }
         if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null) {
             val currentSlot = SlotKey(activeTeamId, activeBindSlot)
@@ -480,8 +480,8 @@ private fun Kolco24AppRoot() {
                         val existing = bindingRepo.findByUid(uid)
                         when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {
                             BindOutcome.NotInPool -> sheetState = BindSheetState.NotInPool(uid)
-                            BindOutcome.AlreadyOnThisSlot ->
-                                sheetState = BindSheetState.Success(existing!!.participantNumber, uid)
+                            is BindOutcome.AlreadyOnThisSlot ->
+                                sheetState = BindSheetState.Success(outcome.participantNumber, uid)
                             is BindOutcome.AlreadyBound -> {
                                 pendingUid = uid
                                 pendingNumber = outcome.participantNumber

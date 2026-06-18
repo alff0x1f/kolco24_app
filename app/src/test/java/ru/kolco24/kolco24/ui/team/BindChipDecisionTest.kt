@@ -48,6 +48,14 @@ class BindChipDecisionTest {
     fun uidAlreadyOnThisSlot_alreadyOnThisSlot() {
         val existing = MemberChipBindingEntity(teamId = 7, numberInTeam = 2, nfcUid = uid, participantNumber = 101)
         val outcome = decideBind(uid, poolNumber = 101, existing = existing, currentSlot = slot)
-        assertEquals(BindOutcome.AlreadyOnThisSlot, outcome)
+        assertEquals(BindOutcome.AlreadyOnThisSlot(101), outcome)
+    }
+
+    @Test
+    fun alreadyBound_usesPoolNumberNotStoredParticipantNumber() {
+        // The pool is authoritative; stored participantNumber may be stale if pool was updated.
+        val existing = MemberChipBindingEntity(teamId = 7, numberInTeam = 5, nfcUid = uid, participantNumber = 99)
+        val outcome = decideBind(uid, poolNumber = 101, existing = existing, currentSlot = slot)
+        assertEquals(BindOutcome.AlreadyBound(SlotKey(7, 5), 101), outcome)
     }
 }

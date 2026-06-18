@@ -55,7 +55,7 @@ fun decideBind(
     if (existing != null) {
         val existingSlot = SlotKey(existing.teamId, existing.numberInTeam)
         return if (existingSlot == currentSlot) {
-            BindOutcome.AlreadyOnThisSlot
+            BindOutcome.AlreadyOnThisSlot(poolNumber)
         } else {
             BindOutcome.AlreadyBound(existingSlot, poolNumber)
         }
@@ -74,8 +74,8 @@ sealed interface BindOutcome {
     /** Uid is free and in the pool — bind it, resolving to [participantNumber]. */
     data class ReadyToBind(val participantNumber: Int) : BindOutcome
 
-    /** Uid is already bound to exactly this slot — nothing to do. */
-    object AlreadyOnThisSlot : BindOutcome
+    /** Uid is already bound to exactly this slot — nothing to do; [participantNumber] for display. */
+    data class AlreadyOnThisSlot(val participantNumber: Int) : BindOutcome
 }
 
 /**
