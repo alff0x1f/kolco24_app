@@ -66,10 +66,13 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - Update this plan if implementation deviates from scope.
 
 ## Solution Overview
-1. **`member_tags` sync** — a new synced resource mirroring `LegendRepository`: DTO → `ApiClient`
-   delegate → `MemberTagsRepository` → a **global** Room table `member_tags` (no `raceId`, replaced
-   on every fetch), with a **single global** ETag in `sync_meta` (resource key `"member_tags"`, not
-   partitioned by race). See the Technical Details note on why the ETag is global, not per-race.
+1. **`member_tags` sync** — a new synced resource mirroring `LegendRepository`/`CheckpointEntity`
+   **exactly**: DTO → `ApiClient` delegate → `MemberTagsRepository` → a **per-race** Room table
+   `member_tags` (`raceId` column, `replaceAllForRace`), with a **per-race** ETag in `sync_meta`
+   (resource key `"race/<raceId>/member_tags"`). The pool is *currently* identical across races, but
+   the backend is expected to move to **per-race tag pools** (API.md: «задел под будущие пер-гоночные
+   комплекты»); modelling it per-race now future-proofs the schema and matches the established legend
+   pattern, so no migration is needed when the backend switches.
 2. **Local bindings** — a Room table `member_chip_bindings`, composite PK `(teamId, numberInTeam)`,
    `@Index` on `nfcUid`, exposed by `MemberChipBindingRepository`. Local-only; never uploaded.
 3. **Real NFC reading** — manifest permission + `NfcAdapter.enableReaderMode` lifecycle in
@@ -83,7 +86,10 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - **`member_tags` JSON:** `{"member_tags":[{"number":101,"nfc_uid":"04A2B3C4D5E680"}, ...]}`.
   `nfc_uid` is already normalized server-side (trim + UPPERCASE). The app normalizes read UIDs the
   same way before comparing.
-- **`MemberTagEntity`** (`member_tags`): `@PrimaryKey val nfcUid: String`, `val number: Int`.
+- **`MemberTagEntity`** (`member_tags`): `@Entity(primaryKeys = ["raceId","nfcUid"], indices=[Index("raceId")])`,
+  columns `raceId: Int`, `nfcUid: String`, `number: Int`. Composite PK `(raceId, nfcUid)` because the
+  pool is per-race and `member_tags` carries no server `id` (API.md: «Внутреннего id в выдаче нет —
+  слот идентифицируется по `nfc_uid`»); the same `nfc_uid` may legitimately appear in two races' pools.
 - **`MemberChipBindingEntity`** (`member_chip_bindings`): `@Entity(primaryKeys = ["teamId","numberInTeam"], indices=[Index("nfcUid")])`,
   columns `teamId: Int`, `numberInTeam: Int`, `nfcUid: String`, `participantNumber: Int`.
   `participantNumber` is resolved from the pool at bind time and stored so a row renders without a
@@ -95,12 +101,13 @@ sync resource) is reusable by the future checkpoint-scan feature.
   assumption holds; if the backend ever reorders slots, a binding could re-associate to the new slot
   occupant. Document this assumption in CLAUDE.md (Task 14). No automatic mismatch detection is
   possible (the member carries no participant number to compare against the stored `participantNumber`).
-- **Sync resource key:** a **single global** key `"member_tags"` in `sync_meta` (per `origin`). The
-  pool is global and currently identical across all race URLs (API.md: «Для всех гонок ответ сейчас
-  одинаков», so the ETag is identical too). A per-race ETag combined with a global table would be
-  racy when two races are warmed in one session (startup warms the nearest race, Launch B the
-  selected one); a single global key avoids that. ETags still partition by `origin` (cloud vs. local
-  server), matching the rest of `sync_meta`.
+- **Sync resource key:** per-race `"race/$raceId/member_tags"` in `sync_meta` (per `origin`),
+  identical in shape to the legend key. Because the table is now per-race (`replaceAllForRace`), the
+  two warm-ups touching different races in one session (startup warms the nearest race, Launch B the
+  selected one) write disjoint rows and disjoint ETags — no clobber, and it stays correct once the
+  backend serves a genuinely different pool per race.
+- **Pool lookups are race-scoped:** the bind flow resolves a scanned UID against the **selected
+  team's race** pool — `memberTagDao.findByUid(selectedRaceId, uid)` — never the whole table.
 - **NFC reader flags:** `FLAG_READER_NFC_A or FLAG_READER_NFC_B or FLAG_READER_NFC_F or FLAG_READER_NFC_V or FLAG_READER_SKIP_NDEF_CHECK`.
   UID = `tag.id` bytes → hex string → `trim().uppercase()`.
 - **NFC availability:** `adapter == null` → no hardware; `adapter != null && !isEnabled` → disabled
@@ -139,10 +146,13 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MemberTagEntity.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MemberTagDao.kt`
 
-- [ ] create `@Entity(tableName = "member_tags") MemberTagEntity(@PrimaryKey val nfcUid: String, val number: Int)`
-- [ ] create `MemberTagDao`: `observeAll(): Flow<List<MemberTagEntity>>`,
-      `suspend findByUid(nfcUid: String): MemberTagEntity?`, `@Transaction suspend replaceAll(tags)`
-      (`deleteAll()` + `insertAll(tags)`, plus the `deleteAll`/`insertAll` helpers)
+- [ ] create `@Entity(tableName = "member_tags", primaryKeys = ["raceId","nfcUid"], indices = [Index("raceId")])`
+      `MemberTagEntity(val raceId: Int, val nfcUid: String, val number: Int)` (mirrors `CheckpointEntity`'s
+      per-race shape)
+- [ ] create `MemberTagDao` (mirror `CheckpointDao`): `observeForRace(raceId): Flow<List<MemberTagEntity>>`,
+      `suspend findByUid(raceId: Int, nfcUid: String): MemberTagEntity?`,
+      `@Transaction suspend replaceAllForRace(raceId, tags)` (`deleteForRace(raceId)` + `insertAll(tags)`,
+      plus the `deleteForRace`/`insertAll` helpers)
 - [ ] (no separate unit test — trivial DAO, covered by repo + migration tests; note in commit)
 - [ ] run `./gradlew testDebugUnitTest` — must pass before next task
 
@@ -169,13 +179,16 @@ sync resource) is reusable by the future checkpoint-scan feature.
 
 - [ ] add `MemberTagEntity` + `MemberChipBindingEntity` to `@Database(entities=[...])`, bump
       `version = 4`, add `abstract fun memberTagDao()` + `memberChipBindingDao()`
-- [ ] write `MIGRATION_3_4`: `CREATE TABLE member_tags` + `CREATE TABLE member_chip_bindings`
-      (composite PK) + `CREATE INDEX index_member_chip_bindings_nfcUid`; register in `addMigrations(...)`
+- [ ] write `MIGRATION_3_4`: `CREATE TABLE member_tags` (composite PK `(raceId, nfcUid)`) +
+      `CREATE INDEX index_member_tags_raceId` + `CREATE TABLE member_chip_bindings` (composite PK
+      `(teamId, numberInTeam)`) + `CREATE INDEX index_member_chip_bindings_nfcUid`; register in
+      `addMigrations(...)`
 - [ ] build once (`./gradlew assembleDebug`) so KSP regenerates `4.json`; confirm the migration SQL
       byte-matches the generated table/column/index names (camelCase); **commit `4.json` to git**
       (exportSchema=true requires it tracked, like `{1,2,3}.json`)
-- [ ] add `migrate3To4_keepsDataAndAddsTables` + `migrate3To4_bindingIndexExists` to `MigrationTest`
-      (seed a v3 race/team, run 1→2→3→4, assert survival, both tables present + insertable, index exists)
+- [ ] add `migrate3To4_keepsDataAndAddsTables` + `migrate3To4_indexesExist` to `MigrationTest`
+      (seed a v3 race/team, run 1→2→3→4, assert survival, both tables present + insertable, both the
+      `index_member_tags_raceId` and `index_member_chip_bindings_nfcUid` indexes exist)
 - [ ] run `./gradlew lintDebug testDebugUnitTest`; run `./gradlew connectedDebugAndroidTest` (device) —
       migration test must pass before next task
 
@@ -186,14 +199,16 @@ sync resource) is reusable by the future checkpoint-scan feature.
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/MemberTagsRepositoryTest.kt`
 
 - [ ] create `MemberTagsRepository(apiClient, memberTagDao, syncMetaDao, origin)` mirroring
-      `LegendRepository`: `observeAll()`, `suspend findByUid(uid)`,
-      `suspend refreshMemberTags(raceId): RefreshResult` (global resource key `"member_tags"` — NOT
-      per-race; `replaceAll` **then** ETag upsert as two transactions, ETag skipped when null)
-- [ ] add a private `MemberTagDto.toEntity()` mapping (`nfcUid`, `number`)
-- [ ] write repo tests mirroring `LegendRepositoryTest`: success maps + stores ETag under the global
-      `"member_tags"` key; write-before-ETag ordering via `callLog`; success-without-ETag skips ETag
-      save; 304 leaves data; offline; 403; 500 → `HttpError`; empty list replaces existing rows;
-      two different `raceId`s share the **same** ETag resource key
+      `LegendRepository`: `observeForRace(raceId)`, `suspend findByUid(raceId, uid)`,
+      `suspend refreshMemberTags(raceId): RefreshResult` (per-race resource key
+      `"race/$raceId/member_tags"`; `replaceAllForRace` **then** ETag upsert as two transactions,
+      ETag skipped when null)
+- [ ] add a private `MemberTagDto.toEntity(raceId)` mapping (`raceId`, `nfcUid`, `number`)
+- [ ] write repo tests mirroring `LegendRepositoryTest`: success maps + stores ETag under
+      `"race/$raceId/member_tags"`; write-before-ETag ordering via `callLog`; success-without-ETag
+      skips ETag save; 304 leaves data; offline; 403; 500 → `HttpError`; empty list replaces that
+      race's rows; two different `raceId`s use **different** ETag resource keys and write disjoint rows
+      (mirror `LegendRepositoryTest.differentRaceIds_useDifferentSyncResources`)
 - [ ] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 6: `MemberChipBindingRepository`
@@ -311,7 +326,8 @@ sync resource) is reusable by the future checkpoint-scan feature.
       set/clear): on enter set `(context as MainActivity).onTagScanned = { uid -> ... }`; in `onDispose`
       set it back to `null`. This guarantees the hook is cleared on **every** exit path (dismiss,
       BackHandler, success auto-dismiss, team switch, recomposition). The callback runs on the main
-      thread (Task 9 posts there); it does the pool lookup + `decideBind` + writes via
+      thread (Task 9 posts there); it does the **race-scoped** pool lookup
+      (`memberTagDao.findByUid(selectedRaceId, uid)`) + `decideBind` + writes via
       `container.applicationScope` (outlives the closing sheet)
 - [ ] `onUnbindMember` deletes the slot via `container.applicationScope.launch { bindingRepo.unbind(selectedTeamId, member.numberInTeam) }`
 - [ ] add `BackHandler(enabled = bindSlot != null && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null)`
@@ -329,7 +345,8 @@ sync resource) is reusable by the future checkpoint-scan feature.
 
 ### Task 14: [Final] Update documentation
 - [ ] update `CLAUDE.md`: new `MemberTagsRepository` / `MemberChipBindingRepository`, `member_tags`
-      (global table, global `"member_tags"` ETag key) + `member_chip_bindings` tables, Room v4 +
+      (per-race table, per-race `"race/<raceId>/member_tags"` ETag key, modelled per-race ahead of the
+      backend's future per-race pools) + `member_chip_bindings` tables, Room v4 +
       `MIGRATION_3_4`, NFC reader-mode infra in `MainActivity`, `BindChipSheet`, and `TeamScreen`'s
       now-live binding UI (replace the «NFC chip binding is out of scope» / «boundCount = 0» notes).
       Record the **binding-key assumption**: bindings are keyed by `(teamId, numberInTeam)` and rely on
