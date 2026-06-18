@@ -24,7 +24,6 @@ class TeamPickerLogicTest {
         dateEnd = dateEnd,
         place = "Лес",
         regStatus = regStatus,
-        isLegendVisible = true,
     )
 
     private fun team(

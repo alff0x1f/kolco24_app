@@ -185,7 +185,6 @@ class RaceRepositoryTest {
         dateEnd = null,
         place = "Сосновый бор",
         regStatus = "open",
-        isLegendVisible = true,
     )
 }
 

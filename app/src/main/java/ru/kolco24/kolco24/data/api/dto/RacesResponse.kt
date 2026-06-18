@@ -22,5 +22,4 @@ data class RaceDto(
     @SerialName("date_end") val dateEnd: String? = null,
     val place: String,
     @SerialName("reg_status") val regStatus: String,
-    @SerialName("is_legend_visible") val isLegendVisible: Boolean,
 )
