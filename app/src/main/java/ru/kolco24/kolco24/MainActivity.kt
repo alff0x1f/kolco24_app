@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -85,6 +84,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
+    @Volatile
     var onTagScanned: ((String) -> Unit)? = null
 
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
@@ -474,7 +474,7 @@ private fun Kolco24AppRoot() {
         // offline opens within a session skip the DB lookup. Durable state (across activity recreation
         // and startup warm-ups) is tracked in sync_meta via memberTagsRepo.hasBeenSynced().
         val hasSyncedPool = remember(activeRaceId) { booleanArrayOf(false) }
-        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null) {
+        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null && !showSettings) {
             val currentSlot = SlotKey(activeTeamId, activeBindSlot)
             // Reset per opened slot; survives recomposition while the same slot stays open.
             var sheetState by remember(activeBindSlot) { mutableStateOf<BindSheetState>(BindSheetState.Waiting) }
@@ -536,9 +536,7 @@ private fun Kolco24AppRoot() {
                                     // Refresh the stored participantNumber from the authoritative pool
                                     // in case it changed since the original bind.
                                     try {
-                                        container.applicationScope.async {
-                                            bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
-                                        }.await()
+                                        bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
                                         sheetState = BindSheetState.Success(outcome.participantNumber, uid)
                                     } catch (_: Exception) {
                                         sheetState = BindSheetState.Waiting
@@ -550,11 +548,8 @@ private fun Kolco24AppRoot() {
                                     sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
                                 }
                                 is BindOutcome.ReadyToBind -> {
-                                    // Await the write so success is only shown after persistence completes.
                                     try {
-                                        container.applicationScope.async {
-                                            bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
-                                        }.await()
+                                        bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
                                         sheetState = BindSheetState.Success(outcome.participantNumber, uid)
                                     } catch (_: Exception) {
                                         sheetState = BindSheetState.Waiting
@@ -588,9 +583,7 @@ private fun Kolco24AppRoot() {
                         scope.launch {
                             if (!scanMutex.tryLock()) return@launch
                             try {
-                                container.applicationScope.async {
-                                    bindingRepo.bind(activeTeamId, activeBindSlot, uid, number)
-                                }.await()
+                                bindingRepo.bind(activeTeamId, activeBindSlot, uid, number)
                                 sheetState = BindSheetState.Success(number, uid)
                             } catch (_: Exception) {
                                 sheetState = BindSheetState.AlreadyBound(uid, number)
