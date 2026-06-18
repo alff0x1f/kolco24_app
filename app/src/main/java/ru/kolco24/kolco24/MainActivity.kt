@@ -512,7 +512,7 @@ private fun Kolco24AppRoot() {
             BindChipSheet(
                 member = bindMember,
                 state = sheetState,
-                nfcDisabled = nfcState == NfcState.Disabled,
+                nfcDisabled = nfcState != NfcState.Available,
                 onReassign = {
                     val uid = pendingUid
                     val number = pendingNumber
