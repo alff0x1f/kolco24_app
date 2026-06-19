@@ -81,17 +81,17 @@ an `AlertDialog` is shown; confirming performs the Room delete on `applicationSc
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 
-- [ ] add import `androidx.compose.foundation.combinedClickable` and
+- [x] add import `androidx.compose.foundation.combinedClickable` and
   `androidx.compose.foundation.ExperimentalFoundationApi`
-- [ ] annotate `MemberRow` with `@OptIn(ExperimentalFoundationApi::class)`
-- [ ] in `MemberRow` (line ~289), replace
+- [x] annotate `MemberRow` with `@OptIn(ExperimentalFoundationApi::class)`
+- [x] in `MemberRow` (line ~289), replace
   `.then(if (bound) Modifier.clickable(onClick = onUnbind) else Modifier)` with
   `.then(if (bound) Modifier.combinedClickable(onClick = {}, onLongClick = onUnbind) else Modifier)`
-- [ ] remove the bound-branch trailing `ChevronRight` (lines ~352-358) so bound rows have no trailing
+- [x] remove the bound-branch trailing `ChevronRight` (lines ~352-358) so bound rows have no trailing
   icon; keep the unbound-branch «Привязать» `OutlinedButton` untouched
-- [ ] remove the now-unused `Icons.Filled.ChevronRight` import **only if** no longer referenced in this
+- [x] remove the now-unused `Icons.Filled.ChevronRight` import **only if** no longer referenced in this
   file (it is still used by `MiscRow` — keep the import in that case)
-- [ ] update the `MemberRow`/`TeamScreen` KDoc: "tapping the row unbinds" → "long-press the row to
+- [x] update the `MemberRow`/`TeamScreen` KDoc: "tapping the row unbinds" → "long-press the row to
   unbind (host confirms)"
 
 ### Task 2: Add confirmation dialog + state in `MainActivity`

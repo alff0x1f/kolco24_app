@@ -1,9 +1,11 @@
 package ru.kolco24.kolco24.ui.team
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,8 +59,9 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  * hero card and roster. State is hoisted: the host collects the selection and passes it in.
  *
  * Each member slot carries an optional local NFC chip [bindings] entry (keyed by `numberInTeam`):
- * bound members render their participant number + uid and tapping the row unbinds; unbound members
- * show «Чип не привязан» + a «Привязать» button (enabled only when [nfcAvailable]). The hero card's
+ * bound members render their participant number + uid and a long-press on the row requests an unbind
+ * (the host confirms via a dialog — a plain tap does nothing, to avoid accidental deletes); unbound
+ * members show «Чип не привязан» + a «Привязать» button (enabled only when [nfcAvailable]). The hero card's
  * «N / total с чипом» counter is driven by `members.count { bindings.containsKey(it.numberInTeam) }`
  * (counts only current roster members with bindings, so stale entries for removed members are ignored).
  */
@@ -272,6 +275,7 @@ private fun SectionCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MemberRow(
     member: TeamMemberItem,
@@ -286,7 +290,7 @@ private fun MemberRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (bound) Modifier.clickable(onClick = onUnbind) else Modifier)
+                .then(if (bound) Modifier.combinedClickable(onClick = {}, onLongClick = onUnbind) else Modifier)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -349,12 +353,6 @@ private fun MemberRow(
                     Spacer(Modifier.width(6.dp))
                     Text("Привязать", style = MaterialTheme.typography.labelMedium)
                 }
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
 
