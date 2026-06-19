@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +45,8 @@ fun SettingsScreen(
     onChangeTeam: () -> Unit,
     onResetTeam: (() -> Unit)? = null,
     onClearDatabase: (() -> Unit)? = null,
+    onWriteChip: (() -> Unit)? = null,
+    onWriteChipNdef: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.background(MaterialTheme.colorScheme.surface).pointerInput(Unit) { detectTapGestures {} }) {
@@ -79,7 +82,7 @@ fun SettingsScreen(
         }
 
         // Debug-only: caller passes non-null callbacks only in debug builds (see MainActivity).
-        if (onResetTeam != null || onClearDatabase != null) {
+        if (onResetTeam != null || onClearDatabase != null || onWriteChip != null || onWriteChipNdef != null) {
             Text(
                 text = "Отладка",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -108,6 +111,22 @@ fun SettingsScreen(
                             title = "Очистить базу данных",
                             subtitle = "Debug: удалить гонки, команды, легенду и ETag",
                             onClick = onClearDatabase,
+                        )
+                    }
+                    if (onWriteChip != null) {
+                        DebugRow(
+                            icon = Icons.Filled.Nfc,
+                            title = "Записать code на чип",
+                            subtitle = "Debug: записать uuid на метку MifareUltralight",
+                            onClick = onWriteChip,
+                        )
+                    }
+                    if (onWriteChipNdef != null) {
+                        DebugRow(
+                            icon = Icons.Filled.Nfc,
+                            title = "Записать code на чип (NDEF)",
+                            subtitle = "Debug: NDEF + AAR — метка открывает приложение",
+                            onClick = onWriteChipNdef,
                         )
                     }
                 }

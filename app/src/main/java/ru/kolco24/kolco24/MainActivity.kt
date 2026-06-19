@@ -1,12 +1,15 @@
 package ru.kolco24.kolco24
 
 import android.content.Intent
+import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -51,13 +54,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.data.nfc.ChipWriteResult
+import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
+import ru.kolco24.kolco24.data.nfc.chipCodeFromNdef
+import ru.kolco24.kolco24.data.nfc.chipCodeHex
+import ru.kolco24.kolco24.data.nfc.newChipCode
+import ru.kolco24.kolco24.data.nfc.readChipCode
+import ru.kolco24.kolco24.data.nfc.writeChipCode
+import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.todayIso
@@ -65,6 +78,8 @@ import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
+import ru.kolco24.kolco24.ui.settings.WriteChipDialog
+import ru.kolco24.kolco24.ui.settings.WriteChipState
 import ru.kolco24.kolco24.ui.team.BindChipSheet
 import ru.kolco24.kolco24.ui.team.BindOutcome
 import ru.kolco24.kolco24.ui.team.BindSheetState
@@ -93,6 +108,12 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
     var onTagScanned: ((String) -> Unit)? = null
 
+    /**
+     * Sink for the next raw [Tag] when a write flow is active (debug chip writer). When set it takes
+     * priority over [onTagScanned] in [onTagDiscovered] — writing needs the full Tag, not just the uid.
+     */
+    var onTagForWrite: ((Tag) -> Unit)? = null
+
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
         private set
@@ -105,6 +126,42 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 Kolco24AppRoot()
             }
         }
+        // Cold/background launch from an NFC tap: the launching intent already carries the tag's
+        // NDEF data (no second scan needed).
+        handleNfcIntent(intent)
+    }
+
+    /** singleTop: a tap while the activity is already resumed re-delivers the intent here. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNfcIntent(intent)
+    }
+
+    /**
+     * Parse a chip [code] out of an NFC launch intent. Only `NDEF_DISCOVERED` is handled (our
+     * manifest filter is scoped to the `kolco24.ru:code` external type). The NDEF message is
+     * captured by the OS at scan time, so the code is available even if the tag was already lifted.
+     */
+    private fun handleNfcIntent(intent: Intent) {
+        if (intent.action != NfcAdapter.ACTION_NDEF_DISCOVERED) return
+        val messages = ndefMessagesOf(intent) ?: return
+        val code = chipCodeFromNdef(messages) ?: return
+        // Temporary visible consumer — the real read path (legend unlock) replaces this Toast.
+        Toast.makeText(this, "Чип: ${chipCodeHex(code)}", Toast.LENGTH_LONG).show()
+    }
+
+    /** Version-safe read of `EXTRA_NDEF_MESSAGES`; null when absent or empty. */
+    private fun ndefMessagesOf(intent: Intent): Array<NdefMessage>? {
+        val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES, NdefMessage::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
+                ?.filterIsInstance<NdefMessage>()
+                ?.toTypedArray()
+        }
+        return raw?.takeIf { it.isNotEmpty() }
     }
 
     override fun onResume() {
@@ -125,10 +182,28 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         nfcAdapter?.disableReaderMode(this)
     }
 
-    /** Reader-mode callback (binder thread): normalize the UID and route it to the UI thread. */
+    /**
+     * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
+     * armed scan flow (bind sheet) gets the normalized UID; otherwise — idle foreground — we read
+     * the tag's NDEF and surface our own code chips, mirroring the cold-launch intent path (which
+     * reader mode would otherwise suppress). Tag I/O runs here on the binder thread.
+     */
     override fun onTagDiscovered(tag: Tag) {
-        val uid = normalizeNfcUid(tag.id)
-        mainHandler.post { onTagScanned?.invoke(uid) }
+        val writeHook = onTagForWrite
+        if (writeHook != null) {
+            mainHandler.post { writeHook(tag) }
+            return
+        }
+        val scanHook = onTagScanned
+        if (scanHook != null) {
+            val uid = normalizeNfcUid(tag.id)
+            mainHandler.post { scanHook(uid) }
+            return
+        }
+        val code = readChipCode(tag) ?: return
+        mainHandler.post {
+            Toast.makeText(this, "Чип: ${chipCodeHex(code)}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private companion object {
@@ -164,6 +239,10 @@ private fun Kolco24AppRoot() {
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    // Debug chip writer: hex of the code being written (uuid), or null when the dialog is closed.
+    var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
+    // false = raw bytes to pages 4–7; true = NDEF message + AAR (tag stays NDEF, auto-opens the app).
+    var chipWriterNdef by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
@@ -308,7 +387,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; showScan = true },
+                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -351,9 +430,10 @@ private fun Kolco24AppRoot() {
         ) { showSettings = false }
         if (showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) {
             SettingsScreen(
-                onBack = { showSettings = false },
+                onBack = { showSettings = false; chipWriterCode = null },
                 onChangeTeam = {
                     showSettings = false
+                    chipWriterCode = null
                     confirmTeamId = null
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
@@ -376,7 +456,56 @@ private fun Kolco24AppRoot() {
                 } else {
                     null
                 },
+                onWriteChip = if (BuildConfig.DEBUG) {
+                    { chipWriterNdef = false; chipWriterCode = chipCodeHex(newChipCode()) }
+                } else {
+                    null
+                },
+                onWriteChipNdef = if (BuildConfig.DEBUG) {
+                    { chipWriterNdef = true; chipWriterCode = chipCodeHex(newChipCode()) }
+                } else {
+                    null
+                },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // Debug chip writer dialog — floats above the open Settings overlay. Renders only while Settings
+        // is open (the row that opens it lives there); arms onTagForWrite for the duration.
+        val activeChipCode = chipWriterCode
+        if (activeChipCode != null && showSettings) {
+            var writeState by remember(activeChipCode) { mutableStateOf<WriteChipState>(WriteChipState.Waiting) }
+            DisposableEffect(activeChipCode) {
+                val host = activity
+                host?.onTagForWrite = { tag ->
+                    // Only act on a fresh tap; ignore re-presentations during/after a write.
+                    if (writeState is WriteChipState.Waiting) {
+                        writeState = WriteChipState.Writing
+                        scope.launch {
+                            val bytes = chipCodeFromHex(activeChipCode)
+                            val result = withContext(Dispatchers.IO) {
+                                if (chipWriterNdef) {
+                                    writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
+                                } else {
+                                    writeChipCode(tag, bytes)
+                                }
+                            }
+                            writeState = when (result) {
+                                ChipWriteResult.Success -> WriteChipState.Success
+                                ChipWriteResult.Unsupported -> WriteChipState.Unsupported
+                                is ChipWriteResult.Failed -> WriteChipState.Failed(result.message)
+                            }
+                        }
+                    }
+                }
+                onDispose { host?.onTagForWrite = null }
+            }
+            WriteChipDialog(
+                codeHex = activeChipCode,
+                state = writeState,
+                nfcDisabled = nfcState != NfcState.Available,
+                onReset = { chipWriterCode = chipCodeHex(newChipCode()) },
+                onDismiss = { chipWriterCode = null },
             )
         }
 
