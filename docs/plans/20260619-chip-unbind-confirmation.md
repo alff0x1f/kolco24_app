@@ -99,23 +99,23 @@ an `AlertDialog` is shown; confirming performs the Room delete on `applicationSc
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }` next to `bindSlot`
+- [x] add `var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }` next to `bindSlot`
   (line ~223)
-- [ ] reset it on team switch: extend the existing `LaunchedEffect(selectedTeamId) { bindSlot = null }`
+- [x] reset it on team switch: extend the existing `LaunchedEffect(selectedTeamId) { bindSlot = null }`
   (line 226) to also set `unbindSlot = null` (a switched-away team's slot must not linger)
-- [ ] change `onUnbindMember` (lines ~321-327) to only set `unbindSlot = member.numberInTeam`
+- [x] change `onUnbindMember` (lines ~321-327) to only set `unbindSlot = member.numberInTeam`
   (remove the direct `bindingRepo.unbind(...)` call)
-- [ ] reset `unbindSlot = null` in the `onScanClick` handler (line ~303) alongside the other overlay
+- [x] reset `unbindSlot = null` in the `onScanClick` handler (line ~303) alongside the other overlay
   resets, so the scan FAB never opens behind a stale dialog
-- [ ] add an `AlertDialog` block (after the bind-sheet block, ~line 600) shown when
+- [x] add an `AlertDialog` block (after the bind-sheet block, ~line 600) shown when
   `unbindSlot != null` **and** the member resolves from `teamForTab?.members.find { it.numberInTeam == unbindSlot }`:
   title «Отвязать чип?»; text = member name + mono «№{participantNumber} · {uid}» (from
   `bindings[unbindSlot]`) + «Чип можно будет привязать заново.»; confirm button «Отвязать»
   (`MaterialTheme.colorScheme.error`) → `container.applicationScope.launch { bindingRepo.unbind(teamId, slot) }`
   then `unbindSlot = null`; dismiss button «Отмена» and `onDismissRequest` → `unbindSlot = null`
-- [ ] add `BackHandler(enabled = unbindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null) { unbindSlot = null }`,
+- [x] add `BackHandler(enabled = unbindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null) { unbindSlot = null }`,
   layered consistently with the existing bind-slot `BackHandler` guards (line ~473)
-- [ ] build: `./gradlew assembleDebug` must compile (resolves opt-in + new imports)
+- [x] build: `./gradlew assembleDebug` must compile (resolves opt-in + new imports)
 
 ### Task 3: Verify acceptance criteria
 - [ ] `./gradlew lintDebug` passes

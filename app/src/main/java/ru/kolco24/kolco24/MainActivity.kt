@@ -12,7 +12,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -23,6 +26,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -30,6 +34,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -221,9 +228,11 @@ private fun Kolco24AppRoot() {
 
     // Bind-chip overlay: which member slot (numberInTeam) is being bound, or null when the sheet is closed.
     var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
-    // Clear the bind slot on team change so a stale slot from a previous team cannot accidentally
-    // re-open the sheet for an unrelated member on the newly selected team.
-    LaunchedEffect(selectedTeamId) { bindSlot = null }
+    // Unbind confirmation: which member slot (numberInTeam) is pending unbind, or null when no dialog.
+    var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
+    // Clear both slots on team change so a stale slot from a previous team cannot accidentally
+    // re-open the sheet/dialog for an unrelated member on the newly selected team.
+    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
@@ -300,7 +309,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; showScan = true },
+                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -318,13 +327,9 @@ private fun Kolco24AppRoot() {
                         teamLoading = teamState is SelectedTeamState.Loading,
                         bindings = bindings,
                         onBindMember = { member -> bindSlot = member.numberInTeam },
-                        onUnbindMember = { member ->
-                            val teamId = selectedTeamId
-                            if (teamId != null) {
-                                // applicationScope so the delete outlives the composition (consistent with selectTeam).
-                                container.applicationScope.launch { bindingRepo.unbind(teamId, member.numberInTeam) }
-                            }
-                        },
+                        // Only request confirmation here; the actual Room delete happens after the
+                        // user confirms in the AlertDialog below (guards against accidental unbinds).
+                        onUnbindMember = { member -> unbindSlot = member.numberInTeam },
                         nfcAvailable = nfcAvailable,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
@@ -598,6 +603,58 @@ private fun Kolco24AppRoot() {
                 },
                 onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                 onDismiss = { bindSlot = null },
+            )
+        }
+
+        // Unbind confirmation. A long-press on a bound member sets unbindSlot (no write yet); this
+        // dialog performs the Room delete only on explicit confirmation, so an accidental tap on a
+        // bound member can never destroy a binding.
+        val activeUnbindSlot = unbindSlot
+        val unbindMember = if (activeUnbindSlot != null) {
+            teamForTab?.members?.find { it.numberInTeam == activeUnbindSlot }
+        } else {
+            null
+        }
+        val unbindBinding = activeUnbindSlot?.let { bindings[it] }
+        BackHandler(
+            enabled = unbindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+        ) { unbindSlot = null }
+        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null) {
+            val teamId = selectedTeamId
+            AlertDialog(
+                onDismissRequest = { unbindSlot = null },
+                title = { Text("Отвязать чип?") },
+                text = {
+                    Column {
+                        Text(unbindMember.name, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = "№${unbindBinding.participantNumber} · ${unbindBinding.nfcUid}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "Чип можно будет привязать заново.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            // applicationScope so the delete outlives the closing dialog (consistent with selectTeam).
+                            container.applicationScope.launch { bindingRepo.unbind(teamId, activeUnbindSlot) }
+                            unbindSlot = null
+                        },
+                    ) {
+                        Text("Отвязать", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { unbindSlot = null }) { Text("Отмена") }
+                },
             )
         }
     }
