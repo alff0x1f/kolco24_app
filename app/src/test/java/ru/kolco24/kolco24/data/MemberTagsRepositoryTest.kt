@@ -144,6 +144,7 @@ class MemberTagsRepositoryTest {
         server.enqueue(MockResponse().setResponseCode(403))
 
         assertEquals(RefreshResult.Forbidden, repository.refreshMemberTags(8))
+        assertFalse(repository.hasBeenSynced(8))
     }
 
     @Test
@@ -151,6 +152,7 @@ class MemberTagsRepositoryTest {
         server.enqueue(MockResponse().setResponseCode(500))
 
         assertEquals(RefreshResult.HttpError(500), repository.refreshMemberTags(8))
+        assertFalse(repository.hasBeenSynced(8))
     }
 
     @Test

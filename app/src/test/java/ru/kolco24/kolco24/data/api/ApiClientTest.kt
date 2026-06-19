@@ -382,4 +382,13 @@ class ApiClientTest {
 
         assertEquals(FetchResult.Error(null), apiClient.fetchMemberTags(8, null))
     }
+
+    @Test
+    fun fetchMemberTags_invalidJson_returnsError() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{ not json"))
+
+        val result = apiClient.fetchMemberTags(8, null)
+
+        assertTrue(result is FetchResult.Error)
+    }
 }

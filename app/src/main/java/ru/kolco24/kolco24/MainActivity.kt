@@ -91,7 +91,6 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
-    @Volatile
     var onTagScanned: ((String) -> Unit)? = null
 
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
@@ -117,7 +116,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             else -> NfcState.Available
         }
         if (nfcState == NfcState.Available) {
-            adapter?.enableReaderMode(this, this, READER_FLAGS, null)
+            adapter!!.enableReaderMode(this, this, READER_FLAGS, null)
         }
     }
 
@@ -486,9 +485,6 @@ private fun Kolco24AppRoot() {
             val currentSlot = SlotKey(activeTeamId, activeBindSlot)
             // Reset per opened slot; survives recomposition while the same slot stays open.
             var sheetState by remember(activeBindSlot) { mutableStateOf<BindSheetState>(BindSheetState.Waiting) }
-            // Pending chip for the AlreadyBound → «Перепривязать» path.
-            var pendingUid by remember(activeBindSlot) { mutableStateOf<String?>(null) }
-            var pendingNumber by remember(activeBindSlot) { mutableStateOf<Int?>(null) }
 
             // Arm/clear the NFC read hook for exactly this open sheet. onDispose covers every exit path
             // (dismiss, BackHandler, success auto-dismiss, team switch, recomposition).
@@ -551,8 +547,6 @@ private fun Kolco24AppRoot() {
                                     }
                                 }
                                 is BindOutcome.AlreadyBound -> {
-                                    pendingUid = uid
-                                    pendingNumber = outcome.participantNumber
                                     sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
                                 }
                                 is BindOutcome.ReadyToBind -> {
@@ -585,19 +579,16 @@ private fun Kolco24AppRoot() {
                 state = sheetState,
                 nfcDisabled = nfcState != NfcState.Available,
                 onReassign = {
-                    val uid = pendingUid
-                    val number = pendingNumber
-                    if (uid != null && number != null) {
-                        scope.launch {
-                            if (!scanMutex.tryLock()) return@launch
-                            try {
-                                bindingRepo.bind(activeTeamId, activeBindSlot, uid, number)
-                                sheetState = BindSheetState.Success(number, uid)
-                            } catch (_: Exception) {
-                                sheetState = BindSheetState.AlreadyBound(uid, number)
-                            } finally {
-                                scanMutex.unlock()
-                            }
+                    val s = sheetState as? BindSheetState.AlreadyBound ?: return@BindChipSheet
+                    scope.launch {
+                        if (!scanMutex.tryLock()) return@launch
+                        try {
+                            bindingRepo.bind(activeTeamId, activeBindSlot, s.uid, s.participantNumber)
+                            sheetState = BindSheetState.Success(s.participantNumber, s.uid)
+                        } catch (_: Exception) {
+                            sheetState = BindSheetState.AlreadyBound(s.uid, s.participantNumber)
+                        } finally {
+                            scanMutex.unlock()
                         }
                     }
                 },
@@ -619,7 +610,7 @@ private fun Kolco24AppRoot() {
         BackHandler(
             enabled = unbindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { unbindSlot = null }
-        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null) {
+        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null && !showSettings) {
             val teamId = selectedTeamId
             AlertDialog(
                 onDismissRequest = { unbindSlot = null },
