@@ -106,13 +106,13 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
-    var onTagScanned: ((String) -> Unit)? = null
+    @Volatile var onTagScanned: ((String) -> Unit)? = null
 
     /**
      * Sink for the next raw [Tag] when a write flow is active (debug chip writer). When set it takes
      * priority over [onTagScanned] in [onTagDiscovered] — writing needs the full Tag, not just the uid.
      */
-    var onTagForWrite: ((Tag) -> Unit)? = null
+    @Volatile var onTagForWrite: ((Tag) -> Unit)? = null
 
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
@@ -127,8 +127,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             }
         }
         // Cold/background launch from an NFC tap: the launching intent already carries the tag's
-        // NDEF data (no second scan needed).
-        handleNfcIntent(intent)
+        // NDEF data (no second scan needed). Skip on recreation — the intent is stale by then.
+        if (savedInstanceState == null) handleNfcIntent(intent)
     }
 
     /** singleTop: a tap while the activity is already resumed re-delivers the intent here. */
@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Parse a chip [code] out of an NFC launch intent. Only `NDEF_DISCOVERED` is handled (our
-     * manifest filter is scoped to the `kolco24.ru:code` external type). The NDEF message is
+     * manifest filter is scoped to the `kolco24.ru:cp` external type). The NDEF message is
      * captured by the OS at scan time, so the code is available even if the tag was already lifted.
      */
     private fun handleNfcIntent(intent: Intent) {
@@ -427,7 +427,7 @@ private fun Kolco24AppRoot() {
         // on top when both are active). Its BackHandler only fires when nothing else is layered above it.
         BackHandler(
             enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
-        ) { showSettings = false }
+        ) { showSettings = false; chipWriterCode = null }
         if (showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) {
             SettingsScreen(
                 onBack = { showSettings = false; chipWriterCode = null },
