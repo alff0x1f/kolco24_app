@@ -114,6 +114,13 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      */
     @Volatile var onTagForWrite: ((Tag) -> Unit)? = null
 
+    /**
+     * Sink for the next raw [Tag] when the «Отметить КП» scan flow is active (ScanScreen). When set
+     * it takes priority over [onTagScanned] but yields to [onTagForWrite] in [onTagDiscovered] —
+     * marking needs the full Tag to both read the CP chip's code and fall back to the member uid.
+     */
+    @Volatile var onTagForMark: ((Tag) -> Unit)? = null
+
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
         private set
@@ -184,14 +191,20 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
-     * armed scan flow (bind sheet) gets the normalized UID; otherwise — idle foreground — we read
-     * the tag's NDEF and surface our own code chips, mirroring the cold-launch intent path (which
-     * reader mode would otherwise suppress). Tag I/O runs here on the binder thread.
+     * armed mark flow (ScanScreen) gets the raw [Tag]; an armed scan flow (bind sheet) gets the
+     * normalized UID; otherwise — idle foreground — we read the tag's NDEF and surface our own code
+     * chips, mirroring the cold-launch intent path (which reader mode would otherwise suppress).
+     * Tag I/O runs here on the binder thread.
      */
     override fun onTagDiscovered(tag: Tag) {
         val writeHook = onTagForWrite
         if (writeHook != null) {
             mainHandler.post { writeHook(tag) }
+            return
+        }
+        val markHook = onTagForMark
+        if (markHook != null) {
+            mainHandler.post { markHook(tag) }
             return
         }
         val scanHook = onTagScanned

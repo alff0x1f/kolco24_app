@@ -198,11 +198,11 @@ fun classifyTag(
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] добавить `@Volatile var onTagForMark: ((Tag) -> Unit)? = null`.
-- [ ] в `onTagDiscovered` вставить приоритет: `onTagForWrite` → `onTagForMark` (post в main с raw `Tag`) → `onTagScanned` → idle `readChipCode`.
-- [ ] обновить KDoc на хуках/классе (приоритеты), синхронизировать раздел про NFC в CLAUDE.md в Task 9.
-- [ ] (тестов на binder-IO нет — поведение хука покрыто pure-логикой Task 4; отметить в чеклисте).
-- [ ] `./gradlew lintDebug` — зелёно перед Task 6.
+- [x] добавить `@Volatile var onTagForMark: ((Tag) -> Unit)? = null`.
+- [x] в `onTagDiscovered` вставить приоритет: `onTagForWrite` → `onTagForMark` (post в main с raw `Tag`) → `onTagScanned` → idle `readChipCode`.
+- [x] обновить KDoc на хуках/классе (приоритеты), синхронизировать раздел про NFC в CLAUDE.md в Task 9.
+- [x] (тестов на binder-IO нет — поведение хука покрыто pure-логикой Task 4; отметить в чеклисте).
+- [x] `./gradlew lintDebug` — зелёно перед Task 6.
 
 ### Task 6: ScanScreen — живой stateful-хост сессии
 
