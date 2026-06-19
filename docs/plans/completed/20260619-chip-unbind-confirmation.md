@@ -126,10 +126,10 @@ an `AlertDialog` is shown; confirming performs the Room delete on `applicationSc
   MainActivity.kt:612-635 (`unbindMember.name`, `unbindBinding.participantNumber`/`nfcUid`)
 
 ### Task 4: [Final] Update documentation
-- [ ] update CLAUDE.md: in the `TeamScreen.kt` bullet, change "tapping the row calls `onUnbindMember`"
+- [x] update CLAUDE.md: in the `TeamScreen.kt` bullet, change "tapping the row calls `onUnbindMember`"
   to describe long-press → host confirmation dialog, and note bound rows no longer show a chevron; in
   the «Bind-chip overlay» section, document the new `unbindSlot` state + its `BackHandler` guard
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual, on-device — no checkboxes.*
