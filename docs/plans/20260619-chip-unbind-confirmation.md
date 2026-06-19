@@ -118,11 +118,12 @@ an `AlertDialog` is shown; confirming performs the Room delete on `applicationSc
 - [x] build: `./gradlew assembleDebug` must compile (resolves opt-in + new imports)
 
 ### Task 3: Verify acceptance criteria
-- [ ] `./gradlew lintDebug` passes
-- [ ] `./gradlew assembleDebug` passes
-- [ ] confirm a regular tap on a bound row no longer triggers any Room write (code review of the
-  `combinedClickable` `onClick = {}` path)
-- [ ] confirm the dialog reads name/№/uid from the resolved member + `bindings[unbindSlot]`
+- [x] `./gradlew lintDebug` passes
+- [x] `./gradlew assembleDebug` passes
+- [x] confirm a regular tap on a bound row no longer triggers any Room write (code review of the
+  `combinedClickable` `onClick = {}` path) — TeamScreen.kt:293 `onClick = {}`, write only on `onLongClick`
+- [x] confirm the dialog reads name/№/uid from the resolved member + `bindings[unbindSlot]` —
+  MainActivity.kt:612-635 (`unbindMember.name`, `unbindBinding.participantNumber`/`nfcUid`)
 
 ### Task 4: [Final] Update documentation
 - [ ] update CLAUDE.md: in the `TeamScreen.kt` bullet, change "tapping the row calls `onUnbindMember`"
