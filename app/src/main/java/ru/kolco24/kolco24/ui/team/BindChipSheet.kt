@@ -93,8 +93,8 @@ sealed interface BindSheetState {
     /** Scanned [uid] (participant [participantNumber]) is already bound to another member. */
     data class AlreadyBound(val uid: String, val participantNumber: Int) : BindSheetState
 
-    /** Bound [participantNumber] / [uid] to this slot — auto-dismisses. */
-    data class Success(val participantNumber: Int, val uid: String) : BindSheetState
+    /** Bound [participantNumber] to this slot — auto-dismisses. */
+    data class Success(val participantNumber: Int) : BindSheetState
 
     /** Pool hasn't synced yet — a background refresh was triggered; user should rescan shortly. */
     object PoolNotReady : BindSheetState
@@ -189,7 +189,7 @@ fun BindChipSheet(
                     icon = Icons.Filled.CheckCircle,
                     tint = MaterialTheme.colorScheme.tertiary,
                     title = "Чип привязан",
-                    detail = "№${state.participantNumber} · ${state.uid}",
+                    detail = "№${state.participantNumber}",
                     body = null,
                 )
             }

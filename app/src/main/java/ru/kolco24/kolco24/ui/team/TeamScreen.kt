@@ -316,7 +316,7 @@ private fun MemberRow(
                             modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            text = "№${binding.participantNumber} · ${binding.nfcUid}",
+                            text = "№${binding.participantNumber}",
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
