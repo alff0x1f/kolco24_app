@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,15 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.ui.theme.OrangeCta
-import ru.kolco24.kolco24.ui.theme.RobotoMono
 
 /**
  * Screen 04d — confirmation [ModalBottomSheet] before switching to a team. Shows the team token,
- * name and category, an explanation, and the orange "Перейти в команду" CTA. [onConfirm] commits the
+ * name and category, the roster (member names), and the orange "Выбрать команду" CTA. [onConfirm] commits the
  * choice (host persists it via `selectTeam`); [onDismiss] (handle drag, scrim tap, system back, or
  * "Отмена") closes the sheet without changing the selection.
  */
@@ -56,18 +54,6 @@ fun TeamSwitchSheet(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "СМЕНИТЬ КОМАНДУ",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp,
-                ),
-                fontFamily = RobotoMono,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(16.dp))
             TeamToken(text = teamToken(team), size = 60.dp)
 
             Spacer(Modifier.height(12.dp))
@@ -85,13 +71,18 @@ fun TeamSwitchSheet(
                 textAlign = TextAlign.Center,
             )
 
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Вы будете отмечаться за эту команду — на КП засчитываются её NFC-чипы.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+            if (team.members.isNotEmpty()) {
+                Spacer(Modifier.height(20.dp))
+                team.members.sortedBy { it.numberInTeam }.forEach { member ->
+                    Text(
+                        text = member.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
+            }
 
             Spacer(Modifier.height(24.dp))
             Button(
@@ -106,13 +97,13 @@ fun TeamSwitchSheet(
                 ),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.SwapHoriz,
+                    imageVector = Icons.Filled.Check,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    text = "Перейти в команду",
+                    text = "Выбрать команду",
                     style = MaterialTheme.typography.titleSmall,
                 )
             }

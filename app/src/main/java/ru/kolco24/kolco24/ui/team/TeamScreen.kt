@@ -166,19 +166,6 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
-                Text(
-                    text = "Команда",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-            Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -316,7 +303,7 @@ private fun MemberRow(
                             modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            text = "№${binding.participantNumber} · ${binding.nfcUid}",
+                            text = "№${binding.participantNumber}",
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

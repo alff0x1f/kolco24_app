@@ -541,7 +541,7 @@ private fun Kolco24AppRoot() {
                                     // in case it changed since the original bind.
                                     try {
                                         bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
-                                        sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                                        sheetState = BindSheetState.Success(outcome.participantNumber)
                                     } catch (_: Exception) {
                                         sheetState = BindSheetState.Waiting
                                     }
@@ -552,7 +552,7 @@ private fun Kolco24AppRoot() {
                                 is BindOutcome.ReadyToBind -> {
                                     try {
                                         bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
-                                        sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                                        sheetState = BindSheetState.Success(outcome.participantNumber)
                                     } catch (_: Exception) {
                                         sheetState = BindSheetState.Waiting
                                     }
@@ -584,7 +584,7 @@ private fun Kolco24AppRoot() {
                         if (!scanMutex.tryLock()) return@launch
                         try {
                             bindingRepo.bind(activeTeamId, activeBindSlot, s.uid, s.participantNumber)
-                            sheetState = BindSheetState.Success(s.participantNumber, s.uid)
+                            sheetState = BindSheetState.Success(s.participantNumber)
                         } catch (_: Exception) {
                             sheetState = BindSheetState.AlreadyBound(s.uid, s.participantNumber)
                         } finally {
