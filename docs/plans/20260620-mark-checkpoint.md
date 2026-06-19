@@ -143,11 +143,11 @@ fun classifyTag(
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MarkDao.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/db/IntListConverterTest.kt`
 
-- [ ] создать `MarkEntity` (поля по «Technical Details»; `@PrimaryKey val id: String`, индексы `teamId`/`point` только — upload-флаги без индексов).
-- [ ] создать `IntListConverter` (`List<Int>` ↔ JSON через `kotlinx.serialization`, по образцу `TeamMembersConverter`).
-- [ ] создать `MarkDao`: `observeForTeam(teamId): Flow<List<MarkEntity>>` (`ORDER BY takenAt DESC`), `getById(id): MarkEntity?`, `@Upsert suspend fun upsert(mark)`, `@Transaction suspend fun addMember(id, numberInTeam, now, expectedCount)` (читает строку, добавляет в `present` set-семантикой, пересчитывает `complete`/`updatedAt`, пишет обратно).
-- [ ] написать `IntListConverterTest` (round-trip пустой/непустой/дубли, success).
-- [ ] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 2.
+- [x] создать `MarkEntity` (поля по «Technical Details»; `@PrimaryKey val id: String`, индексы `teamId`/`point` только — upload-флаги без индексов).
+- [x] создать `IntListConverter` (`List<Int>` ↔ JSON через `kotlinx.serialization`, по образцу `TeamMembersConverter`).
+- [x] создать `MarkDao`: `observeForTeam(teamId): Flow<List<MarkEntity>>` (`ORDER BY takenAt DESC`), `getById(id): MarkEntity?`, `@Upsert suspend fun upsert(mark)`, `@Transaction suspend fun addMember(id, numberInTeam, now, expectedCount)` (читает строку, добавляет в `present` set-семантикой, пересчитывает `complete`/`updatedAt`, пишет обратно).
+- [x] написать `IntListConverterTest` (round-trip пустой/непустой/дубли, success).
+- [x] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 2.
 
 ### Task 2: Room v6 — миграция + preserve taken + схема
 
