@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.InstallId
 import ru.kolco24.kolco24.data.LegendRepository
+import ru.kolco24.kolco24.data.MarkRepository
 import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.RaceRepository
@@ -85,6 +86,13 @@ class AppContainer(private val context: Context) {
     val memberChipBindingRepository: MemberChipBindingRepository by lazy {
         MemberChipBindingRepository(
             bindingDao = database.memberChipBindingDao(),
+        )
+    }
+
+    val markRepository: MarkRepository by lazy {
+        MarkRepository(
+            markDao = database.markDao(),
+            checkpointDao = database.checkpointDao(),
         )
     }
 

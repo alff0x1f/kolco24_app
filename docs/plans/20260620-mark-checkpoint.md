@@ -174,11 +174,11 @@ fun classifyTag(
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/AppContainer.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryTest.kt`
 
-- [ ] `MarkRepository(markDao, checkpointDao)`: `observeMarks(teamId)`; `startKpTake(raceId, teamId, point, number, cost, cpUid, cpCode, expectedCount, bufferedMembers, now): String` (генерит UUID, считает `complete`, upsert, при `complete` → `markTaken(point)`, возвращает id); `addMember(markId, point, numberInTeam, expectedCount, now)` (`@Transaction addMember`, при `complete` → `markTaken(point)`).
-- [ ] вынести деривацию счёта/баллов в pure-функции (`takenPointCount`, `totalScore`) для теста и UI.
-- [ ] `AppContainer`: lazy `markDao` + `markRepository` (как `memberChipBindingRepository`).
-- [ ] `MarkRepositoryTest` (fake `MarkDao`/`CheckpointDao`): UUID уникален; буфер до КП вливается; инкремент present идемпотентен; `complete` при `present ⊇ ростер` ставит `taken`; повтор после закрытия = новая строка; деривация различных point.
-- [ ] `./gradlew testDebugUnitTest` — зелёно перед Task 4.
+- [x] `MarkRepository(markDao, checkpointDao)`: `observeMarks(teamId)`; `startKpTake(raceId, teamId, point, number, cost, cpUid, cpCode, expectedCount, bufferedMembers, now): String` (генерит UUID, считает `complete`, upsert, при `complete` → `markTaken(point)`, возвращает id); `addMember(markId, point, numberInTeam, expectedCount, now)` (`@Transaction addMember`, при `complete` → `markTaken(point)`).
+- [x] вынести деривацию счёта/баллов в pure-функции (`takenPointCount`, `totalScore`) для теста и UI.
+- [x] `AppContainer`: lazy `markDao` + `markRepository` (как `memberChipBindingRepository`).
+- [x] `MarkRepositoryTest` (fake `MarkDao`/`CheckpointDao`): UUID уникален; буфер до КП вливается; инкремент present идемпотентен; `complete` при `present ⊇ ростер` ставит `taken`; повтор после закрытия = новая строка; деривация различных point.
+- [x] `./gradlew testDebugUnitTest` — зелёно перед Task 4.
 
 ### Task 4: Pure-логика скан-сессии и различение чипа
 
