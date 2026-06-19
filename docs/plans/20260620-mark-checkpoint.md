@@ -187,11 +187,11 @@ fun classifyTag(
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/scan/ScanSessionTest.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/scan/ScanTagDecisionTest.kt`
 
-- [ ] `ScanSession` + `ScanEvent` + `reduce(session, event, now)` (top-level pure): `Kp` заполняет point/cost/cpUid/cpCode и вливает `bufferedBeforeKp`; `Member` до КП → в буфер, после КП → в `present`; `UnboundChip`/`BadKp` не двигают окно; любой принятый скан обновляет `lastScanAt`.
-- [ ] чистая функция различения `classifyTag(code, uid, unlock, bindings, checkpointsById): ScanEvent` (без Android-зависимостей; `Tag`-IO и вызов `unlock` остаются в `MainActivity`). Резолвит `number`/`cost` для `Kp` из `checkpointsById[point]`; `cost==null` → `BadKp`.
-- [ ] `ScanSessionTest`: КП заполняет point; Member копит present; идемпотентность повторного участника; `complete`-условие; буфер участников до КП вливается; `BadKp`/`UnboundChip` не сбрасывают таймер.
-- [ ] `ScanTagDecisionTest`: code→Kp(Revealed/IdentityOnly) с number/cost из `checkpointsById`; code→BadKp(Unknown/Failed/cost==null); uid в bindings→Member; uid не в bindings→UnboundChip.
-- [ ] `./gradlew testDebugUnitTest` — зелёно перед Task 5.
+- [x] `ScanSession` + `ScanEvent` + `reduce(session, event, now)` (top-level pure): `Kp` заполняет point/cost/cpUid/cpCode и вливает `bufferedBeforeKp`; `Member` до КП → в буфер, после КП → в `present`; `UnboundChip`/`BadKp` не двигают окно; любой принятый скан обновляет `lastScanAt`.
+- [x] чистая функция различения `classifyTag(code, uid, unlock, bindings, checkpointsById): ScanEvent` (без Android-зависимостей; `Tag`-IO и вызов `unlock` остаются в `MainActivity`). Резолвит `number`/`cost` для `Kp` из `checkpointsById[point]`; `cost==null` → `BadKp`.
+- [x] `ScanSessionTest`: КП заполняет point; Member копит present; идемпотентность повторного участника; `complete`-условие; буфер участников до КП вливается; `BadKp`/`UnboundChip` не сбрасывают таймер.
+- [x] `ScanTagDecisionTest`: code→Kp(Revealed/IdentityOnly) с number/cost из `checkpointsById`; code→BadKp(Unknown/Failed/cost==null); uid в bindings→Member; uid не в bindings→UnboundChip.
+- [x] `./gradlew testDebugUnitTest` — зелёно перед Task 5.
 
 ### Task 5: NFC-маршрутизация — хук onTagForMark
 
