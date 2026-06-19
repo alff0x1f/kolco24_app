@@ -38,6 +38,10 @@ class Kolco24App : Application() {
                 val legend = container.legendRepository.refreshLegend(nearest)
                 Log.i(TAG, "Prefetch legend for nearest race $nearest: $legend")
             }
+            launch {
+                val memberTags = container.memberTagsRepository.refreshMemberTags(nearest)
+                Log.i(TAG, "Prefetch member tags for nearest race $nearest: $memberTags")
+            }
         }
         container.applicationScope.launch {
             // `selectedTeam` emits its persisted value immediately on subscribe, so a team chosen in
@@ -56,6 +60,10 @@ class Kolco24App : Application() {
                     launch {
                         val teams = container.teamRepository.refreshTeams(raceId)
                         Log.i(TAG, "Teams refresh for selected race $raceId: $teams")
+                    }
+                    launch {
+                        val memberTags = container.memberTagsRepository.refreshMemberTags(raceId)
+                        Log.i(TAG, "Member tags refresh for selected race $raceId: $memberTags")
                     }
                 }
             }

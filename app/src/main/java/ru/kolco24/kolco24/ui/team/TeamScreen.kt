@@ -1,9 +1,11 @@
 package ru.kolco24.kolco24.ui.team
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonAdd
@@ -42,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.data.db.CategoryEntity
+import ru.kolco24.kolco24.data.db.MemberChipBindingEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
@@ -53,7 +57,13 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  * Screen 04 — the «Команда» tab. With no selected [team] it shows [TeamEmptyContent] (onboarding,
  * or the "team disappeared" notice when [teamMissing]); otherwise it renders the selected team's
  * hero card and roster. State is hoisted: the host collects the selection and passes it in.
- * NFC chip binding is out of scope, so every member shows as "Чип не привязан".
+ *
+ * Each member slot carries an optional local NFC chip [bindings] entry (keyed by `numberInTeam`):
+ * bound members render their participant number + uid and a long-press on the row requests an unbind
+ * (the host confirms via a dialog — a plain tap does nothing, to avoid accidental deletes); unbound
+ * members show «Чип не привязан» + a «Привязать» button (enabled only when [nfcAvailable]). The hero card's
+ * «N / total с чипом» counter is driven by `members.count { bindings.containsKey(it.numberInTeam) }`
+ * (counts only current roster members with bindings, so stale entries for removed members are ignored).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +75,10 @@ fun TeamScreen(
     modifier: Modifier = Modifier,
     teamMissing: Boolean = false,
     teamLoading: Boolean = false,
+    bindings: Map<Int, MemberChipBindingEntity> = emptyMap(),
+    onBindMember: (TeamMemberItem) -> Unit = {},
+    onUnbindMember: (TeamMemberItem) -> Unit = {},
+    nfcAvailable: Boolean = false,
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -90,7 +104,12 @@ fun TeamScreen(
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
             item("hero") {
-                TeamHeroCard(team = team, category = category, totalCount = team.ucount)
+                TeamHeroCard(
+                    team = team,
+                    category = category,
+                    totalCount = team.ucount,
+                    boundCount = members.count { bindings.containsKey(it.numberInTeam) },
+                )
             }
             item("members") {
                 SectionCard(
@@ -98,7 +117,14 @@ fun TeamScreen(
                     supporting = "Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.",
                 ) {
                     members.forEachIndexed { index, member ->
-                        MemberRow(member = member, isLast = index == members.lastIndex)
+                        MemberRow(
+                            member = member,
+                            binding = bindings[member.numberInTeam],
+                            isLast = index == members.lastIndex,
+                            nfcAvailable = nfcAvailable,
+                            onBind = { onBindMember(member) },
+                            onUnbind = { onUnbindMember(member) },
+                        )
                     }
                 }
             }
@@ -128,9 +154,8 @@ private fun TeamTopBar() {
 }
 
 @Composable
-private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount: Int) {
-    val boundCount = 0
-    val allBound = totalCount > 0 && boundCount == totalCount
+private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount: Int, boundCount: Int) {
+    val allBound = totalCount > 0 && boundCount >= totalCount
     val number = team.startNumber?.takeIf { it.isNotBlank() }
     Surface(
         modifier = Modifier
@@ -250,12 +275,22 @@ private fun SectionCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MemberRow(member: TeamMemberItem, isLast: Boolean) {
+private fun MemberRow(
+    member: TeamMemberItem,
+    binding: MemberChipBindingEntity?,
+    isLast: Boolean,
+    nfcAvailable: Boolean,
+    onBind: () -> Unit,
+    onUnbind: () -> Unit,
+) {
+    val bound = binding != null
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (bound) Modifier.combinedClickable(onClick = {}, onLongClick = onUnbind) else Modifier)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -268,32 +303,56 @@ private fun MemberRow(member: TeamMemberItem, isLast: Boolean) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(top = 2.dp),
-                ) {
-                    Box(modifier = Modifier.size(14.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
-                    Text(
-                        text = "Чип не привязан",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                if (binding != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = "№${binding.participantNumber} · ${binding.nfcUid}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        Box(modifier = Modifier.size(14.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+                        Text(
+                            text = "Чип не привязан",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
 
-            OutlinedButton(
-                onClick = {},
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
-                Spacer(Modifier.width(6.dp))
-                Text("Привязать", style = MaterialTheme.typography.labelMedium)
+            if (!bound) {
+                OutlinedButton(
+                    onClick = onBind,
+                    enabled = nfcAvailable,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Привязать", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
 

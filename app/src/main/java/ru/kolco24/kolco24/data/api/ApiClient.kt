@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import ru.kolco24.kolco24.data.api.dto.LegendResponse
+import ru.kolco24.kolco24.data.api.dto.MemberTagsResponse
 import ru.kolco24.kolco24.data.api.dto.RaceDto
 import ru.kolco24.kolco24.data.api.dto.RacesResponse
 import ru.kolco24.kolco24.data.api.dto.TeamsResponse
@@ -64,6 +65,16 @@ class ApiClient(
     suspend fun fetchLegend(raceId: Int, etag: String?): FetchResult<LegendResponse> =
         conditionalGet("$baseUrl/app/race/$raceId/legend/", etag) {
             json.decodeFromString<LegendResponse>(it)
+        }
+
+    /**
+     * `GET /app/race/<raceId>/member_tags/`. Same conditional-request semantics as [fetchRaces];
+     * `200` → [FetchResult.Success] with the parsed [MemberTagsResponse] (the race's NFC chip pool)
+     * and the response ETag.
+     */
+    suspend fun fetchMemberTags(raceId: Int, etag: String?): FetchResult<MemberTagsResponse> =
+        conditionalGet("$baseUrl/app/race/$raceId/member_tags/", etag) {
+            json.decodeFromString<MemberTagsResponse>(it)
         }
 
     /**

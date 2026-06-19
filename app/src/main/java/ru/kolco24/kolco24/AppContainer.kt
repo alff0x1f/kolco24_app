@@ -7,6 +7,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.InstallId
 import ru.kolco24.kolco24.data.LegendRepository
+import ru.kolco24.kolco24.data.MemberChipBindingRepository
+import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.TeamRepository
 import ru.kolco24.kolco24.data.api.ApiClient
@@ -68,6 +70,21 @@ class AppContainer(private val context: Context) {
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
             json = json,
+        )
+    }
+
+    val memberTagsRepository: MemberTagsRepository by lazy {
+        MemberTagsRepository(
+            apiClient = apiClient,
+            memberTagDao = database.memberTagDao(),
+            syncMetaDao = database.syncMetaDao(),
+            origin = baseUrl,
+        )
+    }
+
+    val memberChipBindingRepository: MemberChipBindingRepository by lazy {
+        MemberChipBindingRepository(
+            bindingDao = database.memberChipBindingDao(),
         )
     }
 

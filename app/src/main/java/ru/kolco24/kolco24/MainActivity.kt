@@ -1,12 +1,21 @@
 package ru.kolco24.kolco24
 
+import android.content.Intent
+import android.nfc.NfcAdapter
+import android.nfc.Tag
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -17,6 +26,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -24,7 +34,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,15 +49,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
+import ru.kolco24.kolco24.ui.team.BindChipSheet
+import ru.kolco24.kolco24.ui.team.BindOutcome
+import ru.kolco24.kolco24.ui.team.BindSheetState
+import ru.kolco24.kolco24.ui.team.SlotKey
+import ru.kolco24.kolco24.ui.team.decideBind
 import ru.kolco24.kolco24.ui.team.TeamScreen
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
@@ -52,7 +77,26 @@ import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
-class MainActivity : ComponentActivity() {
+/** Whether the device can currently read NFC tags, readable by composables for the bind UI. */
+enum class NfcState { NoHardware, Disabled, Available }
+
+class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
+
+    /** Lazily resolved once; null when the device has no NFC hardware. */
+    private val nfcAdapter: NfcAdapter? by lazy {
+        getSystemService(android.nfc.NfcManager::class.java)?.defaultAdapter
+    }
+
+    /** Main-thread handler so tag reads (delivered on a binder thread) hop to the UI thread. */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
+    var onTagScanned: ((String) -> Unit)? = null
+
+    /** Recomputed on every resume; composables observe it to render the bind affordances. */
+    var nfcState by mutableStateOf(NfcState.NoHardware)
+        private set
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -61,6 +105,39 @@ class MainActivity : ComponentActivity() {
                 Kolco24AppRoot()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val adapter = nfcAdapter
+        nfcState = when {
+            adapter == null -> NfcState.NoHardware
+            !adapter.isEnabled -> NfcState.Disabled
+            else -> NfcState.Available
+        }
+        if (nfcState == NfcState.Available) {
+            adapter!!.enableReaderMode(this, this, READER_FLAGS, null)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nfcAdapter?.disableReaderMode(this)
+    }
+
+    /** Reader-mode callback (binder thread): normalize the UID and route it to the UI thread. */
+    override fun onTagDiscovered(tag: Tag) {
+        val uid = normalizeNfcUid(tag.id)
+        mainHandler.post { onTagScanned?.invoke(uid) }
+    }
+
+    private companion object {
+        const val READER_FLAGS =
+            NfcAdapter.FLAG_READER_NFC_A or
+                NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_NFC_F or
+                NfcAdapter.FLAG_READER_NFC_V or
+                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
     }
 }
 
@@ -93,7 +170,17 @@ private fun Kolco24AppRoot() {
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
     val legendRepo = container.legendRepository
+    val memberTagsRepo = container.memberTagsRepository
+    val bindingRepo = container.memberChipBindingRepository
     val today = todayIso()
+
+    // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
+    val activity = context as? MainActivity
+    val nfcState = activity?.nfcState ?: NfcState.NoHardware
+    // Enable bind affordances whenever NFC hardware is present (even if currently disabled).
+    // The bind sheet shows an NFC-settings deep-link when nfcState == Disabled; disabling the
+    // button on NoHardware only (not Disabled) makes that recovery UI reachable.
+    val nfcAvailable = nfcState != NfcState.NoHardware
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -127,10 +214,24 @@ private fun Kolco24AppRoot() {
         selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
 
+    // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
+    val bindingsList by remember(selectedTeamId) {
+        selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    val bindings = remember(bindingsList) { bindingsList.associateBy { it.numberInTeam } }
+
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
     var pickerRaceId by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirmTeamId by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    // Bind-chip overlay: which member slot (numberInTeam) is being bound, or null when the sheet is closed.
+    var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
+    // Unbind confirmation: which member slot (numberInTeam) is pending unbind, or null when no dialog.
+    var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
+    // Clear both slots on team change so a stale slot from a previous team cannot accidentally
+    // re-open the sheet/dialog for an unrelated member on the newly selected team.
+    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
@@ -207,7 +308,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; showScan = true },
+                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -223,6 +324,12 @@ private fun Kolco24AppRoot() {
                         onOpenSettings = { showSettings = true },
                         teamMissing = teamMissing,
                         teamLoading = teamState is SelectedTeamState.Loading,
+                        bindings = bindings,
+                        onBindMember = { member -> bindSlot = member.numberInTeam },
+                        // Only request confirmation here; the actual Room delete happens after the
+                        // user confirms in the AlertDialog below (guards against accidental unbinds).
+                        onUnbindMember = { member -> unbindSlot = member.numberInTeam },
+                        nfcAvailable = nfcAvailable,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
@@ -354,6 +461,192 @@ private fun Kolco24AppRoot() {
                     onDismiss = { confirmTeamId = null },
                 )
             }
+        }
+
+        // Bind-chip overlay (ModalBottomSheet). Shown when a member slot is selected and resolves to a
+        // member of the current team; NFC is armed app-wide, so the sheet only needs to route each read.
+        // Back press is handled by the sheet's own onDismissRequest plus this guarded BackHandler.
+        val activeBindSlot = bindSlot
+        val activeTeamId = selectedTeamId
+        val activeRaceId = selectedRaceId
+        val bindMember = if (activeBindSlot != null) {
+            teamForTab?.members?.find { it.numberInTeam == activeBindSlot }
+        } else {
+            null
+        }
+        BackHandler(
+            enabled = bindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+        ) { bindSlot = null }
+        // Keyed by race; caches within this composition whether the pool is known-synced, so repeated
+        // offline opens within a session skip the DB lookup. Durable state (across activity recreation
+        // and startup warm-ups) is tracked in sync_meta via memberTagsRepo.hasBeenSynced().
+        val hasSyncedPool = remember(activeRaceId) { booleanArrayOf(false) }
+        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null && !showSettings) {
+            val currentSlot = SlotKey(activeTeamId, activeBindSlot)
+            // Reset per opened slot; survives recomposition while the same slot stays open.
+            var sheetState by remember(activeBindSlot) { mutableStateOf<BindSheetState>(BindSheetState.Waiting) }
+
+            // Arm/clear the NFC read hook for exactly this open sheet. onDispose covers every exit path
+            // (dismiss, BackHandler, success auto-dismiss, team switch, recomposition).
+            val scanMutex = remember(activeBindSlot) { Mutex() }
+            DisposableEffect(activeBindSlot) {
+                val host = activity
+                host?.onTagScanned = { uid ->
+                    // Suspending DAO lookups run off the main thread internally; launch on the UI scope so
+                    // state writes land on the main thread. Binding writes use the same scope — they are
+                    // fast Room inserts that finish well before the 900ms auto-dismiss window.
+                    scope.launch {
+                        // Ignore stray scans during the 900ms auto-dismiss animation after a successful bind.
+                        if (sheetState is BindSheetState.Success) return@launch
+                        // Serialize concurrent scan events (e.g. rapid re-presentation of the same chip):
+                        // skip any scan that arrives while one is already being processed.
+                        if (!scanMutex.tryLock()) return@launch
+                        try {
+                            // Fetch the full pool so we can distinguish "pool not yet synced" (empty table)
+                            // from "uid genuinely absent from the pool" (non-empty table, uid missing).
+                            // Using findByUid alone would conflate these two cases.
+                            var pool = memberTagsRepo.observeForRace(activeRaceId).first()
+                            if (pool.isEmpty() && !hasSyncedPool[0]) {
+                                // Pool is empty and not yet confirmed in this composition: check the
+                                // durable sync_meta record first (covers activity recreation and cases
+                                // where the startup warm-up synced an empty pool before the sheet opened).
+                                if (memberTagsRepo.hasBeenSynced(activeRaceId)) {
+                                    // Pool is known-synced but empty; cache the flag and fall through so
+                                    // the scan produces NotInPool rather than PoolNotReady.
+                                    hasSyncedPool[0] = true
+                                } else {
+                                    // No prior sync record: attempt an inline refresh. If the server is
+                                    // unreachable stay in PoolNotReady; on success mark synced and re-read
+                                    // (a still-empty pool will produce NotInPool on this and all subsequent
+                                    // scans).
+                                    sheetState = BindSheetState.PoolNotReady
+                                    val refreshResult = memberTagsRepo.refreshMemberTags(activeRaceId)
+                                    if (refreshResult == RefreshResult.Offline ||
+                                        refreshResult is RefreshResult.HttpError ||
+                                        refreshResult == RefreshResult.Forbidden
+                                    ) {
+                                        sheetState = BindSheetState.Waiting
+                                        return@launch
+                                    }
+                                    hasSyncedPool[0] = true
+                                    pool = memberTagsRepo.observeForRace(activeRaceId).first()
+                                }
+                            }
+                            val poolNumber = pool.find { it.nfcUid == uid }?.number
+                            val existing = bindingRepo.findByUid(uid)
+                            when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {
+                                BindOutcome.NotInPool -> sheetState = BindSheetState.NotInPool(uid)
+                                is BindOutcome.AlreadyOnThisSlot -> {
+                                    // Refresh the stored participantNumber from the authoritative pool
+                                    // in case it changed since the original bind.
+                                    try {
+                                        bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
+                                        sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                                    } catch (_: Exception) {
+                                        sheetState = BindSheetState.Waiting
+                                    }
+                                }
+                                is BindOutcome.AlreadyBound -> {
+                                    sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
+                                }
+                                is BindOutcome.ReadyToBind -> {
+                                    try {
+                                        bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
+                                        sheetState = BindSheetState.Success(outcome.participantNumber, uid)
+                                    } catch (_: Exception) {
+                                        sheetState = BindSheetState.Waiting
+                                    }
+                                }
+                            }
+                        } finally {
+                            scanMutex.unlock()
+                        }
+                    }
+                }
+                onDispose { host?.onTagScanned = null }
+            }
+
+            // Auto-dismiss shortly after a successful bind so the confirmation is visible briefly.
+            LaunchedEffect(sheetState) {
+                if (sheetState is BindSheetState.Success) {
+                    delay(900)
+                    bindSlot = null
+                }
+            }
+
+            BindChipSheet(
+                member = bindMember,
+                state = sheetState,
+                nfcDisabled = nfcState != NfcState.Available,
+                onReassign = {
+                    val s = sheetState as? BindSheetState.AlreadyBound ?: return@BindChipSheet
+                    scope.launch {
+                        if (!scanMutex.tryLock()) return@launch
+                        try {
+                            bindingRepo.bind(activeTeamId, activeBindSlot, s.uid, s.participantNumber)
+                            sheetState = BindSheetState.Success(s.participantNumber, s.uid)
+                        } catch (_: Exception) {
+                            sheetState = BindSheetState.AlreadyBound(s.uid, s.participantNumber)
+                        } finally {
+                            scanMutex.unlock()
+                        }
+                    }
+                },
+                onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
+                onDismiss = { bindSlot = null },
+            )
+        }
+
+        // Unbind confirmation. A long-press on a bound member sets unbindSlot (no write yet); this
+        // dialog performs the Room delete only on explicit confirmation, so an accidental tap on a
+        // bound member can never destroy a binding.
+        val activeUnbindSlot = unbindSlot
+        val unbindMember = if (activeUnbindSlot != null) {
+            teamForTab?.members?.find { it.numberInTeam == activeUnbindSlot }
+        } else {
+            null
+        }
+        val unbindBinding = activeUnbindSlot?.let { bindings[it] }
+        BackHandler(
+            enabled = unbindSlot != null && !showScan && !showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+        ) { unbindSlot = null }
+        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null && !showSettings) {
+            val teamId = selectedTeamId
+            AlertDialog(
+                onDismissRequest = { unbindSlot = null },
+                title = { Text("Отвязать чип?") },
+                text = {
+                    Column {
+                        Text(unbindMember.name, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = "№${unbindBinding.participantNumber} · ${unbindBinding.nfcUid}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "Чип можно будет привязать заново.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            // applicationScope so the delete outlives the closing dialog (consistent with selectTeam).
+                            container.applicationScope.launch { bindingRepo.unbind(teamId, activeUnbindSlot) }
+                            unbindSlot = null
+                        },
+                    ) {
+                        Text("Отвязать", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { unbindSlot = null }) { Text("Отмена") }
+                },
+            )
         }
     }
 }
