@@ -360,6 +360,100 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate5To6_keepsDataAndAddsMarksTable() {
+        val dbName = "migration-5to6-test.db"
+
+        // Reach v5, then seed a race + a checkpoint so we can assert existing data survives.
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(
+            dbName,
+            5,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus) " +
+                    "VALUES (7, 'Кольцо', 'kolco', '2026-08-01', NULL, 'Лес', 'open')"
+            )
+            db.execSQL(
+                "INSERT INTO checkpoints (id, raceId, number, cost, type, description, locked, encIv, encCt, taken) " +
+                    "VALUES (1, 7, 5, 10, 'kp', 'У пня', 0, NULL, NULL, 0)"
+            )
+        }
+
+        // Run 5→6; MigrationTestHelper validates the resulting schema against 6.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            6,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+        )
+
+        // Existing rows survive the additive migration.
+        db.query("SELECT name FROM races WHERE id = 7").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Кольцо", cursor.getString(0))
+        }
+        db.query("SELECT description FROM checkpoints WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("У пня", cursor.getString(0))
+        }
+
+        // New table exists, is empty, and accepts the entity column set — a camelCase/snake_case
+        // mismatch only surfaces here.
+        db.query("SELECT count(*) FROM marks").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.execSQL(
+            "INSERT INTO marks (id, raceId, teamId, point, checkpointNumber, cost, method, " +
+                "cpUid, cpCode, present, expectedCount, complete, photoPath, takenAt, updatedAt, " +
+                "uploadedLocal, uploadedCloud) " +
+                "VALUES ('uuid-1', 7, 3, 1, 5, 10, 'nfc', '04A2B3C4', 'DEADBEEF', '[1,2]', 2, 1, " +
+                "NULL, 1000, 1000, 0, 0)"
+        )
+        db.query("SELECT point, complete, present FROM marks WHERE id = 'uuid-1'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+            assertEquals(1, cursor.getInt(1))
+            assertEquals("[1,2]", cursor.getString(2))
+        }
+        db.close()
+    }
+
+    @Test
+    fun migrate5To6_marksIndicesExist() {
+        val dbName = "migration-5to6-index-test.db"
+        helper.createDatabase(dbName, 1).close()
+
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            6,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+        )
+
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' " +
+                "AND name IN ('index_marks_teamId', 'index_marks_point') AND tbl_name = 'marks'"
+        ).use { cursor ->
+            assertEquals(2, cursor.count)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate2To3_indexExists() {
         val dbName = "migration-2to3-index-test.db"
         helper.createDatabase(dbName, 1).close()

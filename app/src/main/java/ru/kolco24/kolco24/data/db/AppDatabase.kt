@@ -19,11 +19,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TagEntity::class,
         MemberTagEntity::class,
         MemberChipBindingEntity::class,
+        MarkEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
-@TypeConverters(TeamMembersConverter::class)
+@TypeConverters(TeamMembersConverter::class, IntListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun raceDao(): RaceDao
     abstract fun syncMetaDao(): SyncMetaDao
@@ -33,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun memberTagDao(): MemberTagDao
     abstract fun memberChipBindingDao(): MemberChipBindingDao
+    abstract fun markDao(): MarkDao
 
     companion object {
         /**
@@ -174,13 +176,45 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Local-only checkpoint-taking log. Purely additive — existing tables are untouched, so the
+         * v5 data survives the upgrade. `marks` carries one row per take ([MarkEntity]); it is indexed
+         * on `teamId` (the roster view's query) and `point` (the score derivation). The upload flags
+         * stay unindexed — no upload queries exist yet (an additive migration will index them when
+         * they do). SQL must match Room's generated schema (see schemas/.../6.json) exactly, or the
+         * validation check fails at runtime.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `marks` (`id` TEXT NOT NULL, " +
+                        "`raceId` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, " +
+                        "`point` INTEGER NOT NULL, `checkpointNumber` INTEGER NOT NULL, " +
+                        "`cost` INTEGER NOT NULL, `method` TEXT NOT NULL, `cpUid` TEXT NOT NULL, " +
+                        "`cpCode` TEXT NOT NULL, `present` TEXT NOT NULL, " +
+                        "`expectedCount` INTEGER NOT NULL, `complete` INTEGER NOT NULL, " +
+                        "`photoPath` TEXT, `takenAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                        "`uploadedLocal` INTEGER NOT NULL, `uploadedCloud` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_marks_teamId` ON `marks` (`teamId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_marks_point` ON `marks` (`point`)")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 .build()
     }
 }

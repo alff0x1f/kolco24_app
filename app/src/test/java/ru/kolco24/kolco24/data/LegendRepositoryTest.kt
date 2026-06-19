@@ -389,6 +389,15 @@ private class FakeCheckpointDao(private val callLog: MutableList<String>) : Chec
         }
     }
 
+    override suspend fun markTaken(id: Int) {
+        checkpoints.value = checkpoints.value.map {
+            if (it.id == id) it.copy(taken = true) else it
+        }
+    }
+
+    override suspend fun takenIdsForRace(raceId: Int): List<Int> =
+        checkpoints.value.filter { it.raceId == raceId && it.taken }.map { it.id }
+
     override suspend fun getCheckpointsForRace(raceId: Int): List<CheckpointEntity> =
         checkpoints.value.filter { it.raceId == raceId }
 

@@ -159,13 +159,13 @@ fun classifyTag(
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/CheckpointDaoTest.kt`
 - Add `@TypeConverters(IntListConverter::class)` (рядом с `TeamMembersConverter`), `entities += MarkEntity`, `abstract fun markDao(): MarkDao`.
 
-- [ ] поднять `version = 6`, добавить `MarkEntity` в `entities`, `markDao()`, конвертер.
-- [ ] добавить `MIGRATION_5_6` (CREATE TABLE marks + 2 индекса: `index_marks_teamId`, `index_marks_point`) и зарегистрировать в `addMigrations(...)` (в конце цепочки после `MIGRATION_4_5`).
-- [ ] `CheckpointDao`: добавить `markTaken(id)` и `takenIdsForRace(raceId)`; в `replaceAllForRace` снапшотить taken-id до wipe и переприменять **отдельным безусловным циклом** после reinsert (не внутри `if (incoming.locked)`).
-- [ ] собрать `assembleDebug` (KSP сгенерит `6.json`), сверить SQL миграции с `6.json` (camelCase индексы), закоммитить `6.json`.
-- [ ] дополнить `MigrationTest` кейсом 5→6 (вставка строки `marks`, проверка после миграции).
-- [ ] дополнить `CheckpointDaoTest`: taken-строка переживает `replaceAllForRace` (для open- и locked-incoming).
-- [ ] `./gradlew lintDebug testDebugUnitTest` + (на устройстве) `connectedDebugAndroidTest` — зелёно перед Task 3.
+- [x] поднять `version = 6`, добавить `MarkEntity` в `entities`, `markDao()`, конвертер.
+- [x] добавить `MIGRATION_5_6` (CREATE TABLE marks + 2 индекса: `index_marks_teamId`, `index_marks_point`) и зарегистрировать в `addMigrations(...)` (в конце цепочки после `MIGRATION_4_5`).
+- [x] `CheckpointDao`: добавить `markTaken(id)` и `takenIdsForRace(raceId)`; в `replaceAllForRace` снапшотить taken-id до wipe и переприменять **отдельным безусловным циклом** после reinsert (не внутри `if (incoming.locked)`).
+- [x] собрать `assembleDebug` (KSP сгенерит `6.json`), сверить SQL миграции с `6.json` (camelCase индексы), закоммитить `6.json`. SQL миграции совпал с `6.json` дословно.
+- [x] дополнить `MigrationTest` кейсом 5→6 (вставка строки `marks`, проверка после миграции).
+- [x] дополнить `CheckpointDaoTest`: taken-строка переживает `replaceAllForRace` (для open- и locked-incoming).
+- [x] `./gradlew lintDebug testDebugUnitTest` — зелёно. `connectedDebugAndroidTest` пропущен (нет эмулятора/устройства — instrumented тесты написаны, миграция сверена со схемой 6.json при сборке).
 
 ### Task 3: MarkRepository (local-only)
 
