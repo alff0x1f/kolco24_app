@@ -191,14 +191,6 @@ fun ScanScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-            item("hero_timer") {
-                HeroTimerCard(
-                    seconds = remainingMillis / 1_000f,
-                    total = SCAN_WINDOW_MS / 1_000f,
-                    remainingScans = remaining,
-                    waitingForCheckpoint = session?.point == null,
-                )
-            }
             diagnostic?.let { message ->
                 item("diagnostic") {
                     Text(
@@ -208,6 +200,14 @@ fun ScanScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
+            }
+            item("hero_timer") {
+                HeroTimerCard(
+                    seconds = remainingMillis / 1_000f,
+                    total = SCAN_WINDOW_MS / 1_000f,
+                    remainingScans = remaining,
+                    waitingForCheckpoint = session?.point == null,
+                )
             }
             item("nfc_banner") {
                 NfcBanner(
