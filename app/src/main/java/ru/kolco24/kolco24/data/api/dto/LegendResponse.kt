@@ -21,9 +21,9 @@ data class LegendResponse(
  * `description` are nullable, and `enc != null` is the locked sentinel.
  *
  * [color] is **public** (a named semantic token: `""`/`red`/`blue`/`green`/`yellow`/`orange`/`purple`)
- * and is present in **both** the open and locked branches — it is never hidden behind `enc`. It is
- * defaulted to `""` for forward-compatibility (the field is documented as always present, but a
- * default keeps parsing robust if a payload omits it).
+ * and is present in **both** the open and locked branches — it is never hidden behind `enc`. It
+ * defaults to `null` so that a payload omitting the field is parsed safely; `LegendRepository`
+ * coerces `null` to `""` (no bar) via `?: ""` in `CheckpointDto.toEntity`.
  */
 @Serializable
 data class CheckpointDto(

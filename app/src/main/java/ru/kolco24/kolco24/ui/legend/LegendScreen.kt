@@ -63,6 +63,7 @@ import ru.kolco24.kolco24.ui.theme.CpColorPurple
 import ru.kolco24.kolco24.ui.theme.CpColorRed
 import ru.kolco24.kolco24.ui.theme.CpColorYellow
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.theme.Tertiary
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 
 /**
@@ -373,13 +374,14 @@ private fun LegendFilterChip(
 
 /**
  * Compose mapping from the pure [CheckpointColor] enum to its bar color. Kept here (a Compose file)
- * rather than in the Android-free `CheckpointColor.kt`. Green/orange reuse existing theme brand
- * colors; the rest come from the `CpColor*` palette. Same shade in light & dark — purely decorative.
+ * rather than in the Android-free `CheckpointColor.kt`. Green/orange reuse existing brand colors
+ * ([Tertiary]/[OrangeCta]); the rest come from the `CpColor*` palette. Fixed shades — same in
+ * light & dark — purely decorative.
  */
-private fun CheckpointColor.barColor(tertiary: Color): Color = when (this) {
+private fun CheckpointColor.barColor(): Color = when (this) {
     CheckpointColor.RED -> CpColorRed
     CheckpointColor.BLUE -> CpColorBlue
-    CheckpointColor.GREEN -> tertiary
+    CheckpointColor.GREEN -> Tertiary
     CheckpointColor.YELLOW -> CpColorYellow
     CheckpointColor.ORANGE -> OrangeCta
     CheckpointColor.PURPLE -> CpColorPurple
@@ -391,8 +393,7 @@ private fun CheckpointRow(cp: CheckpointEntity, taken: Boolean, isLast: Boolean)
     // before reveal. Neutral (`null` = `""`/unknown token) → transparent → the row looks as today.
     // The 4dp bar is a fixed gutter in every row so spacing is identical across colored/uncolored
     // rows; the inner rows drop 4dp of leading padding to keep text alignment pixel-identical.
-    val barColor = parseCheckpointColor(cp.color)?.barColor(MaterialTheme.colorScheme.tertiary)
-        ?: Color.Transparent
+    val barColor = parseCheckpointColor(cp.color)?.barColor() ?: Color.Transparent
 
     Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         Box(
