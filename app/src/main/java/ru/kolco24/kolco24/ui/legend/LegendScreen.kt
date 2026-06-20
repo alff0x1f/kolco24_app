@@ -476,9 +476,9 @@ private fun LockedCheckpointRow(cp: CheckpointEntity) {
     // No description to show, so the placeholder bars stand in for it. Widths are derived from the
     // CP id — stable across recompositions, but varied row-to-row so the masked list reads like real
     // text rather than a column of identical bars (the design varies them by the hidden name length).
-    val firstBarFraction = 0.50f + ((cp.id * 17) % 44) / 100f
-    val hasSecondBar = (cp.id * 13) % 3 == 0
-    val secondBarFraction = 0.28f + ((cp.id * 29) % 26) / 100f
+    val firstBarFraction = 0.50f + Math.floorMod(cp.id * 17, 44) / 100f
+    val hasSecondBar = Math.floorMod(cp.id * 13, 3) == 0
+    val secondBarFraction = 0.28f + Math.floorMod(cp.id * 29, 26) / 100f
 
     Row(
         modifier = Modifier
