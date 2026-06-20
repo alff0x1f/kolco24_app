@@ -148,7 +148,8 @@ sealed interface UnlockOutcome {
 /**
  * Maps a network DTO to the persisted entity, stamping the owning [raceId]. A locked CP arrives with
  * an `enc` envelope and no `cost`/`description`; an open CP carries its content directly.
- * [CheckpointDao.replaceAllForRace] preserves any prior offline reveal.
+ * [CheckpointDao.replaceAllForRace] preserves any prior offline reveal. `color` is race-scoped public
+ * data present in both branches, so it passes straight through (no preserve-on-resync handling needed).
  */
 private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEntity(
     id = id,
@@ -160,6 +161,7 @@ private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEn
     locked = enc != null,
     encIv = enc?.iv,
     encCt = enc?.ct,
+    color = color ?: "",
 )
 
 /** Maps a `tags[]` DTO to its persisted entity (1:1), stamping the owning [raceId]. */

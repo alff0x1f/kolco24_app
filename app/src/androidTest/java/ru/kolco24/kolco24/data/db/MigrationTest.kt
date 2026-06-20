@@ -535,6 +535,71 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate7To8_keepsDataAndAddsColorColumn() {
+        val dbName = "migration-7to8-test.db"
+
+        // Reach v7, then seed a race + a checkpoint so we can assert existing data survives.
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(
+            dbName,
+            7,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus) " +
+                    "VALUES (7, 'Кольцо', 'kolco', '2026-08-01', NULL, 'Лес', 'open')"
+            )
+            db.execSQL(
+                "INSERT INTO checkpoints (id, raceId, number, cost, type, description, locked, encIv, encCt) " +
+                    "VALUES (1, 7, 5, 10, 'kp', 'У пня', 0, NULL, NULL)"
+            )
+        }
+
+        // Run 7→8; MigrationTestHelper validates the resulting schema against 8.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            8,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+        )
+
+        // The new `color` column exists and the existing row backfilled to '' (the default).
+        db.query("SELECT count(*) FROM pragma_table_info('checkpoints') WHERE name = 'color'")
+            .use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+            }
+        db.query("SELECT cost, description, color FROM checkpoints WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(10, cursor.getInt(0))
+            assertEquals("У пня", cursor.getString(1))
+            assertEquals("", cursor.getString(2))
+        }
+        // The column accepts a non-default token too.
+        db.execSQL(
+            "INSERT INTO checkpoints (id, raceId, number, cost, type, description, locked, encIv, encCt, color) " +
+                "VALUES (2, 7, 6, 20, 'kp', 'У реки', 0, NULL, NULL, 'red')"
+        )
+        db.query("SELECT color FROM checkpoints WHERE id = 2").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("red", cursor.getString(0))
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate2To3_indexExists() {
         val dbName = "migration-2to3-index-test.db"
         helper.createDatabase(dbName, 1).close()

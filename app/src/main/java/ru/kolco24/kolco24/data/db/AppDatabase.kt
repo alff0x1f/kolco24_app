@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MemberChipBindingEntity::class,
         MarkEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class, IntListConverter::class)
@@ -233,6 +233,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the public `color` token column to `checkpoints` (a named semantic token, e.g.
+         * `red`/`blue`/`""`, used to render a leading color bar in the legend). Purely additive — a
+         * plain `ALTER TABLE ... ADD COLUMN` (no table recreate, unlike [MIGRATION_3_4]/[MIGRATION_6_7])
+         * since the column is appended and `NOT NULL DEFAULT ''` backfills existing rows. SQL must
+         * match Room's generated schema (see schemas/.../8.json) exactly, or the validation check
+         * fails at runtime.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `checkpoints` ADD COLUMN `color` TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -246,6 +262,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .build()
     }

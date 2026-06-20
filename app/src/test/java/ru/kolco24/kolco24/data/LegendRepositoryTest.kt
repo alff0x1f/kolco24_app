@@ -95,8 +95,24 @@ class LegendRepositoryTest {
         assertEquals(1, cp.number)
         assertEquals(10, cp.cost)
         assertEquals("kp", cp.type)
+        assertEquals("", cp.color)
 
         assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/legend"))
+    }
+
+    @Test
+    fun success_mapsColorToEntity() = runTest {
+        val payload = """{"race":8,"checkpoints":[
+            {"id":101,"number":1,"cost":10,"type":"kp","description":"A","color":"blue"},
+            {"id":102,"number":2,"cost":5,"type":"kp","description":"B"}
+        ]}"""
+        server.enqueue(MockResponse().setResponseCode(200).setBody(payload))
+
+        repository.refreshLegend(8)
+
+        val checkpoints = repository.checkpointsForRace(8).first()
+        assertEquals("blue", checkpoints.find { it.id == 101 }?.color)
+        assertEquals("", checkpoints.find { it.id == 102 }?.color)
     }
 
     @Test

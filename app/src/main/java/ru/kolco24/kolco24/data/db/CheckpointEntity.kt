@@ -19,6 +19,11 @@ import androidx.room.PrimaryKey
  * complete), while a checkpoint row is **race-scoped** and shared across that race's teams. Taken
  * state is therefore derived from the selected team's complete marks (see [ru.kolco24.kolco24.data.takenPoints]),
  * not persisted on the checkpoint — persisting it here leaked one team's progress onto another's.
+ *
+ * [color] is **race-scoped public data** (a named semantic token, e.g. `red`/`blue`/`""`) served in
+ * both the open and locked branches — never hidden behind `enc`. It therefore needs no team-scoping
+ * and no preserve-on-resync handling (the server always sends it). Kept as the **last** field so the
+ * appended `ALTER TABLE ... ADD COLUMN color` (v7→v8) matches the generated schema's ordinal layout.
  */
 @Entity(tableName = "checkpoints", indices = [Index("raceId")])
 data class CheckpointEntity(
@@ -31,4 +36,5 @@ data class CheckpointEntity(
     val locked: Boolean = false,
     val encIv: String? = null,
     val encCt: String? = null,
+    val color: String = "",
 )
