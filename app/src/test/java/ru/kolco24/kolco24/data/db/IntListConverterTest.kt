@@ -32,4 +32,10 @@ class IntListConverterTest {
 
         assertEquals(values, restored)
     }
+
+    @Test
+    fun fromJson_malformedInput_returnsEmptyList() {
+        assertTrue(converter.fromJson("not-json").isEmpty())
+        assertTrue(converter.fromJson("{\"key\":\"value\"}").isEmpty())
+    }
 }

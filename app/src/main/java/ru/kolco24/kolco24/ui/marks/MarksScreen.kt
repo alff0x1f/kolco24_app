@@ -70,14 +70,16 @@ enum class MarkKind { NFC, PHOTO }
  */
 fun marksToTiles(marks: List<MarkEntity>): List<Mark> {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    val recentAt = marks.maxByOrNull { it.takenAt }?.takenAt
+    // marks is newest-first (observeMarks orders by takenAt DESC); flag the first id so ties at the
+    // same millisecond never produce more than one "recent" tile.
+    val recentId = marks.firstOrNull()?.id
     return marks.map { m ->
         Mark(
             number = m.checkpointNumber.toString().padStart(2, '0'),
             cost = m.cost,
             kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
             time = fmt.format(Date(m.takenAt)),
-            isRecent = m.takenAt == recentAt,
+            isRecent = m.id == recentId,
         )
     }
 }
@@ -94,6 +96,7 @@ private val RedBand = Color(0xFFB01528)
 @Composable
 fun MarksScreen(
     marks: List<MarkEntity> = emptyList(),
+    nfcAvailable: Boolean = true,
     onScanClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -128,7 +131,7 @@ fun MarksScreen(
                     }
                 }
                 item("nfc_banner") {
-                    NfcBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                    NfcBanner(nfcAvailable = nfcAvailable, modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
                 }
             }
 
@@ -354,7 +357,7 @@ private fun PhotoTile(mark: Mark, gradientIndex: Int) {
 }
 
 @Composable
-private fun NfcBanner(modifier: Modifier = Modifier) {
+private fun NfcBanner(nfcAvailable: Boolean, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -363,23 +366,35 @@ private fun NfcBanner(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(22.dp)
-                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f), CircleShape),
+                .background(
+                    if (nfcAvailable) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)
+                    else MaterialTheme.colorScheme.errorContainer,
+                    CircleShape,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(MaterialTheme.colorScheme.tertiary, CircleShape)
+                    .background(
+                        if (nfcAvailable) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.error,
+                        CircleShape,
+                    )
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "NFC активен",
+                text = if (nfcAvailable) "NFC активен" else "NFC недоступен",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Приложите телефон к КП или чипу команды",
+                text = if (nfcAvailable) {
+                    "Приложите телефон к КП или чипу команды"
+                } else {
+                    "Сканирование NFC на этом устройстве недоступно"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

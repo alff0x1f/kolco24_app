@@ -4,6 +4,9 @@ import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
 
+/** Sliding scan-window duration in milliseconds. Shared by ScanScreen's UI timer and MainActivity's DB-side expiry. */
+internal const val SCAN_WINDOW_MS = 20_000L
+
 /**
  * In-flight state of one «Отметить КП» session — a sliding 20 s window that accumulates the team's
  * present-set around a single checkpoint chip. Pure value type: no Android, no I/O, no timer. The
@@ -82,13 +85,16 @@ sealed interface ScanEvent {
 fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = when (event) {
     is ScanEvent.Kp -> {
         val base = session ?: ScanSession.empty(now)
+        // When switching to a different КП, discard the prior KP's members — they were present at a
+        // different checkpoint. A repeat scan of the same КП preserves accumulated members.
+        val priorPresent = if (session?.point == event.point) base.present else emptySet()
         base.copy(
             point = event.point,
             checkpointNumber = event.number,
             cost = event.cost,
             cpUid = event.cpUid,
             cpCode = event.cpCode,
-            present = base.present + base.bufferedBeforeKp,
+            present = priorPresent + base.bufferedBeforeKp,
             bufferedBeforeKp = emptySet(),
             lastScanAt = now,
         )

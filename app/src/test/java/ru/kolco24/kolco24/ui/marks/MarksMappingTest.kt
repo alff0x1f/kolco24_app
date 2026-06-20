@@ -97,6 +97,18 @@ class MarksMappingTest {
     }
 
     @Test
+    fun `tied takenAt flags only first tile as recent`() {
+        // Both marks share the same maximum timestamp. Only the first in newest-first order gets flagged.
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 1, takenAt = 3_000L),
+            mark("b", point = 2, number = 2, cost = 1, takenAt = 3_000L),
+        )
+        val tiles = marksToTiles(marks)
+        assertTrue(tiles[0].isRecent)
+        assertFalse(tiles[1].isRecent)
+    }
+
+    @Test
     fun `taken count is distinct complete points and repeat does not double score`() {
         val marks = listOf(
             mark("a", point = 1, number = 1, cost = 2, complete = true),

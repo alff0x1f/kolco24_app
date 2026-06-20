@@ -45,7 +45,7 @@ class MarkRepository(
     ): String {
         val id = UUID.randomUUID().toString()
         val present = bufferedMembers.toList()
-        val complete = present.size >= expectedCount
+        val complete = expectedCount > 0 && present.size >= expectedCount
         markDao.upsert(
             MarkEntity(
                 id = id,

@@ -77,6 +77,7 @@ import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
+import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.scan.ScanEvent
 import ru.kolco24.kolco24.ui.scan.classifyTag
@@ -231,9 +232,6 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
     }
 }
-
-/** Sliding scan-window length; must match [ru.kolco24.kolco24.ui.scan.ScanScreen]'s UI timer. */
-private const val SCAN_WINDOW_MS = 20_000L
 
 /**
  * Bookkeeping for the DB side of one «Отметить КП» session, mirroring [ScanScreen]'s UI session so
@@ -435,6 +433,7 @@ private fun Kolco24AppRoot() {
                 when (page) {
                     0 -> MarksScreen(
                         marks = marks,
+                        nfcAvailable = nfcAvailable,
                         onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
@@ -493,6 +492,9 @@ private fun Kolco24AppRoot() {
                             // A new KP, an expired window, or a switch of CP starts a fresh take row;
                             // re-scanning the same KP within the window only re-stamps the window.
                             if (expired || scanTake.markId == null || scanTake.point != event.point) {
+                                // An expired window means the pre-KP buffer belongs to a dead session;
+                                // discard it so stale members are not credited to the new take.
+                                if (expired) scanTake.buffer.clear()
                                 val buffered = scanTake.buffer.toSet()
                                 val rosterSize = scanRoster.size
                                 // applicationScope.async: the write survives the overlay closing, yet

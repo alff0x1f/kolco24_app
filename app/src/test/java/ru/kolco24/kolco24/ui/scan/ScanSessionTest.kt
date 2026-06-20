@@ -96,4 +96,30 @@ class ScanSessionTest {
         assertEquals(setOf(5), s.bufferedBeforeKp)
         assertEquals(42L, s.lastScanAt)
     }
+
+    @Test
+    fun kp_repeatScan_preservesPresentAndUpdatesWindow() {
+        var s = reduce(null, kp(), now = 0L)
+        s = reduce(s, ScanEvent.Member(1), now = 100L)
+        s = reduce(s, ScanEvent.Member(2), now = 200L)
+        // Re-scan the same КП — members must be kept, window re-stamped.
+        s = reduce(s, kp(), now = 300L)
+        assertEquals(42, s!!.point)
+        assertEquals(setOf(1, 2), s.present)
+        assertEquals(300L, s.lastScanAt)
+    }
+
+    @Test
+    fun kp_switchCP_resetsPresentAndBufferDrains() {
+        val kpB = ScanEvent.Kp(point = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")
+        var s = reduce(null, kp(), now = 0L)
+        s = reduce(s, ScanEvent.Member(1), now = 100L)
+        s = reduce(s, ScanEvent.Member(2), now = 200L)
+        // Switch to a different checkpoint — prior KP's members must NOT carry over.
+        s = reduce(s, kpB, now = 300L)
+        assertEquals(99, s!!.point)
+        assertTrue(s.present.isEmpty())
+        assertTrue(s.bufferedBeforeKp.isEmpty())
+        assertEquals(300L, s.lastScanAt)
+    }
 }

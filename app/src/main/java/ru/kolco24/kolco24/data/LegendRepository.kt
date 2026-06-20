@@ -1,6 +1,8 @@
 package ru.kolco24.kolco24.data
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.FetchResult
@@ -100,12 +102,14 @@ class LegendRepository(
                 if (iv != null && ct != null) cp.id to EncBlob(iv, ct) else null
             }
             .toMap()
-        val result = LegendCrypto.unlock(
-            code = code,
-            tag = UnlockTag(tagEntity.point, tagEntity.iv, tagEntity.ct),
-            encById = encById,
-            json = json,
-        )
+        val result = withContext(Dispatchers.Default) {
+            LegendCrypto.unlock(
+                code = code,
+                tag = UnlockTag(tagEntity.point, tagEntity.iv, tagEntity.ct),
+                encById = encById,
+                json = json,
+            )
+        }
         return when (result) {
             is UnlockResult.Revealed -> {
                 for (cp in result.checkpoints) {

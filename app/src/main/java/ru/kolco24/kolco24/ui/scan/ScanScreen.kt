@@ -66,7 +66,6 @@ import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.ui.theme.BrandRed
 
-private const val SCAN_WINDOW_MS = 20_000L
 private const val TIMER_TICK_MS = 250L
 
 data class ScanChip(
@@ -162,7 +161,7 @@ fun ScanScreen(
         ) {
             item("top_bar") {
                 ScanTopBar(
-                    canFinish = session != null,
+                    canFinish = session?.point != null,
                     onClose = {
                         finalizeSession()
                         onClose()

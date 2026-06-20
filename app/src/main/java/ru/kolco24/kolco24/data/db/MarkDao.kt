@@ -32,7 +32,7 @@ interface MarkDao {
             mark.copy(
                 present = present,
                 expectedCount = expectedCount,
-                complete = present.size >= expectedCount,
+                complete = expectedCount > 0 && present.size >= expectedCount,
                 updatedAt = now,
             ),
         )

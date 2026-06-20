@@ -88,7 +88,9 @@ class MarkRepositoryTest {
         assertFalse(checkpointDao.isTaken(10))
         repository.addMember(id, point = 10, numberInTeam = 3, expectedCount = 3, now = 1_400L)
         assertTrue(checkpointDao.isTaken(10))
-        assertEquals(listOf(1, 2, 3), markDao.getById(id)!!.present)
+        val finalMark = markDao.getById(id)!!
+        assertEquals(listOf(1, 2, 3), finalMark.present)
+        assertTrue(finalMark.complete)
     }
 
     @Test

@@ -109,4 +109,10 @@ class ScanTagDecisionTest {
         )
         assertEquals(ScanEvent.UnboundChip, event)
     }
+
+    @Test
+    fun code_withNullUnlock_badKp() {
+        val event = classifyTag(code, uid, unlock = null, emptyMap(), checkpoints)
+        assertEquals(ScanEvent.BadKp("не удалось расшифровать"), event)
+    }
 }
