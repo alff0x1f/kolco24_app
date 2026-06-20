@@ -80,7 +80,7 @@ fun Kolco24Theme(
             // remaining OS-mode-based from the enableEdgeToEdge() call in onCreate.
             // auto() preserves gesture-navigation transparency on API 29+ while still
             // supplying the correct scrim on API 26-28.
-            (view.context as ComponentActivity).enableEdgeToEdge(
+            (view.context as? ComponentActivity)?.enableEdgeToEdge(
                 statusBarStyle = SystemBarStyle.auto(
                     android.graphics.Color.TRANSPARENT,
                     android.graphics.Color.TRANSPARENT,
