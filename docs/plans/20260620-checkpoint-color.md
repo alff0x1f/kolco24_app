@@ -70,9 +70,9 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/LegendResponse.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/CheckpointEntity.kt`
 
-- [ ] Add `val color: String = ""` to `CheckpointDto` (default `""` for forward-compat; field is documented as always present but a default keeps parsing robust). Update the KDoc to note `color` is public and appears in both open and locked branches.
-- [ ] Add `val color: String = ""` as the **last** field of `CheckpointEntity` (so the appended `ALTER TABLE ADD COLUMN` agrees with the generated `8.json` ordinal layout); update KDoc noting it is race-scoped public data (no team-scoping, no preserve-on-resync concern).
-- [ ] No standalone tests in this task (covered by Task 5 parser tests + Task 2 migration test); confirm `./gradlew assembleDebug` compiles after the entity change (KSP regenerates the schema delta).
+- [x] Add `val color: String = ""` to `CheckpointDto` (default `""` for forward-compat; field is documented as always present but a default keeps parsing robust). Update the KDoc to note `color` is public and appears in both open and locked branches.
+- [x] Add `val color: String = ""` as the **last** field of `CheckpointEntity` (so the appended `ALTER TABLE ADD COLUMN` agrees with the generated `8.json` ordinal layout); update KDoc noting it is race-scoped public data (no team-scoping, no preserve-on-resync concern).
+- [x] No standalone tests in this task (covered by Task 5 parser tests + Task 2 migration test); confirm `./gradlew assembleDebug` compiles after the entity change (KSP regenerates the schema delta).
 
 ### Task 2: Room migration v7 → v8 (additive `color` column)
 

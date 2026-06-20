@@ -19,6 +19,11 @@ data class LegendResponse(
  * **Locked** checkpoints (`is_legend_locked` on the server) arrive without `cost`/`description` —
  * the plaintext never leaves the server — and instead carry an `enc` envelope. So `cost` and
  * `description` are nullable, and `enc != null` is the locked sentinel.
+ *
+ * [color] is **public** (a named semantic token: `""`/`red`/`blue`/`green`/`yellow`/`orange`/`purple`)
+ * and is present in **both** the open and locked branches — it is never hidden behind `enc`. It is
+ * defaulted to `""` for forward-compatibility (the field is documented as always present, but a
+ * default keeps parsing robust if a payload omits it).
  */
 @Serializable
 data class CheckpointDto(
@@ -28,6 +33,7 @@ data class CheckpointDto(
     val type: String,
     val description: String? = null,
     val enc: EncDto? = null,
+    val color: String = "",
 )
 
 /** AES-256-GCM envelope: `iv` (12 bytes, Base64) + `ct` (`ciphertext || tag(16)`, Base64). */
