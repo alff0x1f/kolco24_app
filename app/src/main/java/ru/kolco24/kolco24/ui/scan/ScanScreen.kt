@@ -139,10 +139,11 @@ fun ScanScreen(
     val reverseBindings = remember(bindings) { bindings.entries.associate { (uid, number) -> number to uid } }
     val chips = roster.map { member ->
         val chipId = reverseBindings[member.numberInTeam]
+        val scanned = (session?.present ?: emptySet()) + (session?.bufferedBeforeKp ?: emptySet())
         ScanChip(
             chipId = chipId,
             name = member.name,
-            filled = member.numberInTeam in (session?.present ?: emptySet()),
+            filled = member.numberInTeam in scanned,
             bound = chipId != null,
         )
     }
