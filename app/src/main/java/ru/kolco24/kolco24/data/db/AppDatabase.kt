@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MemberChipBindingEntity::class,
         MarkEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class, IntListConverter::class)
@@ -202,6 +202,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Drops the race-global `taken` column from `checkpoints`. "Взято" is team-scoped, so it is
+         * now derived from the marks log instead of persisted on the (race-shared) checkpoint row.
+         * SQLite-24 cannot `DROP COLUMN`, so `checkpoints` is recreated (copy-rename) exactly like
+         * [MIGRATION_3_4] — all other checkpoint data (incl. offline reveals) is copied across. SQL
+         * must match Room's generated schema (see schemas/.../7.json) exactly, or the validation check
+         * fails at runtime. The `marks` table is untouched.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `checkpoints_new` (`id` INTEGER NOT NULL, " +
+                        "`raceId` INTEGER NOT NULL, `number` INTEGER NOT NULL, `cost` INTEGER, " +
+                        "`type` TEXT NOT NULL, `description` TEXT, `locked` INTEGER NOT NULL, " +
+                        "`encIv` TEXT, `encCt` TEXT, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "INSERT INTO `checkpoints_new` " +
+                        "(`id`, `raceId`, `number`, `cost`, `type`, `description`, `locked`, " +
+                        "`encIv`, `encCt`) " +
+                        "SELECT `id`, `raceId`, `number`, `cost`, `type`, `description`, `locked`, " +
+                        "`encIv`, `encCt` FROM `checkpoints`"
+                )
+                db.execSQL("DROP TABLE `checkpoints`")
+                db.execSQL("ALTER TABLE `checkpoints_new` RENAME TO `checkpoints`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_checkpoints_raceId` ON `checkpoints` (`raceId`)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -214,6 +245,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .build()
     }

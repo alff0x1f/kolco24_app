@@ -92,7 +92,6 @@ class AppContainer(private val context: Context) {
     val markRepository: MarkRepository by lazy {
         MarkRepository(
             markDao = database.markDao(),
-            checkpointDao = database.checkpointDao(),
         )
     }
 

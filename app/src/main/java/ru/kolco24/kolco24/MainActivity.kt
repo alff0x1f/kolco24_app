@@ -75,6 +75,7 @@ import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
+import ru.kolco24.kolco24.data.takenPoints
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
@@ -338,14 +339,23 @@ private fun Kolco24AppRoot() {
     }.collectAsState(initial = emptyList())
     val bindings = remember(bindingsList) { bindingsList.associateBy { it.numberInTeam } }
 
-    // Local take events for the selected team, newest first (consumed by «Отметки» in Task 8).
+    // Local take events for the selected team, newest first (consumed by «Отметки» and «Легенда»).
     val marks by remember(selectedTeamId) {
         selectedTeamId?.let { markRepo.observeMarks(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+    // "Взято" is team-scoped: derive it from THIS team's complete marks, never off the race-shared
+    // checkpoint row — otherwise switching teams within a race would show the prior team's progress.
+    val takenIds = remember(marks) { takenPoints(marks) }
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     val scanRoster = teamForTab?.members ?: emptyList()
-    val scanBindings = remember(bindingsList) { bindingsList.associate { it.nfcUid to it.numberInTeam } }
+    // Only the current roster's slots may count toward a take. A binding left over from a member who
+    // was since removed from the roster (its numberInTeam no longer present) is excluded, so a stale
+    // chip reads as UnboundChip instead of silently substituting for a real, un-scanned participant.
+    val rosterSlots = remember(scanRoster) { scanRoster.mapTo(HashSet()) { it.numberInTeam } }
+    val scanBindings = remember(bindingsList, rosterSlots) {
+        bindingsList.filter { it.numberInTeam in rosterSlots }.associate { it.nfcUid to it.numberInTeam }
+    }
     val checkpointsById = remember(legendCheckpoints) { legendCheckpoints.associateBy { it.id } }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
@@ -438,13 +448,25 @@ private fun Kolco24AppRoot() {
                     0 -> MarksScreen(
                         marks = marks,
                         nfcAvailable = nfcActiveForScan,
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true },
+                        onScanClick = {
+                            // Scanning needs a resolved team with a roster. With no team (or a
+                            // selection whose team row has gone missing) there is nothing to score
+                            // against — route to team selection instead of opening an empty scan that
+                            // would only error on the first tap and could log an orphan take.
+                            if (teamForTab != null) {
+                                teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
+                                bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true
+                            } else {
+                                pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
+                            }
+                        },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
                         checkpoints = legendCheckpoints,
                         hasTeam = teamState !is SelectedTeamState.None,
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
+                        takenIds = takenIds,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     2 -> TeamScreen(
@@ -480,7 +502,10 @@ private fun Kolco24AppRoot() {
                 onScanTag = onScanTag@{ tag ->
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
-                    if (raceId == null || teamId == null) {
+                    // raceId/teamId come from the selection pointer, which survives the team row going
+                    // missing; an empty roster means there is nothing to score, so refuse rather than
+                    // open a take with expectedCount = 0 (which can never complete and orphans a row).
+                    if (raceId == null || teamId == null || scanRoster.isEmpty()) {
                         return@onScanTag ScanEvent.BadKp("команда не выбрана")
                     }
                     val uid = normalizeNfcUid(tag.id)

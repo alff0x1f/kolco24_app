@@ -68,9 +68,9 @@ import ru.kolco24.kolco24.ui.theme.RobotoMono
  * flag), so there is no "before start" state: locked CPs arrive in [checkpoints] with `cost == null`
  * and render as masked rows ([CheckpointRow]) until an NFC scan reveals them.
  *
- * [checkpoints] doubles as the model (no domain layer); [CheckpointEntity.taken] is always `false`
- * this iteration (marks not built yet) but the score card, filter and dim/strike row styling stay so
- * the future marks feature flips data, not UI.
+ * [checkpoints] doubles as the model (no domain layer). [takenIds] is the set of checkpoint ids the
+ * **selected team** has scored, derived from its own marks (see [ru.kolco24.kolco24.data.takenPoints]);
+ * "взято" is team-scoped, so it is passed in rather than read off the (race-shared) checkpoint row.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +78,7 @@ fun LegendScreen(
     checkpoints: List<CheckpointEntity>,
     hasTeam: Boolean,
     onChooseTeam: () -> Unit,
+    takenIds: Set<Int> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -90,22 +91,22 @@ fun LegendScreen(
 
         when {
             !hasTeam -> LegendNoTeam(onChooseTeam = onChooseTeam)
-            else -> LegendList(checkpoints = checkpoints)
+            else -> LegendList(checkpoints = checkpoints, takenIds = takenIds)
         }
     }
 }
 
 @Composable
-private fun LegendList(checkpoints: List<CheckpointEntity>) {
+private fun LegendList(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>) {
     var showOnlyOpen by rememberSaveable { mutableStateOf(false) }
 
-    val visible = if (showOnlyOpen) checkpoints.filter { !it.taken } else checkpoints
+    val visible = if (showOnlyOpen) checkpoints.filter { it.id !in takenIds } else checkpoints
 
-    val takenCount = checkpoints.count { it.taken }
+    val takenCount = checkpoints.count { it.id in takenIds }
     val totalCount = checkpoints.size
     // cost is nullable now (locked CPs hide it until unlocked); sum only the known costs. Locked-
     // unrevealed CPs are surfaced as a «+N закрытых КП» hint instead of skewing the score.
-    val takenScore = checkpoints.filter { it.taken }.mapNotNull { it.cost }.sum()
+    val takenScore = checkpoints.filter { it.id in takenIds }.mapNotNull { it.cost }.sum()
     val totalScore = checkpoints.mapNotNull { it.cost }.sum()
     val lockedCount = checkpoints.count { it.locked }
 
@@ -150,7 +151,7 @@ private fun LegendList(checkpoints: List<CheckpointEntity>) {
         }
 
         item("list") {
-            CheckpointListCard(checkpoints = visible)
+            CheckpointListCard(checkpoints = visible, takenIds = takenIds)
         }
     }
 }
@@ -297,7 +298,7 @@ private fun LockedHero(lockedCount: Int) {
 }
 
 @Composable
-private fun CheckpointListCard(checkpoints: List<CheckpointEntity>) {
+private fun CheckpointListCard(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>) {
     Column(modifier = Modifier.padding(horizontal = 8.dp)) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -306,7 +307,11 @@ private fun CheckpointListCard(checkpoints: List<CheckpointEntity>) {
         ) {
             Column {
                 checkpoints.forEachIndexed { index, cp ->
-                    CheckpointRow(cp = cp, isLast = index == checkpoints.size - 1)
+                    CheckpointRow(
+                        cp = cp,
+                        taken = cp.id in takenIds,
+                        isLast = index == checkpoints.size - 1,
+                    )
                 }
             }
         }
@@ -361,7 +366,7 @@ private fun LegendFilterChip(
 }
 
 @Composable
-private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
+private fun CheckpointRow(cp: CheckpointEntity, taken: Boolean, isLast: Boolean) {
     Column {
         // A locked CP keeps its plaintext on the server until an NFC scan reveals it, so the row is
         // masked: a lock chip + the bare КП number, with the description shown as skeleton bars
@@ -369,7 +374,7 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
         if (cp.locked) {
             LockedCheckpointRow(cp)
         } else {
-            OpenCheckpointRow(cp)
+            OpenCheckpointRow(cp, taken = taken)
         }
 
         if (!isLast) {
@@ -382,9 +387,9 @@ private fun CheckpointRow(cp: CheckpointEntity, isLast: Boolean) {
 }
 
 @Composable
-private fun OpenCheckpointRow(cp: CheckpointEntity) {
+private fun OpenCheckpointRow(cp: CheckpointEntity, taken: Boolean) {
     val contentColor =
-        if (cp.taken) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+        if (taken) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
 
     Row(
         modifier = Modifier
@@ -408,7 +413,7 @@ private fun OpenCheckpointRow(cp: CheckpointEntity) {
             text = cp.description.orEmpty(),
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 15.5.sp,
-                fontWeight = if (cp.taken) FontWeight.Normal else FontWeight.Medium,
+                fontWeight = if (taken) FontWeight.Normal else FontWeight.Medium,
                 letterSpacing = 0.sp,
             ),
             color = contentColor,
@@ -416,7 +421,7 @@ private fun OpenCheckpointRow(cp: CheckpointEntity) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (cp.taken) {
+        if (taken) {
             Icon(
                 imageVector = Icons.Filled.CheckCircle,
                 contentDescription = "Взято",

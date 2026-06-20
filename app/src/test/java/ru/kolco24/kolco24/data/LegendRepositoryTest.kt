@@ -95,7 +95,6 @@ class LegendRepositoryTest {
         assertEquals(1, cp.number)
         assertEquals(10, cp.cost)
         assertEquals("kp", cp.type)
-        assertFalse(cp.taken)
 
         assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/legend"))
     }
@@ -388,15 +387,6 @@ private class FakeCheckpointDao(private val callLog: MutableList<String>) : Chec
             if (it.id == id) it.copy(cost = cost, description = description, locked = false) else it
         }
     }
-
-    override suspend fun markTaken(id: Int) {
-        checkpoints.value = checkpoints.value.map {
-            if (it.id == id) it.copy(taken = true) else it
-        }
-    }
-
-    override suspend fun takenIdsForRace(raceId: Int): List<Int> =
-        checkpoints.value.filter { it.raceId == raceId && it.taken }.map { it.id }
 
     override suspend fun getCheckpointsForRace(raceId: Int): List<CheckpointEntity> =
         checkpoints.value.filter { it.raceId == raceId }

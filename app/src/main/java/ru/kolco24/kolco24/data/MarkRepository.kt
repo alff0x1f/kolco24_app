@@ -2,25 +2,26 @@ package ru.kolco24.kolco24.data
 
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
-import ru.kolco24.kolco24.data.db.CheckpointDao
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 
 /**
  * Single source of truth for the **local-only** checkpoint-taking events (взятия КП). Wraps [MarkDao]
- * for the event rows and [CheckpointDao] for the `taken` flip that scores a checkpoint. This data is
- * never uploaded yet — the table only carries upload-seed flags.
+ * for the event rows. This data is never uploaded yet — the table only carries upload-seed flags.
  *
  * A take is a two-phase row: [startKpTake] is called the moment the КП chip is scanned (creating a
  * row with a client UUID so the take survives process death and merges cleanly across two servers),
  * then [addMember] accumulates each member's `numberInTeam` within the rolling scan window. Whenever a
  * row's `present` set covers the whole roster ([MarkEntity.expectedCount]) it becomes [MarkEntity.complete]
- * and the underlying checkpoint flips to `taken` (= scored). A partial collect is stored for the future
- * server log but not scored, and a repeat take of the same checkpoint produces a **new** row.
+ * (= scored). A partial collect is stored for the future server log but not scored, and a repeat take of
+ * the same checkpoint produces a **new** row.
+ *
+ * "Взято" is **not** written back onto the checkpoint row: it is team-scoped (a checkpoint shared by a
+ * race's teams would otherwise leak one team's progress onto another's), so the legend derives it from
+ * this team's complete marks via [takenPoints].
  */
 class MarkRepository(
     private val markDao: MarkDao,
-    private val checkpointDao: CheckpointDao,
 ) {
     /** Live take events for one team, newest first. */
     fun observeMarks(teamId: Int): Flow<List<MarkEntity>> = markDao.observeForTeam(teamId)
@@ -29,7 +30,7 @@ class MarkRepository(
      * Open a new take for [point] (КП chip just scanned). Generates a fresh UUID, snapshots the
      * checkpoint metadata ([number]/[cost]) and roster size ([expectedCount]), seeds `present` with any
      * members already buffered before the chip ([bufferedMembers], deduplicated), recomputes `complete`,
-     * upserts the row, and — if already complete — flips the checkpoint to `taken`. Returns the new id.
+     * and upserts the row. Returns the new id.
      */
     suspend fun startKpTake(
         raceId: Int,
@@ -64,13 +65,13 @@ class MarkRepository(
                 updatedAt = now,
             ),
         )
-        if (complete) checkpointDao.markTaken(point)
         return id
     }
 
     /**
-     * Add one member ([numberInTeam]) to the take [markId] with set semantics (idempotent rescan), then
-     * flip [point] to `taken` if the row is now complete. A missing row is a no-op.
+     * Add one member ([numberInTeam]) to the take [markId] with set semantics (idempotent rescan).
+     * A missing row is a no-op. [point] is unused now that scoring is derived (kept for the call-site's
+     * readability and a future per-point recompute), so it is accepted but not consulted.
      */
     suspend fun addMember(
         markId: String,
@@ -80,14 +81,20 @@ class MarkRepository(
         now: Long,
     ) {
         markDao.addMember(markId, numberInTeam, now, expectedCount)
-        val mark = markDao.getById(markId) ?: return
-        if (mark.complete) checkpointDao.markTaken(point)
     }
 }
 
 /** Distinct checkpoints scored (complete) across the given take events. */
 fun takenPointCount(marks: List<MarkEntity>): Int =
     marks.filter { it.complete }.map { it.point }.distinct().size
+
+/**
+ * The set of checkpoint ids (points) scored by these marks — i.e. the team's "взято" checkpoints,
+ * derived from its own complete takes. The legend uses this instead of a persisted per-checkpoint flag
+ * so that switching teams within a race shows each team's own progress.
+ */
+fun takenPoints(marks: List<MarkEntity>): Set<Int> =
+    marks.filter { it.complete }.mapTo(HashSet()) { it.point }
 
 /** Sum of cost over distinct scored checkpoints — a repeat take of the same point does not double-count. */
 fun totalScore(marks: List<MarkEntity>): Int =

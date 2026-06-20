@@ -11,22 +11,18 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import ru.kolco24.kolco24.data.db.CheckpointDao
-import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 
 class MarkRepositoryTest {
 
     private lateinit var markDao: FakeMarkDao
-    private lateinit var checkpointDao: MarkFakeCheckpointDao
     private lateinit var repository: MarkRepository
 
     @Before
     fun setUp() {
         markDao = FakeMarkDao()
-        checkpointDao = MarkFakeCheckpointDao()
-        repository = MarkRepository(markDao, checkpointDao)
+        repository = MarkRepository(markDao)
     }
 
     private suspend fun startTake(
@@ -67,36 +63,35 @@ class MarkRepositoryTest {
         assertEquals("CODE10", mark.cpCode)
         assertEquals(listOf(1), mark.present)
         assertFalse(mark.complete)
-        assertFalse(checkpointDao.isTaken(10))
     }
 
     @Test
-    fun startKpTake_completeWhenBufferCoversRoster_marksTaken() = runTest {
+    fun startKpTake_completeWhenBufferCoversRoster_scores() = runTest {
         val id = startTake(point = 10, expectedCount = 2, buffered = setOf(1, 2))
         assertTrue(markDao.getById(id)!!.complete)
-        assertTrue(checkpointDao.isTaken(10))
+        assertEquals(setOf(10), takenPoints(repository.observeMarks(7).first()))
     }
 
     @Test
     fun addMember_accumulatesAndScoresOnFullRoster() = runTest {
         val id = startTake(point = 10, expectedCount = 3)
         repository.addMember(id, point = 10, numberInTeam = 1, expectedCount = 3, now = 1_100L)
-        assertFalse(checkpointDao.isTaken(10))
+        assertFalse(markDao.getById(id)!!.complete)
         repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, now = 1_200L)
         // Idempotent rescan of an already-present member does not advance the count.
         repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, now = 1_300L)
-        assertFalse(checkpointDao.isTaken(10))
+        assertFalse(markDao.getById(id)!!.complete)
         repository.addMember(id, point = 10, numberInTeam = 3, expectedCount = 3, now = 1_400L)
-        assertTrue(checkpointDao.isTaken(10))
         val finalMark = markDao.getById(id)!!
         assertEquals(listOf(1, 2, 3), finalMark.present)
         assertTrue(finalMark.complete)
+        assertEquals(setOf(10), takenPoints(repository.observeMarks(7).first()))
     }
 
     @Test
     fun addMember_missingRow_isNoOp() = runTest {
         repository.addMember("nope", point = 10, numberInTeam = 1, expectedCount = 1, now = 1L)
-        assertFalse(checkpointDao.isTaken(10))
+        assertTrue(repository.observeMarks(7).first().isEmpty())
     }
 
     @Test
@@ -133,27 +128,4 @@ private class FakeMarkDao : MarkDao {
     override suspend fun upsert(mark: MarkEntity) {
         rows.value = rows.value.filterNot { it.id == mark.id } + mark
     }
-}
-
-private class MarkFakeCheckpointDao : CheckpointDao {
-    private val taken = mutableSetOf<Int>()
-
-    fun isTaken(id: Int): Boolean = id in taken
-
-    override suspend fun markTaken(id: Int) {
-        taken += id
-    }
-
-    override fun observeCheckpointsForRace(raceId: Int) = throw UnsupportedOperationException()
-    override suspend fun insertCheckpoints(checkpoints: List<CheckpointEntity>) =
-        throw UnsupportedOperationException()
-    override suspend fun deleteCheckpointsForRace(raceId: Int) = throw UnsupportedOperationException()
-    override suspend fun revealedForRace(raceId: Int): List<CheckpointEntity> =
-        throw UnsupportedOperationException()
-    override suspend fun reveal(id: Int, cost: Int, description: String?) =
-        throw UnsupportedOperationException()
-    override suspend fun takenIdsForRace(raceId: Int): List<Int> =
-        throw UnsupportedOperationException()
-    override suspend fun getCheckpointsForRace(raceId: Int): List<CheckpointEntity> =
-        throw UnsupportedOperationException()
 }

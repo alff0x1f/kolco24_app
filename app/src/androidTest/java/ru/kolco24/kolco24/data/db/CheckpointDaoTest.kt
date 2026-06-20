@@ -108,49 +108,4 @@ class CheckpointDaoTest {
         assertEquals(listOf(20), ids)
         assertNull(dao.revealedForRace(1).firstOrNull { it.id == 21 })
     }
-
-    @Test
-    fun markTaken_thenResyncWithOpenRow_keepsTaken() = runBlocking {
-        dao.replaceAllForRace(1, listOf(open(20)))
-        dao.markTaken(20)
-
-        // A 200 refresh re-sends the CP as an open row (locked=false) — taken must survive.
-        dao.replaceAllForRace(1, listOf(open(20)))
-
-        assertEquals(listOf(20), dao.takenIdsForRace(1))
-    }
-
-    @Test
-    fun markTaken_thenResyncWithLockedRow_keepsTaken() = runBlocking {
-        dao.replaceAllForRace(1, listOf(open(10, cost = 40)))
-        dao.markTaken(10)
-
-        // A 200 refresh re-sends the same CP locked; taken survives (and the prior reveal too).
-        dao.replaceAllForRace(1, listOf(locked(10)))
-
-        assertEquals(listOf(10), dao.takenIdsForRace(1))
-        val cp10 = dao.revealedForRace(1).single { it.id == 10 }
-        assertEquals(40, cp10.cost)
-    }
-
-    @Test
-    fun resync_doesNotTakeCheckpointsThatWereNeverTaken() = runBlocking {
-        dao.replaceAllForRace(1, listOf(open(20), open(21)))
-        dao.markTaken(20)
-
-        dao.replaceAllForRace(1, listOf(open(20), open(21)))
-
-        assertEquals(listOf(20), dao.takenIdsForRace(1))
-    }
-
-    @Test
-    fun resync_droppingATakenCheckpoint_doesNotResurrectIt() = runBlocking {
-        dao.replaceAllForRace(1, listOf(open(20), open(21)))
-        dao.markTaken(21)
-        // CP 21 disappears from the server feed; its taken flag must not re-create it.
-        dao.replaceAllForRace(1, listOf(open(20)))
-
-        assertEquals(emptyList<Int>(), dao.takenIdsForRace(1))
-        assertNull(dao.revealedForRace(1).firstOrNull { it.id == 21 })
-    }
 }
