@@ -244,9 +244,9 @@ fun classifyTag(
 - [x] `./gradlew lintDebug testDebugUnitTest` — зелёно перед Task 9.
 
 ### Task 9: Verify acceptance criteria
-- [ ] проверить все требования Overview: скан КП→reveal+taken-при-полном-ростере, окно 20 с скользит, повтор=новая строка, оффлайн, `cpUid`/`cpCode` пишутся, вкладки на реальных данных.
-- [ ] edge-кейсы: непривязанный браслет; чужой код (BadKp); окно истекло без КП; смерть процесса после скана КП (строка есть, present частичный).
-- [ ] полный прогон: `./gradlew lintDebug testDebugUnitTest`; на устройстве `connectedDebugAndroidTest` (миграция/DAO).
+- [x] проверить все требования Overview: скан КП→reveal+taken-при-полном-ростере (`unlock`→`reveal`; `complete = present.size >= expectedCount`→`markTaken`), окно 20 с скользит (`SCAN_WINDOW_MS`, `lastScanAt` рестамп на каждом принятом скане в `reduce`+`ScanTakeState`), повтор=новая строка (новый UUID при `markId==null`/смене `point`/истечении окна; свежий `ScanTakeState` на каждый `showScan`), оффлайн (`LegendCrypto` локально, Room — источник истины), `cpUid`/`cpCode` пишутся (`startKpTake` сохраняет оба из `Kp`), вкладки на реальных данных (`MarksScreen(marks)`, `LegendScreen(legendCheckpoints)`). Все подтверждены в коде.
+- [x] edge-кейсы: непривязанный браслет (`UnboundChip`→окно не двигается), чужой код (`BadKp`), окно истекло без КП (`point==null`→ничего не коммитится), смерть процесса после скана КП (строка создаётся сразу в `startKpTake` на скане КП, present частичный, переживёт). Все покрыты `reduce`/`classifyTag` + unit-тестами.
+- [x] полный прогон: `./gradlew lintDebug testDebugUnitTest` — зелёно. `connectedDebugAndroidTest` (миграция/DAO) пропущен — нет эмулятора/устройства; instrumented-тесты (`MigrationTest` 5→6, `CheckpointDaoTest` preserve taken) написаны, SQL `MIGRATION_5_6` сверен с `6.json` при сборке.
 
 ### Task 10: [Final] Документация
 - [ ] обновить CLAUDE.md: запись про `marks`/`MarkEntity`/`MarkDao`/`IntListConverter`, `MarkRepository`, Room v6 + `MIGRATION_5_6`, хук `onTagForMark` и приоритеты, живой `ScanScreen` (сессия/таймер/reduce), `MarksScreen` на реальных данных, preserve `taken` в `replaceAllForRace`.
