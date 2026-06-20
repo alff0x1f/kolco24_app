@@ -8,7 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 
@@ -74,8 +74,8 @@ fun Kolco24Theme(
 ) {
     val view = LocalView.current
     if (!view.isInEditMode) {
-        SideEffect {
-            // Re-apply the full SystemBarStyle on every theme change so that on API 26-28
+        DisposableEffect(darkTheme) {
+            // Re-apply the full SystemBarStyle when the theme changes so that on API 26-28
             // the nav-bar scrim colour stays in sync with the resolved app theme rather than
             // remaining OS-mode-based from the enableEdgeToEdge() call in onCreate.
             // auto() preserves gesture-navigation transparency on API 29+ while still
@@ -92,6 +92,7 @@ fun Kolco24Theme(
                     detectDarkMode = { darkTheme },
                 ),
             )
+            onDispose {}
         }
     }
     MaterialTheme(
