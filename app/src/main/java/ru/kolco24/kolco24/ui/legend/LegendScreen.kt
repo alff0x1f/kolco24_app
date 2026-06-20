@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,6 +58,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.ui.theme.CpColorBlue
+import ru.kolco24.kolco24.ui.theme.CpColorPurple
+import ru.kolco24.kolco24.ui.theme.CpColorRed
+import ru.kolco24.kolco24.ui.theme.CpColorYellow
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 
@@ -365,23 +371,52 @@ private fun LegendFilterChip(
     }
 }
 
+/**
+ * Compose mapping from the pure [CheckpointColor] enum to its bar color. Kept here (a Compose file)
+ * rather than in the Android-free `CheckpointColor.kt`. Green/orange reuse existing theme brand
+ * colors; the rest come from the `CpColor*` palette. Same shade in light & dark — purely decorative.
+ */
+private fun CheckpointColor.barColor(tertiary: Color): Color = when (this) {
+    CheckpointColor.RED -> CpColorRed
+    CheckpointColor.BLUE -> CpColorBlue
+    CheckpointColor.GREEN -> tertiary
+    CheckpointColor.YELLOW -> CpColorYellow
+    CheckpointColor.ORANGE -> OrangeCta
+    CheckpointColor.PURPLE -> CpColorPurple
+}
+
 @Composable
 private fun CheckpointRow(cp: CheckpointEntity, taken: Boolean, isLast: Boolean) {
-    Column {
-        // A locked CP keeps its plaintext on the server until an NFC scan reveals it, so the row is
-        // masked: a lock chip + the bare КП number, with the description shown as skeleton bars
-        // (screen A2b in docs/design — see `LockedLegendRow`) instead of any real text.
-        if (cp.locked) {
-            LockedCheckpointRow(cp)
-        } else {
-            OpenCheckpointRow(cp, taken = taken)
-        }
+    // `color` is race-scoped public data (present on open AND locked rows), so the bar shows even
+    // before reveal. Neutral (`null` = `""`/unknown token) → transparent → the row looks as today.
+    // The 4dp bar is a fixed gutter in every row so spacing is identical across colored/uncolored
+    // rows; the inner rows drop 4dp of leading padding to keep text alignment pixel-identical.
+    val barColor = parseCheckpointColor(cp.color)?.barColor(MaterialTheme.colorScheme.tertiary)
+        ?: Color.Transparent
 
-        if (!isLast) {
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 76.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
-            )
+    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .fillMaxHeight()
+                .background(barColor),
+        )
+        Column {
+            // A locked CP keeps its plaintext on the server until an NFC scan reveals it, so the row
+            // is masked: a lock chip + the bare КП number, with the description shown as skeleton bars
+            // (screen A2b in docs/design — see `LockedLegendRow`) instead of any real text.
+            if (cp.locked) {
+                LockedCheckpointRow(cp)
+            } else {
+                OpenCheckpointRow(cp, taken = taken)
+            }
+
+            if (!isLast) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 72.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
         }
     }
 }
@@ -394,7 +429,9 @@ private fun OpenCheckpointRow(cp: CheckpointEntity, taken: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            // start padding is 16-4 = 12dp; the 4dp leading color bar makes up the difference so
+            // text alignment is pixel-identical to the pre-color layout.
+            .padding(start = 12.dp, top = 12.dp, end = 16.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -446,7 +483,9 @@ private fun LockedCheckpointRow(cp: CheckpointEntity) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            // start padding is 16-4 = 12dp; the 4dp leading color bar makes up the difference so
+            // text alignment is pixel-identical to the pre-color layout.
+            .padding(start = 12.dp, top = 12.dp, end = 16.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

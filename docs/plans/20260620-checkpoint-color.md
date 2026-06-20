@@ -121,11 +121,11 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/legend/LegendScreen.kt`
 
-- [ ] Add the Compose mapping `CheckpointColor.barColor(): Color` **in `LegendScreen.kt`** (a Compose file) — never in the pure `CheckpointColor.kt`, which must stay Android-free; `parseCheckpointColor(cp.color)` → `null` means no bar.
-- [ ] In `CheckpointRow`, wrap the existing row + divider so a leading `Box(Modifier.width(4.dp).fillMaxHeight().background(barColor ?: Color.Transparent))` sits on the left edge, applied to **both** `OpenCheckpointRow` and `LockedCheckpointRow` (color is public, shows pre-reveal). The 4dp bar is a **fixed gutter present in every row** (transparent when neutral) so spacing is consistent across colored and uncolored rows; reduce the row's existing leading horizontal padding by 4dp (and keep the divider's 76dp start aligned) so text alignment is identical to today and the "zero regression" claim holds literally.
-- [ ] Confirm color does not touch scoring/filter/taken/lockedCount logic (no changes to `LegendList` metrics).
-- [ ] Known minor UI detail (ship as-is): the first/last row's bar meets the rounded `CheckpointListCard` corner as a square — acceptable; note for design.
-- [ ] No automated UI test (host UI untested by convention); visual verification is a Post-Completion manual step. Run `./gradlew lintDebug` — must pass.
+- [x] Add the Compose mapping `CheckpointColor.barColor(): Color` **in `LegendScreen.kt`** (a Compose file) — never in the pure `CheckpointColor.kt`, which must stay Android-free; `parseCheckpointColor(cp.color)` → `null` means no bar.
+- [x] In `CheckpointRow`, wrap the existing row + divider so a leading `Box(Modifier.width(4.dp).fillMaxHeight().background(barColor ?: Color.Transparent))` sits on the left edge, applied to **both** `OpenCheckpointRow` and `LockedCheckpointRow` (color is public, shows pre-reveal). The 4dp bar is a **fixed gutter present in every row** (transparent when neutral) so spacing is consistent across colored and uncolored rows; reduce the row's existing leading horizontal padding by 4dp (and keep the divider's 76dp start aligned) so text alignment is identical to today and the "zero regression" claim holds literally. (Row wrapped in `Modifier.height(IntrinsicSize.Min)` so `fillMaxHeight` resolves; inner rows now `padding(start=12,top=12,end=16,bottom=12)`; divider start 72dp so its absolute position stays at 76dp.)
+- [x] Confirm color does not touch scoring/filter/taken/lockedCount logic (no changes to `LegendList` metrics).
+- [x] Known minor UI detail (ship as-is): the first/last row's bar meets the rounded `CheckpointListCard` corner as a square — acceptable; note for design.
+- [x] No automated UI test (host UI untested by convention); visual verification is a Post-Completion manual step. Run `./gradlew lintDebug` — must pass.
 
 ### Task 7: Verify acceptance criteria
 - [ ] `color` flows DTO → entity → Room → row; open and locked rows both show the bar; `""`/unknown render with no bar (no regression).
