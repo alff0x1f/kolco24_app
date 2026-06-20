@@ -135,9 +135,9 @@
 - [x] Run instrumented migration guard (emulator/device): `./gradlew connectedDebugAndroidTest`. (Already validated in Task 2 — all 13 MigrationTest cases incl. migrate7To8 passed on emulator Medium_Phone_API_36.1; no device connected this iteration to re-run.)
 
 ### Task 8: [Final] Update documentation
-- [ ] Update `CLAUDE.md`: note `CheckpointDto`/`CheckpointEntity` carry `color`, Room is now **v8** with `MIGRATION_7_8` (additive `color` column), `8.json` committed, the new pure `ui/legend/CheckpointColor.kt` + `CheckpointColorTest`, and the legend leading-color-bar rendering. Adjust the existing v7/version references accordingly.
-- [ ] Update `docs/checkpoint-color.md` "Согласовать с командой" only if the exact palette is confirmed (otherwise leave for design sign-off).
-- [ ] Move this plan to `docs/plans/completed/`.
+- [x] Update `CLAUDE.md`: note `CheckpointDto`/`CheckpointEntity` carry `color`, Room is now **v8** with `MIGRATION_7_8` (additive `color` column), `8.json` committed, the new pure `ui/legend/CheckpointColor.kt` + `CheckpointColorTest`, and the legend leading-color-bar rendering. Adjust the existing v7/version references accordingly.
+- [x] Update `docs/checkpoint-color.md` "Согласовать с командой" only if the exact palette is confirmed (otherwise leave for design sign-off). (Left as-is — palette not yet design-confirmed; the exact hexes remain pending design sign-off per Post-Completion.)
+- [x] Move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
