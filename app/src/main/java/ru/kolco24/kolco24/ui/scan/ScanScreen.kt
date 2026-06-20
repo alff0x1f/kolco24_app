@@ -191,6 +191,14 @@ fun ScanScreen(
                     },
                 )
             }
+            item("hero_timer") {
+                HeroTimerCard(
+                    seconds = remainingMillis / 1_000f,
+                    total = SCAN_WINDOW_MS / 1_000f,
+                    remainingScans = remaining,
+                    waitingForCheckpoint = session?.point == null,
+                )
+            }
             item("cp_waiting") {
                 CpWaitingCard(session = session)
             }
@@ -217,14 +225,6 @@ fun ScanScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-            }
-            item("hero_timer") {
-                HeroTimerCard(
-                    seconds = remainingMillis / 1_000f,
-                    total = SCAN_WINDOW_MS / 1_000f,
-                    remainingScans = remaining,
-                    waitingForCheckpoint = session?.point == null,
-                )
             }
             item("nfc_banner") {
                 NfcBanner(
@@ -495,9 +495,12 @@ private fun ChipSlot(chip: ScanChip) {
                     text = chip.name,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                // The binding is known before scanning, so show the chip number right away.
                 Text(
-                    text = "NFC · scan",
+                    text = "№${chip.chipNumber ?: "—"}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 2.dp),
