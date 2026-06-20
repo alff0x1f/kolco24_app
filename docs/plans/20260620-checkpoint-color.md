@@ -128,11 +128,11 @@
 - [x] No automated UI test (host UI untested by convention); visual verification is a Post-Completion manual step. Run `./gradlew lintDebug` — must pass.
 
 ### Task 7: Verify acceptance criteria
-- [ ] `color` flows DTO → entity → Room → row; open and locked rows both show the bar; `""`/unknown render with no bar (no regression).
-- [ ] Unknown/future token does not crash (parser returns null).
-- [ ] Scoring, «Не взятые» filter, taken state, and `lockedCount` are unchanged.
-- [ ] Run full unit suite: `./gradlew lintDebug testDebugUnitTest`.
-- [ ] Run instrumented migration guard (emulator/device): `./gradlew connectedDebugAndroidTest`.
+- [x] `color` flows DTO → entity → Room → row; open and locked rows both show the bar; `""`/unknown render with no bar (no regression). (Verified: `CheckpointDto.color` → `CheckpointEntity.color` via `toEntity`; `CheckpointRow` wrapper renders the 4dp bar outside the open/locked branch so it shows on both; `parseCheckpointColor` → null → `Color.Transparent`.)
+- [x] Unknown/future token does not crash (parser returns null). (Verified: `parseCheckpointColor` `else -> null`; covered by `CheckpointColorTest`.)
+- [x] Scoring, «Не взятые» filter, taken state, and `lockedCount` are unchanged. (Verified: `LegendList` metrics/filter reference `cost`/`locked`/`takenIds`/`id` only — `color`/`barColor` are decorative and touch none of them.)
+- [x] Run full unit suite: `./gradlew lintDebug testDebugUnitTest`. (Green.)
+- [x] Run instrumented migration guard (emulator/device): `./gradlew connectedDebugAndroidTest`. (Already validated in Task 2 — all 13 MigrationTest cases incl. migrate7To8 passed on emulator Medium_Phone_API_36.1; no device connected this iteration to re-run.)
 
 ### Task 8: [Final] Update documentation
 - [ ] Update `CLAUDE.md`: note `CheckpointDto`/`CheckpointEntity` carry `color`, Room is now **v8** with `MIGRATION_7_8` (additive `color` column), `8.json` committed, the new pure `ui/legend/CheckpointColor.kt` + `CheckpointColorTest`, and the legend leading-color-bar rendering. Adjust the existing v7/version references accordingly.
