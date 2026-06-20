@@ -79,12 +79,12 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/ThemePreference.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/ThemePreferenceTest.kt`
 
-- [ ] create `ThemePreference(load: () -> String?, save: (String) -> Unit)` holding `MutableStateFlow(parseThemeMode(load()))` exposed as `val mode: StateFlow<ThemeMode>`
-- [ ] add `fun setMode(m: ThemeMode) { _mode.value = m; save(m.name) }`
-- [ ] add `companion object { fun fromSharedPreferences(context: Context): ThemePreference }` using prefs file `"kolco24.settings"`, key `"theme_mode"`, `MODE_PRIVATE`, `apply()` (mirror `InstallId`)
-- [ ] write `ThemePreferenceTest` with a fake in-memory store: defaults to SYSTEM when empty; pre-seeded value parses on init
-- [ ] write `ThemePreferenceTest`: `setMode` calls `save` with the enum name and emits the new value on `mode`
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] create `ThemePreference(load: () -> String?, save: (String) -> Unit)` holding `MutableStateFlow(parseThemeMode(load()))` exposed as `val mode: StateFlow<ThemeMode>`
+- [x] add `fun setMode(m: ThemeMode) { _mode.value = m; save(m.name) }`
+- [x] add `companion object { fun fromSharedPreferences(context: Context): ThemePreference }` using prefs file `"kolco24.settings"`, key `"theme_mode"`, `MODE_PRIVATE`, `apply()` (mirror `InstallId`)
+- [x] write `ThemePreferenceTest` with a fake in-memory store: defaults to SYSTEM when empty; pre-seeded value parses on init
+- [x] write `ThemePreferenceTest`: `setMode` calls `save` with the enum name and emits the new value on `mode`
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 3: Expose ThemePreference via AppContainer + apply in MainActivity
 
