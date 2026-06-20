@@ -296,6 +296,9 @@ private fun Kolco24AppRoot() {
     // The bind sheet shows an NFC-settings deep-link when nfcState == Disabled; disabling the
     // button on NoHardware only (not Disabled) makes that recovery UI reachable.
     val nfcAvailable = nfcState != NfcState.NoHardware
+    // For scan-facing UI (banners that say "NFC активен"): reader mode is only active when
+    // NFC is fully Available, so the banner must reflect the actual scanning capability.
+    val nfcActiveForScan = nfcState == NfcState.Available
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -434,7 +437,7 @@ private fun Kolco24AppRoot() {
                 when (page) {
                     0 -> MarksScreen(
                         marks = marks,
-                        nfcAvailable = nfcAvailable,
+                        nfcAvailable = nfcActiveForScan,
                         onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
@@ -473,7 +476,7 @@ private fun Kolco24AppRoot() {
             ScanScreen(
                 roster = scanRoster,
                 bindings = scanBindings,
-                nfcAvailable = nfcAvailable,
+                nfcAvailable = nfcActiveForScan,
                 onScanTag = onScanTag@{ tag ->
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
