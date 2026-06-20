@@ -93,9 +93,9 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/LegendRepository.kt`
 
-- [ ] In `CheckpointDto.toEntity`, pass `color = color`.
-- [ ] Confirm **no change** needed to `CheckpointDao.replaceAllForRace` (color always arrives from the server, nothing to preserve) and `reveal()` (color stored at insert) — add a one-line code comment only if it clarifies intent; do not modify the transaction.
-- [ ] No new test here (the mapping is exercised by the existing `LegendRepository`/`CheckpointDao` instrumented tests and Task 5 covers parsing); confirm compile.
+- [x] In `CheckpointDto.toEntity`, pass `color = color`.
+- [x] Confirm **no change** needed to `CheckpointDao.replaceAllForRace` (color always arrives from the server, nothing to preserve) and `reveal()` (color stored at insert) — add a one-line code comment only if it clarifies intent; do not modify the transaction.
+- [x] No new test here (the mapping is exercised by the existing `LegendRepository`/`CheckpointDao` instrumented tests and Task 5 covers parsing); confirm compile.
 
 ### Task 4: Palette colors in the theme
 
