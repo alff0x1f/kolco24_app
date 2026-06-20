@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -63,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
 import ru.kolco24.kolco24.data.nfc.chipCodeFromNdef
@@ -73,10 +75,14 @@ import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
+import ru.kolco24.kolco24.data.takenPoints
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
+import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
 import ru.kolco24.kolco24.ui.scan.ScanScreen
+import ru.kolco24.kolco24.ui.scan.ScanEvent
+import ru.kolco24.kolco24.ui.scan.classifyTag
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
 import ru.kolco24.kolco24.ui.settings.WriteChipDialog
 import ru.kolco24.kolco24.ui.settings.WriteChipState
@@ -113,6 +119,13 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      * priority over [onTagScanned] in [onTagDiscovered] — writing needs the full Tag, not just the uid.
      */
     @Volatile var onTagForWrite: ((Tag) -> Unit)? = null
+
+    /**
+     * Sink for the next raw [Tag] when the «Отметить КП» scan flow is active (ScanScreen). When set
+     * it takes priority over [onTagScanned] but yields to [onTagForWrite] in [onTagDiscovered] —
+     * marking needs the full Tag to both read the CP chip's code and fall back to the member uid.
+     */
+    @Volatile var onTagForMark: ((Tag) -> Unit)? = null
 
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
@@ -184,14 +197,20 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
-     * armed scan flow (bind sheet) gets the normalized UID; otherwise — idle foreground — we read
-     * the tag's NDEF and surface our own code chips, mirroring the cold-launch intent path (which
-     * reader mode would otherwise suppress). Tag I/O runs here on the binder thread.
+     * armed mark flow (ScanScreen) gets the raw [Tag]; an armed scan flow (bind sheet) gets the
+     * normalized UID; otherwise — idle foreground — we read the tag's NDEF and surface our own code
+     * chips, mirroring the cold-launch intent path (which reader mode would otherwise suppress).
+     * Tag I/O runs here on the binder thread.
      */
     override fun onTagDiscovered(tag: Tag) {
         val writeHook = onTagForWrite
         if (writeHook != null) {
             mainHandler.post { writeHook(tag) }
+            return
+        }
+        val markHook = onTagForMark
+        if (markHook != null) {
+            mainHandler.post { markHook(tag) }
             return
         }
         val scanHook = onTagScanned
@@ -214,6 +233,26 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 NfcAdapter.FLAG_READER_NFC_V or
                 NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
     }
+}
+
+/**
+ * Bookkeeping for the DB side of one «Отметить КП» session, mirroring [ScanScreen]'s UI session so
+ * `onScanTag` can persist takes. A fresh instance is `remember`-ed each time the scan overlay opens.
+ *
+ * - [markId]/[point]/[expectedCount] describe the open take row (set on the КП scan).
+ * - [buffer] holds member slots scanned **before** the КП chip; it is drained into [MarkRepository.startKpTake].
+ * - [present] mirrors the slots already credited to the open take so a re-scan of an already-counted
+ *   member is idempotent and does **not** refresh [lastScanAt] (mirrors [reduce]).
+ * - [lastScanAt] lazily detects window expiry (a scan more than [SCAN_WINDOW_MS] after the previous one
+ *   starts a new take), keeping the persisted rows in step with the UI's timer-driven finalize.
+ */
+private class ScanTakeState {
+    var markId: String? = null
+    var point: Int? = null
+    var expectedCount: Int = 0
+    val buffer = mutableSetOf<Int>()
+    val present = mutableSetOf<Int>()
+    var lastScanAt: Long = 0L
 }
 
 /** Step of the team-selection overlay flow, layered over the tab Scaffold (no navigation library). */
@@ -251,6 +290,7 @@ private fun Kolco24AppRoot() {
     val legendRepo = container.legendRepository
     val memberTagsRepo = container.memberTagsRepository
     val bindingRepo = container.memberChipBindingRepository
+    val markRepo = container.markRepository
     val today = todayIso()
 
     // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
@@ -260,6 +300,9 @@ private fun Kolco24AppRoot() {
     // The bind sheet shows an NFC-settings deep-link when nfcState == Disabled; disabling the
     // button on NoHardware only (not Disabled) makes that recovery UI reachable.
     val nfcAvailable = nfcState != NfcState.NoHardware
+    // For scan-facing UI (banners that say "NFC активен"): reader mode is only active when
+    // NFC is fully Available, so the banner must reflect the actual scanning capability.
+    val nfcActiveForScan = nfcState == NfcState.Available
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
@@ -292,12 +335,50 @@ private fun Kolco24AppRoot() {
     val legendCheckpoints by remember(selectedRaceId) {
         selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+    // Guard: collectAsState does not reset on key change — filter stale checkpoints from the
+    // prior race during the brief window before the new flow emits (mirrors the safeMarks guard).
+    val safeCheckpoints = if (selectedRaceId != null) legendCheckpoints.filter { it.raceId == selectedRaceId } else emptyList()
 
     // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
     val bindingsList by remember(selectedTeamId) {
         selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val bindings = remember(bindingsList) { bindingsList.associateBy { it.numberInTeam } }
+
+    // Local take events for the selected team, newest first (consumed by «Отметки» and «Легенда»).
+    val marks by remember(selectedTeamId) {
+        selectedTeamId?.let { markRepo.observeMarks(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    // Guard: collectAsState does not reset on key change — filter stale marks from the prior team
+    // during the brief window before the new flow emits (mirrors the scanRoster/scanBindings guard).
+    val safeMarks = if (selectedTeamId != null) marks.filter { it.teamId == selectedTeamId } else emptyList()
+    // "Взято" is team-scoped: derive it from THIS team's complete marks, never off the race-shared
+    // checkpoint row — otherwise switching teams within a race would show the prior team's progress.
+    val takenIds = remember(safeMarks) { takenPoints(safeMarks) }
+
+    // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
+    // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
+    // only seeded with `initial` on first composition). During the brief window after a team switch
+    // where bindingsList / teamForTab are still the previous team's data, filter on the current
+    // selectedTeamId so stale chips from team A are not credited to team B's mark.
+    val scanRoster = if (teamForTab?.id == selectedTeamId) teamForTab?.members ?: emptyList() else emptyList()
+    // Only the current roster's slots may count toward a take. A binding left over from a member who
+    // was since removed from the roster (its numberInTeam no longer present) is excluded, so a stale
+    // chip reads as UnboundChip instead of silently substituting for a real, un-scanned participant.
+    val rosterSlots = remember(scanRoster) { scanRoster.mapTo(HashSet()) { it.numberInTeam } }
+    val scanBindings = remember(bindingsList, rosterSlots, selectedTeamId) {
+        bindingsList
+            .filter { it.teamId == selectedTeamId && it.numberInTeam in rosterSlots }
+            .associate { it.nfcUid to it.numberInTeam }
+    }
+    // Display-only map for the scan overlay: the member's slot → its chip number (participantNumber),
+    // same filter as scanBindings. The screen shows «№N» instead of the raw nfcUid.
+    val scanChipNumbers = remember(bindingsList, rosterSlots, selectedTeamId) {
+        bindingsList
+            .filter { it.teamId == selectedTeamId && it.numberInTeam in rosterSlots }
+            .associate { it.numberInTeam to it.participantNumber }
+    }
+    val checkpointsById = remember(safeCheckpoints) { safeCheckpoints.associateBy { it.id } }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
@@ -387,13 +468,27 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true },
+                        marks = safeMarks,
+                        nfcAvailable = nfcActiveForScan,
+                        onScanClick = {
+                            // Scanning needs a resolved team with a roster. With no team (or a
+                            // selection whose team row has gone missing) there is nothing to score
+                            // against — route to team selection instead of opening an empty scan that
+                            // would only error on the first tap and could log an orphan take.
+                            if (teamForTab != null) {
+                                teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
+                                bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true
+                            } else {
+                                pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
+                            }
+                        },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
-                        checkpoints = legendCheckpoints,
+                        checkpoints = safeCheckpoints,
                         hasTeam = teamState !is SelectedTeamState.None,
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
+                        takenIds = takenIds,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     2 -> TeamScreen(
@@ -420,7 +515,111 @@ private fun Kolco24AppRoot() {
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
         BackHandler(enabled = showScan) { showScan = false; showSettings = false }
         if (showScan) {
-            ScanScreen(onClose = { showScan = false; showSettings = false }, modifier = Modifier.fillMaxSize())
+            // Fresh DB-side take bookkeeping per opened overlay (parallels ScanScreen's UI session).
+            val scanTake = remember(showScan) { ScanTakeState() }
+            ScanScreen(
+                roster = scanRoster,
+                chipNumbers = scanChipNumbers,
+                nfcAvailable = nfcActiveForScan,
+                onScanTag = onScanTag@{ tag, now ->
+                    val raceId = selectedRaceId
+                    val teamId = selectedTeamId
+                    // raceId/teamId come from the selection pointer, which survives the team row going
+                    // missing; an empty roster means there is nothing to score, so refuse rather than
+                    // open a take with expectedCount = 0 (which can never complete and orphans a row).
+                    if (raceId == null || teamId == null || scanRoster.isEmpty()) {
+                        return@onScanTag ScanEvent.BadKp("команда не выбрана")
+                    }
+                    val uid = normalizeNfcUid(tag.id)
+                    // readChipCode is blocking NfcA I/O; unlock is a suspend DAO+crypto path.
+                    val code = withContext(Dispatchers.IO) { readChipCode(tag) }
+                    val unlock = if (code != null) legendRepo.unlock(raceId, code) else null
+                    // For Revealed, checkpointsById is stale (recomposition hasn't fired) so we always
+                    // re-read from the DAO. For IdentityOnly we also re-read: if the legend hasn't
+                    // emitted its first batch yet (cold start), checkpointsById is still empty and
+                    // the DAO snapshot is the only source that has the CP's cost.
+                    val localCheckpointsById =
+                        if (unlock is UnlockOutcome.Revealed || unlock is UnlockOutcome.IdentityOnly) {
+                            legendRepo.checkpointsSnapshot(raceId).associateBy { it.id }
+                        } else {
+                            checkpointsById
+                        }
+                    val event = classifyTag(code, uid, unlock, scanBindings, localCheckpointsById)
+                    val expired = scanTake.lastScanAt != 0L &&
+                        (now - scanTake.lastScanAt) >= SCAN_WINDOW_MS
+                    when (event) {
+                        is ScanEvent.Kp -> {
+                            // A new KP, an expired window, or a switch of CP starts a fresh take row;
+                            // re-scanning the same KP within the window only re-stamps the window.
+                            if (expired || scanTake.markId == null || scanTake.point != event.point) {
+                                // An expired window means the pre-KP buffer belongs to a dead session;
+                                // discard it so stale members are not credited to the new take.
+                                if (expired) scanTake.buffer.clear()
+                                val buffered = scanTake.buffer.toSet()
+                                val rosterSize = scanRoster.size
+                                // applicationScope.async: the write survives the overlay closing, yet
+                                // await() still hands the id back for the in-session addMember chain.
+                                val id = container.applicationScope.async {
+                                    markRepo.startKpTake(
+                                        raceId = raceId,
+                                        teamId = teamId,
+                                        point = event.point,
+                                        number = event.number,
+                                        cost = event.cost,
+                                        cpUid = event.cpUid,
+                                        cpCode = event.cpCode,
+                                        expectedCount = rosterSize,
+                                        bufferedMembers = buffered,
+                                        now = now,
+                                    )
+                                }.await()
+                                scanTake.markId = id
+                                scanTake.point = event.point
+                                scanTake.expectedCount = rosterSize
+                                // The buffered members were drained into the take's present-set.
+                                scanTake.present.clear()
+                                scanTake.present.addAll(buffered)
+                                scanTake.buffer.clear()
+                            }
+                            scanTake.lastScanAt = now
+                        }
+                        is ScanEvent.Member -> {
+                            if (expired) {
+                                scanTake.markId = null
+                                scanTake.point = null
+                                scanTake.buffer.clear()
+                                scanTake.present.clear()
+                            }
+                            val markId = scanTake.markId
+                            val point = scanTake.point
+                            if (markId == null || point == null) {
+                                // No KP yet: hold the member until the КП chip lands. A re-tap of an
+                                // already-buffered member is idempotent and must not refresh the window.
+                                if (!scanTake.buffer.add(event.numberInTeam)) return@onScanTag event
+                            } else {
+                                // A re-tap of an already-credited member is idempotent and must not
+                                // refresh the window (else one person could keep the take alive alone).
+                                if (!scanTake.present.add(event.numberInTeam)) return@onScanTag event
+                                container.applicationScope.async {
+                                    markRepo.addMember(
+                                        markId = markId,
+                                        point = point,
+                                        numberInTeam = event.numberInTeam,
+                                        expectedCount = scanTake.expectedCount,
+                                        now = now,
+                                    )
+                                }.await()
+                            }
+                            scanTake.lastScanAt = now
+                        }
+                        // Diagnostics never open a take or advance the window.
+                        ScanEvent.UnboundChip, is ScanEvent.BadKp -> Unit
+                    }
+                    event
+                },
+                onClose = { showScan = false; showSettings = false },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         // Settings overlay — sits beneath the picker/scan overlays (rendered before them, so they draw

@@ -38,6 +38,10 @@ interface CheckpointDao {
      * fresh server rows are wiped+reinserted, then any incoming still-`locked` row whose id was
      * previously revealed gets its plaintext re-applied. Open rows arrive with their content already,
      * so they overwrite cleanly.
+     *
+     * Taken ("взято") state is **not** preserved here — it is no longer stored on the checkpoint. It
+     * is derived per-team from the marks log (see [ru.kolco24.kolco24.data.takenPoints]), so a resync
+     * cannot disturb it.
      */
     @Transaction
     suspend fun replaceAllForRace(raceId: Int, checkpoints: List<CheckpointEntity>) {

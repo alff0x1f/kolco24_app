@@ -92,6 +92,9 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
     // MigrationTestHelper reads the exported schema JSONs from the androidTest assets.
     sourceSets["androidTest"].assets.srcDirs("$projectDir/schemas")
 }

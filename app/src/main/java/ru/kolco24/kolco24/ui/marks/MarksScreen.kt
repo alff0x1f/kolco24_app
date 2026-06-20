@@ -43,6 +43,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.takenPointCount
+import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 
@@ -56,16 +62,27 @@ data class Mark(
 
 enum class MarkKind { NFC, PHOTO }
 
-private val MOCK_MARKS = listOf(
-    Mark("00", 0, MarkKind.NFC, "10:16"),
-    Mark("02", 2, MarkKind.PHOTO, "11:42"),
-    Mark("04", 3, MarkKind.NFC, "12:08"),
-    Mark("07", 4, MarkKind.PHOTO, "13:22", isRecent = true),
-    Mark("11", 5, MarkKind.NFC, "13:34"),
-    Mark("13", 5, MarkKind.NFC, "13:58"),
-    Mark("16", 3, MarkKind.PHOTO, "14:21"),
-    Mark("21", 4, MarkKind.NFC, "14:47"),
-)
+/**
+ * Pure mapping of the local take events into display tiles — **one tile per event** (a repeat take of
+ * the same checkpoint shows as a separate tile). [marks] is expected newest-first (as `observeMarks`
+ * delivers). The single most-recent event (max `takenAt`) is flagged [Mark.isRecent]. Uses
+ * [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ */
+fun marksToTiles(marks: List<MarkEntity>): List<Mark> {
+    val fmt = SimpleDateFormat("HH:mm", Locale.US)
+    // marks is newest-first (observeMarks orders by takenAt DESC); flag the first id so ties at the
+    // same millisecond never produce more than one "recent" tile.
+    val recentId = marks.firstOrNull()?.id
+    return marks.map { m ->
+        Mark(
+            number = m.checkpointNumber.toString().padStart(2, '0'),
+            cost = m.cost,
+            kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
+            time = fmt.format(Date(m.takenAt)),
+            isRecent = m.id == recentId,
+        )
+    }
+}
 
 private val PHOTO_GRADIENTS = listOf(
     listOf(Color(0xFFDCD3B0), Color(0xFF8FA178), Color(0xFF5B6A4A)),
@@ -77,9 +94,15 @@ private val RedBand = Color(0xFFB01528)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
-    val totalKp = MOCK_MARKS.size
-    val totalScore = MOCK_MARKS.sumOf { it.cost }
+fun MarksScreen(
+    marks: List<MarkEntity> = emptyList(),
+    nfcAvailable: Boolean = true,
+    onScanClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val totalKp = takenPointCount(marks)
+    val score = totalScore(marks)
+    val tiles = marksToTiles(marks)
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -95,21 +118,20 @@ fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
                 contentPadding = PaddingValues(bottom = 80.dp),
             ) {
                 item("metrics") {
-                    MetricsCard(kpCount = totalKp, score = totalScore, timeToKv = "10:19")
+                    // «ДО КВ» has no real source yet — placeholder until control-time lands.
+                    MetricsCard(kpCount = totalKp, score = score, timeToKv = "—")
                 }
-                item("date_header") {
-                    Text(
-                        text = "Сегодня · 10 окт",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-                item("tile_grid") {
-                    TileGrid(marks = MOCK_MARKS)
+                if (tiles.isEmpty()) {
+                    item("empty") {
+                        MarksEmpty(modifier = Modifier.padding(top = 64.dp))
+                    }
+                } else {
+                    item("tile_grid") {
+                        TileGrid(marks = tiles)
+                    }
                 }
                 item("nfc_banner") {
-                    NfcBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                    NfcBanner(nfcAvailable = nfcAvailable, modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
                 }
             }
 
@@ -151,6 +173,26 @@ fun MarksScreen(onScanClick: () -> Unit = {}, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MarksEmpty(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Пока нет отметок",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Отметьте КП кнопкой «Отметить КП»",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -315,7 +357,7 @@ private fun PhotoTile(mark: Mark, gradientIndex: Int) {
 }
 
 @Composable
-private fun NfcBanner(modifier: Modifier = Modifier) {
+private fun NfcBanner(nfcAvailable: Boolean, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -324,23 +366,35 @@ private fun NfcBanner(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(22.dp)
-                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f), CircleShape),
+                .background(
+                    if (nfcAvailable) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)
+                    else MaterialTheme.colorScheme.errorContainer,
+                    CircleShape,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(MaterialTheme.colorScheme.tertiary, CircleShape)
+                    .background(
+                        if (nfcAvailable) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.error,
+                        CircleShape,
+                    )
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "NFC активен",
+                text = if (nfcAvailable) "NFC активен" else "NFC недоступен",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Приложите телефон к КП или чипу команды",
+                text = if (nfcAvailable) {
+                    "Приложите телефон к КП или чипу команды"
+                } else {
+                    "Сканирование NFC на этом устройстве недоступно"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

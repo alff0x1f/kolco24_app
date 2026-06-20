@@ -1,5 +1,9 @@
 package ru.kolco24.kolco24.ui.scan
 
+import android.nfc.Tag
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -34,6 +38,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -42,33 +55,119 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import ru.kolco24.kolco24.MainActivity
+import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.ui.theme.BrandRed
 
-data class ScanChip(
-    val chipId: String?,
-    val name: String?,
-    val filled: Boolean,
-)
+private const val TIMER_TICK_MS = 250L
 
-private val MOCK_SCAN_CHIPS = listOf(
-    ScanChip("597", "Маленков А.", true),
-    ScanChip("601", "Иванов И.", true),
-    ScanChip("604", "Сидоров П.", true),
-    ScanChip(null, null, false),
-    ScanChip(null, null, false),
-    ScanChip(null, null, false),
+data class ScanChip(
+    val chipNumber: Int?,
+    val name: String,
+    val filled: Boolean,
+    val bound: Boolean,
 )
 
 @Composable
-fun ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
-    val scanned = MOCK_SCAN_CHIPS.count { it.filled }
-    val total = MOCK_SCAN_CHIPS.size
-    val remaining = total - scanned
+fun ScanScreen(
+    roster: List<TeamMemberItem>,
+    chipNumbers: Map<Int, Int>,
+    nfcAvailable: Boolean,
+    onScanTag: suspend (Tag, Long) -> ScanEvent,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val activity = LocalContext.current as? MainActivity
+    val scope = rememberCoroutineScope()
+    val scanMutex = remember { Mutex() }
+    val currentOnScanTag by rememberUpdatedState(onScanTag)
+    var session by remember { mutableStateOf<ScanSession?>(null) }
+    var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
+    var diagnostic by remember { mutableStateOf<String?>(null) }
+
+    fun finalizeSession() {
+        session = null
+        remainingMillis = SCAN_WINDOW_MS
+        diagnostic = null
+    }
+
+    DisposableEffect(activity, scope) {
+        activity?.onTagForMark = { tag ->
+            // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
+            // slow NFC or DB work is dated when the user tapped, not when processing starts.
+            val now = System.currentTimeMillis()
+            scope.launch {
+                scanMutex.withLock {
+                    val event = currentOnScanTag(tag, now)
+                    when (event) {
+                        ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
+                        is ScanEvent.BadKp -> diagnostic = event.reason
+                        else -> {
+                            diagnostic = null
+                            // If the 20 s window had already elapsed at tap time, the DB side
+                            // started a fresh take; discard the expired UI session so reduce
+                            // also starts fresh instead of extending the stale one.
+                            val effectiveSession = if (session != null &&
+                                (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
+                            // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
+                            // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
+                            // so the ring must keep counting down rather than flash back to full.
+                            session = reduce(effectiveSession, event, now)
+                        }
+                    }
+                }
+            }
+        }
+        onDispose {
+            activity?.onTagForMark = null
+        }
+    }
+
+    LaunchedEffect(session?.lastScanAt) {
+        val lastScanAt = session?.lastScanAt ?: run {
+            remainingMillis = SCAN_WINDOW_MS
+            return@LaunchedEffect
+        }
+        while (session?.lastScanAt == lastScanAt) {
+            val remaining = SCAN_WINDOW_MS - (System.currentTimeMillis() - lastScanAt)
+            remainingMillis = remaining.coerceAtLeast(0L)
+            if (remaining <= 0L) {
+                // A scan coroutine may be suspended inside scanMutex right at the deadline (e.g.
+                // awaiting a DB write after its IO finished). Wait for it to complete; if the scan
+                // extended the window (updated session.lastScanAt), skip finalization — the new
+                // LaunchedEffect will pick it up.
+                scanMutex.withLock {
+                    if (session?.lastScanAt == lastScanAt) finalizeSession()
+                }
+                break
+            }
+            delay(TIMER_TICK_MS)
+        }
+    }
+
+    val chips = roster.map { member ->
+        val chipNumber = chipNumbers[member.numberInTeam]
+        val scanned = (session?.present ?: emptySet()) + (session?.bufferedBeforeKp ?: emptySet())
+        ScanChip(
+            chipNumber = chipNumber,
+            name = member.name,
+            filled = member.numberInTeam in scanned,
+            bound = chipNumber != null,
+        )
+    }
+    val scanned = chips.count { it.filled }
+    val total = chips.size
+    val remaining = (total - scanned).coerceAtLeast(0)
 
     Box(
         modifier = modifier
@@ -80,16 +179,34 @@ fun ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
             contentPadding = WindowInsets.navigationBars.add(WindowInsets(bottom = 32.dp)).asPaddingValues(),
         ) {
             item("top_bar") {
-                ScanTopBar(onClose = onClose)
+                ScanTopBar(
+                    canFinish = session?.point != null,
+                    onClose = {
+                        finalizeSession()
+                        onClose()
+                    },
+                    onFinish = {
+                        finalizeSession()
+                        onClose()
+                    },
+                )
+            }
+            item("hero_timer") {
+                HeroTimerCard(
+                    seconds = remainingMillis / 1_000f,
+                    total = SCAN_WINDOW_MS / 1_000f,
+                    remainingScans = remaining,
+                    waitingForCheckpoint = session?.point == null,
+                )
             }
             item("cp_waiting") {
-                CpWaitingCard()
+                CpWaitingCard(session = session)
             }
             item("chip_section") {
                 ChipSectionHeader(scanned = scanned, total = total)
             }
             item("chip_grid") {
-                ChipGrid(chips = MOCK_SCAN_CHIPS)
+                ChipGrid(chips = chips)
             }
             item("chip_hint") {
                 Text(
@@ -99,18 +216,28 @@ fun ScanScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-            item("hero_timer") {
-                HeroTimerCard(seconds = 17f, total = 20f, remainingScans = remaining)
+            diagnostic?.let { message ->
+                item("diagnostic") {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
             }
             item("nfc_banner") {
-                NfcBanner(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                NfcBanner(
+                    nfcAvailable = nfcAvailable,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ScanTopBar(onClose: () -> Unit) {
+private fun ScanTopBar(canFinish: Boolean, onClose: () -> Unit, onFinish: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -132,7 +259,7 @@ private fun ScanTopBar(onClose: () -> Unit) {
                 .weight(1f)
                 .padding(start = 4.dp),
         )
-        TextButton(onClick = {}, enabled = false) {
+        TextButton(onClick = onFinish, enabled = canFinish) {
             Text(
                 text = "Готово",
                 style = MaterialTheme.typography.labelLarge,
@@ -142,7 +269,8 @@ private fun ScanTopBar(onClose: () -> Unit) {
 }
 
 @Composable
-private fun CpWaitingCard() {
+private fun CpWaitingCard(session: ScanSession?) {
+    val hasCheckpoint = session?.point != null
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -156,7 +284,11 @@ private fun CpWaitingCard() {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            CpBadgeEmpty(size = 64.dp)
+            if (hasCheckpoint) {
+                CpBadge(number = session?.checkpointNumber, size = 64.dp)
+            } else {
+                CpBadgeEmpty(size = 64.dp)
+            }
             Column {
                 Text(
                     text = "Метка КП",
@@ -164,18 +296,41 @@ private fun CpWaitingCard() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "КП не отсканирован",
+                    text = if (hasCheckpoint) "КП ${session?.checkpointNumber}" else "КП не отсканирован",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 3.dp),
                 )
                 Text(
-                    text = "Поднесите телефон к чипу на КП",
+                    text = if (hasCheckpoint) {
+                        "Стоимость: ${session?.cost} баллов"
+                    } else {
+                        "Поднесите телефон к чипу на КП"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CpBadge(number: Int?, size: Dp) {
+    val height = size * 0.86f
+    Surface(
+        modifier = Modifier.size(width = size, height = height),
+        shape = MaterialTheme.shapes.small,
+        color = BrandRed,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = number?.toString() ?: "—",
+                style = MaterialTheme.typography.headlineSmall,
+                fontFamily = FontFamily.Monospace,
+                color = Color.White,
+            )
         }
     }
 }
@@ -309,26 +464,43 @@ private fun ChipSlot(chip: ScanChip) {
         Column(modifier = Modifier.weight(1f)) {
             if (chip.filled) {
                 Text(
-                    text = chip.name ?: "",
+                    text = chip.name,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Чип ${chip.chipId}",
+                    text = "№${chip.chipNumber ?: "—"}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
                 )
-            } else {
+            } else if (!chip.bound) {
                 Text(
-                    text = "Ожидание",
+                    text = chip.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "NFC · scan",
+                    text = "Чип не привязан",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            } else {
+                Text(
+                    text = chip.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                // The binding is known before scanning, so show the chip number right away.
+                Text(
+                    text = "№${chip.chipNumber ?: "—"}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 2.dp),
@@ -367,8 +539,20 @@ private fun WaitingChipIcon() {
 }
 
 @Composable
-private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
+private fun HeroTimerCard(
+    seconds: Float,
+    total: Float,
+    remainingScans: Int,
+    waitingForCheckpoint: Boolean,
+) {
     val pct = if (total > 0f) (seconds / total).coerceIn(0f, 1f) else 0f
+    // The timer ticks every TIMER_TICK_MS, so pct arrives in steps. Tween between steps (linear, one
+    // tick long) so the ring sweeps smoothly instead of jumping every 250 ms.
+    val animatedPct by animateFloatAsState(
+        targetValue = pct,
+        animationSpec = tween(durationMillis = TIMER_TICK_MS.toInt(), easing = LinearEasing),
+        label = "timerRing",
+    )
     val ringColor = if (seconds < 5f) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
     val trackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.12f)
     val chipWord = when {
@@ -405,7 +589,7 @@ private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
                     drawArc(
                         color = ringColor,
                         startAngle = -90f,
-                        sweepAngle = 360f * pct,
+                        sweepAngle = 360f * animatedPct,
                         useCenter = false,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
                     )
@@ -447,7 +631,11 @@ private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "КП и ещё $remainingScans $chipWord",
+                    text = if (waitingForCheckpoint) {
+                        "КП и ещё $remainingScans $chipWord"
+                    } else {
+                        "Осталось $remainingScans $chipWord"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.inverseOnSurface,
                 )
@@ -463,7 +651,7 @@ private fun HeroTimerCard(seconds: Float, total: Float, remainingScans: Int) {
 }
 
 @Composable
-private fun NfcBanner(modifier: Modifier = Modifier) {
+private fun NfcBanner(nfcAvailable: Boolean, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -472,23 +660,35 @@ private fun NfcBanner(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(22.dp)
-                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f), CircleShape),
+                .background(
+                    if (nfcAvailable) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)
+                    else MaterialTheme.colorScheme.errorContainer,
+                    CircleShape,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(MaterialTheme.colorScheme.tertiary, CircleShape)
+                    .background(
+                        if (nfcAvailable) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.error,
+                        CircleShape,
+                    )
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "NFC активен",
+                text = if (nfcAvailable) "NFC активен" else "NFC недоступен",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Приложите телефон к КП или чипу команды",
+                text = if (nfcAvailable) {
+                    "Приложите телефон к КП или чипу команды"
+                } else {
+                    "Сканирование NFC на этом устройстве недоступно"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

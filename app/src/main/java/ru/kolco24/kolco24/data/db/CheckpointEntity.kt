@@ -15,8 +15,10 @@ import androidx.room.PrimaryKey
  * `cost`/`description` directly with no `enc` and `locked = false`. After an offline reveal,
  * [CheckpointDao.reveal] clears [locked] to `false` (so `locked` always agrees with `cost == null`).
  *
- * [taken] is not part of the legend API (it comes from NFC marks, not built yet) — it defaults
- * to `false` and the future marks feature flips the data, not the schema.
+ * There is no `taken` flag here: "взято" is **team-scoped** (it depends on which team's marks are
+ * complete), while a checkpoint row is **race-scoped** and shared across that race's teams. Taken
+ * state is therefore derived from the selected team's complete marks (see [ru.kolco24.kolco24.data.takenPoints]),
+ * not persisted on the checkpoint — persisting it here leaked one team's progress onto another's.
  */
 @Entity(tableName = "checkpoints", indices = [Index("raceId")])
 data class CheckpointEntity(
@@ -29,5 +31,4 @@ data class CheckpointEntity(
     val locked: Boolean = false,
     val encIv: String? = null,
     val encCt: String? = null,
-    val taken: Boolean = false,
 )

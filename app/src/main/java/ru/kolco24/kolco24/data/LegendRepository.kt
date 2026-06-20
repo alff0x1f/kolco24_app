@@ -1,6 +1,8 @@
 package ru.kolco24.kolco24.data
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.FetchResult
@@ -43,6 +45,10 @@ class LegendRepository(
     fun checkpointsForRace(raceId: Int): Flow<List<CheckpointEntity>> =
         checkpointDao.observeCheckpointsForRace(raceId)
 
+    /** One-shot snapshot — re-reads after an offline [unlock] to get the just-revealed cost. */
+    suspend fun checkpointsSnapshot(raceId: Int): List<CheckpointEntity> =
+        checkpointDao.getCheckpointsForRace(raceId)
+
     /**
      * Fetches `/app/race/<raceId>/legend/` with the stored ETag and, on `200`, replaces that race's
      * checkpoints **and** tags, then saves the new ETag. Like [TeamRepository.refreshTeams], the data
@@ -81,7 +87,7 @@ class LegendRepository(
      * The 16-byte NFC [code] is hashed to a `bid` and looked up in [TagDao]; the [LegendCrypto] engine
      * does the actual crypto (this method only owns the DB lookup, the entity→[EncBlob] map, and
      * persistence). Each revealed CP is written via [CheckpointDao.reveal] — `locked` is cleared to
-     * `false`; `taken` is left untouched (the unbuilt marks feature owns `taken`).
+     * `false`.
      *
      * @return an [UnlockOutcome]: [UnlockOutcome.Unknown] when no tag matches the `bid`,
      *   [UnlockOutcome.IdentityOnly] for an open-CP tag (nothing to decrypt),
@@ -100,12 +106,14 @@ class LegendRepository(
                 if (iv != null && ct != null) cp.id to EncBlob(iv, ct) else null
             }
             .toMap()
-        val result = LegendCrypto.unlock(
-            code = code,
-            tag = UnlockTag(tagEntity.point, tagEntity.iv, tagEntity.ct),
-            encById = encById,
-            json = json,
-        )
+        val result = withContext(Dispatchers.Default) {
+            LegendCrypto.unlock(
+                code = code,
+                tag = UnlockTag(tagEntity.point, tagEntity.iv, tagEntity.ct),
+                encById = encById,
+                json = json,
+            )
+        }
         return when (result) {
             is UnlockResult.Revealed -> {
                 for (cp in result.checkpoints) {
@@ -140,7 +148,7 @@ sealed interface UnlockOutcome {
 /**
  * Maps a network DTO to the persisted entity, stamping the owning [raceId]. A locked CP arrives with
  * an `enc` envelope and no `cost`/`description`; an open CP carries its content directly.
- * `taken` starts `false`. [CheckpointDao.replaceAllForRace] preserves any prior offline reveal.
+ * [CheckpointDao.replaceAllForRace] preserves any prior offline reveal.
  */
 private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEntity(
     id = id,
