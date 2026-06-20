@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
 import ru.kolco24.kolco24.data.nfc.chipCodeFromNdef
@@ -483,7 +484,14 @@ private fun Kolco24AppRoot() {
                     // readChipCode is blocking NfcA I/O; unlock is a suspend DAO+crypto path.
                     val code = withContext(Dispatchers.IO) { readChipCode(tag) }
                     val unlock = if (code != null) legendRepo.unlock(raceId, code) else null
-                    val event = classifyTag(code, uid, unlock, scanBindings, checkpointsById)
+                    // If unlock just revealed a locked CP, checkpointsById is a stale Compose snapshot
+                    // (recomposition hasn't fired yet), so re-read from the DAO to get the fresh cost.
+                    val localCheckpointsById = if (unlock is UnlockOutcome.Revealed) {
+                        legendRepo.checkpointsSnapshot(raceId).associateBy { it.id }
+                    } else {
+                        checkpointsById
+                    }
+                    val event = classifyTag(code, uid, unlock, scanBindings, localCheckpointsById)
                     val now = System.currentTimeMillis()
                     val expired = scanTake.lastScanAt != 0L &&
                         (now - scanTake.lastScanAt) >= SCAN_WINDOW_MS

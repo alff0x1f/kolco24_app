@@ -45,6 +45,10 @@ class LegendRepository(
     fun checkpointsForRace(raceId: Int): Flow<List<CheckpointEntity>> =
         checkpointDao.observeCheckpointsForRace(raceId)
 
+    /** One-shot snapshot — re-reads after an offline [unlock] to get the just-revealed cost. */
+    suspend fun checkpointsSnapshot(raceId: Int): List<CheckpointEntity> =
+        checkpointDao.getCheckpointsForRace(raceId)
+
     /**
      * Fetches `/app/race/<raceId>/legend/` with the stored ETag and, on `200`, replaces that race's
      * checkpoints **and** tags, then saves the new ETag. Like [TeamRepository.refreshTeams], the data
