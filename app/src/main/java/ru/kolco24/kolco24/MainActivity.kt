@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -136,7 +137,38 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Set the real window background to match the persisted theme before the first Compose
+        // frame is painted. This eliminates any unstyled-surface flash between activity creation
+        // and the first Compose draw. The preview/starting window is disabled via
+        // windowDisablePreview in themes.xml, so no OS-mode-based colour flash occurs when
+        // the stored theme differs from the system dark mode.
+        val storedMode = (applicationContext as Kolco24App).container.themePreference.mode.value
+        val systemNight = resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        window.decorView.setBackgroundColor(
+            if (storedMode.isDark(systemNight))
+                android.graphics.Color.parseColor("#201A19")  // SurfaceDark
+            else
+                android.graphics.Color.parseColor("#EEF0F3")  // SurfaceLight
+        )
+        // Apply the resolved theme style immediately so that on API 26-28 the nav-bar
+        // scrim colour matches the app theme rather than the OS mode. auto() preserves
+        // gesture-navigation transparency on API 29+ while still supplying the correct
+        // scrim on API 26-28.
+        val resolvedDark = storedMode.isDark(systemNight)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+                detectDarkMode = { resolvedDark },
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.argb(0xe6, 0xff, 0xff, 0xff),
+                android.graphics.Color.argb(0x80, 0x1b, 0x1b, 0x1b),
+                detectDarkMode = { resolvedDark },
+            ),
+        )
         setContent {
             // Single subscription point for the persisted theme preference: collect once here,
             // apply via Kolco24Theme, and thread the mode + setter down as params (no second
