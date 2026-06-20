@@ -1,6 +1,9 @@
 package ru.kolco24.kolco24.ui.scan
 
 import android.nfc.Tag
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -116,8 +119,10 @@ fun ScanScreen(
                             // also starts fresh instead of extending the stale one.
                             val effectiveSession = if (session != null &&
                                 (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
+                            // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
+                            // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
+                            // so the ring must keep counting down rather than flash back to full.
                             session = reduce(effectiveSession, event, now)
-                            remainingMillis = SCAN_WINDOW_MS
                         }
                     }
                 }
@@ -539,6 +544,13 @@ private fun HeroTimerCard(
     waitingForCheckpoint: Boolean,
 ) {
     val pct = if (total > 0f) (seconds / total).coerceIn(0f, 1f) else 0f
+    // The timer ticks every TIMER_TICK_MS, so pct arrives in steps. Tween between steps (linear, one
+    // tick long) so the ring sweeps smoothly instead of jumping every 250 ms.
+    val animatedPct by animateFloatAsState(
+        targetValue = pct,
+        animationSpec = tween(durationMillis = TIMER_TICK_MS.toInt(), easing = LinearEasing),
+        label = "timerRing",
+    )
     val ringColor = if (seconds < 5f) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
     val trackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.12f)
     val chipWord = when {
@@ -575,7 +587,7 @@ private fun HeroTimerCard(
                     drawArc(
                         color = ringColor,
                         startAngle = -90f,
-                        sweepAngle = 360f * pct,
+                        sweepAngle = 360f * animatedPct,
                         useCenter = false,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
                     )

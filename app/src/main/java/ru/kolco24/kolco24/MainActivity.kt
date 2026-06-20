@@ -241,6 +241,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
  *
  * - [markId]/[point]/[expectedCount] describe the open take row (set on the КП scan).
  * - [buffer] holds member slots scanned **before** the КП chip; it is drained into [MarkRepository.startKpTake].
+ * - [present] mirrors the slots already credited to the open take so a re-scan of an already-counted
+ *   member is idempotent and does **not** refresh [lastScanAt] (mirrors [reduce]).
  * - [lastScanAt] lazily detects window expiry (a scan more than [SCAN_WINDOW_MS] after the previous one
  *   starts a new take), keeping the persisted rows in step with the UI's timer-driven finalize.
  */
@@ -249,6 +251,7 @@ private class ScanTakeState {
     var point: Int? = null
     var expectedCount: Int = 0
     val buffer = mutableSetOf<Int>()
+    val present = mutableSetOf<Int>()
     var lastScanAt: Long = 0L
 }
 
@@ -566,6 +569,9 @@ private fun Kolco24AppRoot() {
                                 scanTake.markId = id
                                 scanTake.point = event.point
                                 scanTake.expectedCount = rosterSize
+                                // The buffered members were drained into the take's present-set.
+                                scanTake.present.clear()
+                                scanTake.present.addAll(buffered)
                                 scanTake.buffer.clear()
                             }
                             scanTake.lastScanAt = now
@@ -575,13 +581,18 @@ private fun Kolco24AppRoot() {
                                 scanTake.markId = null
                                 scanTake.point = null
                                 scanTake.buffer.clear()
+                                scanTake.present.clear()
                             }
                             val markId = scanTake.markId
                             val point = scanTake.point
                             if (markId == null || point == null) {
-                                // No KP yet: hold the member until the КП chip lands.
-                                scanTake.buffer.add(event.numberInTeam)
+                                // No KP yet: hold the member until the КП chip lands. A re-tap of an
+                                // already-buffered member is idempotent and must not refresh the window.
+                                if (!scanTake.buffer.add(event.numberInTeam)) return@onScanTag event
                             } else {
+                                // A re-tap of an already-credited member is idempotent and must not
+                                // refresh the window (else one person could keep the take alive alone).
+                                if (!scanTake.present.add(event.numberInTeam)) return@onScanTag event
                                 container.applicationScope.async {
                                     markRepo.addMember(
                                         markId = markId,

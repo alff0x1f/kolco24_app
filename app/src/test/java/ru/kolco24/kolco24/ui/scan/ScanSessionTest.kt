@@ -32,13 +32,22 @@ class ScanSessionTest {
     }
 
     @Test
-    fun member_isIdempotent() {
+    fun member_isIdempotent_andDoesNotRefreshWindow() {
         var s = reduce(null, kp(), now = 0L)
         s = reduce(s, ScanEvent.Member(1), now = 100L)
         s = reduce(s, ScanEvent.Member(1), now = 200L)
         assertEquals(setOf(1), s!!.present)
-        // a repeated member still refreshes the window
-        assertEquals(200L, s.lastScanAt)
+        // A re-scan of an already-present member must NOT refresh the window — otherwise one
+        // person could keep the 20 s timer alive alone by re-tapping their own chip.
+        assertEquals(100L, s.lastScanAt)
+    }
+
+    @Test
+    fun member_beforeKp_repeat_doesNotRefreshWindow() {
+        var s = reduce(null, ScanEvent.Member(1), now = 100L)
+        s = reduce(s, ScanEvent.Member(1), now = 200L)
+        assertEquals(setOf(1), s!!.bufferedBeforeKp)
+        assertEquals(100L, s.lastScanAt)
     }
 
     @Test

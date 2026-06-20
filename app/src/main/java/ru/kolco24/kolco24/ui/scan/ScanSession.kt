@@ -76,11 +76,14 @@ sealed interface ScanEvent {
  *   scan just re-stamps the window.
  * - [ScanEvent.Member] goes to the buffer while [ScanSession.point] is null, otherwise straight into
  *   `present`; set-semantics make a repeated member idempotent. A member scanned with no session yet
- *   starts one (so pre-KP bracelets are not lost).
+ *   starts one (so pre-KP bracelets are not lost). Re-scanning a member who is **already** counted
+ *   does **not** refresh the window — otherwise one person could keep the 20 s timer alive
+ *   indefinitely by re-tapping their own chip while walking back to the team.
  * - [ScanEvent.UnboundChip] / [ScanEvent.BadKp] are ignored — the session (and its window) is
  *   returned unchanged, so a stray tap never extends the 20 s timer.
  *
- * Any accepted scan refreshes [ScanSession.lastScanAt] to [now].
+ * Any scan that adds new information (a KP or a not-yet-counted member) refreshes
+ * [ScanSession.lastScanAt] to [now]; an idempotent re-scan leaves the window untouched.
  */
 fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = when (event) {
     is ScanEvent.Kp -> {
@@ -103,9 +106,13 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
     is ScanEvent.Member -> {
         val base = session ?: ScanSession.empty(now)
         if (base.point == null) {
-            base.copy(bufferedBeforeKp = base.bufferedBeforeKp + event.numberInTeam, lastScanAt = now)
+            // Already buffered → idempotent, leave the window alone.
+            if (event.numberInTeam in base.bufferedBeforeKp) base
+            else base.copy(bufferedBeforeKp = base.bufferedBeforeKp + event.numberInTeam, lastScanAt = now)
         } else {
-            base.copy(present = base.present + event.numberInTeam, lastScanAt = now)
+            // Already present → idempotent, leave the window alone.
+            if (event.numberInTeam in base.present) base
+            else base.copy(present = base.present + event.numberInTeam, lastScanAt = now)
         }
     }
 
