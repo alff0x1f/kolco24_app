@@ -401,7 +401,7 @@ private fun CheckpointRow(cp: CheckpointEntity, taken: Boolean, isLast: Boolean)
                 .fillMaxHeight()
                 .background(barColor),
         )
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             // A locked CP keeps its plaintext on the server until an NFC scan reveals it, so the row
             // is masked: a lock chip + the bare КП number, with the description shown as skeleton bars
             // (screen A2b in docs/design — see `LockedLegendRow`) instead of any real text.

@@ -95,6 +95,7 @@ class LegendRepositoryTest {
         assertEquals(1, cp.number)
         assertEquals(10, cp.cost)
         assertEquals("kp", cp.type)
+        assertEquals("", cp.color)
 
         assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/legend"))
     }
