@@ -95,6 +95,7 @@ fun ScanScreen(
     fun finalizeSession() {
         session = null
         remainingMillis = SCAN_WINDOW_MS
+        diagnostic = null
     }
 
     DisposableEffect(activity, scope) {

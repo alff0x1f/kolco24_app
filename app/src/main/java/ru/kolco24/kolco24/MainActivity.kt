@@ -486,7 +486,7 @@ private fun Kolco24AppRoot() {
                     val event = classifyTag(code, uid, unlock, scanBindings, checkpointsById)
                     val now = System.currentTimeMillis()
                     val expired = scanTake.lastScanAt != 0L &&
-                        (now - scanTake.lastScanAt) > SCAN_WINDOW_MS
+                        (now - scanTake.lastScanAt) >= SCAN_WINDOW_MS
                     when (event) {
                         is ScanEvent.Kp -> {
                             // A new KP, an expired window, or a switch of CP starts a fresh take row;
