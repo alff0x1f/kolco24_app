@@ -1,11 +1,21 @@
 package ru.kolco24.kolco24.ui.theme
 
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
+
+// Nav-bar scrim colours used on API 26-28 where transparency is not supported.
+// These match the defaults that enableEdgeToEdge() uses when called without arguments.
+private val LightNavScrim = android.graphics.Color.argb(0xe6, 0xff, 0xff, 0xff)
+private val DarkNavScrim  = android.graphics.Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 
 private val LightColorScheme = lightColorScheme(
     primary              = BrandRed,
@@ -62,6 +72,29 @@ fun Kolco24Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        DisposableEffect(darkTheme) {
+            // Re-apply the full SystemBarStyle when the theme changes so that on API 26-28
+            // the nav-bar scrim colour stays in sync with the resolved app theme rather than
+            // remaining OS-mode-based from the enableEdgeToEdge() call in onCreate.
+            // auto() preserves gesture-navigation transparency on API 29+ while still
+            // supplying the correct scrim on API 26-28.
+            (view.context as? ComponentActivity)?.enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT,
+                    detectDarkMode = { darkTheme },
+                ),
+                navigationBarStyle = SystemBarStyle.auto(
+                    LightNavScrim,
+                    DarkNavScrim,
+                    detectDarkMode = { darkTheme },
+                ),
+            )
+            onDispose {}
+        }
+    }
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,

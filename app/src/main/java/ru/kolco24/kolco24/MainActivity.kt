@@ -12,8 +12,10 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -97,6 +99,8 @@ import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.theme.ThemeMode
+import ru.kolco24.kolco24.ui.theme.isDark
 
 /** Whether the device can currently read NFC tags, readable by composables for the bind UI. */
 enum class NfcState { NoHardware, Disabled, Available }
@@ -133,10 +137,49 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Set the real window background to match the persisted theme before the first Compose
+        // frame is painted. This eliminates any unstyled-surface flash between activity creation
+        // and the first Compose draw. The preview/starting window is disabled via
+        // windowDisablePreview in themes.xml, so no OS-mode-based colour flash occurs when
+        // the stored theme differs from the system dark mode.
+        val storedMode = (applicationContext as Kolco24App).container.themePreference.mode.value
+        val systemNight = resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        window.decorView.setBackgroundColor(
+            if (storedMode.isDark(systemNight))
+                android.graphics.Color.parseColor("#201A19")  // SurfaceDark
+            else
+                android.graphics.Color.parseColor("#EEF0F3")  // SurfaceLight
+        )
+        // Apply the resolved theme style immediately so that on API 26-28 the nav-bar
+        // scrim colour matches the app theme rather than the OS mode. auto() preserves
+        // gesture-navigation transparency on API 29+ while still supplying the correct
+        // scrim on API 26-28.
+        val resolvedDark = storedMode.isDark(systemNight)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+                detectDarkMode = { resolvedDark },
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.argb(0xe6, 0xff, 0xff, 0xff),
+                android.graphics.Color.argb(0x80, 0x1b, 0x1b, 0x1b),
+                detectDarkMode = { resolvedDark },
+            ),
+        )
         setContent {
-            Kolco24Theme {
-                Kolco24AppRoot()
+            // Single subscription point for the persisted theme preference: collect once here,
+            // apply via Kolco24Theme, and thread the mode + setter down as params (no second
+            // collectAsState deeper in the tree).
+            val container = remember { (applicationContext as Kolco24App).container }
+            val mode by container.themePreference.mode.collectAsState()
+            Kolco24Theme(darkTheme = mode.isDark(isSystemInDarkTheme())) {
+                Kolco24AppRoot(
+                    themeMode = mode,
+                    onThemeModeChange = { container.themePreference.setMode(it) },
+                )
             }
         }
         // Cold/background launch from an NFC tap: the launching intent already carries the tag's
@@ -273,7 +316,10 @@ private data class PickerTeamsState(
 )
 
 @Composable
-private fun Kolco24AppRoot() {
+private fun Kolco24AppRoot(
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+) {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
@@ -637,6 +683,8 @@ private fun Kolco24AppRoot() {
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
                 },
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the
