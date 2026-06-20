@@ -36,6 +36,13 @@ val InverseOnSurface = Color(0xFFF4F6F9)
 val OrangeCta = Color(0xFFC65A2E)
 val InversePrimary   = Color(0xFFFFB4AB)
 
+// Checkpoint color-bar palette (legend leading bar). Saturated single shade,
+// same in light & dark. Green reuses Tertiary, orange reuses OrangeCta.
+val CpColorRed    = Color(0xFFE53935)
+val CpColorBlue   = Color(0xFF1E88E5)
+val CpColorYellow = Color(0xFFF4B400)
+val CpColorPurple = Color(0xFF8E44AD)
+
 val ErrorLight      = Color(0xFFBA1A1A)
 val OnErrorLight    = Color(0xFFFFFFFF)
 val ErrorContainer  = Color(0xFFFFDAD6)

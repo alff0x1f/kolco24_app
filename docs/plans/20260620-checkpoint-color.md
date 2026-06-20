@@ -102,8 +102,8 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/theme/Color.kt`
 
-- [ ] Add the four new `Color` vals (red `#E53935`, blue `#1E88E5`, yellow `#F4B400`, purple `#8E44AD`) with clear names (e.g. `CpColorRed`, `CpColorBlue`, `CpColorYellow`, `CpColorPurple`). Reuse existing `Tertiary` (green) and `OrangeCta` (orange) — do not duplicate.
-- [ ] No test (static color constants).
+- [x] Add the four new `Color` vals (red `#E53935`, blue `#1E88E5`, yellow `#F4B400`, purple `#8E44AD`) with clear names (e.g. `CpColorRed`, `CpColorBlue`, `CpColorYellow`, `CpColorPurple`). Reuse existing `Tertiary` (green) and `OrangeCta` (orange) — do not duplicate.
+- [x] No test (static color constants).
 
 ### Task 5: Pure token parser + JVM tests
 
