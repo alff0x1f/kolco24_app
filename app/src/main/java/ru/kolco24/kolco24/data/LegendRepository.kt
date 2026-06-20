@@ -87,7 +87,7 @@ class LegendRepository(
      * The 16-byte NFC [code] is hashed to a `bid` and looked up in [TagDao]; the [LegendCrypto] engine
      * does the actual crypto (this method only owns the DB lookup, the entity→[EncBlob] map, and
      * persistence). Each revealed CP is written via [CheckpointDao.reveal] — `locked` is cleared to
-     * `false`; `taken` is left untouched (the unbuilt marks feature owns `taken`).
+     * `false`.
      *
      * @return an [UnlockOutcome]: [UnlockOutcome.Unknown] when no tag matches the `bid`,
      *   [UnlockOutcome.IdentityOnly] for an open-CP tag (nothing to decrypt),
@@ -148,7 +148,7 @@ sealed interface UnlockOutcome {
 /**
  * Maps a network DTO to the persisted entity, stamping the owning [raceId]. A locked CP arrives with
  * an `enc` envelope and no `cost`/`description`; an open CP carries its content directly.
- * `taken` starts `false`. [CheckpointDao.replaceAllForRace] preserves any prior offline reveal.
+ * [CheckpointDao.replaceAllForRace] preserves any prior offline reveal.
  */
 private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEntity(
     id = id,

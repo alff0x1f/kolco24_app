@@ -467,7 +467,7 @@ private fun ChipSlot(chip: ScanChip) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Чип ${chip.chipId}",
+                    text = "Чип ${chip.chipId ?: "—"}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
