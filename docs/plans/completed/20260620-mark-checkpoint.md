@@ -249,8 +249,8 @@ fun classifyTag(
 - [x] полный прогон: `./gradlew lintDebug testDebugUnitTest` — зелёно. `connectedDebugAndroidTest` (миграция/DAO) пропущен — нет эмулятора/устройства; instrumented-тесты (`MigrationTest` 5→6, `CheckpointDaoTest` preserve taken) написаны, SQL `MIGRATION_5_6` сверен с `6.json` при сборке.
 
 ### Task 10: [Final] Документация
-- [ ] обновить CLAUDE.md: запись про `marks`/`MarkEntity`/`MarkDao`/`IntListConverter`, `MarkRepository`, Room v6 + `MIGRATION_5_6`, хук `onTagForMark` и приоритеты, живой `ScanScreen` (сессия/таймер/reduce), `MarksScreen` на реальных данных, preserve `taken` в `replaceAllForRace`.
-- [ ] переместить план в `docs/plans/completed/`.
+- [x] обновить CLAUDE.md: запись про `marks`/`MarkEntity`/`MarkDao`/`IntListConverter`, `MarkRepository`, Room v6 + `MIGRATION_5_6`, хук `onTagForMark` и приоритеты, живой `ScanScreen` (сессия/таймер/reduce + `ScanSession`/`classifyTag`), `MarksScreen` на реальных данных, preserve `taken` в `replaceAllForRace`.
+- [x] переместить план в `docs/plans/completed/`.
 
 ## Post-Completion
 
