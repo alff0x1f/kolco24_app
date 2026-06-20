@@ -33,7 +33,7 @@ data class CheckpointDto(
     val type: String,
     val description: String? = null,
     val enc: EncDto? = null,
-    val color: String = "",
+    val color: String? = null,
 )
 
 /** AES-256-GCM envelope: `iv` (12 bytes, Base64) + `ct` (`ciphertext || tag(16)`, Base64). */

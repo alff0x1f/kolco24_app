@@ -141,7 +141,23 @@ class LegendResponseTest {
         val response = json.decodeFromString<LegendResponse>(payload)
 
         assertEquals("red", response.checkpoints[0].color)
-        assertEquals("", response.checkpoints[1].color)
+        assertNull(response.checkpoints[1].color)
+    }
+
+    @Test
+    fun checkpointColor_nullInJsonParsesAsNull() {
+        val payload = """
+            {
+              "race": 8,
+              "checkpoints": [
+                {"id": 1, "number": 1, "cost": 5, "type": "kp", "description": "A", "color": null}
+              ]
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<LegendResponse>(payload)
+
+        assertNull(response.checkpoints[0].color)
     }
 
     @Test

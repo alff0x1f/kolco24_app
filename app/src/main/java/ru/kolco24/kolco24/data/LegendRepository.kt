@@ -161,7 +161,7 @@ private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEn
     locked = enc != null,
     encIv = enc?.iv,
     encCt = enc?.ct,
-    color = color,
+    color = color ?: "",
 )
 
 /** Maps a `tags[]` DTO to its persisted entity (1:1), stamping the owning [raceId]. */
