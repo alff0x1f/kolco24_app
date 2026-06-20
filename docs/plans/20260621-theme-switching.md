@@ -114,11 +114,11 @@
 - [x] run `./gradlew testDebugUnitTest` and `./gradlew lintDebug` — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify all three modes apply correctly and override the system setting
-- [ ] verify default (fresh install / empty prefs) is SYSTEM — no behavior regression
-- [ ] verify chosen mode survives process death / app restart (synchronous read, no flash)
-- [ ] run full unit suite: `./gradlew testDebugUnitTest`
-- [ ] run lint: `./gradlew lintDebug`
+- [x] verify all three modes apply correctly and override the system setting (manual on-device test — skipped, not automatable; logic covered by ThemeModeTest)
+- [x] verify default (fresh install / empty prefs) is SYSTEM — no behavior regression (manual on-device test — skipped, not automatable; covered by ThemePreferenceTest default-empty case)
+- [x] verify chosen mode survives process death / app restart (synchronous read, no flash) (manual on-device test — skipped, not automatable; covered by ThemePreferenceTest pre-seeded case)
+- [x] run full unit suite: `./gradlew testDebugUnitTest` — passed
+- [x] run lint: `./gradlew lintDebug` — passed
 
 ### Task 6: [Final] Update documentation
 - [ ] update `CLAUDE.md`: document `ThemeMode.kt`, `ThemePreference.kt`, the `AppContainer.themePreference` member, the `MainActivity` theme application, and the new `SettingsScreen` «Внешний вид» card/params
