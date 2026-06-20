@@ -332,6 +332,9 @@ private fun Kolco24AppRoot() {
     val legendCheckpoints by remember(selectedRaceId) {
         selectedRaceId?.let { legendRepo.checkpointsForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+    // Guard: collectAsState does not reset on key change — filter stale checkpoints from the
+    // prior race during the brief window before the new flow emits (mirrors the safeMarks guard).
+    val safeCheckpoints = if (selectedRaceId != null) legendCheckpoints.filter { it.raceId == selectedRaceId } else emptyList()
 
     // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
     val bindingsList by remember(selectedTeamId) {
@@ -343,20 +346,29 @@ private fun Kolco24AppRoot() {
     val marks by remember(selectedTeamId) {
         selectedTeamId?.let { markRepo.observeMarks(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+    // Guard: collectAsState does not reset on key change — filter stale marks from the prior team
+    // during the brief window before the new flow emits (mirrors the scanRoster/scanBindings guard).
+    val safeMarks = if (selectedTeamId != null) marks.filter { it.teamId == selectedTeamId } else emptyList()
     // "Взято" is team-scoped: derive it from THIS team's complete marks, never off the race-shared
     // checkpoint row — otherwise switching teams within a race would show the prior team's progress.
-    val takenIds = remember(marks) { takenPoints(marks) }
+    val takenIds = remember(safeMarks) { takenPoints(safeMarks) }
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
-    val scanRoster = teamForTab?.members ?: emptyList()
+    // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
+    // only seeded with `initial` on first composition). During the brief window after a team switch
+    // where bindingsList / teamForTab are still the previous team's data, filter on the current
+    // selectedTeamId so stale chips from team A are not credited to team B's mark.
+    val scanRoster = if (teamForTab?.id == selectedTeamId) teamForTab?.members ?: emptyList() else emptyList()
     // Only the current roster's slots may count toward a take. A binding left over from a member who
     // was since removed from the roster (its numberInTeam no longer present) is excluded, so a stale
     // chip reads as UnboundChip instead of silently substituting for a real, un-scanned participant.
     val rosterSlots = remember(scanRoster) { scanRoster.mapTo(HashSet()) { it.numberInTeam } }
-    val scanBindings = remember(bindingsList, rosterSlots) {
-        bindingsList.filter { it.numberInTeam in rosterSlots }.associate { it.nfcUid to it.numberInTeam }
+    val scanBindings = remember(bindingsList, rosterSlots, selectedTeamId) {
+        bindingsList
+            .filter { it.teamId == selectedTeamId && it.numberInTeam in rosterSlots }
+            .associate { it.nfcUid to it.numberInTeam }
     }
-    val checkpointsById = remember(legendCheckpoints) { legendCheckpoints.associateBy { it.id } }
+    val checkpointsById = remember(safeCheckpoints) { safeCheckpoints.associateBy { it.id } }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
@@ -446,7 +458,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
-                        marks = marks,
+                        marks = safeMarks,
                         nfcAvailable = nfcActiveForScan,
                         onScanClick = {
                             // Scanning needs a resolved team with a roster. With no team (or a
@@ -463,7 +475,7 @@ private fun Kolco24AppRoot() {
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
-                        checkpoints = legendCheckpoints,
+                        checkpoints = safeCheckpoints,
                         hasTeam = teamState !is SelectedTeamState.None,
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
                         takenIds = takenIds,
@@ -499,7 +511,7 @@ private fun Kolco24AppRoot() {
                 roster = scanRoster,
                 bindings = scanBindings,
                 nfcAvailable = nfcActiveForScan,
-                onScanTag = onScanTag@{ tag ->
+                onScanTag = onScanTag@{ tag, now ->
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
                     // raceId/teamId come from the selection pointer, which survives the team row going
@@ -512,15 +524,17 @@ private fun Kolco24AppRoot() {
                     // readChipCode is blocking NfcA I/O; unlock is a suspend DAO+crypto path.
                     val code = withContext(Dispatchers.IO) { readChipCode(tag) }
                     val unlock = if (code != null) legendRepo.unlock(raceId, code) else null
-                    // If unlock just revealed a locked CP, checkpointsById is a stale Compose snapshot
-                    // (recomposition hasn't fired yet), so re-read from the DAO to get the fresh cost.
-                    val localCheckpointsById = if (unlock is UnlockOutcome.Revealed) {
-                        legendRepo.checkpointsSnapshot(raceId).associateBy { it.id }
-                    } else {
-                        checkpointsById
-                    }
+                    // For Revealed, checkpointsById is stale (recomposition hasn't fired) so we always
+                    // re-read from the DAO. For IdentityOnly we also re-read: if the legend hasn't
+                    // emitted its first batch yet (cold start), checkpointsById is still empty and
+                    // the DAO snapshot is the only source that has the CP's cost.
+                    val localCheckpointsById =
+                        if (unlock is UnlockOutcome.Revealed || unlock is UnlockOutcome.IdentityOnly) {
+                            legendRepo.checkpointsSnapshot(raceId).associateBy { it.id }
+                        } else {
+                            checkpointsById
+                        }
                     val event = classifyTag(code, uid, unlock, scanBindings, localCheckpointsById)
-                    val now = System.currentTimeMillis()
                     val expired = scanTake.lastScanAt != 0L &&
                         (now - scanTake.lastScanAt) >= SCAN_WINDOW_MS
                     when (event) {

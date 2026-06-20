@@ -80,7 +80,7 @@ fun ScanScreen(
     roster: List<TeamMemberItem>,
     bindings: Map<String, Int>,
     nfcAvailable: Boolean,
-    onScanTag: suspend (Tag) -> ScanEvent,
+    onScanTag: suspend (Tag, Long) -> ScanEvent,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -100,16 +100,23 @@ fun ScanScreen(
 
     DisposableEffect(activity, scope) {
         activity?.onTagForMark = { tag ->
+            // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
+            // slow NFC or DB work is dated when the user tapped, not when processing starts.
+            val now = System.currentTimeMillis()
             scope.launch {
                 scanMutex.withLock {
-                    val event = currentOnScanTag(tag)
-                    val now = System.currentTimeMillis()
+                    val event = currentOnScanTag(tag, now)
                     when (event) {
                         ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
                         is ScanEvent.BadKp -> diagnostic = event.reason
                         else -> {
                             diagnostic = null
-                            session = reduce(session, event, now)
+                            // If the 20 s window had already elapsed at tap time, the DB side
+                            // started a fresh take; discard the expired UI session so reduce
+                            // also starts fresh instead of extending the stale one.
+                            val effectiveSession = if (session != null &&
+                                (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
+                            session = reduce(effectiveSession, event, now)
                             remainingMillis = SCAN_WINDOW_MS
                         }
                     }
@@ -130,7 +137,13 @@ fun ScanScreen(
             val remaining = SCAN_WINDOW_MS - (System.currentTimeMillis() - lastScanAt)
             remainingMillis = remaining.coerceAtLeast(0L)
             if (remaining <= 0L) {
-                finalizeSession()
+                // A scan coroutine may be suspended inside scanMutex right at the deadline (e.g.
+                // awaiting a DB write after its IO finished). Wait for it to complete; if the scan
+                // extended the window (updated session.lastScanAt), skip finalization — the new
+                // LaunchedEffect will pick it up.
+                scanMutex.withLock {
+                    if (session?.lastScanAt == lastScanAt) finalizeSession()
+                }
                 break
             }
             delay(TIMER_TICK_MS)
