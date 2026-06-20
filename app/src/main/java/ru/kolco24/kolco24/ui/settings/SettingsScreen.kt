@@ -250,7 +250,7 @@ private fun ThemeDialog(
                     ) {
                         RadioButton(
                             selected = mode == currentMode,
-                            onClick = { onSelect(mode) },
+                            onClick = null,
                         )
                         Text(
                             text = themeModeLabel(mode),
