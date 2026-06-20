@@ -92,13 +92,13 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }` to `AppContainer`
-- [ ] in the `setContent { }` lambda, add `val container = remember { (applicationContext as Kolco24App).container }` and `val mode by container.themePreference.mode.collectAsState()` (single subscription point)
-- [ ] pass `darkTheme = mode.isDark(isSystemInDarkTheme())` to `Kolco24Theme` (no change to `Theme.kt`)
-- [ ] add `themeMode: ThemeMode` + `onThemeModeChange: (ThemeMode) -> Unit` params to `Kolco24AppRoot` and pass `themeMode = mode`, `onThemeModeChange = { container.themePreference.setMode(it) }` from `setContent`
-- [ ] verify no behavior change at default (SYSTEM still follows the OS)
-- [ ] (no new unit tests — wiring only; covered by Task 1/2 logic tests and manual verification) — note rationale inline
-- [ ] run `./gradlew testDebugUnitTest` and `./gradlew lintDebug` — must pass before next task
+- [x] add `val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }` to `AppContainer`
+- [x] in the `setContent { }` lambda, add `val container = remember { (applicationContext as Kolco24App).container }` and `val mode by container.themePreference.mode.collectAsState()` (single subscription point)
+- [x] pass `darkTheme = mode.isDark(isSystemInDarkTheme())` to `Kolco24Theme` (no change to `Theme.kt`)
+- [x] add `themeMode: ThemeMode` + `onThemeModeChange: (ThemeMode) -> Unit` params to `Kolco24AppRoot` and pass `themeMode = mode`, `onThemeModeChange = { container.themePreference.setMode(it) }` from `setContent`
+- [x] verify no behavior change at default (SYSTEM still follows the OS) — default mode is SYSTEM, `isDark(systemDark)` returns `systemDark`, matching the prior `isSystemInDarkTheme()` behavior
+- [x] (no new unit tests — wiring only; covered by Task 1/2 logic tests and manual verification) — note rationale inline
+- [x] run `./gradlew testDebugUnitTest` and `./gradlew lintDebug` — must pass before next task
 
 ### Task 4: Settings UI — «Внешний вид» card, ThemeRow, ThemeDialog
 

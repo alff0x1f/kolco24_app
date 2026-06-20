@@ -12,6 +12,7 @@ import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.TeamRepository
+import ru.kolco24.kolco24.data.ThemePreference
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
@@ -94,6 +95,9 @@ class AppContainer(private val context: Context) {
             markDao = database.markDao(),
         )
     }
+
+    /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
+    val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }
 
     /** Long-lived scope for fire-and-forget background work (e.g. startup refresh). */
     val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -97,6 +98,8 @@ import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.theme.ThemeMode
+import ru.kolco24.kolco24.ui.theme.isDark
 
 /** Whether the device can currently read NFC tags, readable by composables for the bind UI. */
 enum class NfcState { NoHardware, Disabled, Available }
@@ -135,8 +138,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            Kolco24Theme {
-                Kolco24AppRoot()
+            // Single subscription point for the persisted theme preference: collect once here,
+            // apply via Kolco24Theme, and thread the mode + setter down as params (no second
+            // collectAsState deeper in the tree).
+            val container = remember { (applicationContext as Kolco24App).container }
+            val mode by container.themePreference.mode.collectAsState()
+            Kolco24Theme(darkTheme = mode.isDark(isSystemInDarkTheme())) {
+                Kolco24AppRoot(
+                    themeMode = mode,
+                    onThemeModeChange = { container.themePreference.setMode(it) },
+                )
             }
         }
         // Cold/background launch from an NFC tap: the launching intent already carries the tag's
@@ -273,7 +284,10 @@ private data class PickerTeamsState(
 )
 
 @Composable
-private fun Kolco24AppRoot() {
+private fun Kolco24AppRoot(
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+) {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
