@@ -223,12 +223,12 @@ fun classifyTag(
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] собрать `marks by remember(selectedTeamId){ markRepo.observeMarks(it) ?: flowOf(emptyList()) }.collectAsState(...)`.
-- [ ] инвертировать `bindings` в `Map<String, Int>` (`nfcUid → numberInTeam`) для `ScanScreen`; ростер = `teamForTab?.members`.
-- [ ] реализовать `onScanTag(tag)`: `readChipCode` → `unlock` / `normalizeNfcUid` → `classifyTag` → при `Kp` вызвать `markRepo.startKpTake(...)` (с буфером из текущей сессии), при `Member` → `markRepo.addMember(...)`; записи на `applicationScope`/IO, возврат `ScanEvent` для `reduce`.
-- [ ] пробросить в `ScanScreen` (overlay) `roster`/`bindings`/`nfcAvailable`/`onScanTag`; гард как у других overlay (`!showScan` и т.д. уже есть).
-- [ ] передать `marks` в `MarksScreen` (Task 8).
-- [ ] `./gradlew lintDebug` + ручная сборка — зелёно перед Task 8.
+- [x] собрать `marks by remember(selectedTeamId){ markRepo.observeMarks(it) ?: flowOf(emptyList()) }.collectAsState(...)`.
+- [x] инвертировать `bindings` в `Map<String, Int>` (`nfcUid → numberInTeam`) для `ScanScreen`; ростер = `teamForTab?.members`.
+- [x] реализовать `onScanTag(tag)`: `readChipCode` → `unlock` / `normalizeNfcUid` → `classifyTag` → при `Kp` вызвать `markRepo.startKpTake(...)` (с буфером из текущей сессии через `ScanTakeState`, окно истекает лениво по `SCAN_WINDOW_MS`), при `Member` → `markRepo.addMember(...)`; записи на `applicationScope.async{}.await()` (переживают закрытие overlay, но возвращают `id`), возврат `ScanEvent` для `reduce`.
+- [x] пробросить в `ScanScreen` (overlay) `roster`/`bindings`/`nfcAvailable`/`onScanTag`; гард как у других overlay (`!showScan` и т.д. уже есть).
+- [x] передать `marks` в `MarksScreen` — `marks` собран в `MainActivity` и готов; проброс в сигнатуру `MarksScreen` завершается в Task 8 (смена сигнатуры там же).
+- [x] `./gradlew lintDebug` + ручная сборка — зелёно перед Task 8.
 
 ### Task 8: Вкладки Отметки и Легенда на реальных данных
 
