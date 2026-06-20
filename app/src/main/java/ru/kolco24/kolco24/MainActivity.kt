@@ -77,6 +77,7 @@ import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.ScanScreen
+import ru.kolco24.kolco24.ui.scan.ScanEvent
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
 import ru.kolco24.kolco24.ui.settings.WriteChipDialog
 import ru.kolco24.kolco24.ui.settings.WriteChipState
@@ -433,7 +434,14 @@ private fun Kolco24AppRoot() {
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
         BackHandler(enabled = showScan) { showScan = false; showSettings = false }
         if (showScan) {
-            ScanScreen(onClose = { showScan = false; showSettings = false }, modifier = Modifier.fillMaxSize())
+            ScanScreen(
+                roster = emptyList(),
+                bindings = emptyMap(),
+                nfcAvailable = nfcAvailable,
+                onScanTag = { ScanEvent.BadKp("stub") },
+                onClose = { showScan = false; showSettings = false },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         // Settings overlay — sits beneath the picker/scan overlays (rendered before them, so they draw

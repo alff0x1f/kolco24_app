@@ -210,13 +210,13 @@ fun classifyTag(
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (только обновить вызов под новую сигнатуру — иначе `assembleDebug` не соберётся)
 
-- [ ] удалить `MOCK_SCAN_CHIPS`; новая сигнатура: `ScanScreen(roster: List<TeamMemberItem>, bindings: Map<String, Int>, nfcAvailable: Boolean, onScanTag: suspend (Tag) -> ScanEvent, onClose: () -> Unit)`.
-- [ ] **обновить вызов `ScanScreen(...)` в `MainActivity`** с временной заглушкой `onScanTag = { ScanEvent.BadKp("stub") }` и `roster=emptyList()`/`bindings=emptyMap()`, чтобы `assembleDebug` оставался зелёным на границе задачи; реальная сборка состояния и `onScanTag` — Task 7.
-- [ ] `var session by remember { mutableStateOf<ScanSession?>(null) }`; `DisposableEffect` ставит/снимает `activity.onTagForMark` (callback вызывает `onScanTag` в `scope.launch`, затем `reduce`).
-- [ ] таймер: `LaunchedEffect(session?.lastScanAt)` тик ~250 мс, `remaining`, `<=0` → finalize (`session = null` + закрытие сессии в репо).
-- [ ] рендер на существующих компонентах: `CpWaitingCard` (point==null → «приложите чип КП», иначе номер+стоимость); `ChipGrid` из `roster` (зелёный=present, непривязан=«чип не привязан»); `HeroTimerCard` с реальным `remaining`/остатком; строка/тост на `UnboundChip`/`BadKp`.
-- [ ] «Готово» enabled при `session != null` → finalize + `onClose`; правило: окно истекло и `point==null` → молча ничего не коммитим.
-- [ ] (UI; pure-части протестированы в Task 4) — собрать `assembleDebug`, `./gradlew lintDebug` — зелёно перед Task 7.
+- [x] удалить `MOCK_SCAN_CHIPS`; новая сигнатура: `ScanScreen(roster: List<TeamMemberItem>, bindings: Map<String, Int>, nfcAvailable: Boolean, onScanTag: suspend (Tag) -> ScanEvent, onClose: () -> Unit)`.
+- [x] **обновить вызов `ScanScreen(...)` в `MainActivity`** с временной заглушкой `onScanTag = { ScanEvent.BadKp("stub") }` и `roster=emptyList()`/`bindings=emptyMap()`, чтобы `assembleDebug` оставался зелёным на границе задачи; реальная сборка состояния и `onScanTag` — Task 7.
+- [x] `var session by remember { mutableStateOf<ScanSession?>(null) }`; `DisposableEffect` ставит/снимает `activity.onTagForMark` (callback вызывает `onScanTag` в `scope.launch`, затем `reduce`).
+- [x] таймер: `LaunchedEffect(session?.lastScanAt)` тик ~250 мс, `remaining`, `<=0` → finalize (`session = null` + закрытие сессии в репо).
+- [x] рендер на существующих компонентах: `CpWaitingCard` (point==null → «приложите чип КП», иначе номер+стоимость); `ChipGrid` из `roster` (зелёный=present, непривязан=«чип не привязан»); `HeroTimerCard` с реальным `remaining`/остатком; строка/тост на `UnboundChip`/`BadKp`.
+- [x] «Готово» enabled при `session != null` → finalize + `onClose`; правило: окно истекло и `point==null` → молча ничего не коммитим.
+- [x] (UI; pure-части протестированы в Task 4) — собрать `assembleDebug`, `./gradlew lintDebug` — зелёно перед Task 7.
 
 ### Task 7: MainActivity — сборка состояния и проброс onScanTag
 
