@@ -651,6 +651,8 @@ private fun Kolco24AppRoot(
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
                 },
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the

@@ -106,12 +106,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add params `themeMode: ThemeMode` and `onThemeModeChange: (ThemeMode) -> Unit` to `SettingsScreen`
-- [ ] add «Внешний вид» `Surface` card with a `ThemeRow` (`Icons.Filled.Palette` avatar, title «Тема», subtitle = current mode label, chevron), mirroring `ChangeTeamRow` styling
-- [ ] add a private `ThemeDialog` (`AlertDialog`, 3 `RadioButton` rows: Системная/Светлая/Тёмная) toggled by a local `var showThemeDialog by remember { mutableStateOf(false) }`; selecting an option calls `onThemeModeChange` and closes the dialog
-- [ ] forward `Kolco24AppRoot`'s `themeMode`/`onThemeModeChange` params (added in Task 3) into the `SettingsScreen(...)` call — no new `collectAsState` here (single subscription stays at `setContent`)
-- [ ] (no unit tests — Compose host UI is untested per project convention; note inline) ; the label/mode mapping helper, if extracted, gets a test in `ThemeModeTest`
-- [ ] run `./gradlew testDebugUnitTest` and `./gradlew lintDebug` — must pass before next task
+- [x] add params `themeMode: ThemeMode` and `onThemeModeChange: (ThemeMode) -> Unit` to `SettingsScreen`
+- [x] add «Внешний вид» `Surface` card with a `ThemeRow` (`Icons.Filled.Palette` avatar, title «Тема», subtitle = current mode label, chevron), mirroring `ChangeTeamRow` styling
+- [x] add a private `ThemeDialog` (`AlertDialog`, 3 `RadioButton` rows: Системная/Светлая/Тёмная) toggled by a local `var showThemeDialog by remember { mutableStateOf(false) }`; selecting an option calls `onThemeModeChange` and closes the dialog
+- [x] forward `Kolco24AppRoot`'s `themeMode`/`onThemeModeChange` params (added in Task 3) into the `SettingsScreen(...)` call — no new `collectAsState` here (single subscription stays at `setContent`)
+- [x] (no unit tests — Compose host UI is untested per project convention; the `themeModeLabel` helper is a trivial inline `when`, not extracted to the pure model)
+- [x] run `./gradlew testDebugUnitTest` and `./gradlew lintDebug` — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify all three modes apply correctly and override the system setting
