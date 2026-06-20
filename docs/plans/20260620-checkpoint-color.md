@@ -111,10 +111,10 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/legend/CheckpointColor.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/legend/CheckpointColorTest.kt`
 
-- [ ] Create `CheckpointColor.kt` with `enum class CheckpointColor { RED, BLUE, GREEN, YELLOW, ORANGE, PURPLE }` and `fun parseCheckpointColor(token: String): CheckpointColor?` using `token.trim().lowercase()`, returning `null` for `""` and any unknown token.
-- [ ] Keep this file Android-free/pure (no Compose imports) so it is JVM-unit-testable, mirroring `ScanSession.kt` / `TeamPickerLogic.kt`.
-- [ ] Write `CheckpointColorTest`: each of the six known tokens maps to its enum; `""` → null; unknown (e.g. `"teal"`) → null; case-insensitive (`"RED"`, `"Red"`) and whitespace-tolerant (`" red "`) → `RED`.
-- [ ] Run `./gradlew testDebugUnitTest` — must pass before next task.
+- [x] Create `CheckpointColor.kt` with `enum class CheckpointColor { RED, BLUE, GREEN, YELLOW, ORANGE, PURPLE }` and `fun parseCheckpointColor(token: String): CheckpointColor?` using `token.trim().lowercase()`, returning `null` for `""` and any unknown token.
+- [x] Keep this file Android-free/pure (no Compose imports) so it is JVM-unit-testable, mirroring `ScanSession.kt` / `TeamPickerLogic.kt`.
+- [x] Write `CheckpointColorTest`: each of the six known tokens maps to its enum; `""` → null; unknown (e.g. `"teal"`) → null; case-insensitive (`"RED"`, `"Red"`) and whitespace-tolerant (`" red "`) → `RED`.
+- [x] Run `./gradlew testDebugUnitTest` — must pass before next task.
 
 ### Task 6: Render the leading color bar in the legend row
 
