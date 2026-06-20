@@ -19,6 +19,7 @@ class CheckpointColorTest {
     @Test
     fun emptyToken_isNull() {
         assertNull(parseCheckpointColor(""))
+        assertNull(parseCheckpointColor("   "))
     }
 
     @Test

@@ -100,6 +100,21 @@ class LegendRepositoryTest {
     }
 
     @Test
+    fun success_mapsColorToEntity() = runTest {
+        val payload = """{"race":8,"checkpoints":[
+            {"id":101,"number":1,"cost":10,"type":"kp","description":"A","color":"blue"},
+            {"id":102,"number":2,"cost":5,"type":"kp","description":"B"}
+        ]}"""
+        server.enqueue(MockResponse().setResponseCode(200).setBody(payload))
+
+        repository.refreshLegend(8)
+
+        val checkpoints = repository.checkpointsForRace(8).first()
+        assertEquals("blue", checkpoints.find { it.id == 101 }?.color)
+        assertEquals("", checkpoints.find { it.id == 102 }?.color)
+    }
+
+    @Test
     fun success_writesDataBeforeEtag() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(legendJson()),

@@ -127,6 +127,24 @@ class LegendResponseTest {
     }
 
     @Test
+    fun checkpointColor_parsedFromPayload() {
+        val payload = """
+            {
+              "race": 8,
+              "checkpoints": [
+                {"id": 1, "number": 1, "cost": 5, "type": "kp", "description": "A", "color": "red"},
+                {"id": 2, "number": 2, "cost": 5, "type": "kp", "description": "B"}
+              ]
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<LegendResponse>(payload)
+
+        assertEquals("red", response.checkpoints[0].color)
+        assertEquals("", response.checkpoints[1].color)
+    }
+
+    @Test
     fun unknownFieldsAreIgnored() {
         val payload = """
             {
