@@ -121,8 +121,8 @@
 - [x] run lint: `./gradlew lintDebug` — passed
 
 ### Task 6: [Final] Update documentation
-- [ ] update `CLAUDE.md`: document `ThemeMode.kt`, `ThemePreference.kt`, the `AppContainer.themePreference` member, the `MainActivity` theme application, and the new `SettingsScreen` «Внешний вид» card/params
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md`: document `ThemeMode.kt`, `ThemePreference.kt`, the `AppContainer.themePreference` member, the `MainActivity` theme application, and the new `SettingsScreen` «Внешний вид» card/params
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only*
