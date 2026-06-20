@@ -236,12 +236,12 @@ fun classifyTag(
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/marks/MarksMappingTest.kt`
 
-- [ ] удалить `MOCK_MARKS`; `MarksScreen(marks: List<MarkEntity>, onScanClick, ...)`.
-- [ ] pure-маппинг `MarkEntity → Mark`: `number = checkpointNumber.toString().padStart(2,'0')`, `time = SimpleDateFormat("HH:mm", Locale.US).format(Date(takenAt))` (без `java.time`), `kind = if (method=="photo") PHOTO else NFC`, `isRecent` = самое свежее; **плитка на каждое событие**.
-- [ ] метрики: «ВЗЯТО» = различные `point` с `complete`; «СУММА» = `Σ cost` по различным взятым `point`; «ДО КВ» — placeholder (без источника). Пустое состояние (нет команды/нет отметок).
-- [ ] Легенда: **без изменений сигнатуры** — `taken` наполняется из Room (проверить, что `MainActivity` уже отдаёт `legendCheckpoints`).
-- [ ] `MarksMappingTest`: маппинг события (nfc/photo, формат времени, padStart), деривация метрик (различные point, повтор не двоит баллы).
-- [ ] `./gradlew lintDebug testDebugUnitTest` — зелёно перед Task 9.
+- [x] удалить `MOCK_MARKS`; `MarksScreen(marks: List<MarkEntity>, onScanClick, ...)`.
+- [x] pure-маппинг `MarkEntity → Mark`: `number = checkpointNumber.toString().padStart(2,'0')`, `time = SimpleDateFormat("HH:mm", Locale.US).format(Date(takenAt))` (без `java.time`), `kind = if (method=="photo") PHOTO else NFC`, `isRecent` = самое свежее; **плитка на каждое событие** (`marksToTiles`).
+- [x] метрики: «ВЗЯТО» = различные `point` с `complete`; «СУММА» = `Σ cost` по различным взятым `point` (`takenPointCount`/`totalScore`); «ДО КВ» — placeholder («—», без источника). Пустое состояние (`MarksEmpty`, нет команды/нет отметок).
+- [x] Легенда: **без изменений сигнатуры** — `taken` наполняется из Room (`MainActivity` уже отдаёт `legendCheckpoints` в `LegendScreen`).
+- [x] `MarksMappingTest`: маппинг события (nfc/photo, формат времени, padStart, recent), деривация метрик (различные point, повтор не двоит баллы).
+- [x] `./gradlew lintDebug testDebugUnitTest` — зелёно перед Task 9.
 
 ### Task 9: Verify acceptance criteria
 - [ ] проверить все требования Overview: скан КП→reveal+taken-при-полном-ростере, окно 20 с скользит, повтор=новая строка, оффлайн, `cpUid`/`cpCode` пишутся, вкладки на реальных данных.

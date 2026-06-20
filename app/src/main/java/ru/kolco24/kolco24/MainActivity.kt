@@ -434,6 +434,7 @@ private fun Kolco24AppRoot() {
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
+                        marks = marks,
                         onScanClick = { teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
