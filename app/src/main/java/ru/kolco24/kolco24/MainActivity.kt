@@ -371,6 +371,13 @@ private fun Kolco24AppRoot() {
             .filter { it.teamId == selectedTeamId && it.numberInTeam in rosterSlots }
             .associate { it.nfcUid to it.numberInTeam }
     }
+    // Display-only map for the scan overlay: the member's slot → its chip number (participantNumber),
+    // same filter as scanBindings. The screen shows «№N» instead of the raw nfcUid.
+    val scanChipNumbers = remember(bindingsList, rosterSlots, selectedTeamId) {
+        bindingsList
+            .filter { it.teamId == selectedTeamId && it.numberInTeam in rosterSlots }
+            .associate { it.numberInTeam to it.participantNumber }
+    }
     val checkpointsById = remember(safeCheckpoints) { safeCheckpoints.associateBy { it.id } }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
@@ -512,7 +519,7 @@ private fun Kolco24AppRoot() {
             val scanTake = remember(showScan) { ScanTakeState() }
             ScanScreen(
                 roster = scanRoster,
-                bindings = scanBindings,
+                chipNumbers = scanChipNumbers,
                 nfcAvailable = nfcActiveForScan,
                 onScanTag = onScanTag@{ tag, now ->
                     val raceId = selectedRaceId

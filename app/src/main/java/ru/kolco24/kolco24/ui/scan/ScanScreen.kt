@@ -72,7 +72,7 @@ import ru.kolco24.kolco24.ui.theme.BrandRed
 private const val TIMER_TICK_MS = 250L
 
 data class ScanChip(
-    val chipId: String?,
+    val chipNumber: Int?,
     val name: String,
     val filled: Boolean,
     val bound: Boolean,
@@ -81,7 +81,7 @@ data class ScanChip(
 @Composable
 fun ScanScreen(
     roster: List<TeamMemberItem>,
-    bindings: Map<String, Int>,
+    chipNumbers: Map<Int, Int>,
     nfcAvailable: Boolean,
     onScanTag: suspend (Tag, Long) -> ScanEvent,
     onClose: () -> Unit,
@@ -155,15 +155,14 @@ fun ScanScreen(
         }
     }
 
-    val reverseBindings = remember(bindings) { bindings.entries.associate { (uid, number) -> number to uid } }
     val chips = roster.map { member ->
-        val chipId = reverseBindings[member.numberInTeam]
+        val chipNumber = chipNumbers[member.numberInTeam]
         val scanned = (session?.present ?: emptySet()) + (session?.bufferedBeforeKp ?: emptySet())
         ScanChip(
-            chipId = chipId,
+            chipNumber = chipNumber,
             name = member.name,
             filled = member.numberInTeam in scanned,
-            bound = chipId != null,
+            bound = chipNumber != null,
         )
     }
     val scanned = chips.count { it.filled }
@@ -472,7 +471,7 @@ private fun ChipSlot(chip: ScanChip) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Чип ${chip.chipId ?: "—"}",
+                    text = "№${chip.chipNumber ?: "—"}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
