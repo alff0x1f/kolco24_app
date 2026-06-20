@@ -66,12 +66,12 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/theme/ThemeMode.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/theme/ThemeModeTest.kt`
 
-- [ ] create `ThemeMode.kt` with `enum class ThemeMode { SYSTEM, LIGHT, DARK }` (no Android imports)
-- [ ] add `fun ThemeMode.isDark(systemDark: Boolean): Boolean` (SYSTEM→systemDark, LIGHT→false, DARK→true)
-- [ ] add `fun parseThemeMode(raw: String?): ThemeMode` defaulting to SYSTEM for null/unknown
-- [ ] write `ThemeModeTest`: `isDark` across 3 modes × systemDark true/false (6 cases)
-- [ ] write `ThemeModeTest`: `parseThemeMode` null→SYSTEM, unknown→SYSTEM, round-trip each enum name
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] create `ThemeMode.kt` with `enum class ThemeMode { SYSTEM, LIGHT, DARK }` (no Android imports)
+- [x] add `fun ThemeMode.isDark(systemDark: Boolean): Boolean` (SYSTEM→systemDark, LIGHT→false, DARK→true)
+- [x] add `fun parseThemeMode(raw: String?): ThemeMode` defaulting to SYSTEM for null/unknown
+- [x] write `ThemeModeTest`: `isDark` across 3 modes × systemDark true/false (6 cases)
+- [x] write `ThemeModeTest`: `parseThemeMode` null→SYSTEM, unknown→SYSTEM, round-trip each enum name
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 2: ThemePreference (SharedPreferences-backed reactive store)
 
