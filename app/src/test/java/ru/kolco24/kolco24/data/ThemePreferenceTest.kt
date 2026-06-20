@@ -1,7 +1,6 @@
 package ru.kolco24.kolco24.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.kolco24.kolco24.ui.theme.ThemeMode
 
@@ -25,6 +24,10 @@ class ThemePreferenceTest {
         val store = FakeStore(value = "DARK")
         val pref = ThemePreference(store.load, store.save)
         assertEquals(ThemeMode.DARK, pref.mode.value)
+
+        val store2 = FakeStore(value = "LIGHT")
+        val pref2 = ThemePreference(store2.load, store2.save)
+        assertEquals(ThemeMode.LIGHT, pref2.mode.value)
     }
 
     @Test
@@ -46,6 +49,10 @@ class ThemePreferenceTest {
         pref.setMode(ThemeMode.DARK)
         assertEquals("DARK", store.value)
         assertEquals(ThemeMode.DARK, pref.mode.value)
+
+        pref.setMode(ThemeMode.SYSTEM)
+        assertEquals("SYSTEM", store.value)
+        assertEquals(ThemeMode.SYSTEM, pref.mode.value)
     }
 
     @Test
@@ -58,9 +65,4 @@ class ThemePreferenceTest {
         assertEquals(ThemeMode.DARK, reopened.mode.value)
     }
 
-    @Test
-    fun emptyStore_loadReturnsNull() {
-        val store = FakeStore(value = null)
-        assertNull(store.load())
-    }
 }

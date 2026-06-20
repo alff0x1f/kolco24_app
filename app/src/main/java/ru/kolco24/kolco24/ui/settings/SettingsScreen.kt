@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +61,7 @@ fun SettingsScreen(
     onWriteChipNdef: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    var showThemeDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.background(MaterialTheme.colorScheme.surface).pointerInput(Unit) { detectTapGestures {} }) {
         TopAppBar(
             title = { Text("Настройки") },
