@@ -31,7 +31,12 @@ class AppContainer(private val context: Context) {
 
     private val json: Json by lazy { Json { ignoreUnknownKeys = true } }
 
-    private val apiClient: ApiClient by lazy {
+    /**
+     * Shared signed `/app/` client. Exposed (not private) so the admin provisioning flow can issue
+     * `bindTag` POSTs directly — there is no provisioning repository (the bind response isn't
+     * persisted; the next legend refresh delivers the new tag via the existing `tags[]` array).
+     */
+    val apiClient: ApiClient by lazy {
         val interceptor = AppSignatureInterceptor(
             keyId = BuildConfig.APP_KEY_ID,
             secret = BuildConfig.APP_SECRET,
