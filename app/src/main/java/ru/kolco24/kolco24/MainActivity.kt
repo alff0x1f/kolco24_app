@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
@@ -685,6 +686,9 @@ private fun Kolco24AppRoot(
                 },
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
+                // Placeholder wiring — Task 9 collects the real session flow and adds the showAdmin overlay.
+                session = AdminSession.LoggedOut,
+                onOpenAdmin = {},
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the

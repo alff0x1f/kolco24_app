@@ -178,9 +178,9 @@ Build bottom-up in four layers so each rests on a tested foundation:
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 
-- [ ] Add `session: AdminSession` + `onOpenAdmin: () -> Unit` params (non-null; present in release builds).
-- [ ] Add an «Администратор» `surfaceContainerLow` card with one `AdminRow` mirroring `ChangeTeamRow`/`ThemeRow` styling; subtitle = «Войти» when `LoggedOut` else the admin email; tap → `onOpenAdmin`.
-- [ ] Compile — must pass before Task 9. (Stateless Compose; no unit test.)
+- [x] Add `session: AdminSession` + `onOpenAdmin: () -> Unit` params (non-null; present in release builds).
+- [x] Add an «Администратор» `surfaceContainerLow` card with one `AdminRow` mirroring `ChangeTeamRow`/`ThemeRow` styling; subtitle = «Войти» when `LoggedOut` else the admin email; tap → `onOpenAdmin`.
+- [x] Compile — must pass before Task 9. (Stateless Compose; no unit test.) MainActivity call site got placeholder `session = LoggedOut` / `onOpenAdmin = {}` to keep compile green; Task 9 replaces with the real flow.
 
 ### Task 9: Admin overlay host wiring in MainActivity
 
