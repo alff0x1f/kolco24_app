@@ -78,7 +78,7 @@ class ChipCheckModelTest {
             checkpoint = null,
             chipsOnKp = 1,
         )
-        assertEquals(ChipCheckResult.Inconsistent("0411223344AABB", "abc123", 99), result)
+        assertEquals(ChipCheckResult.Inconsistent(uid = "0411223344AABB", bid = "abc123", pointId = 99), result)
     }
 
     @Test

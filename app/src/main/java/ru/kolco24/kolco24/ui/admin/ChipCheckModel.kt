@@ -47,11 +47,12 @@ sealed interface ChipCheckResult {
         val bid: String,
     ) : ChipCheckResult
 
-    /** A tag matched [bid] but its [point] has no checkpoint row in the legend. */
+    /** A tag matched [bid] but its [pointId] has no checkpoint row in the legend. */
     data class Inconsistent(
         override val uid: String,
         val bid: String,
-        val point: Int,
+        /** The checkpoint DB id (server surrogate key) — NOT the human-visible КП number. */
+        val pointId: Int,
     ) : ChipCheckResult
 
     /** No КП code could be read from the chip (blank, bracelet, or read error). */
@@ -83,7 +84,7 @@ fun classifyChipCheck(
 ): ChipCheckResult = when {
     bid == null -> ChipCheckResult.NoCode(uid)
     tag == null -> ChipCheckResult.UnknownChip(uid, bid)
-    checkpoint == null -> ChipCheckResult.Inconsistent(uid, bid, tag.point)
+    checkpoint == null -> ChipCheckResult.Inconsistent(uid = uid, bid = bid, pointId = tag.point)
     else -> ChipCheckResult.Ok(
         uid = uid,
         number = checkpoint.number,

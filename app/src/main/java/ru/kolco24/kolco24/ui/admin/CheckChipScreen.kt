@@ -167,7 +167,7 @@ fun CheckChipScreen(
                         recent.add(0, result)
                         // removeAt(lastIndex), NOT removeLast(): the stdlib extension trips a NewApi
                         // lint error against JDK 21 SequencedCollection.removeLast on minSdk 24.
-                        while (recent.size > 20) recent.removeAt(recent.lastIndex)
+                        if (recent.size > 20) recent.removeAt(recent.lastIndex)
                     }
                 }
             }
@@ -245,7 +245,7 @@ private fun CheckChipHero(
             is ChipCheckResult.Inconsistent -> MessageHero(
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Filled.Error,
-                title = "КП №${result.point} нет в легенде — обновите данные",
+                title = "КП не найден в легенде — обновите данные",
                 uid = result.uid,
                 diagnostic = "bid ${result.bid}",
             )
@@ -447,7 +447,7 @@ private fun RecentCheckRow(result: ChipCheckResult) {
         }
         is ChipCheckResult.Inconsistent -> {
             dot = neutral
-            label = "КП ${result.point.toString().padStart(2, '0')}"
+            label = "—"
             icon = Icons.Filled.Error
             iconTint = MaterialTheme.colorScheme.error
         }
