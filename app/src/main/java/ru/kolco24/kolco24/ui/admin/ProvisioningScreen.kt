@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -370,6 +371,10 @@ fun ProvisioningScreen(
             // being written) and removes the risk of premature chip removal.
             userScrollEnabled = provisionState !is ProvisionState.Binding &&
                 provisionState !is ProvisionState.Writing,
+            // Pages have unequal heights (bound КП carry a «Уже привязано» rack, empty ones don't).
+            // The pager's default CenterVertically would push the shorter pages' hero card down; pin
+            // pages to the top so every hero card sits at the same height.
+            verticalAlignment = Alignment.Top,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 24.dp),
         ) { page ->
@@ -441,8 +446,10 @@ fun ProvisioningRail(ticks: List<RailTick>, modifier: Modifier = Modifier) {
     ) {
         val neutral = MaterialTheme.colorScheme.outlineVariant
         ticks.forEach { tick ->
+            // Always tint with the КП's own color; coverage is the second channel — a bound tick is
+            // full-strength, an unbound one is the same hue dimmed (a colorless КП reads faint grey).
             val tint = tick.color?.barColor() ?: neutral
-            val color = if (tick.filled) tint else neutral
+            val color = if (tick.filled) tint else tint.copy(alpha = 0.3f)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -516,7 +523,9 @@ fun ChipRack(
     freshTokens: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    // Reserve a constant minimum height so a bound КП (with the «Уже привязано» line) and an empty one
+    // produce equal-height pages — keeps the hero cards aligned and the ScanZone steady across swipes.
+    Column(modifier = modifier.fillMaxWidth().heightIn(min = 32.dp)) {
         if (preSeededCount > 0) {
             Text(
                 text = "Уже привязано: $preSeededCount",
