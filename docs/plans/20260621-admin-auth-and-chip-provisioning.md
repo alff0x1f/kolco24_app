@@ -169,9 +169,9 @@ Build bottom-up in four layers so each rests on a tested foundation:
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] Add lazy `adminTokenStore = AdminTokenStore.fromSharedPreferences(context)` and lazy `adminAuthRepository`.
-- [ ] Resolve the construction-order cycle (interceptor needs a token provider; repo needs `ApiClient` which needs the interceptor): pass `tokenProvider = { adminAuthRepository.token() }` as a lambda into `AppSignatureInterceptor`. The lambda is only invoked at request time, after both `by lazy` blocks have initialized — `apiClient`'s lazy init must not touch `adminAuthRepository` (it doesn't), and `token()` is a synchronous `StateFlow.value` read, so no init-time recursion and no blocking on the interceptor thread.
-- [ ] Compile (`assembleDebug`) — must pass before Task 8. (DI wiring; no unit test, per repo convention.)
+- [x] Add lazy `adminTokenStore = AdminTokenStore.fromSharedPreferences(context)` and lazy `adminAuthRepository`.
+- [x] Resolve the construction-order cycle (interceptor needs a token provider; repo needs `ApiClient` which needs the interceptor): pass `tokenProvider = { adminAuthRepository.token() }` as a lambda into `AppSignatureInterceptor`. The lambda is only invoked at request time, after both `by lazy` blocks have initialized — `apiClient`'s lazy init must not touch `adminAuthRepository` (it doesn't), and `token()` is a synchronous `StateFlow.value` read, so no init-time recursion and no blocking on the interceptor thread.
+- [x] Compile (`assembleDebug`) — must pass before Task 8. (DI wiring; no unit test, per repo convention.)
 
 ### Task 8: Admin entry point in Settings
 

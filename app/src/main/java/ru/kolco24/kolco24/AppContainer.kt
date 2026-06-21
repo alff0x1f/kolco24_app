@@ -5,6 +5,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
+import ru.kolco24.kolco24.data.AdminAuthRepository
+import ru.kolco24.kolco24.data.AdminTokenStore
 import ru.kolco24.kolco24.data.InstallId
 import ru.kolco24.kolco24.data.LegendRepository
 import ru.kolco24.kolco24.data.MarkRepository
@@ -35,6 +37,10 @@ class AppContainer(private val context: Context) {
             secret = BuildConfig.APP_SECRET,
             installIdProvider = { installId },
             appVersion = BuildConfig.VERSION_NAME,
+            // Deferred to request time: invoked only after both `by lazy` blocks have initialized.
+            // `token()` is a synchronous StateFlow.value read, so no init-time recursion and no
+            // blocking on the interceptor thread. Bearer is never part of the canonical string.
+            tokenProvider = { adminAuthRepository.token() },
         )
         ApiClient(
             baseUrl = baseUrl,
@@ -98,6 +104,19 @@ class AppContainer(private val context: Context) {
 
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }
+
+    /** Persisted race-admin session store (token/email/expiry) backing [adminAuthRepository]. */
+    private val adminTokenStore: AdminTokenStore by lazy {
+        AdminTokenStore.fromSharedPreferences(context)
+    }
+
+    /** Reactive race-admin session; its [AdminAuthRepository.token] feeds the interceptor's bearer. */
+    val adminAuthRepository: AdminAuthRepository by lazy {
+        AdminAuthRepository(
+            apiClient = apiClient,
+            store = adminTokenStore,
+        )
+    }
 
     /** Long-lived scope for fire-and-forget background work (e.g. startup refresh). */
     val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
