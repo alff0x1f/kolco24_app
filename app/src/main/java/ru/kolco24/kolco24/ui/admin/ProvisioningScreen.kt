@@ -168,7 +168,7 @@ fun ProvisioningScreen(
         var provisionState by remember { mutableStateOf<ProvisionState>(ProvisionState.WaitingForChip) }
 
         // Reset the scan zone whenever the pager settles on a different КП.
-        LaunchedEffect(pagerState.currentPage) {
+        LaunchedEffect(pagerState.settledPage) {
             provisionState = ProvisionState.WaitingForChip
         }
         // Light haptic stamp on a successful write.

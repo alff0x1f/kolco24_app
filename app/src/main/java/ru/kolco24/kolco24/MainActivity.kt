@@ -912,7 +912,7 @@ private fun Kolco24AppRoot(
         // offline opens within a session skip the DB lookup. Durable state (across activity recreation
         // and startup warm-ups) is tracked in sync_meta via memberTagsRepo.hasBeenSynced().
         val hasSyncedPool = remember(activeRaceId) { booleanArrayOf(false) }
-        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null && !showSettings) {
+        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null && !showSettings && !showAdmin && !showProvisioning) {
             val currentSlot = SlotKey(activeTeamId, activeBindSlot)
             // Reset per opened slot; survives recomposition while the same slot stays open.
             var sheetState by remember(activeBindSlot) { mutableStateOf<BindSheetState>(BindSheetState.Waiting) }
@@ -1041,7 +1041,7 @@ private fun Kolco24AppRoot(
         BackHandler(
             enabled = unbindSlot != null && !showScan && !showSettings && !showAdmin && !showProvisioning && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { unbindSlot = null }
-        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null && !showSettings) {
+        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null && !showSettings && !showAdmin && !showProvisioning) {
             val teamId = selectedTeamId
             AlertDialog(
                 onDismissRequest = { unbindSlot = null },
