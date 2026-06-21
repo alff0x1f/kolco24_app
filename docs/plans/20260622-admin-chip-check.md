@@ -119,11 +119,11 @@
 - [x] No unit test (UI wiring). Covered by Task 5.
 
 ### Task 5: Verify acceptance criteria
-- [ ] Verify all Overview requirements: scanning a provisioned КП chip in the Admin section shows its КП (number/cost/color), an OK status, UID, count of other chips on that КП, and bid·method diagnostics.
-- [ ] Verify edge cases handled: blank chip / member bracelet → `NoCode`; foreign-race or stale chip → `UnknownChip`; missing checkpoint row → `Inconsistent`.
-- [ ] Run `./gradlew lintDebug` — must pass.
-- [ ] Run `./gradlew testDebugUnitTest` — must pass (incl. `ChipCheckModelTest`).
-- [ ] Confirm `./gradlew assembleDebug` builds.
+- [x] Verify all Overview requirements: scanning a provisioned КП chip in the Admin section shows its КП (number/cost/color), an OK status, UID, count of other chips on that КП, and bid·method diagnostics. (Confirmed in `OkHero` — 96sp RobotoMono number, cost, `barColor()` band, green «Привязан корректно», UID, «На этом КП ещё N чип(ов)», «bid · checkMethod».)
+- [x] Verify edge cases handled: blank chip / member bracelet → `NoCode`; foreign-race or stale chip → `UnknownChip`; missing checkpoint row → `Inconsistent`. (All four branches in `classifyChipCheck` + `CheckChipHero`.)
+- [x] Run `./gradlew lintDebug` — must pass. (BUILD SUCCESSFUL.)
+- [x] Run `./gradlew testDebugUnitTest` — must pass (incl. `ChipCheckModelTest`). (BUILD SUCCESSFUL.)
+- [x] Confirm `./gradlew assembleDebug` builds. (BUILD SUCCESSFUL.)
 
 ### Task 6: [Final] Documentation
 - [ ] Add a `ui/admin/CheckChipScreen.kt` + `ui/admin/ChipCheckModel.kt` bullet to CLAUDE.md's data/UI layer notes, and note the new `onTagForVerify` hook + `showCheckChip` overlay flag in the `MainActivity` / Admin-overlay sections (mirroring the provisioning entries).
