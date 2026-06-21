@@ -198,10 +198,10 @@ Build bottom-up in four layers so each rests on a tested foundation:
 **Files:**
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/admin/AdminScreen.kt`
 
-- [ ] Stateful overlay branching on `session`. `LoggedOut` → login form (email + password fields, «Войти» button), `AdminLoginState { Idle / Submitting / Error(message) }` driving spinner + inline error; on submit call `adminAuthRepository.login(...)` in `applicationScope`, map outcome via `adminErrorMessage`.
-- [ ] `LoggedIn` → admin home: show email, «Привязать чип к КП» row → opens provisioning (host flag, Task 12), «Выйти» row → `logout()` in `applicationScope`.
-- [ ] `TopAppBar` with back arrow → close overlay.
-- [ ] Compile — must pass before Task 11. (Compose UI; logic covered by `adminErrorMessage` test in Task 6.)
+- [x] Stateful overlay branching on `session`. `LoggedOut` → login form (email + password fields, «Войти» button), `AdminLoginState { Idle / Submitting / Error(message) }` driving spinner + inline error; on submit call `adminAuthRepository.login(...)` in `applicationScope`, map outcome via `adminErrorMessage`.
+- [x] `LoggedIn` → admin home: show email, «Привязать чип к КП» row → opens provisioning (host flag, Task 12), «Выйти» row → `logout()` in `applicationScope`.
+- [x] `TopAppBar` with back arrow → close overlay.
+- [x] Compile — must pass before Task 11. (Compose UI; logic covered by `adminErrorMessage` test in Task 6.)
 
 ### Task 11: Provisioning pure model + rail/hero/rack composables
 
