@@ -245,8 +245,8 @@ Build bottom-up in four layers so each rests on a tested foundation:
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] Document: interceptor body-hash signing + bearer `tokenProvider`; `ApiClient` `PostResult` + login/logout/bindTag; `AdminTokenStore` + `AdminAuthRepository` (`AdminSession`, expiry, `onUnauthorized`); the admin overlay pattern (`showAdmin`); `AdminScreen` + `ProvisioningScreen` pager/rail + `ProvisioningModel`; the new DTOs.
-- [ ] Move this plan to `docs/plans/completed/`.
+- [x] Document: interceptor body-hash signing + bearer `tokenProvider`; `ApiClient` `PostResult` + login/logout/bindTag; `AdminTokenStore` + `AdminAuthRepository` (`AdminSession`, expiry, `onUnauthorized`); the admin overlay pattern (`showAdmin`); `AdminScreen` + `ProvisioningScreen` pager/rail + `ProvisioningModel`; the new DTOs.
+- [x] Move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 
