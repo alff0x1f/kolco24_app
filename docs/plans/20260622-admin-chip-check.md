@@ -101,9 +101,9 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] Add `@Volatile var onTagForVerify: ((Tag) -> Unit)? = null` near `onTagForProvision` (with a KDoc mirroring the others — armed by `CheckChipScreen`, read-only verification, needs raw `Tag`).
-- [ ] In `onTagDiscovered`, insert the `onTagForVerify` branch **after** the `onTagForProvision` block and before `onTagForMark` (post to `mainHandler` and `return`, same shape as siblings).
-- [ ] Confirm build (no test — wiring). Covered by Task 5.
+- [x] Add `@Volatile var onTagForVerify: ((Tag) -> Unit)? = null` near `onTagForProvision` (with a KDoc mirroring the others — armed by `CheckChipScreen`, read-only verification, needs raw `Tag`).
+- [x] In `onTagDiscovered`, insert the `onTagForVerify` branch **after** the `onTagForProvision` block and before `onTagForMark` (post to `mainHandler` and `return`, same shape as siblings).
+- [x] Confirm build (no test — wiring). Covered by Task 5.
 
 ### Task 4: AdminHome row + overlay hosting
 

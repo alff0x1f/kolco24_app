@@ -136,6 +136,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     @Volatile var onTagForProvision: ((Tag) -> Unit)? = null
 
     /**
+     * Sink for the next raw [Tag] when the admin chip-verification overlay is active
+     * (CheckChipScreen). When set it yields to [onTagForWrite]/[onTagForProvision] but takes
+     * priority over [onTagForMark]/[onTagScanned] — verification reads the chip's code off the raw
+     * Tag to resolve which КП it is bound to. Read-only: no writes, no server, no admin token.
+     * Provisioning and verify never co-open, so the relative order with [onTagForProvision] is
+     * cosmetic, but a distinct hook keeps each `DisposableEffect` owning exactly one hook.
+     */
+    @Volatile var onTagForVerify: ((Tag) -> Unit)? = null
+
+    /**
      * Sink for the next raw [Tag] when the «Отметить КП» scan flow is active (ScanScreen). When set
      * it takes priority over [onTagScanned] but yields to [onTagForWrite] in [onTagDiscovered] —
      * marking needs the full Tag to both read the CP chip's code and fall back to the member uid.
@@ -251,7 +261,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
-     * armed provisioning flow (admin pager) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
+     * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
+     * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
      * the raw [Tag]; an armed scan flow (bind sheet) gets the
      * normalized UID; otherwise — idle foreground — we read the tag's NDEF and surface our own code
      * chips, mirroring the cold-launch intent path (which reader mode would otherwise suppress).
@@ -266,6 +277,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val provisionHook = onTagForProvision
         if (provisionHook != null) {
             mainHandler.post { provisionHook(tag) }
+            return
+        }
+        val verifyHook = onTagForVerify
+        if (verifyHook != null) {
+            mainHandler.post { verifyHook(tag) }
             return
         }
         val markHook = onTagForMark
