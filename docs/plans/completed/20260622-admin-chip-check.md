@@ -126,8 +126,8 @@
 - [x] Confirm `./gradlew assembleDebug` builds. (BUILD SUCCESSFUL.)
 
 ### Task 6: [Final] Documentation
-- [ ] Add a `ui/admin/CheckChipScreen.kt` + `ui/admin/ChipCheckModel.kt` bullet to CLAUDE.md's data/UI layer notes, and note the new `onTagForVerify` hook + `showCheckChip` overlay flag in the `MainActivity` / Admin-overlay sections (mirroring the provisioning entries).
-- [ ] Move this plan to `docs/plans/completed/`.
+- [x] Add a `ui/admin/CheckChipScreen.kt` + `ui/admin/ChipCheckModel.kt` bullet to CLAUDE.md's data/UI layer notes, and note the new `onTagForVerify` hook + `showCheckChip` overlay flag in the `MainActivity` / Admin-overlay sections (mirroring the provisioning entries).
+- [x] Move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only*
