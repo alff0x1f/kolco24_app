@@ -124,7 +124,7 @@ fun CheckChipScreen(
         )
 
         if (raceId == null) {
-            CheckChipHint("Сначала выберите команду")
+            CheckChipHint("Сначала выберите гонку в разделе «Команда»")
             return@Column
         }
 
@@ -135,8 +135,11 @@ fun CheckChipScreen(
         val checkpoints by remember(raceId) {
             container.legendRepository.checkpointsForRace(raceId)
         }.collectAsState(initial = emptyList())
-        val checkpointsById = remember(checkpoints) { checkpoints.associateBy { it.id } }
-        val countsByPoint = remember(tags) { tags.groupingBy { it.point }.eachCount() }
+        // collectAsState does not reset on key change — filter stale rows from the prior race.
+        val filteredTags = remember(tags, raceId) { tags.filter { it.raceId == raceId } }
+        val filteredCheckpoints = remember(checkpoints, raceId) { checkpoints.filter { it.raceId == raceId } }
+        val checkpointsById = remember(filteredCheckpoints) { filteredCheckpoints.associateBy { it.id } }
+        val countsByPoint = remember(filteredTags) { filteredTags.groupingBy { it.point }.eachCount() }
 
         var lastResult by remember(raceId) { mutableStateOf<ChipCheckResult?>(null) }
         val recent = remember(raceId) { mutableStateListOf<ChipCheckResult>() }
@@ -144,7 +147,7 @@ fun CheckChipScreen(
         val scope = rememberCoroutineScope()
 
         // Long-lived hook reads the latest collected lists without re-arming on every recomposition.
-        val tagsLatest = rememberUpdatedState(tags)
+        val tagsLatest = rememberUpdatedState(filteredTags)
         val cpByIdLatest = rememberUpdatedState(checkpointsById)
         val countsLatest = rememberUpdatedState(countsByPoint)
 
@@ -245,7 +248,7 @@ private fun CheckChipHero(
             is ChipCheckResult.Inconsistent -> MessageHero(
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Filled.Error,
-                title = "КП №${result.pointId} нет в легенде — обновите данные",
+                title = "Чип привязан к КП, которого нет в легенде — обновите данные",
                 uid = result.uid,
                 diagnostic = "bid ${result.bid}",
             )
