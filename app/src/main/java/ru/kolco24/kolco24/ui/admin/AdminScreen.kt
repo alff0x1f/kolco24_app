@@ -50,7 +50,9 @@ import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.LoginOutcome
 import ru.kolco24.kolco24.data.adminErrorMessage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Race-admin overlay (full-screen, hosted via the `showAdmin` flag in `MainActivity`, same overlay
@@ -128,10 +130,12 @@ private fun LoginForm() {
         state = AdminLoginState.Submitting
         container.applicationScope.launch {
             val outcome = container.adminAuthRepository.login(email.trim(), password)
-            state = if (outcome == LoginOutcome.Success) {
-                AdminLoginState.Idle
-            } else {
-                AdminLoginState.Error(adminErrorMessage(outcome))
+            withContext(Dispatchers.Main) {
+                state = if (outcome == LoginOutcome.Success) {
+                    AdminLoginState.Idle
+                } else {
+                    AdminLoginState.Error(adminErrorMessage(outcome))
+                }
             }
         }
     }

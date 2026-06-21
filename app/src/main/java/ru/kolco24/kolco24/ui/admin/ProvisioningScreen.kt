@@ -192,30 +192,43 @@ fun ProvisioningScreen(
                 val cp = cpsState.value.getOrNull(pagerState.currentPage) ?: return@onTag
                 val uid = normalizeNfcUid(tag.id)
                 provisionState = ProvisionState.Binding(uid)
-                scope.launch {
+                // applicationScope survives overlay dismissal so the NFC write completes even if
+                // the user navigates away after the server bind but before the chip write finishes.
+                container.applicationScope.launch {
                     when (val result = container.apiClient.bindTag(raceId, cp.id, uid)) {
                         is PostResult.Success -> {
-                            provisionState = ProvisionState.Writing
-                            val bytes = chipCodeFromHex(result.data.code)
+                            withContext(Dispatchers.Main) { provisionState = ProvisionState.Writing }
+                            val bytes = try {
+                                chipCodeFromHex(result.data.code)
+                            } catch (_: IllegalArgumentException) {
+                                withContext(Dispatchers.Main) {
+                                    provisionState = ProvisionState.Failed("Неверный код от сервера")
+                                }
+                                return@launch
+                            }
                             val written = withContext(Dispatchers.IO) {
                                 writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
                             }
-                            if (written == ChipWriteResult.Success) {
-                                // A re-tap of an already-written chip is idempotent (200 + same code).
-                                val existing = freshTokens[cp.id].orEmpty()
-                                if (uid !in existing) freshTokens[cp.id] = existing + uid
-                                provisionState = ProvisionState.Success(result.data.number)
-                            } else {
-                                provisionState =
-                                    ProvisionState.Failed("Не удалось записать, приложите снова")
+                            withContext(Dispatchers.Main) {
+                                if (written == ChipWriteResult.Success) {
+                                    // A re-tap of an already-written chip is idempotent (200 + same code).
+                                    val existing = freshTokens[cp.id].orEmpty()
+                                    if (uid !in existing) freshTokens[cp.id] = existing + uid
+                                    provisionState = ProvisionState.Success(result.data.number)
+                                } else {
+                                    provisionState =
+                                        ProvisionState.Failed("Не удалось записать, приложите снова")
+                                }
                             }
                         }
                         // 401: token revoked/expired server-side — clear the session and drop to login.
                         PostResult.Unauthorized -> {
                             container.adminAuthRepository.onUnauthorized()
-                            onClose()
+                            withContext(Dispatchers.Main) { onClose() }
                         }
-                        else -> provisionState = ProvisionState.Failed(provisionErrorMessage(result))
+                        else -> withContext(Dispatchers.Main) {
+                            provisionState = ProvisionState.Failed(provisionErrorMessage(result))
+                        }
                     }
                 }
             }

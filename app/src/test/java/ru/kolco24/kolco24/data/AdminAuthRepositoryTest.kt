@@ -176,6 +176,8 @@ class AdminAuthRepositoryTest {
         assertEquals("2099-07-21T14:03:00Z", s.expiresAt)
         assertEquals("new-tok", fake.map["admin_token"])
         assertEquals("admin@kolco24.ru", fake.map["admin_email"])
+        assertEquals("2099-07-21T14:03:00Z", fake.map["admin_token_expires_at"])
+        assertEquals("new-tok", repo.token())
     }
 
     @Test

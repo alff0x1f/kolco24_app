@@ -61,12 +61,38 @@ class AdminTokenStoreTest {
     }
 
     @Test
-    fun read_returnsNull_whenAnySingleKeyMissing() {
-        // Only token + email present, expiry absent → incomplete session is null.
+    fun read_returnsNull_whenExpiryMissing() {
+        // token + email present, expiry absent → incomplete session is null.
         val store = FakeStore(
             mapOf(
                 "admin_token" to "tok",
                 "admin_email" to "a@b.ru",
+            )
+        )
+        val s = AdminTokenStore(store.load, store.save)
+        assertNull(s.read())
+    }
+
+    @Test
+    fun read_returnsNull_whenTokenMissing() {
+        // Only email + expiry present, token absent → incomplete session is null.
+        val store = FakeStore(
+            mapOf(
+                "admin_email" to "a@b.ru",
+                "admin_token_expires_at" to "2099-01-01T00:00:00Z",
+            )
+        )
+        val s = AdminTokenStore(store.load, store.save)
+        assertNull(s.read())
+    }
+
+    @Test
+    fun read_returnsNull_whenEmailMissing() {
+        // Only token + expiry present, email absent → incomplete session is null.
+        val store = FakeStore(
+            mapOf(
+                "admin_token" to "tok",
+                "admin_token_expires_at" to "2099-01-01T00:00:00Z",
             )
         )
         val s = AdminTokenStore(store.load, store.save)

@@ -99,4 +99,10 @@ class ProvisioningModelTest {
         assertEquals("AB", chipTokenLabel("AB"))
         assertEquals("ABCD", chipTokenLabel("ABCD"))
     }
+
+    @Test
+    fun chipTokenLabel_fiveChars_truncatesToLastFour() {
+        // length == 5 is the first case where takeLast(4) differs from the uid itself.
+        assertEquals("BCDE", chipTokenLabel("ABCDE"))
+    }
 }

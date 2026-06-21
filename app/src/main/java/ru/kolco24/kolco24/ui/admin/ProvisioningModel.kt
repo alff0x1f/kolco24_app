@@ -65,7 +65,8 @@ fun railTicks(
 
 /**
  * Maps a non-success [PostResult] from a `bindTag` call to a user-facing RU message for the scan zone.
- * [PostResult.Success] never reaches here (the host handles it), so it returns a neutral fallback.
+ * The caller (host) handles [PostResult.Success] before calling this; an unexpected Success falls to
+ * the `else` branch and returns «Ошибка сервера» as a safe fallback.
  *
  * - `409` ([PostResult.Conflict]) → «уже привязан к другому КП». The server's `409` body carries no
  *   checkpoint number (`{"detail": ...}`), so the message is **generic** — it can't name the other КП.
@@ -74,7 +75,6 @@ fun railTicks(
  *   build-HMAC signature/clock failure (the spec returns `403` for either), hence the combined message.
  */
 fun provisionErrorMessage(result: PostResult<*>): String = when (result) {
-    is PostResult.Success -> "Готово"
     PostResult.Conflict -> "Этот тег уже привязан к другому КП"
     PostResult.Forbidden -> "Нет прав администратора этой гонки или ошибка подписи/часов"
     PostResult.Unauthorized -> "Сессия истекла, войдите снова"
@@ -82,6 +82,7 @@ fun provisionErrorMessage(result: PostResult<*>): String = when (result) {
     PostResult.RateLimited -> "Слишком часто, подождите немного"
     PostResult.Offline -> "Нет сети, попробуйте снова"
     is PostResult.Error -> if (result.code == 404) "КП не найдено" else "Ошибка сервера"
+    else -> "Ошибка сервера"
 }
 
 /**
