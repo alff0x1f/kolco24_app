@@ -232,11 +232,11 @@ Build bottom-up in four layers so each rests on a tested foundation:
 
 ### Task 13: Verify acceptance criteria (repo-verifiable gates)
 
-- [ ] Confirm existing GET signing unchanged (regression): old `SigningTest`/`ApiClientTest` still green.
-- [ ] Confirm no Room schema bump (no new `schemas/*.json`, no migration added).
-- [ ] Run full `./gradlew testDebugUnitTest` — must pass.
-- [ ] Run `./gradlew lintDebug` — must pass.
-- [ ] Run `./gradlew assembleDebug` — must compile (release params for the admin card present too).
+- [x] Confirm existing GET signing unchanged (regression): old `SigningTest`/`ApiClientTest` still green.
+- [x] Confirm no Room schema bump (no new `schemas/*.json`, no migration added). (Verified: `git diff --stat main -- app/schemas/` empty.)
+- [x] Run full `./gradlew testDebugUnitTest` — must pass.
+- [x] Run `./gradlew lintDebug` — must pass.
+- [x] Run `./gradlew assembleDebug` — must compile (release params for the admin card present too).
 
 *(On-device behavioral verification — login/bearer/401/chip-write/409/offline — requires hardware + a real admin account; see Post-Completion.)*
 
