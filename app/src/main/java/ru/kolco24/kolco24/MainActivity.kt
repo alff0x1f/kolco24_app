@@ -825,9 +825,9 @@ private fun Kolco24AppRoot(
         // registered after admin's (and admin's is guarded with !showProvisioning) so it wins the back
         // press when both overlays are stacked. raceId is the selected team's race (null → hint screen).
         BackHandler(
-            enabled = showProvisioning && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+            enabled = showProvisioning && !showCheckChip && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { showProvisioning = false }
-        if (showProvisioning && !showScan) {
+        if (showProvisioning && !showCheckChip && !showScan) {
             ProvisioningScreen(
                 raceId = selectedRaceId,
                 onClose = { showProvisioning = false },

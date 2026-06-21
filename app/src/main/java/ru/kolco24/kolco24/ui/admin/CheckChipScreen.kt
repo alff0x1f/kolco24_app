@@ -245,7 +245,7 @@ private fun CheckChipHero(
             is ChipCheckResult.Inconsistent -> MessageHero(
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Filled.Error,
-                title = "КП не найден в легенде — обновите данные",
+                title = "КП №${result.pointId} нет в легенде — обновите данные",
                 uid = result.uid,
                 diagnostic = "bid ${result.bid}",
             )
