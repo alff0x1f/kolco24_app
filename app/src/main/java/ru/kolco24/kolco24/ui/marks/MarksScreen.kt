@@ -2,7 +2,6 @@ package ru.kolco24.kolco24.ui.marks
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,31 +56,32 @@ data class Mark(
     val cost: Int,
     val kind: MarkKind,
     val time: String,
-    val isRecent: Boolean = false,
 )
 
 enum class MarkKind { NFC, PHOTO }
 
 /**
- * Pure mapping of the local take events into display tiles — **one tile per event** (a repeat take of
- * the same checkpoint shows as a separate tile). [marks] is expected newest-first (as `observeMarks`
- * delivers). The single most-recent event (max `takenAt`) is flagged [Mark.isRecent]. Uses
- * [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ * Pure mapping of the local take events into display tiles — **one tile per completed event** (a repeat
+ * take of the same checkpoint shows as a separate tile). Only `complete` takes are shown: a КП scanned
+ * without scanning the whole team (e.g. КП chip only, or a partial collect) leaves a `complete=false`
+ * row that is kept in the DB for the future server log but never tiled here, matching the
+ * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
+ * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
+ * front. Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
  */
 fun marksToTiles(marks: List<MarkEntity>): List<Mark> {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    // marks is newest-first (observeMarks orders by takenAt DESC); flag the first id so ties at the
-    // same millisecond never produce more than one "recent" tile.
-    val recentId = marks.firstOrNull()?.id
-    return marks.map { m ->
-        Mark(
-            number = m.checkpointNumber.toString().padStart(2, '0'),
-            cost = m.cost,
-            kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
-            time = fmt.format(Date(m.takenAt)),
-            isRecent = m.id == recentId,
-        )
-    }
+    // Reverse newest-first → oldest-first so each new take lands at the end of the grid.
+    return marks.filter { it.complete }
+        .asReversed()
+        .map { m ->
+            Mark(
+                number = m.checkpointNumber.toString().padStart(2, '0'),
+                cost = m.cost,
+                kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
+                time = fmt.format(Date(m.takenAt)),
+            )
+        }
 }
 
 private val PHOTO_GRADIENTS = listOf(
@@ -290,13 +290,11 @@ private fun MarkTile(mark: Mark, gradientIndex: Int) {
 
 @Composable
 private fun NfcTile(mark: Mark) {
-    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary) else Modifier
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-            .then(recentBorder),
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -329,13 +327,11 @@ private fun NfcTile(mark: Mark) {
 @Composable
 private fun PhotoTile(mark: Mark, gradientIndex: Int) {
     val gradient = PHOTO_GRADIENTS[gradientIndex]
-    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary) else Modifier
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(Brush.linearGradient(gradient))
-            .then(recentBorder),
+            .background(Brush.linearGradient(gradient)),
     ) {
         Surface(
             modifier = Modifier

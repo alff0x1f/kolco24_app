@@ -4,7 +4,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
@@ -41,15 +40,16 @@ class MarksMappingTest {
     private fun hhmm(epoch: Long) = SimpleDateFormat("HH:mm", Locale.US).format(Date(epoch))
 
     @Test
-    fun `tile per event preserves order and count`() {
+    fun `tile per event reverses to oldest-first so new takes append to the end`() {
+        // Input is newest-first (as observeMarks delivers); tiles come back oldest-first.
         val marks = listOf(
-            mark("a", point = 1, number = 1, cost = 2, takenAt = 3_000L),
+            mark("a", point = 1, number = 1, cost = 2, takenAt = 3_000L), // newest
             mark("b", point = 2, number = 4, cost = 3, takenAt = 2_000L),
-            mark("c", point = 1, number = 1, cost = 2, takenAt = 1_000L), // repeat of point 1
+            mark("c", point = 3, number = 7, cost = 2, takenAt = 1_000L), // oldest
         )
         val tiles = marksToTiles(marks)
         assertEquals(3, tiles.size)
-        assertEquals(listOf("01", "04", "01"), tiles.map { it.number })
+        assertEquals(listOf("07", "04", "01"), tiles.map { it.number })
     }
 
     @Test
@@ -66,8 +66,9 @@ class MarksMappingTest {
                 mark("b", point = 2, number = 2, cost = 1, method = "photo", takenAt = 1_000L),
             ),
         )
-        assertEquals(MarkKind.NFC, tiles[0].kind)
-        assertEquals(MarkKind.PHOTO, tiles[1].kind)
+        // Oldest-first: the photo take (1_000L) comes first, the nfc take (2_000L) last.
+        assertEquals(MarkKind.PHOTO, tiles[0].kind)
+        assertEquals(MarkKind.NFC, tiles[1].kind)
     }
 
     @Test
@@ -78,34 +79,31 @@ class MarksMappingTest {
     }
 
     @Test
-    fun `only the newest event is flagged recent`() {
-        val tiles = marksToTiles(
-            listOf(
-                mark("a", point = 1, number = 1, cost = 1, takenAt = 3_000L),
-                mark("b", point = 2, number = 2, cost = 1, takenAt = 2_000L),
-                mark("c", point = 3, number = 3, cost = 1, takenAt = 1_000L),
-            ),
-        )
-        assertTrue(tiles[0].isRecent)
-        assertFalse(tiles[1].isRecent)
-        assertFalse(tiles[2].isRecent)
-    }
-
-    @Test
     fun `empty marks yield no tiles`() {
         assertTrue(marksToTiles(emptyList()).isEmpty())
     }
 
     @Test
-    fun `tied takenAt flags only first tile as recent`() {
-        // Both marks share the same maximum timestamp. Only the first in newest-first order gets flagged.
+    fun `incomplete takes are not tiled`() {
+        // КП scanned without the whole team: an empty (0 members) and a partial take both stay
+        // complete=false and must not appear as tiles.
         val marks = listOf(
-            mark("a", point = 1, number = 1, cost = 1, takenAt = 3_000L),
-            mark("b", point = 2, number = 2, cost = 1, takenAt = 3_000L),
+            mark("empty", point = 1, number = 1, cost = 2, complete = false, takenAt = 3_000L),
+            mark("partial", point = 2, number = 4, cost = 3, complete = false, takenAt = 2_000L),
+        )
+        assertTrue(marksToTiles(marks).isEmpty())
+    }
+
+    @Test
+    fun `only completed takes are tiled in oldest-first order`() {
+        // Newest event is incomplete and filtered out; the rest are tiled oldest-first.
+        val marks = listOf(
+            mark("incomplete", point = 1, number = 1, cost = 2, complete = false, takenAt = 4_000L),
+            mark("done-new", point = 2, number = 4, cost = 3, complete = true, takenAt = 3_000L),
+            mark("done-old", point = 3, number = 7, cost = 5, complete = true, takenAt = 2_000L),
         )
         val tiles = marksToTiles(marks)
-        assertTrue(tiles[0].isRecent)
-        assertFalse(tiles[1].isRecent)
+        assertEquals(listOf("07", "04"), tiles.map { it.number })
     }
 
     @Test
