@@ -108,18 +108,6 @@ class MarksMappingTest {
     }
 
     @Test
-    fun `only the newest completed take is flagged isRecent`() {
-        val marks = listOf(
-            mark("a", point = 1, number = 1, cost = 2, takenAt = 3_000L), // newest
-            mark("b", point = 2, number = 4, cost = 3, takenAt = 2_000L),
-            mark("c", point = 3, number = 7, cost = 2, takenAt = 1_000L), // oldest
-        )
-        val tiles = marksToTiles(marks)
-        // Tiles are oldest-first, so the newest take is the last tile.
-        assertEquals(listOf(false, false, true), tiles.map { it.isRecent })
-    }
-
-    @Test
     fun `colorOf resolves the per-take checkpoint color`() {
         val tiles = marksToTiles(
             listOf(

@@ -68,7 +68,6 @@ data class Mark(
     val kind: MarkKind,
     val time: String,
     val color: CheckpointColor? = null,
-    val isRecent: Boolean = false,
 )
 
 enum class MarkKind { NFC, PHOTO }
@@ -80,30 +79,27 @@ enum class MarkKind { NFC, PHOTO }
  * row that is kept in the DB for the future server log but never tiled here, matching the
  * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
  * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
- * front. The single newest completed take (by list order, so ties resolve to the row Room returned
- * first) is flagged `isRecent` so the grid can softly highlight «only just scanned». [colorOf] resolves
- * a take's checkpoint color token (point id → server token) for the tile's leading color bar; it
- * defaults to «no color» so the pure mapping stays testable without a checkpoint map. Uses
- * [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ * front. [colorOf] resolves a take's checkpoint color token (point id → server token) for the tile's
+ * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
+ * map. Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
  */
 fun marksToTiles(
     marks: List<MarkEntity>,
     colorOf: (MarkEntity) -> CheckpointColor? = { null },
 ): List<Mark> {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    val completed = marks.filter { it.complete }
-    val newestId = completed.firstOrNull()?.id // input is newest-first → first row is the latest take
     // Reverse newest-first → oldest-first so each new take lands at the end of the grid.
-    return completed.asReversed().map { m ->
-        Mark(
-            number = m.checkpointNumber.toString().padStart(2, '0'),
-            cost = m.cost,
-            kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
-            time = fmt.format(Date(m.takenAt)),
-            color = colorOf(m),
-            isRecent = m.id == newestId,
-        )
-    }
+    return marks.filter { it.complete }
+        .asReversed()
+        .map { m ->
+            Mark(
+                number = m.checkpointNumber.toString().padStart(2, '0'),
+                cost = m.cost,
+                kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
+                time = fmt.format(Date(m.takenAt)),
+                color = colorOf(m),
+            )
+        }
 }
 
 // Photo-seat fill (the charcoal placeholder behind the КП photo) + the mini-badge's reflective
@@ -321,30 +317,18 @@ private val TileShape = RoundedCornerShape(10.dp)
  * One taken checkpoint as a scorecard card: a leading color bar (the КП color, matching the Легенда
  * rows), the КП number as the mono hero, the score earned (`+cost`), and the take time. NFC takes
  * read as a clean numeric card; photo takes swap the number area for the photo seat carrying a small
- * КП badge. The single newest take gets a quiet orange ring + glow so a just-scanned КП stands out.
+ * КП badge.
  */
 @Composable
 private fun ScorecardTile(mark: Mark) {
     val gutter = mark.color?.barColor() ?: Color.Transparent
-    val border = if (mark.isRecent) {
-        BorderStroke(1.5.dp, OrangeCta)
-    } else {
-        BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-    }
     Surface(
         shape = TileShape,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = border,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .then(
-                if (mark.isRecent) {
-                    Modifier.shadow(4.dp, TileShape, spotColor = OrangeCta, ambientColor = OrangeCta)
-                } else {
-                    Modifier
-                },
-            ),
+            .aspectRatio(1f),
     ) {
         // The color bar caps the top edge (echoing the red reflective stripe on a physical КП),
         // overlaid so it never shifts the centered number; clipped to the tile's rounded top.
