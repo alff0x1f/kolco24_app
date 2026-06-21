@@ -94,13 +94,13 @@ Build bottom-up in four layers so each rests on a tested foundation:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/AppSignatureInterceptor.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/SigningTest.kt`
 
-- [ ] Change `buildCanonical(method, fullPath, ts)` → `buildCanonical(method, fullPath, ts, bodyHash)` (keep it a pure top-level fn); update the one existing GET caller to pass `EMPTY_BODY_SHA256`.
-- [ ] Add a pure top-level `sha256Hex(bytes: ByteArray): String` helper (lower-hex).
-- [ ] In `intercept`, compute the body hash from the built request: `okio.Buffer` + `request.body?.writeTo(buffer)`; null body **or `request.body?.isOneShot() == true`** → `EMPTY_BODY_SHA256`. Wrap `writeTo` in try/catch (any `IOException` → `EMPTY_BODY_SHA256` fallback) so it can never crash the interceptor. Sign canonical with the result.
-- [ ] Add `tokenProvider: () -> String? = { null }` constructor param; when it returns non-null add `Authorization: Bearer <token>` (read fresh per call; not in canonical).
-- [ ] Write test: POST-body canonical + signature vector (known body → expected hash) and assert bearer header added when provider non-null / absent when null.
-- [ ] Write test: empty/GET body still produces `EMPTY_BODY_SHA256` (no regression).
-- [ ] Run tests — must pass before Task 2.
+- [x] Change `buildCanonical(method, fullPath, ts)` → `buildCanonical(method, fullPath, ts, bodyHash)` (keep it a pure top-level fn); update the one existing GET caller to pass `EMPTY_BODY_SHA256`.
+- [x] Add a pure top-level `sha256Hex(bytes: ByteArray): String` helper (lower-hex).
+- [x] In `intercept`, compute the body hash from the built request: `okio.Buffer` + `request.body?.writeTo(buffer)`; null body **or `request.body?.isOneShot() == true`** → `EMPTY_BODY_SHA256`. Wrap `writeTo` in try/catch (any `IOException` → `EMPTY_BODY_SHA256` fallback) so it can never crash the interceptor. Sign canonical with the result.
+- [x] Add `tokenProvider: () -> String? = { null }` constructor param; when it returns non-null add `Authorization: Bearer <token>` (read fresh per call; not in canonical).
+- [x] Write test: POST-body canonical + signature vector (known body → expected hash) and assert bearer header added when provider non-null / absent when null.
+- [x] Write test: empty/GET body still produces `EMPTY_BODY_SHA256` (no regression).
+- [x] Run tests — must pass before Task 2.
 
 ### Task 2: `PostResult` + POST path in `ApiClient`
 

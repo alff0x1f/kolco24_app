@@ -106,7 +106,7 @@ class ApiClientTest {
         assertEquals("/app/races/", recorded.path)
         val expectedSig = sign(
             secret,
-            buildCanonical("GET", recorded.path!!, recorded.getHeader("X-App-Ts")!!),
+            buildCanonical("GET", recorded.path!!, recorded.getHeader("X-App-Ts")!!, EMPTY_BODY_SHA256),
         )
         assertEquals(expectedSig, recorded.getHeader("X-App-Sig"))
         assertNull(recorded.getHeader("If-None-Match"))
