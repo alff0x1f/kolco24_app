@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FactCheck
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
@@ -68,6 +69,7 @@ fun AdminScreen(
     session: AdminSession,
     onClose: () -> Unit,
     onOpenProvisioning: () -> Unit = {},
+    onOpenCheckChip: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -96,6 +98,7 @@ fun AdminScreen(
             is AdminSession.LoggedIn -> AdminHome(
                 session = session,
                 onOpenProvisioning = onOpenProvisioning,
+                onOpenCheckChip = onOpenCheckChip,
             )
         }
     }
@@ -220,6 +223,7 @@ private fun LoginForm() {
 private fun AdminHome(
     session: AdminSession.LoggedIn,
     onOpenProvisioning: () -> Unit,
+    onOpenCheckChip: () -> Unit,
 ) {
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
@@ -251,6 +255,22 @@ private fun AdminHome(
                 title = "Привязать чип к КП",
                 subtitle = "Записать NFC-метки на контрольные пункты",
                 onClick = onOpenProvisioning,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            AdminActionRow(
+                icon = Icons.AutoMirrored.Filled.FactCheck,
+                title = "Проверить чип КП",
+                subtitle = "Узнать, к какому КП привязан чип",
+                onClick = onOpenCheckChip,
             )
         }
 

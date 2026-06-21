@@ -111,12 +111,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/admin/AdminScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `AdminScreen.kt`: add `onOpenCheckChip: () -> Unit = {}` param; thread it into `AdminHome`; add a new `AdminActionRow` (icon `Icons.Filled.FactCheck` or `Search`, title «Проверить чип КП», subtitle «Узнать, к какому КП привязан чип») → `onOpenCheckChip`, placed above the «Выйти» row.
-- [ ] `MainActivity.kt`: add `var showCheckChip by rememberSaveable { mutableStateOf(false) }` near `showProvisioning`.
-- [ ] `MainActivity.kt`: pass `onOpenCheckChip = { showProvisioning = false; showCheckChip = true }` to `AdminScreen` (reset the sibling sub-overlay for symmetry with the `showSettings = false` pattern; AdminHome only opens one at a time, so this is defensive); add `showCheckChip = false` to `AdminScreen`'s `onClose`.
-- [ ] `MainActivity.kt`: render `if (showCheckChip && !showScan) { CheckChipScreen(raceId = selectedRaceId, onClose = { showCheckChip = false }) }` after the `ProvisioningScreen` block (drawn above AdminScreen); add a guarded `BackHandler(enabled = showCheckChip && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null) { showCheckChip = false }` registered after admin's, and add `!showCheckChip` to the admin `BackHandler`'s `enabled` guard so the verify handler wins when stacked.
-- [ ] `MainActivity.kt`: reset `showCheckChip = false` everywhere the other admin overlays reset — `onScanClick` (line ~552 + the `showScan` `BackHandler` at ~589), `LaunchedEffect(selectedTeamId)` (line ~465), and add `!showCheckChip` to the bind/unbind `BackHandler`/render guards (lines ~913/919/1046/1048) alongside `!showAdmin && !showProvisioning`.
-- [ ] No unit test (UI wiring). Covered by Task 5.
+- [x] `AdminScreen.kt`: add `onOpenCheckChip: () -> Unit = {}` param; thread it into `AdminHome`; add a new `AdminActionRow` (icon `Icons.AutoMirrored.Filled.FactCheck`, title «Проверить чип КП», subtitle «Узнать, к какому КП привязан чип») → `onOpenCheckChip`, placed above the «Выйти» row.
+- [x] `MainActivity.kt`: add `var showCheckChip by rememberSaveable { mutableStateOf(false) }` near `showProvisioning`.
+- [x] `MainActivity.kt`: pass `onOpenCheckChip = { showProvisioning = false; showCheckChip = true }` to `AdminScreen` (reset the sibling sub-overlay for symmetry with the `showSettings = false` pattern; AdminHome only opens one at a time, so this is defensive); add `showCheckChip = false` to `AdminScreen`'s `onClose`.
+- [x] `MainActivity.kt`: render `if (showCheckChip && !showScan) { CheckChipScreen(raceId = selectedRaceId, onClose = { showCheckChip = false }) }` after the `ProvisioningScreen` block (drawn above AdminScreen); add a guarded `BackHandler(enabled = showCheckChip && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null) { showCheckChip = false }` registered after admin's, and add `!showCheckChip` to the admin `BackHandler`'s `enabled` guard so the verify handler wins when stacked.
+- [x] `MainActivity.kt`: reset `showCheckChip = false` everywhere the other admin overlays reset — `onScanClick` + the `showScan` `BackHandler`, `LaunchedEffect(selectedTeamId)`, and add `!showCheckChip` to the bind/unbind `BackHandler`/render guards alongside `!showAdmin && !showProvisioning`.
+- [x] No unit test (UI wiring). Covered by Task 5.
 
 ### Task 5: Verify acceptance criteria
 - [ ] Verify all Overview requirements: scanning a provisioned КП chip in the Admin section shows its КП (number/cost/color), an OK status, UID, count of other chips on that КП, and bid·method diagnostics.
