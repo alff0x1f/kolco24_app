@@ -142,11 +142,11 @@ Build bottom-up in four layers so each rests on a tested foundation:
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/AdminTokenStore.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/AdminTokenStoreTest.kt`
 
-- [ ] Follow the `ThemePreference` *pattern* (pure injected store + `fromSharedPreferences` adapter, synchronous read at construction, no `java.time`) — but with a **multi-key seam** `load: (String) -> String?` + `save: (String, String?) -> Unit` because three keys are persisted (the shape deliberately differs from `ThemePreference`'s single-value seam).
-- [ ] Expose `read(): StoredSession?` (token+email+expiresAt) and `write(token, email, expiresAt)` / `clear()`; `clear()`/null writes remove all three keys (`admin_token`, `admin_token_expires_at`, `admin_email`).
-- [ ] Add `companion object fun fromSharedPreferences(context)` → prefs file `"kolco24.settings"`, `MODE_PRIVATE`, `apply()`.
-- [ ] Write tests: round-trip; null/clear removes all three keys; initial read reflects pre-seeded store.
-- [ ] Run tests — must pass before Task 6.
+- [x] Follow the `ThemePreference` *pattern* (pure injected store + `fromSharedPreferences` adapter, synchronous read at construction, no `java.time`) — but with a **multi-key seam** `load: (String) -> String?` + `save: (String, String?) -> Unit` because three keys are persisted (the shape deliberately differs from `ThemePreference`'s single-value seam).
+- [x] Expose `read(): StoredSession?` (token+email+expiresAt) and `write(token, email, expiresAt)` / `clear()`; `clear()`/null writes remove all three keys (`admin_token`, `admin_token_expires_at`, `admin_email`).
+- [x] Add `companion object fun fromSharedPreferences(context)` → prefs file `"kolco24.settings"`, `MODE_PRIVATE`, `apply()`.
+- [x] Write tests: round-trip; null/clear removes all three keys; initial read reflects pre-seeded store.
+- [x] Run tests — must pass before Task 6.
 
 ### Task 6: `AdminAuthRepository` (reactive session)
 
