@@ -67,9 +67,9 @@ class LegendResponseTest {
                  "enc": {"iv": "8f3a", "ct": "b91c"}}
               ],
               "tags": [
-                {"bid": "a1b2c3d4e5f60718", "point": 101, "check_method": "nfc",
+                {"bid": "a1b2c3d4e5f60718", "checkpoint_id": 101, "check_method": "nfc",
                  "iv": null, "ct": null},
-                {"bid": "9988776655443322", "point": 103, "check_method": "nfc",
+                {"bid": "9988776655443322", "checkpoint_id": 103, "check_method": "nfc",
                  "iv": "1d2e", "ct": "ff00"}
               ]
             }

@@ -582,7 +582,7 @@ private fun Kolco24AppRoot(
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
         // !showScan guards on both of them they would win (Compose gives priority to the last registered
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
-        BackHandler(enabled = showScan) { showScan = false; showSettings = false }
+        BackHandler(enabled = showScan) { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false }
         if (showScan) {
             // Fresh DB-side take bookkeeping per opened overlay (parallels ScanScreen's UI session).
             val scanTake = remember(showScan) { ScanTakeState() }

@@ -129,7 +129,7 @@ private fun LoginForm() {
         keyboard?.hide()
         state = AdminLoginState.Submitting
         container.applicationScope.launch {
-            val outcome = container.adminAuthRepository.login(email.trim(), password)
+            val outcome = container.adminAuthRepository.login(email.trim(), password.trim())
             withContext(Dispatchers.Main) {
                 state = if (outcome == LoginOutcome.Success) {
                     AdminLoginState.Idle

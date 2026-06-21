@@ -220,8 +220,8 @@ class LegendRepositoryTest {
               {"id":101,"number":1,"cost":10,"type":"kp","description":"open"},
               {"id":102,"number":2,"type":"kp","enc":{"iv":"AAAA","ct":"BBBB"}}
             ],"tags":[
-              {"bid":"abc123","point":101,"check_method":"nfc"},
-              {"bid":"def456","point":102,"check_method":"nfc","iv":"IV","ct":"CT"}
+              {"bid":"abc123","checkpoint_id":101,"check_method":"nfc"},
+              {"bid":"def456","checkpoint_id":102,"check_method":"nfc","iv":"IV","ct":"CT"}
             ]}
         """.trimIndent()
         server.enqueue(MockResponse().setResponseCode(200).setBody(body))

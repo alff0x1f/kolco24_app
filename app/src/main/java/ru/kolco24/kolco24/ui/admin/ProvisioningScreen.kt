@@ -233,9 +233,10 @@ fun ProvisioningScreen(
             onDispose { host?.onTagForProvision = null }
         }
 
-        // Rail coverage = cached bound chips + this session's fresh writes.
+        // Rail coverage: take the max of cached counts and fresh-session counts to avoid
+        // double-counting when a legend refresh mid-session adds the just-written tags to cachedCounts.
         val boundCounts = cps.associate { cp ->
-            cp.id to ((cachedCounts[cp.id] ?: 0) + (freshTokens[cp.id]?.size ?: 0))
+            cp.id to maxOf(cachedCounts[cp.id] ?: 0, freshTokens[cp.id]?.size ?: 0)
         }
 
         Spacer(Modifier.height(12.dp))
