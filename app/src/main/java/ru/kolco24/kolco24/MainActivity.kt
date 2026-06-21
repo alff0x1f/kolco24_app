@@ -447,6 +447,9 @@ private fun Kolco24AppRoot(
             .associate { it.numberInTeam to it.participantNumber }
     }
     val checkpointsById = remember(safeCheckpoints) { safeCheckpoints.associateBy { it.id } }
+    // Per-checkpoint color token (point id → server color), so «Отметки» tiles can paint the same
+    // leading color bar the Легенда rows use. Race-scoped public data, joined off the mark's point.
+    val checkpointColors = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.color } }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
@@ -537,6 +540,7 @@ private fun Kolco24AppRoot(
                 when (page) {
                     0 -> MarksScreen(
                         marks = safeMarks,
+                        checkpointColors = checkpointColors,
                         nfcAvailable = nfcActiveForScan,
                         onScanClick = {
                             // Scanning needs a resolved team with a roster. With no team (or a

@@ -2,7 +2,6 @@ package ru.kolco24.kolco24.ui.marks
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,10 +36,14 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
@@ -49,60 +52,85 @@ import java.util.Locale
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
+import ru.kolco24.kolco24.ui.legend.CheckpointColor
+import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
+import ru.kolco24.kolco24.ui.theme.CpColorBlue
+import ru.kolco24.kolco24.ui.theme.CpColorPurple
+import ru.kolco24.kolco24.ui.theme.CpColorRed
+import ru.kolco24.kolco24.ui.theme.CpColorYellow
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
+import ru.kolco24.kolco24.ui.theme.Tertiary
 
 data class Mark(
     val number: String,
     val cost: Int,
     val kind: MarkKind,
     val time: String,
-    val isRecent: Boolean = false,
+    val color: CheckpointColor? = null,
 )
 
 enum class MarkKind { NFC, PHOTO }
 
 /**
- * Pure mapping of the local take events into display tiles — **one tile per event** (a repeat take of
- * the same checkpoint shows as a separate tile). [marks] is expected newest-first (as `observeMarks`
- * delivers). The single most-recent event (max `takenAt`) is flagged [Mark.isRecent]. Uses
- * [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ * Pure mapping of the local take events into display tiles — **one tile per completed event** (a repeat
+ * take of the same checkpoint shows as a separate tile). Only `complete` takes are shown: a КП scanned
+ * without scanning the whole team (e.g. КП chip only, or a partial collect) leaves a `complete=false`
+ * row that is kept in the DB for the future server log but never tiled here, matching the
+ * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
+ * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
+ * front. [colorOf] resolves a take's checkpoint color token (point id → server token) for the tile's
+ * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
+ * map. Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
  */
-fun marksToTiles(marks: List<MarkEntity>): List<Mark> {
+fun marksToTiles(
+    marks: List<MarkEntity>,
+    colorOf: (MarkEntity) -> CheckpointColor? = { null },
+): List<Mark> {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    // marks is newest-first (observeMarks orders by takenAt DESC); flag the first id so ties at the
-    // same millisecond never produce more than one "recent" tile.
-    val recentId = marks.firstOrNull()?.id
-    return marks.map { m ->
-        Mark(
-            number = m.checkpointNumber.toString().padStart(2, '0'),
-            cost = m.cost,
-            kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
-            time = fmt.format(Date(m.takenAt)),
-            isRecent = m.id == recentId,
-        )
-    }
+    // Reverse newest-first → oldest-first so each new take lands at the end of the grid.
+    return marks.filter { it.complete }
+        .asReversed()
+        .map { m ->
+            Mark(
+                number = m.checkpointNumber.toString().padStart(2, '0'),
+                cost = m.cost,
+                kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
+                time = fmt.format(Date(m.takenAt)),
+                color = colorOf(m),
+            )
+        }
 }
 
-private val PHOTO_GRADIENTS = listOf(
-    listOf(Color(0xFFDCD3B0), Color(0xFF8FA178), Color(0xFF5B6A4A)),
-    listOf(Color(0xFFB7C4D3), Color(0xFF6E7E94), Color(0xFF2C3845)),
-    listOf(Color(0xFFC8BFA6), Color(0xFF897E62), Color(0xFF4A4233)),
-)
-
+// Photo-seat fill (the charcoal placeholder behind the КП photo) + the mini-badge's reflective
+// red stripe. Fixed shades, single value for light & dark, echoing the physical checkpoint markers.
+private val PhotoTileTop = Color(0xFF1D242D)
+private val PhotoTileBottom = Color(0xFF2A323C)
 private val RedBand = Color(0xFFB01528)
+private val PhotoInk = Color(0xFF161A1F)
+
+/** КП color token → fixed bar shade — a third private copy of the mapping in `LegendScreen.kt`. */
+private fun CheckpointColor.barColor(): Color = when (this) {
+    CheckpointColor.RED -> CpColorRed
+    CheckpointColor.BLUE -> CpColorBlue
+    CheckpointColor.GREEN -> Tertiary
+    CheckpointColor.YELLOW -> CpColorYellow
+    CheckpointColor.ORANGE -> OrangeCta
+    CheckpointColor.PURPLE -> CpColorPurple
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarksScreen(
     marks: List<MarkEntity> = emptyList(),
+    checkpointColors: Map<Int, String> = emptyMap(),
     nfcAvailable: Boolean = true,
     onScanClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val totalKp = takenPointCount(marks)
     val score = totalScore(marks)
-    val tiles = marksToTiles(marks)
+    val tiles = marksToTiles(marks) { parseCheckpointColor(checkpointColors[it.point] ?: "") }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -263,15 +291,18 @@ private fun MetricItem(
 @Composable
 private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     val rows = marks.chunked(4)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        rows.forEachIndexed { rowIdx, rowMarks ->
+    Column(
+        modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        rows.forEach { rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                rowMarks.forEachIndexed { colIdx, mark ->
+                rowMarks.forEach { mark ->
                     Box(modifier = Modifier.weight(1f)) {
-                        MarkTile(mark = mark, gradientIndex = (rowIdx * 4 + colIdx) % 3)
+                        ScorecardTile(mark = mark)
                     }
                 }
                 repeat(4 - rowMarks.size) { Box(modifier = Modifier.weight(1f)) }
@@ -280,79 +311,139 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     }
 }
 
+private val TileShape = RoundedCornerShape(10.dp)
+
+/**
+ * One taken checkpoint as a scorecard card: a leading color bar (the КП color, matching the Легенда
+ * rows), the КП number as the mono hero, the score earned (`+cost`), and the take time. NFC takes
+ * read as a clean numeric card; photo takes swap the number area for the photo seat carrying a small
+ * КП badge.
+ */
 @Composable
-private fun MarkTile(mark: Mark, gradientIndex: Int) {
-    when (mark.kind) {
-        MarkKind.NFC -> NfcTile(mark = mark)
-        MarkKind.PHOTO -> PhotoTile(mark = mark, gradientIndex = gradientIndex)
+private fun ScorecardTile(mark: Mark) {
+    val gutter = mark.color?.barColor() ?: Color.Transparent
+    Surface(
+        shape = TileShape,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f),
+    ) {
+        // The color bar caps the top edge (echoing the red reflective stripe on a physical КП),
+        // overlaid so it never shifts the centered number; clipped to the tile's rounded top.
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (mark.kind) {
+                MarkKind.NFC -> NfcTileBody(mark)
+                MarkKind.PHOTO -> PhotoTileBody(mark)
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(gutter),
+            )
+        }
     }
 }
 
 @Composable
-private fun NfcTile(mark: Mark) {
-    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary) else Modifier
+private fun NfcTileBody(mark: Mark) {
+    // Per-element padding (not a shared inset) so the number can center on the WHOLE tile while
+    // «+N» clears the top color stripe and the time hugs the bottom.
+    Box(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = "+${mark.cost}",
+            fontFamily = RobotoMono,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 8.dp),
+        )
+        Text(
+            text = mark.number,
+            color = MaterialTheme.colorScheme.onSurface,
+            // includeFontPadding=false + centered/trimmed line height so the digits sit optically
+            // centered — without it the font's top padding makes the number look pushed down.
+            style = TextStyle(
+                fontFamily = RobotoMono,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                lineHeight = 28.sp,
+                letterSpacing = (-0.8).sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both,
+                ),
+            ),
+            modifier = Modifier.align(Alignment.Center),
+        )
+        Text(
+            text = mark.time,
+            fontFamily = RobotoMono,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 7.dp),
+        )
+    }
+}
+
+@Composable
+private fun PhotoTileBody(mark: Mark) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-            .then(recentBorder),
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
+    ) {
+        MiniCpBadge(
+            number = mark.number,
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 10.dp),
+        )
+        Text(
+            text = "+${mark.cost}",
+            fontFamily = RobotoMono,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = Color.White.copy(alpha = 0.88f),
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 6.dp),
+        )
+        Text(
+            text = mark.time,
+            fontFamily = RobotoMono,
+            fontSize = 11.sp,
+            color = Color.White.copy(alpha = 0.82f),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun MiniCpBadge(number: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .shadow(1.dp, RoundedCornerShape(3.dp))
+            .clip(RoundedCornerShape(3.dp))
+            .background(Color.White),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.10f)
-                .align(Alignment.TopStart)
-                .background(RedBand.copy(alpha = 0.78f))
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.10f)
-                .align(Alignment.BottomStart)
-                .background(RedBand.copy(alpha = 0.78f))
+                .height(2.dp)
+                .align(Alignment.TopCenter)
+                .background(RedBand.copy(alpha = 0.78f)),
         )
         Text(
-            text = mark.number,
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.6).sp,
-            ),
+            text = number,
             fontFamily = RobotoMono,
-            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            letterSpacing = (-0.2).sp,
+            color = PhotoInk,
         )
-    }
-}
-
-@Composable
-private fun PhotoTile(mark: Mark, gradientIndex: Int) {
-    val gradient = PHOTO_GRADIENTS[gradientIndex]
-    val recentBorder = if (mark.isRecent) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary) else Modifier
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .background(Brush.linearGradient(gradient))
-            .then(recentBorder),
-    ) {
-        Surface(
-            modifier = Modifier
-                .padding(6.dp)
-                .align(Alignment.TopStart),
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surfaceContainerLowest,
-            shadowElevation = 1.dp,
-        ) {
-            Text(
-                text = mark.number,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = RobotoMono,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-        }
     }
 }
 
