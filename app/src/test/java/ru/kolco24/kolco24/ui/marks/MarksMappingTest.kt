@@ -9,6 +9,7 @@ import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
+import ru.kolco24.kolco24.ui.legend.CheckpointColor
 
 class MarksMappingTest {
 
@@ -104,6 +105,37 @@ class MarksMappingTest {
         )
         val tiles = marksToTiles(marks)
         assertEquals(listOf("07", "04"), tiles.map { it.number })
+    }
+
+    @Test
+    fun `only the newest completed take is flagged isRecent`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, takenAt = 3_000L), // newest
+            mark("b", point = 2, number = 4, cost = 3, takenAt = 2_000L),
+            mark("c", point = 3, number = 7, cost = 2, takenAt = 1_000L), // oldest
+        )
+        val tiles = marksToTiles(marks)
+        // Tiles are oldest-first, so the newest take is the last tile.
+        assertEquals(listOf(false, false, true), tiles.map { it.isRecent })
+    }
+
+    @Test
+    fun `colorOf resolves the per-take checkpoint color`() {
+        val tiles = marksToTiles(
+            listOf(
+                mark("a", point = 1, number = 1, cost = 1, takenAt = 2_000L),
+                mark("b", point = 2, number = 2, cost = 1, takenAt = 1_000L),
+            ),
+        ) { if (it.point == 1) CheckpointColor.BLUE else null }
+        // Oldest-first: point 2 (null) first, point 1 (BLUE) last.
+        assertEquals(null, tiles[0].color)
+        assertEquals(CheckpointColor.BLUE, tiles[1].color)
+    }
+
+    @Test
+    fun `color defaults to null without a resolver`() {
+        val tiles = marksToTiles(listOf(mark("a", point = 1, number = 1, cost = 1)))
+        assertEquals(null, tiles.single().color)
     }
 
     @Test
