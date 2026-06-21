@@ -124,7 +124,7 @@ fun CheckChipScreen(
         )
 
         if (raceId == null) {
-            CheckChipHint("Сначала выберите гонку в разделе «Команда»")
+            CheckChipHint("Сначала выберите команду в разделе «Команда»")
             return@Column
         }
 
@@ -248,7 +248,7 @@ private fun CheckChipHero(
             is ChipCheckResult.Inconsistent -> MessageHero(
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Filled.Error,
-                title = "Чип привязан к КП, которого нет в легенде — обновите данные",
+                title = "КП №${result.pointId} нет в легенде — обновите данные",
                 uid = result.uid,
                 diagnostic = "bid ${result.bid}",
             )

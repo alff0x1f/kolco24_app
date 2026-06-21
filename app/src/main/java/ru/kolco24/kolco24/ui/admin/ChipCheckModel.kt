@@ -22,7 +22,7 @@ import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
  * - [Ok] — the chip's `bid` matched a tag whose checkpoint exists in the legend.
  * - [UnknownChip] — a code was read, but no tag with that `bid` exists in this race (foreign-race
  *   chip, or the legend list is stale).
- * - [Inconsistent] — a tag matched the `bid`, but its [point] has no checkpoint row (legend drift).
+ * - [Inconsistent] — a tag matched the `bid`, but its [ChipCheckResult.Inconsistent.pointId] has no checkpoint row (legend drift).
  * - [NoCode] — `readChipCode` returned null: a blank chip, a member bracelet, or a read error
  *   (collapsed into one case — the raw read can't distinguish them).
  */
