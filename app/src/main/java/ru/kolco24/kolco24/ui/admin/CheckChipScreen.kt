@@ -128,13 +128,19 @@ fun CheckChipScreen(
             return@Column
         }
 
-        val tags by remember(raceId) {
+        // Use null as sentinel: null = first emission not yet received, emptyList = loaded (possibly empty).
+        // This prevents processing scans against stale empty data during the brief Room delivery window.
+        val tagsState by remember(raceId) {
             container.legendRepository.tagsForRace(raceId)
-        }.collectAsState(initial = emptyList())
+        }.collectAsState(initial = null)
 
-        val checkpoints by remember(raceId) {
+        val checkpointsState by remember(raceId) {
             container.legendRepository.checkpointsForRace(raceId)
-        }.collectAsState(initial = emptyList())
+        }.collectAsState(initial = null)
+
+        val dataReady = tagsState != null && checkpointsState != null
+        val tags = tagsState ?: emptyList()
+        val checkpoints = checkpointsState ?: emptyList()
         val checkpointsById = remember(checkpoints) { checkpoints.associateBy { it.id } }
         val countsByPoint = remember(tags) { tags.groupingBy { it.point }.eachCount() }
 
@@ -144,6 +150,7 @@ fun CheckChipScreen(
         val scope = rememberCoroutineScope()
 
         // Long-lived hook reads the latest collected lists without re-arming on every recomposition.
+        val dataReadyLatest = rememberUpdatedState(dataReady)
         val tagsLatest = rememberUpdatedState(tags)
         val cpByIdLatest = rememberUpdatedState(checkpointsById)
         val countsLatest = rememberUpdatedState(countsByPoint)
@@ -156,6 +163,8 @@ fun CheckChipScreen(
             host?.onTagForVerify = { tag ->
                 scope.launch {
                     mutex.withLock {
+                        // Ignore scans until both legend flows have delivered their first emission.
+                        if (!dataReadyLatest.value) return@withLock
                         val uid = normalizeNfcUid(tag.id)
                         val code = withContext(Dispatchers.IO) { readChipCode(tag) }
                         val bid = code?.let { LegendCrypto.bid(it) }
@@ -358,13 +367,11 @@ private fun OkHero(result: ChipCheckResult.Ok) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val others = (result.chipsOnKp - 1).coerceAtLeast(0)
-            if (others > 0) {
-                Text(
-                    text = "На этом КП ещё $others чип(ов)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "На этом КП ещё $others чип(ов)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 text = "${result.bid} · ${result.checkMethod}",
                 style = MaterialTheme.typography.bodySmall,
