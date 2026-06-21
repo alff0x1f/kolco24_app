@@ -254,9 +254,9 @@ private fun CheckChipHero(
             is ChipCheckResult.Inconsistent -> MessageHero(
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Filled.Error,
-                title = "Чип привязан к КП, которого нет в легенде — обновите данные",
+                title = "КП id=${result.pointId} нет в легенде — обновите данные",
                 uid = result.uid,
-                diagnostic = "bid ${result.bid} · id ${result.pointId}",
+                diagnostic = "bid ${result.bid}",
             )
             is ChipCheckResult.NoCode -> MessageHero(
                 color = OrangeCta,
@@ -367,11 +367,13 @@ private fun OkHero(result: ChipCheckResult.Ok) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val others = (result.chipsOnKp - 1).coerceAtLeast(0)
-            Text(
-                text = "На этом КП ещё $others чип(ов)",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (others > 0) {
+                Text(
+                    text = "На этом КП ещё $others чип(ов)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 text = "${result.bid} · ${result.checkMethod}",
                 style = MaterialTheme.typography.bodySmall,
