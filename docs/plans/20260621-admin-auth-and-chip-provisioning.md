@@ -119,10 +119,10 @@ Build bottom-up in four layers so each rests on a tested foundation:
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/AuthDtos.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/TagDtos.kt`
 
-- [ ] `LoginRequest(email, password)`, `LoginResponse(token, @SerialName("expires_at") expiresAt)` — `@Serializable`.
-- [ ] `TagBindRequest(@SerialName("checkpoint_id") checkpointId, @SerialName("nfc_uid") nfcUid)`, `TagBindResponse(bid, @SerialName("checkpoint_id") checkpointId, number, @SerialName("nfc_uid") nfcUid, code)` — `@Serializable`.
-- [ ] (No unit test — declarative DTOs; serialization exercised via Task 4/Task 6 tests.) Note in commit.
-- [ ] Run build (`assembleDebug` compile) — must pass before Task 4.
+- [x] `LoginRequest(email, password)`, `LoginResponse(token, @SerialName("expires_at") expiresAt)` — `@Serializable`.
+- [x] `TagBindRequest(@SerialName("checkpoint_id") checkpointId, @SerialName("nfc_uid") nfcUid)`, `TagBindResponse(bid, @SerialName("checkpoint_id") checkpointId, number, @SerialName("nfc_uid") nfcUid, code)` — `@Serializable`.
+- [x] (No unit test — declarative DTOs; serialization exercised via Task 4/Task 6 tests.) Note in commit.
+- [x] Run build (`assembleDebug` compile) — must pass before Task 4.
 
 ### Task 4: ApiClient login/logout/bindTag methods
 
