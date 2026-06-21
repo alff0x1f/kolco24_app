@@ -154,7 +154,7 @@ fun ProvisioningScreen(
             container.legendRepository.tagsForRace(raceId)
         }.collectAsState(initial = emptyList())
         // Cached per-КП «уже привязано» counts, pre-seeded from the legend's tag rows.
-        val cachedCounts = remember(tags) { tags.groupingBy { it.point }.eachCount() }
+        val cachedCounts = remember(tags, raceId) { tags.filter { it.raceId == raceId }.groupingBy { it.point }.eachCount() }
 
         // uids written this session, keyed by checkpoint.id; set-semantics (dedupe on add).
         val freshTokens = remember(raceId) { mutableStateMapOf<Int, List<String>>() }
@@ -310,7 +310,7 @@ fun ProvisioningRail(ticks: List<RailTick>, modifier: Modifier = Modifier) {
     ) {
         val neutral = MaterialTheme.colorScheme.outlineVariant
         ticks.forEach { tick ->
-            val tint = tick.color?.barColor() ?: MaterialTheme.colorScheme.primary
+            val tint = tick.color?.barColor() ?: neutral
             val color = if (tick.filled) tint else neutral
             Box(
                 modifier = Modifier
