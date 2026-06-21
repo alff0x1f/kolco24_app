@@ -803,7 +803,7 @@ private fun Kolco24AppRoot(
         BackHandler(
             enabled = showProvisioning && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { showProvisioning = false }
-        if (showProvisioning) {
+        if (showProvisioning && !showScan) {
             ProvisioningScreen(
                 raceId = selectedRaceId,
                 onClose = { showProvisioning = false },
