@@ -92,4 +92,39 @@ class ChipCheckModelTest {
         ) as ChipCheckResult.Ok
         assertEquals(null, result.color)
     }
+
+    @Test
+    fun classify_lockedCheckpoint_isOkWithNullCost() {
+        val result = classifyChipCheck(
+            uid = "0411223344AABB",
+            bid = "abc123",
+            tag = tag("abc123", point = 10),
+            checkpoint = cp(id = 10, number = 5, cost = null),
+            chipsOnKp = 1,
+        )
+        assertEquals(
+            ChipCheckResult.Ok(
+                uid = "0411223344AABB",
+                number = 5,
+                cost = null,
+                color = null,
+                bid = "abc123",
+                checkMethod = "nfc",
+                chipsOnKp = 1,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun classify_nullBid_withNonNullArgs_isNoCode() {
+        val result = classifyChipCheck(
+            uid = "DEADBEEF",
+            bid = null,
+            tag = tag("abc", point = 1),
+            checkpoint = cp(id = 1, number = 1),
+            chipsOnKp = 2,
+        )
+        assertEquals(ChipCheckResult.NoCode("DEADBEEF"), result)
+    }
 }

@@ -10,8 +10,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -129,24 +131,20 @@ fun CheckChipScreen(
         val tags by remember(raceId) {
             container.legendRepository.tagsForRace(raceId)
         }.collectAsState(initial = emptyList())
-        // collectAsState does not reset on key change — filter stale rows from the prior race.
-        val cleanTags = remember(tags, raceId) { tags.filter { it.raceId == raceId } }
 
         val checkpoints by remember(raceId) {
             container.legendRepository.checkpointsForRace(raceId)
         }.collectAsState(initial = emptyList())
-        val checkpointsById = remember(checkpoints, raceId) {
-            checkpoints.filter { it.raceId == raceId }.associateBy { it.id }
-        }
-        val countsByPoint = remember(cleanTags) { cleanTags.groupingBy { it.point }.eachCount() }
+        val checkpointsById = remember(checkpoints) { checkpoints.associateBy { it.id } }
+        val countsByPoint = remember(tags) { tags.groupingBy { it.point }.eachCount() }
 
         var lastResult by remember(raceId) { mutableStateOf<ChipCheckResult?>(null) }
         val recent = remember(raceId) { mutableStateListOf<ChipCheckResult>() }
-        val mutex = remember { Mutex() }
+        val mutex = remember(raceId) { Mutex() }
         val scope = rememberCoroutineScope()
 
         // Long-lived hook reads the latest collected lists without re-arming on every recomposition.
-        val tagsLatest = rememberUpdatedState(cleanTags)
+        val tagsLatest = rememberUpdatedState(tags)
         val cpByIdLatest = rememberUpdatedState(checkpointsById)
         val countsLatest = rememberUpdatedState(countsByPoint)
 
@@ -303,11 +301,14 @@ private fun IdleHero() {
 @Composable
 private fun OkHero(result: ChipCheckResult.Ok) {
     val band = result.color?.barColor() ?: Color.Transparent
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.height(IntrinsicSize.Min),
+    ) {
         Box(
             modifier = Modifier
                 .width(8.dp)
-                .height(200.dp)
+                .fillMaxHeight()
                 .background(band),
         )
         Column(
