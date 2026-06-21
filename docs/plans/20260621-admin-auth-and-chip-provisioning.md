@@ -187,11 +187,11 @@ Build bottom-up in four layers so each rests on a tested foundation:
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] Collect `val adminSession by container.adminAuthRepository.session.collectAsState()` near the existing theme `collectAsState`.
-- [ ] Add `var showAdmin by rememberSaveable { mutableStateOf(false) }`; pass `session`/`onOpenAdmin = { showAdmin = true }` into `SettingsScreen`.
-- [ ] Render `AdminScreen` overlay in the `Box` **before** the CompPicker/TeamPicker blocks; add `BackHandler(enabled = showAdmin && !showScan && teamFlowStep == None && confirmTeamId == null)` → `showAdmin = false`.
-- [ ] Reset `showAdmin = false` in `onScanClick` and on team switch (`LaunchedEffect(selectedTeamId)`), alongside the other overlay resets.
-- [ ] Compile — must pass before Task 10. (Host wiring; no unit test.)
+- [x] Collect `val adminSession by container.adminAuthRepository.session.collectAsState()` near the existing theme `collectAsState`.
+- [x] Add `var showAdmin by rememberSaveable { mutableStateOf(false) }`; pass `session`/`onOpenAdmin = { showAdmin = true }` into `SettingsScreen`. (onOpenAdmin also resets `showSettings` so the two overlays never co-render — Admin draws above.)
+- [x] Render `AdminScreen` overlay in the `Box` **before** the CompPicker/TeamPicker blocks; add `BackHandler(enabled = showAdmin && !showScan && teamFlowStep == None && confirmTeamId == null)` → `showAdmin = false`. (A minimal `AdminScreen` stub was created so the wiring compiles; Task 10 fleshes out the login form ↔ admin home.)
+- [x] Reset `showAdmin = false` in `onScanClick` and on team switch (`LaunchedEffect(selectedTeamId)`), alongside the other overlay resets.
+- [x] Compile — must pass before Task 10. (Host wiring; no unit test.)
 
 ### Task 10: `AdminScreen` (login form ↔ admin home)
 

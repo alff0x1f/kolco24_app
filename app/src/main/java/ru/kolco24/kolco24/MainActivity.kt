@@ -65,7 +65,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
-import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
@@ -98,6 +97,7 @@ import ru.kolco24.kolco24.ui.team.TeamScreen
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
+import ru.kolco24.kolco24.ui.admin.AdminScreen
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.ThemeMode
@@ -325,6 +325,7 @@ private fun Kolco24AppRoot(
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showAdmin by rememberSaveable { mutableStateOf(false) }
     // Debug chip writer: hex of the code being written (uuid), or null when the dialog is closed.
     var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
     // false = raw bytes to pages 4–7; true = NDEF message + AAR (tag stays NDEF, auto-opens the app).
@@ -353,6 +354,8 @@ private fun Kolco24AppRoot(
 
     // Tab «Команда» data: which team is selected, its row, and the categories of its race.
     val races by raceRepo.races.collectAsState(initial = emptyList())
+    // Reactive race-admin session (source of truth for the admin overlay + the Settings «Администратор» row).
+    val adminSession by container.adminAuthRepository.session.collectAsState()
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
@@ -438,7 +441,7 @@ private fun Kolco24AppRoot(
     var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
     // re-open the sheet/dialog for an unrelated member on the newly selected team.
-    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null }
+    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null; showAdmin = false }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
@@ -524,6 +527,7 @@ private fun Kolco24AppRoot(
                             // would only error on the first tap and could log an orphan take.
                             if (teamForTab != null) {
                                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
+                                showAdmin = false
                                 bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true
                             } else {
                                 pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
@@ -686,9 +690,9 @@ private fun Kolco24AppRoot(
                 },
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
-                // Placeholder wiring — Task 9 collects the real session flow and adds the showAdmin overlay.
-                session = AdminSession.LoggedOut,
-                onOpenAdmin = {},
+                session = adminSession,
+                // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
+                onOpenAdmin = { showSettings = false; showAdmin = true },
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the
@@ -757,6 +761,20 @@ private fun Kolco24AppRoot(
                 nfcDisabled = nfcState != NfcState.Available,
                 onReset = { chipWriterCode = chipCodeHex(newChipCode()) },
                 onDismiss = { chipWriterCode = null },
+            )
+        }
+
+        // Admin overlay — sits beneath the picker overlays (rendered before them, so a picker launched
+        // from inside admin draws on top). Opened from the Settings «Администратор» row; its BackHandler
+        // only fires when nothing else is layered above it.
+        BackHandler(
+            enabled = showAdmin && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+        ) { showAdmin = false }
+        if (showAdmin) {
+            AdminScreen(
+                session = adminSession,
+                onClose = { showAdmin = false },
+                modifier = Modifier.fillMaxSize(),
             )
         }
 
