@@ -1,10 +1,14 @@
 package ru.kolco24.kolco24
 
 import android.content.Context
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
+import ru.kolco24.kolco24.data.AdminAuthRepository
+import ru.kolco24.kolco24.data.AdminTokenStore
 import ru.kolco24.kolco24.data.InstallId
 import ru.kolco24.kolco24.data.LegendRepository
 import ru.kolco24.kolco24.data.MarkRepository
@@ -16,6 +20,7 @@ import ru.kolco24.kolco24.data.ThemePreference
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
+import ru.kolco24.kolco24.ui.admin.ProvisionState
 
 /**
  * Hand-rolled dependency container (no Hilt). Everything is `lazy` so nothing touches the
@@ -29,12 +34,21 @@ class AppContainer(private val context: Context) {
 
     private val json: Json by lazy { Json { ignoreUnknownKeys = true } }
 
-    private val apiClient: ApiClient by lazy {
+    /**
+     * Shared signed `/app/` client. Exposed (not private) so the admin provisioning flow can issue
+     * `bindTag` POSTs directly — there is no provisioning repository (the bind response isn't
+     * persisted; the next legend refresh delivers the new tag via the existing `tags[]` array).
+     */
+    val apiClient: ApiClient by lazy {
         val interceptor = AppSignatureInterceptor(
             keyId = BuildConfig.APP_KEY_ID,
             secret = BuildConfig.APP_SECRET,
             installIdProvider = { installId },
             appVersion = BuildConfig.VERSION_NAME,
+            // Deferred to request time: invoked only after both `by lazy` blocks have initialized.
+            // `token()` is a synchronous StateFlow.value read, so no init-time recursion and no
+            // blocking on the interceptor thread. Bearer is never part of the canonical string.
+            tokenProvider = { adminAuthRepository.token() },
         )
         ApiClient(
             baseUrl = baseUrl,
@@ -99,8 +113,72 @@ class AppContainer(private val context: Context) {
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }
 
+    /** Persisted race-admin session store (token/email/expiry) backing [adminAuthRepository]. */
+    private val adminTokenStore: AdminTokenStore by lazy {
+        AdminTokenStore.fromSharedPreferences(context)
+    }
+
+    /** Reactive race-admin session; its [AdminAuthRepository.token] feeds the interceptor's bearer. */
+    val adminAuthRepository: AdminAuthRepository by lazy {
+        AdminAuthRepository(
+            apiClient = apiClient,
+            store = adminTokenStore,
+        )
+    }
+
     /** Long-lived scope for fire-and-forget background work (e.g. startup refresh). */
     val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Application-scoped guard for the chip-provisioning bind+write job. Lives here so the same
+     * lock instance survives overlay close/reopen and activity rotation — a composition-scoped
+     * [remember] would reset to `false` on recreation while the old job is still running.
+     */
+    val provisioningLock: AtomicBoolean = AtomicBoolean(false)
+
+    /**
+     * App-scoped provisioning scan-zone state. Lives here (not in the composition) so it survives
+     * overlay close/reopen and activity rotation: the [applicationScope] bind+write job writes to
+     * this flow directly, and [ProvisioningScreen] collects it via [collectAsState]. This eliminates
+     * the race where a [finally]-released lock allows a new job to set the state, only for the
+     * previous [finally] to clobber it — the lock and the state are now updated in a single step.
+     */
+    val provisioningState: MutableStateFlow<ProvisionState> =
+        MutableStateFlow(ProvisionState.WaitingForChip)
+
+    /**
+     * App-scoped fresh-token map for the provisioning session, keyed by checkpoint id. Survives
+     * activity rotation so the chip-rack pills remain visible if the device is rotated while a
+     * bind+write job is in flight. The [applicationScope] job writes here directly (thread-safe);
+     * [ProvisioningScreen] collects it via [collectAsState]. Reset in [DisposableEffect] onDispose
+     * alongside [provisioningState] and [provisioningActivePage] on intentional close (not rotation).
+     */
+    val provisioningFreshTokens: MutableStateFlow<Map<Int, List<String>>> =
+        MutableStateFlow(emptyMap())
+
+    /**
+     * The pager page that was active when the last bind+write job started. Persisted app-scoped so a
+     * close/reopen or rotation can restore the pager to the correct checkpoint. Reset to 0 alongside
+     * [provisioningState] and [provisioningFreshTokens] on intentional close (not rotation).
+     */
+    val provisioningActivePage: MutableStateFlow<Int> = MutableStateFlow(0)
+
+    /**
+     * The race that owns the current provisioning session. Set when a bind+write job starts and
+     * cleared on cleanup. Used by [DisposableEffect] in [ProvisioningScreen] to distinguish a
+     * same-session reopen (cancel cleanup) from a cross-race open (reset stale state instead).
+     */
+    val provisioningActiveRaceId: MutableStateFlow<Int?> = MutableStateFlow(null)
+
+    /**
+     * App-scoped deferred-cleanup flag for the provisioning flow. Set by [DisposableEffect]'s
+     * `onDispose` when the overlay is closed (not rotated) while a bind+write job is still running;
+     * cleared (via [AtomicBoolean.compareAndSet]) by whichever path — the job's `finally` block or
+     * `onDispose` itself — wins the race. Lives here (not in the composition) so that after an
+     * activity rotation the same flag instance is visible to both the surviving job and the new
+     * `DisposableEffect` that re-arms the hook.
+     */
+    val provisioningPendingCleanup: AtomicBoolean = AtomicBoolean(false)
 
     /**
      * Debug/testing only — wipes every Room table (races, categories, teams, selected_team,

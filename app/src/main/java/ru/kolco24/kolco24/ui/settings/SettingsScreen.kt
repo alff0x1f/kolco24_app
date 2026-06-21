@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Nfc
@@ -42,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.ui.theme.ThemeMode
 
 /**
@@ -57,6 +59,8 @@ fun SettingsScreen(
     onChangeTeam: () -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    session: AdminSession,
+    onOpenAdmin: () -> Unit,
     onResetTeam: (() -> Unit)? = null,
     onClearDatabase: (() -> Unit)? = null,
     onWriteChip: (() -> Unit)? = null,
@@ -110,6 +114,22 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             ThemeRow(currentMode = themeMode, onClick = { showThemeDialog = true })
+        }
+
+        Text(
+            text = "Администратор",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            AdminRow(session = session, onClick = onOpenAdmin)
         }
 
         // Debug-only: caller passes non-null callbacks only in debug builds (see MainActivity).
@@ -305,6 +325,57 @@ private fun DebugRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * «Администратор» row — admin-panel avatar, subtitle = «Войти» when [AdminSession.LoggedOut] else the
+ * logged-in admin email; tap → [onClick] (opens the admin overlay). Mirrors [ChangeTeamRow] styling.
+ */
+@Composable
+private fun AdminRow(session: AdminSession, onClick: () -> Unit) {
+    val subtitle = when (session) {
+        AdminSession.LoggedOut -> "Войти"
+        is AdminSession.LoggedIn -> session.email
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.AdminPanelSettings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Администратор",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

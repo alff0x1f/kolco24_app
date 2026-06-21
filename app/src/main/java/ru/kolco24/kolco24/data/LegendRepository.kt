@@ -50,6 +50,13 @@ class LegendRepository(
         checkpointDao.getCheckpointsForRace(raceId)
 
     /**
+     * Offline-readable NFC tags of one race (one row per bound chip). The admin provisioning flow
+     * groups these by `point` to pre-seed each КП's «уже привязано» count.
+     */
+    fun tagsForRace(raceId: Int): Flow<List<TagEntity>> =
+        tagDao.observeTagsForRace(raceId)
+
+    /**
      * Fetches `/app/race/<raceId>/legend/` with the stored ETag and, on `200`, replaces that race's
      * checkpoints **and** tags, then saves the new ETag. Like [TeamRepository.refreshTeams], the data
      * writes and the ETag write are separate transactions on purpose: a crash between them leaves

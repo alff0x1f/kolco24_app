@@ -44,14 +44,14 @@ data class EncDto(
 )
 
 /**
- * One physical NFC tag. `bid` (`sha256(code)[:16]`) maps a scanned tag → `point` (the CP id it
- * belongs to). `iv`/`ct` hold the `bundle_blob` envelope for tags that unlock locked CPs; they are
- * `null` for tags of open CPs (identification only, nothing to decrypt).
+ * One physical NFC tag. `bid` (`sha256(code)[:16]`) maps a scanned tag → the CP id it belongs to
+ * (`checkpoint_id`, renamed from `point` on the server). `iv`/`ct` hold the `bundle_blob` envelope
+ * for tags that unlock locked CPs; they are `null` for tags of open CPs (identification only).
  */
 @Serializable
 data class TagDto(
     val bid: String,
-    val point: Int,
+    @SerialName("checkpoint_id") val point: Int,
     @SerialName("check_method") val checkMethod: String,
     val iv: String? = null,
     val ct: String? = null,
