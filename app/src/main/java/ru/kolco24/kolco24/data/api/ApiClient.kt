@@ -4,8 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import ru.kolco24.kolco24.data.api.dto.LegendResponse
 import ru.kolco24.kolco24.data.api.dto.MemberTagsResponse
 import ru.kolco24.kolco24.data.api.dto.RaceDto
@@ -25,6 +27,24 @@ sealed interface FetchResult<out T> {
     data object NotModified : FetchResult<Nothing>
     data object Forbidden : FetchResult<Nothing>
     data class Error(val code: Int?) : FetchResult<Nothing>
+}
+
+/**
+ * Outcome of a single POST, parameterised by the payload type [T]. Like [FetchResult], network
+ * (`IOException`) and parse (`SerializationException`) failures never escape as exceptions: the
+ * former collapses into [Offline], the latter into [Error] with a `null` code. The HTTP status is
+ * mapped onto a dedicated branch so callers can react without inspecting raw codes. The non-success
+ * branches carry no payload and are typed `PostResult<Nothing>`.
+ */
+sealed interface PostResult<out T> {
+    data class Success<T>(val data: T) : PostResult<T>
+    data object BadRequest : PostResult<Nothing>
+    data object Unauthorized : PostResult<Nothing>
+    data object Forbidden : PostResult<Nothing>
+    data object Conflict : PostResult<Nothing>
+    data object RateLimited : PostResult<Nothing>
+    data object Offline : PostResult<Nothing>
+    data class Error(val code: Int?) : PostResult<Nothing>
 }
 
 /**
@@ -112,7 +132,50 @@ class ApiClient(
         }
     }
 
+    /**
+     * Shared `POST` of an exact `application/json` [bodyBytes] to [url]. Signing is handled by
+     * [okHttpClient]'s interceptor (which hashes the exact bytes). [parse] turns the body into the
+     * payload [T] and is invoked **only** on the `200`/`201` branch — error bodies are never parsed,
+     * so an empty-body endpoint with a `{ Unit }` parser is safe. Status mapping: `200`/`201` →
+     * [PostResult.Success]; `400` → [PostResult.BadRequest]; `401` → [PostResult.Unauthorized];
+     * `403` → [PostResult.Forbidden]; `409` → [PostResult.Conflict]; `429` → [PostResult.RateLimited];
+     * any other code → [PostResult.Error]. Runs on [Dispatchers.IO]; `IOException` →
+     * [PostResult.Offline], `SerializationException` → [PostResult.Error] with a `null` code.
+     */
+    internal suspend fun <T> post(
+        url: String,
+        bodyBytes: ByteArray,
+        parse: (String) -> T,
+    ): PostResult<T> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .post(bodyBytes.toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        try {
+            okHttpClient.newCall(request).execute().use { response ->
+                when (response.code) {
+                    200, 201 -> {
+                        val body = response.body?.string().orEmpty()
+                        PostResult.Success(parse(body))
+                    }
+                    400 -> PostResult.BadRequest
+                    401 -> PostResult.Unauthorized
+                    403 -> PostResult.Forbidden
+                    409 -> PostResult.Conflict
+                    429 -> PostResult.RateLimited
+                    else -> PostResult.Error(response.code)
+                }
+            }
+        } catch (_: IOException) {
+            PostResult.Offline
+        } catch (_: SerializationException) {
+            PostResult.Error(null)
+        }
+    }
+
     companion object {
+        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
         /** OkHttp client with the 10 s connect/read timeouts and the signing interceptor. */
         fun defaultOkHttpClient(signatureInterceptor: AppSignatureInterceptor): OkHttpClient =
             OkHttpClient.Builder()

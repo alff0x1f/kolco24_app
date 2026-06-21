@@ -391,4 +391,100 @@ class ApiClientTest {
 
         assertTrue(result is FetchResult.Error)
     }
+
+    // --- POST path (PostResult) ---
+
+    private fun postUrl(path: String) = server.url(path).toString()
+
+    @Test
+    fun post_200_parsesBodyIntoSuccess_andSendsJsonBody() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"v":7}"""))
+
+        val result = apiClient.post(postUrl("/app/x/"), """{"a":1}""".toByteArray()) { it }
+
+        assertTrue(result is PostResult.Success)
+        result as PostResult.Success
+        assertEquals("""{"v":7}""", result.data)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/x/", recorded.path)
+        assertEquals("""{"a":1}""", recorded.body.readUtf8())
+        assertTrue(recorded.getHeader("Content-Type")!!.startsWith("application/json"))
+    }
+
+    @Test
+    fun post_201_parsesBodyIntoSuccess() = runTest {
+        server.enqueue(MockResponse().setResponseCode(201).setBody("ok"))
+
+        val result = apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it }
+
+        assertTrue(result is PostResult.Success)
+        assertEquals("ok", (result as PostResult.Success).data)
+    }
+
+    @Test
+    fun post_emptyBody_doesNotInvokeParseOnError() = runTest {
+        // A 401 with no body must not reach the parser (would otherwise crash on empty input).
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        val result = apiClient.post(postUrl("/app/x/"), ByteArray(0)) {
+            error("parse must not be called on error branch")
+        }
+
+        assertEquals(PostResult.Unauthorized, result)
+    }
+
+    @Test
+    fun post_400_returnsBadRequest() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"detail":"bad"}"""))
+
+        assertEquals(PostResult.BadRequest, apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it })
+    }
+
+    @Test
+    fun post_403_returnsForbidden() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        assertEquals(PostResult.Forbidden, apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it })
+    }
+
+    @Test
+    fun post_409_returnsConflict() = runTest {
+        server.enqueue(MockResponse().setResponseCode(409))
+
+        assertEquals(PostResult.Conflict, apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it })
+    }
+
+    @Test
+    fun post_429_returnsRateLimited() = runTest {
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        assertEquals(PostResult.RateLimited, apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it })
+    }
+
+    @Test
+    fun post_500_returnsErrorWithCode() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        assertEquals(PostResult.Error(500), apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it })
+    }
+
+    @Test
+    fun post_connectionDrop_returnsOffline() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertEquals(PostResult.Offline, apiClient.post(postUrl("/app/x/"), ByteArray(0)) { it })
+    }
+
+    @Test
+    fun post_parseThrowsSerialization_returnsErrorWithNullCode() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{ not json"))
+
+        val result: PostResult<String> = apiClient.post(postUrl("/app/x/"), ByteArray(0)) {
+            throw kotlinx.serialization.SerializationException("bad json")
+        }
+
+        assertEquals(PostResult.Error(null), result)
+    }
 }

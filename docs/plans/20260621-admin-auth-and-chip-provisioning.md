@@ -108,10 +108,10 @@ Build bottom-up in four layers so each rests on a tested foundation:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt`
 
-- [ ] Add `sealed interface PostResult<out T>` with `Success(data)`, `BadRequest`, `Unauthorized`, `Forbidden`, `Conflict`, `RateLimited`, `Offline`, `Error(code)`.
-- [ ] Add a private `post(url, bodyBytes: ByteArray, parse: (String) -> T): PostResult<T>` on `Dispatchers.IO`, mapping `200/201→Success`, `400→BadRequest`, `401→Unauthorized`, `403→Forbidden`, `409→Conflict`, `429→RateLimited`, else `Error(code)`; `IOException→Offline`, `SerializationException→Error(null)`. Build the `RequestBody` from the exact `bodyBytes` with `application/json`. **`parse` is invoked only on the `200/201` branch** (error bodies are never parsed), so a `{ Unit }` parser for an empty `logout` body is safe.
-- [ ] Write tests for POST success (200 + 201) and each status mapping + offline, reusing the MockWebServer harness.
-- [ ] Run tests — must pass before Task 3.
+- [x] Add `sealed interface PostResult<out T>` with `Success(data)`, `BadRequest`, `Unauthorized`, `Forbidden`, `Conflict`, `RateLimited`, `Offline`, `Error(code)`.
+- [x] Add a private `post(url, bodyBytes: ByteArray, parse: (String) -> T): PostResult<T>` on `Dispatchers.IO`, mapping `200/201→Success`, `400→BadRequest`, `401→Unauthorized`, `403→Forbidden`, `409→Conflict`, `429→RateLimited`, else `Error(code)`; `IOException→Offline`, `SerializationException→Error(null)`. Build the `RequestBody` from the exact `bodyBytes` with `application/json`. **`parse` is invoked only on the `200/201` branch** (error bodies are never parsed), so a `{ Unit }` parser for an empty `logout` body is safe. (Made `internal` rather than strictly `private` so Task 2's tests can exercise it directly before the typed Task 4 methods exist.)
+- [x] Write tests for POST success (200 + 201) and each status mapping + offline, reusing the MockWebServer harness.
+- [x] Run tests — must pass before Task 3.
 
 ### Task 3: Admin DTOs
 
