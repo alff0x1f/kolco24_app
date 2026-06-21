@@ -312,10 +312,17 @@ fun ProvisioningScreen(
                         // running. compareAndSet guarantees exactly one of (finally, onDispose)
                         // performs the reset, even when they race at the isBusy boundary.
                         if (container.provisioningPendingCleanup.compareAndSet(true, false)) {
-                            container.provisioningState.value = ProvisionState.WaitingForChip
-                            container.provisioningFreshTokens.value = emptyMap()
-                            container.provisioningActivePage.value = 0
-                            container.provisioningActiveRaceId.value = null
+                            // Guard: only reset state if we're still the active race. A Race B
+                            // session may have opened between our onDispose and this finally block,
+                            // already resetting state and arming its own hooks — clobbering its
+                            // freshTokens or activeRaceId here would corrupt Race B's session.
+                            val activeRace = container.provisioningActiveRaceId.value
+                            if (activeRace == null || activeRace == raceId) {
+                                container.provisioningState.value = ProvisionState.WaitingForChip
+                                container.provisioningFreshTokens.value = emptyMap()
+                                container.provisioningActivePage.value = 0
+                                container.provisioningActiveRaceId.value = null
+                            }
                         }
                     }
                 }
