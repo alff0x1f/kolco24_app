@@ -76,12 +76,12 @@
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/admin/ChipCheckModel.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/admin/ChipCheckModelTest.kt`
 
-- [ ] Create `ChipCheckModel.kt` (package `ru.kolco24.kolco24.ui.admin`, Android-free — only imports `CheckpointColor`, `TagEntity`, `CheckpointEntity`), define the `ChipCheckResult` sealed interface with the four variants from Technical Details.
-- [ ] Implement `classifyChipCheck(uid, bid, tag, checkpoint, chipsOnKp): ChipCheckResult` per the branch logic; map `checkpoint.color` via `parseCheckpointColor(...)` into `Ok.color`.
-- [ ] KDoc the file mirroring `ProvisioningModel.kt`'s tone (pure, JVM-unit-testable, host does the impure reads).
-- [ ] Write `ChipCheckModelTest` success case: tag + checkpoint present → `Ok` with correct number/cost/color/bid/checkMethod/chipsOnKp.
-- [ ] Write `ChipCheckModelTest` edge cases: `bid == null` → `NoCode`; `tag == null` → `UnknownChip`; `checkpoint == null` → `Inconsistent`.
-- [ ] Run `./gradlew testDebugUnitTest` — must pass before next task.
+- [x] Create `ChipCheckModel.kt` (package `ru.kolco24.kolco24.ui.admin`, Android-free — only imports `CheckpointColor`, `TagEntity`, `CheckpointEntity`), define the `ChipCheckResult` sealed interface with the four variants from Technical Details.
+- [x] Implement `classifyChipCheck(uid, bid, tag, checkpoint, chipsOnKp): ChipCheckResult` per the branch logic; map `checkpoint.color` via `parseCheckpointColor(...)` into `Ok.color`.
+- [x] KDoc the file mirroring `ProvisioningModel.kt`'s tone (pure, JVM-unit-testable, host does the impure reads).
+- [x] Write `ChipCheckModelTest` success case: tag + checkpoint present → `Ok` with correct number/cost/color/bid/checkMethod/chipsOnKp.
+- [x] Write `ChipCheckModelTest` edge cases: `bid == null` → `NoCode`; `tag == null` → `UnknownChip`; `checkpoint == null` → `Inconsistent`.
+- [x] Run `./gradlew testDebugUnitTest` — must pass before next task.
 
 ### Task 2: CheckChipScreen Compose overlay
 
