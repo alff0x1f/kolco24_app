@@ -41,11 +41,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,6 +65,7 @@ import ru.kolco24.kolco24.BuildConfig
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.data.api.PostResult
+import ru.kolco24.kolco24.data.nfc.CHIP_CODE_BYTES
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
 import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
@@ -156,20 +155,46 @@ fun ProvisioningScreen(
         // Cached per-КП «уже привязано» counts, pre-seeded from the legend's tag rows.
         val cachedCounts = remember(tags, raceId) { tags.filter { it.raceId == raceId }.groupingBy { it.point }.eachCount() }
 
-        // uids written this session, keyed by checkpoint.id; set-semantics (dedupe on add).
-        val freshTokens = remember(raceId) { mutableStateMapOf<Int, List<String>>() }
+        // App-scoped so the map survives activity rotation: the bind+write job holds a reference to
+        // the AppContainer flow, not the composition, so a rotation mid-write still updates the rack.
+        val freshTokensMap by container.provisioningFreshTokens.collectAsState()
+        // Application-scoped lock: survives overlay close/reopen and activity rotation so a
+        // composition reset can't open a second concurrent job while the original is still running.
+        val isBusy = container.provisioningLock
+        // Collected before pagerState so their snapshot values can be used for initialPage without
+        // a direct .value read (which lint flags as StateFlowValueCalledInComposition).
+        val provisionState by container.provisioningState.collectAsState()
+        val activePageIdx by container.provisioningActivePage.collectAsState()
 
         if (cps.isEmpty()) {
             ProvisioningHint("Нет контрольных пунктов для этой гонки")
             return@Column
         }
 
-        val pagerState = rememberPagerState(pageCount = { cps.size })
-        var provisionState by remember { mutableStateOf<ProvisionState>(ProvisionState.WaitingForChip) }
+        // Restore the pager to the active checkpoint on reopen after a close-during-job.
+        val startPage = if (provisionState is ProvisionState.WaitingForChip) {
+            0
+        } else {
+            activePageIdx.coerceIn(0, cps.size - 1)
+        }
+        val pagerState = rememberPagerState(initialPage = startPage, pageCount = { cps.size })
 
-        // Reset the scan zone whenever the pager settles on a different КП.
+        // Reset the scan zone whenever the pager settles on a different КП — but not while a
+        // bind/write job is in flight, and not when a terminal state (Success/Failed) belongs to
+        // the active page (so closing/reopening or rotating mid-job doesn't clobber the result).
         LaunchedEffect(pagerState.settledPage) {
-            provisionState = ProvisionState.WaitingForChip
+            // Read the StateFlow directly so the guard reflects the latest value even if the
+            // Compose snapshot (collectAsState) hasn't propagated yet — an NFC tap arriving just
+            // after page settlement sets Binding on the binder thread; reading the snapshot could
+            // still see WaitingForChip and overwrite Binding before the frame propagates the update.
+            val current = container.provisioningState.value
+            if (current !is ProvisionState.Binding && current !is ProvisionState.Writing) {
+                val isTerminal = current is ProvisionState.Success || current is ProvisionState.Failed
+                val isActivePage = pagerState.settledPage == container.provisioningActivePage.value
+                if (!isTerminal || !isActivePage) {
+                    container.provisioningState.value = ProvisionState.WaitingForChip
+                }
+            }
         }
         // Light haptic stamp on a successful write.
         LaunchedEffect(provisionState) {
@@ -181,62 +206,148 @@ fun ProvisioningScreen(
         // Long-lived hook reads the latest checkpoints without re-arming on every recomposition.
         val cpsState = rememberUpdatedState(cps)
         DisposableEffect(raceId) {
+            val previousActiveRaceId = container.provisioningActiveRaceId.value
+            if (previousActiveRaceId == null || previousActiveRaceId == raceId) {
+                // Same race (or no prior session): re-opening means cleanup is no longer needed.
+                container.provisioningPendingCleanup.set(false)
+            } else {
+                // Different race: reset stale state from race A immediately so it doesn't bleed
+                // into this provisioning session.
+                container.provisioningState.value = ProvisionState.WaitingForChip
+                container.provisioningFreshTokens.value = emptyMap()
+                container.provisioningActivePage.value = 0
+                if (!isBusy.get()) {
+                    // No job running; the pendingCleanup flag is stale from the previous onDispose.
+                    container.provisioningPendingCleanup.set(false)
+                }
+                // else: old job is still in flight; leave pendingCleanup=true so its finally
+                // block finishes cleanup (resetting to the same safe initial values we set above).
+            }
+            container.provisioningActiveRaceId.value = raceId
             val host = activity
             host?.onTagForProvision = onTag@{ tag ->
-                // Bind only to the settled КП; ignore mid-swipe taps and re-taps while already busy.
+                // Bind only to the settled КП; ignore mid-swipe taps and concurrent jobs.
                 if (pagerState.isScrollInProgress) return@onTag
-                val current = provisionState
-                if (current is ProvisionState.Binding || current == ProvisionState.Writing) return@onTag
-                val cp = cpsState.value.getOrNull(pagerState.settledPage) ?: return@onTag
+                if (!isBusy.compareAndSet(false, true)) return@onTag
+                val cp = cpsState.value.getOrNull(pagerState.settledPage) ?: run {
+                    isBusy.set(false)
+                    return@onTag
+                }
                 val uid = normalizeNfcUid(tag.id)
-                provisionState = ProvisionState.Binding(uid)
+                // Record which page and race are active before starting: lets close/reopen and
+                // rotation restore the pager to the correct checkpoint (see rememberPagerState
+                // initialPage), and lets cross-race opens detect stale state (see DisposableEffect).
+                container.provisioningActivePage.value = pagerState.settledPage
+                container.provisioningActiveRaceId.value = raceId
+                // Update the app-scoped flow directly — safe from any thread (MutableStateFlow
+                // is thread-safe), and the flow outlives this composition so state is preserved
+                // across activity rotation and overlay close/reopen.
+                container.provisioningState.value = ProvisionState.Binding(uid)
                 // applicationScope survives overlay dismissal so the NFC write completes even if
                 // the user navigates away after the server bind but before the chip write finishes.
                 container.applicationScope.launch {
-                    when (val result = container.apiClient.bindTag(raceId, cp.id, uid)) {
-                        is PostResult.Success -> {
-                            withContext(Dispatchers.Main) { provisionState = ProvisionState.Writing }
-                            val bytes = try {
-                                chipCodeFromHex(result.data.code)
-                            } catch (_: IllegalArgumentException) {
-                                withContext(Dispatchers.Main) {
-                                    provisionState = ProvisionState.Failed("Неверный код от сервера")
-                                }
-                                return@launch
-                            }
-                            val written = withContext(Dispatchers.IO) {
-                                writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
-                            }
-                            withContext(Dispatchers.Main) {
-                                if (written == ChipWriteResult.Success) {
-                                    // A re-tap of an already-written chip is idempotent (200 + same code).
-                                    val existing = freshTokens[cp.id].orEmpty()
-                                    if (uid !in existing) freshTokens[cp.id] = existing + uid
-                                    provisionState = ProvisionState.Success(result.data.number)
+                    try {
+                        when (val result = container.apiClient.bindTag(raceId, cp.id, uid)) {
+                            is PostResult.Success -> {
+                                container.provisioningState.value = ProvisionState.Writing
+                                val hexCode = result.data.code
+                                val bytes = if (hexCode.length != CHIP_CODE_BYTES * 2) {
+                                    null
                                 } else {
-                                    provisionState =
+                                    try {
+                                        chipCodeFromHex(hexCode)
+                                    } catch (_: IllegalArgumentException) {
+                                        null
+                                    }
+                                }
+                                if (bytes == null) {
+                                    container.provisioningState.value =
+                                        ProvisionState.Failed("Неверный код от сервера")
+                                    return@launch
+                                }
+                                val written = withContext(Dispatchers.IO) {
+                                    writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
+                                }
+                                if (written == ChipWriteResult.Success) {
+                                    // provisioningFreshTokens is a MutableStateFlow — thread-safe,
+                                    // no withContext needed. isBusy prevents concurrent writes so
+                                    // the read-then-write is safe. A re-tap is idempotent (uid guard).
+                                    val prev = container.provisioningFreshTokens.value
+                                    val existing = prev[cp.id].orEmpty()
+                                    if (uid !in existing) {
+                                        container.provisioningFreshTokens.value =
+                                            prev + (cp.id to (existing + uid))
+                                    }
+                                    container.provisioningState.value =
+                                        ProvisionState.Success(result.data.number)
+                                } else {
+                                    container.provisioningState.value =
                                         ProvisionState.Failed("Не удалось записать, приложите снова")
                                 }
                             }
+                            // 401: token revoked/expired server-side — clear the session and drop to login.
+                            PostResult.Unauthorized -> {
+                                container.adminAuthRepository.onUnauthorized()
+                                withContext(Dispatchers.Main) { onClose() }
+                            }
+                            else -> {
+                                container.provisioningState.value =
+                                    ProvisionState.Failed(provisionErrorMessage(result))
+                            }
                         }
-                        // 401: token revoked/expired server-side — clear the session and drop to login.
-                        PostResult.Unauthorized -> {
-                            container.adminAuthRepository.onUnauthorized()
-                            withContext(Dispatchers.Main) { onClose() }
+                    } finally {
+                        // Safety reset: if an unexpected early-exit left the state in-progress,
+                        // clear it so no new job sees a stale Binding/Writing.
+                        val current = container.provisioningState.value
+                        if (current is ProvisionState.Binding || current is ProvisionState.Writing) {
+                            container.provisioningState.value = ProvisionState.WaitingForChip
                         }
-                        else -> withContext(Dispatchers.Main) {
-                            provisionState = ProvisionState.Failed(provisionErrorMessage(result))
+                        // Release the lock BEFORE checking pendingCleanup: onDispose (main thread)
+                        // may be racing with this block (IO thread). By releasing first, we ensure
+                        // that if onDispose already set the flag and then read isBusy=true, it defers
+                        // to us; if onDispose fires after our release and sees isBusy=false, it takes
+                        // ownership via compareAndSet without us double-cleaning.
+                        isBusy.set(false)
+                        // Deferred cleanup: the overlay was closed (not rotated) while this job was
+                        // running. compareAndSet guarantees exactly one of (finally, onDispose)
+                        // performs the reset, even when they race at the isBusy boundary.
+                        if (container.provisioningPendingCleanup.compareAndSet(true, false)) {
+                            container.provisioningState.value = ProvisionState.WaitingForChip
+                            container.provisioningFreshTokens.value = emptyMap()
+                            container.provisioningActivePage.value = 0
+                            container.provisioningActiveRaceId.value = null
                         }
                     }
                 }
             }
-            onDispose { host?.onTagForProvision = null }
+            onDispose {
+                host?.onTagForProvision = null
+                // Skip cleanup during rotation (isChangingConfigurations = true): the composition
+                // restarts but the admin is still provisioning, so state should survive the rotation.
+                if (host?.isChangingConfigurations != true) {
+                    // Set the flag BEFORE reading isBusy so that a job releasing its lock
+                    // concurrently will see the flag in its finally block and perform cleanup.
+                    container.provisioningPendingCleanup.set(true)
+                    if (!isBusy.get()) {
+                        // No job is running (or it already finished and released isBusy). Take
+                        // ownership of cleanup via compareAndSet so we don't double-clean if the
+                        // job's finally raced between our set and this isBusy read.
+                        if (container.provisioningPendingCleanup.compareAndSet(true, false)) {
+                            container.provisioningState.value = ProvisionState.WaitingForChip
+                            container.provisioningFreshTokens.value = emptyMap()
+                            container.provisioningActivePage.value = 0
+                            container.provisioningActiveRaceId.value = null
+                        }
+                    }
+                    // else: job is running; its finally block will see the flag and clean up.
+                }
+            }
         }
 
         // Rail coverage: take the max of cached counts and fresh-session counts to avoid
         // double-counting when a legend refresh mid-session adds the just-written tags to cachedCounts.
         val boundCounts = cps.associate { cp ->
-            cp.id to maxOf(cachedCounts[cp.id] ?: 0, freshTokens[cp.id]?.size ?: 0)
+            cp.id to maxOf(cachedCounts[cp.id] ?: 0, freshTokensMap[cp.id]?.size ?: 0)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -247,6 +358,11 @@ fun ProvisioningScreen(
         Spacer(Modifier.height(20.dp))
         HorizontalPager(
             state = pagerState,
+            // Disable swiping while a bind/write job is in progress: prevents the settled-page
+            // reset from firing mid-job (which would show WaitingForChip while the chip is still
+            // being written) and removes the risk of premature chip removal.
+            userScrollEnabled = provisionState !is ProvisionState.Binding &&
+                provisionState !is ProvisionState.Writing,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 24.dp),
         ) { page ->
@@ -260,7 +376,7 @@ fun ProvisioningScreen(
                 Spacer(Modifier.height(16.dp))
                 ChipRack(
                     preSeededCount = cachedCounts[cp.id] ?: 0,
-                    freshTokens = freshTokens[cp.id].orEmpty(),
+                    freshTokens = freshTokensMap[cp.id].orEmpty(),
                 )
             }
         }
