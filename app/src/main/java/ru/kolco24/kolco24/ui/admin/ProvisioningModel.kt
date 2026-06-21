@@ -82,7 +82,7 @@ fun provisionErrorMessage(result: PostResult<*>): String = when (result) {
     PostResult.RateLimited -> "Слишком часто, подождите немного"
     PostResult.Offline -> "Нет сети, попробуйте снова"
     is PostResult.Error -> if (result.code == 404) "КП не найдено" else "Ошибка сервера"
-    else -> "Ошибка сервера"
+    is PostResult.Success<*> -> "Ошибка сервера"
 }
 
 /**

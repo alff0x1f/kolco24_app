@@ -44,7 +44,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -116,7 +115,6 @@ fun ProvisioningScreen(
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
     val activity = context as? MainActivity
-    val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
 
     Column(
@@ -189,7 +187,7 @@ fun ProvisioningScreen(
                 if (pagerState.isScrollInProgress) return@onTag
                 val current = provisionState
                 if (current is ProvisionState.Binding || current == ProvisionState.Writing) return@onTag
-                val cp = cpsState.value.getOrNull(pagerState.currentPage) ?: return@onTag
+                val cp = cpsState.value.getOrNull(pagerState.settledPage) ?: return@onTag
                 val uid = normalizeNfcUid(tag.id)
                 provisionState = ProvisionState.Binding(uid)
                 // applicationScope survives overlay dismissal so the NFC write completes even if
