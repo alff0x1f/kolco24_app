@@ -487,4 +487,119 @@ class ApiClientTest {
 
         assertEquals(PostResult.Error(null), result)
     }
+
+    // --- login / logout / bindTag (typed POST methods) ---
+
+    @Test
+    fun login_success_parsesTokenAndExpiry_andPostsCredentials() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"token":"tok-123","expires_at":"2026-07-21T14:03:00Z"}"""),
+        )
+
+        val result = apiClient.login("admin@kolco24.ru", "s3cret")
+
+        assertTrue(result is PostResult.Success)
+        result as PostResult.Success
+        assertEquals("tok-123", result.data.token)
+        assertEquals("2026-07-21T14:03:00Z", result.data.expiresAt)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/login/", recorded.path)
+        val body = json.decodeFromString<Map<String, String>>(recorded.body.readUtf8())
+        assertEquals("admin@kolco24.ru", body["email"])
+        assertEquals("s3cret", body["password"])
+    }
+
+    @Test
+    fun login_wrongCredentials_returnsUnauthorized() = runTest {
+        server.enqueue(MockResponse().setResponseCode(401).setBody("""{"detail":"bad"}"""))
+
+        assertEquals(PostResult.Unauthorized, apiClient.login("a@b.c", "nope"))
+    }
+
+    @Test
+    fun login_tooManyAttempts_returnsRateLimited() = runTest {
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        assertEquals(PostResult.RateLimited, apiClient.login("a@b.c", "x"))
+    }
+
+    @Test
+    fun logout_emptyBody200_returnsSuccessUnit() = runTest {
+        // 200 with an empty body must map to Success(Unit), not Error — the parser ignores the body.
+        server.enqueue(MockResponse().setResponseCode(200))
+
+        val result = apiClient.logout()
+
+        assertTrue(result is PostResult.Success)
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/logout/", recorded.path)
+        // Empty body sent.
+        assertEquals("", recorded.body.readUtf8())
+    }
+
+    @Test
+    fun bindTag_201_parsesResponseWithCode_andPostsBinding() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(
+                    """{"bid":"b1","checkpoint_id":101,"number":5,"nfc_uid":"04A2B3","code":"DEADBEEF"}""",
+                ),
+        )
+
+        val result = apiClient.bindTag(8, 101, "04A2B3")
+
+        assertTrue(result is PostResult.Success)
+        result as PostResult.Success
+        assertEquals("b1", result.data.bid)
+        assertEquals(101, result.data.checkpointId)
+        assertEquals(5, result.data.number)
+        assertEquals("04A2B3", result.data.nfcUid)
+        assertEquals("DEADBEEF", result.data.code)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/race/8/tags/", recorded.path)
+        val body = json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(
+            recorded.body.readUtf8(),
+        )
+        assertEquals("101", body["checkpoint_id"].toString())
+        assertEquals("\"04A2B3\"", body["nfc_uid"].toString())
+    }
+
+    @Test
+    fun bindTag_200_idempotentRebind_parsesResponseWithCode() = runTest {
+        // The 200 (re-bind) body must still parse into TagBindResponse — the rewrite path needs `code`.
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """{"bid":"b1","checkpoint_id":101,"number":5,"nfc_uid":"04A2B3","code":"DEADBEEF"}""",
+                ),
+        )
+
+        val result = apiClient.bindTag(8, 101, "04A2B3")
+
+        assertTrue(result is PostResult.Success)
+        assertEquals("DEADBEEF", (result as PostResult.Success).data.code)
+    }
+
+    @Test
+    fun bindTag_409_returnsConflict() = runTest {
+        server.enqueue(MockResponse().setResponseCode(409).setBody("""{"detail":"already bound"}"""))
+
+        assertEquals(PostResult.Conflict, apiClient.bindTag(8, 101, "04A2B3"))
+    }
+
+    @Test
+    fun bindTag_404_returnsErrorWith404() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertEquals(PostResult.Error(404), apiClient.bindTag(8, 999, "04A2B3"))
+    }
 }

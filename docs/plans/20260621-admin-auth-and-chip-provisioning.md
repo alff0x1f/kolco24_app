@@ -130,11 +130,11 @@ Build bottom-up in four layers so each rests on a tested foundation:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt`
 
-- [ ] `login(email, password): PostResult<LoginResponse>` — serialize `LoginRequest` to bytes once, POST `/app/login/`.
-- [ ] `logout(): PostResult<Unit>` — POST `/app/logout/` with an empty `ByteArray` body (still hashes the empty string → `EMPTY_BODY_SHA256`); parser is `{ Unit }` and never touches the body.
-- [ ] `bindTag(raceId, checkpointId, nfcUid): PostResult<TagBindResponse>` — POST `/app/race/<raceId>/tags/`.
-- [ ] Write tests: `login` happy path + 401/429; `bindTag` 201 + 200 (**assert the `200` body parses into `TagBindResponse` carrying `code`** — the write/rewrite path depends on it) + 409 + 404(→`Error(404)`); `logout` 200 with an **empty body** → `Success(Unit)` (not `Error` — guards the empty-body-parse pitfall).
-- [ ] Run tests — must pass before Task 5.
+- [x] `login(email, password): PostResult<LoginResponse>` — serialize `LoginRequest` to bytes once, POST `/app/login/`.
+- [x] `logout(): PostResult<Unit>` — POST `/app/logout/` with an empty `ByteArray` body (still hashes the empty string → `EMPTY_BODY_SHA256`); parser is `{ Unit }` and never touches the body.
+- [x] `bindTag(raceId, checkpointId, nfcUid): PostResult<TagBindResponse>` — POST `/app/race/<raceId>/tags/`.
+- [x] Write tests: `login` happy path + 401/429; `bindTag` 201 + 200 (**assert the `200` body parses into `TagBindResponse` carrying `code`** — the write/rewrite path depends on it) + 409 + 404(→`Error(404)`); `logout` 200 with an **empty body** → `Success(Unit)` (not `Error` — guards the empty-body-parse pitfall).
+- [x] Run tests — must pass before Task 5.
 
 ### Task 5: `AdminTokenStore`
 
