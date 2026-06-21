@@ -375,7 +375,14 @@ fun ProvisioningScreen(
                 )
                 Spacer(Modifier.height(16.dp))
                 ChipRack(
-                    preSeededCount = cachedCounts[cp.id] ?: 0,
+                    // Subtract fresh-session count from cached count: after a mid-session legend
+                    // refresh the server delivers the just-written tags into Room, growing
+                    // cachedCounts to include them — without this subtraction the rack would
+                    // show "Уже привязано: N+K" AND K fresh pills, double-counting K.
+                    preSeededCount = maxOf(
+                        0,
+                        (cachedCounts[cp.id] ?: 0) - (freshTokensMap[cp.id]?.size ?: 0),
+                    ),
                     freshTokens = freshTokensMap[cp.id].orEmpty(),
                 )
             }

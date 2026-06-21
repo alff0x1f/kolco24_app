@@ -44,7 +44,9 @@ class AdminTokenStore(
     }
 
     companion object {
-        private const val PREFS_NAME = "kolco24.settings"
+        // Separate file from "kolco24.settings" (which holds ThemePreference) so the backup
+        // exclusion rule can exclude only the admin token, not the user's theme preference.
+        private const val PREFS_NAME = "kolco24.admin"
         private const val KEY_TOKEN = "admin_token"
         private const val KEY_EMAIL = "admin_email"
         private const val KEY_EXPIRES_AT = "admin_token_expires_at"

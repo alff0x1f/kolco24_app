@@ -7,6 +7,6 @@
 <full-backup-content>
     <!-- Exclude the per-install ID so it is never restored onto a different device/install. -->
     <exclude domain="sharedpref" path="kolco24.install.xml"/>
-    <!-- Exclude the settings file so the admin bearer token is never included in backups. -->
-    <exclude domain="sharedpref" path="kolco24.settings.xml"/>
+    <!-- Exclude the admin token file so the bearer token is never included in backups. -->
+    <exclude domain="sharedpref" path="kolco24.admin.xml"/>
 </full-backup-content>
