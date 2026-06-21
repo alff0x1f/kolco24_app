@@ -21,10 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,9 +59,11 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  * hero card and roster. State is hoisted: the host collects the selection and passes it in.
  *
  * Each member slot carries an optional local NFC chip [bindings] entry (keyed by `numberInTeam`):
- * bound members render their participant number + uid and a long-press on the row requests an unbind
- * (the host confirms via a dialog — a plain tap does nothing, to avoid accidental deletes); unbound
- * members show «Чип не привязан» + a «Привязать» button (enabled only when [nfcAvailable]). The hero card's
+ * a leading [StatusAvatar] is the row's single bound/unbound indicator (green check vs neutral person),
+ * so the subtitle is just «№{participantNumber}» (bound) or «Чип не привязан» (unbound) — no duplicate
+ * status icon/dot. A long-press on a bound row requests an unbind (the host confirms via a dialog — a
+ * plain tap does nothing, to avoid accidental deletes); unbound rows show a «Привязать» button (enabled
+ * only when [nfcAvailable]). The hero card's
  * «N / total с чипом» counter is driven by `members.count { bindings.containsKey(it.numberInTeam) }`
  * (counts only current roster members with bindings, so stale entries for removed members are ignored).
  */
@@ -282,7 +284,7 @@ private fun MemberRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            MonogramAvatar()
+            StatusAvatar(bound = bound)
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -290,39 +292,13 @@ private fun MemberRow(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (binding != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(top = 2.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Text(
-                            text = "№${binding.participantNumber}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(top = 2.dp),
-                    ) {
-                        Box(modifier = Modifier.size(14.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
-                        Text(
-                            text = "Чип не привязан",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
+                Text(
+                    text = if (binding != null) "№${binding.participantNumber}" else "Чип не привязан",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = if (binding != null) FontFamily.Monospace else FontFamily.Default,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
 
             if (!bound) {
@@ -352,21 +328,43 @@ private fun MemberRow(
     }
 }
 
+/**
+ * The member's chip-binding status, shown as the row's single leading indicator: a filled green
+ * circle with a check when [bound], a neutral outlined person glyph when not. This replaces the
+ * old always-red `person_add` monogram and lets the row drop its duplicate status text/dot.
+ */
 @Composable
-private fun MonogramAvatar() {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-            .clip(CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.PersonAdd,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
+private fun StatusAvatar(bound: Boolean) {
+    if (bound) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.tertiary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 
