@@ -154,15 +154,15 @@ Build bottom-up in four layers so each rests on a tested foundation:
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/AdminAuthRepository.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/AdminAuthRepositoryTest.kt`
 
-- [ ] `AdminSession` sealed: `LoggedOut` | `LoggedIn(email, token, expiresAt)`. Constructor takes `apiClient` + `adminTokenStore` (constructor injection, mirroring how repos take DAOs) so tests can inject a fake `ApiClient` — required to test `logout()`-clears-on-`Offline`.
-- [ ] `_session: MutableStateFlow<AdminSession>` seeded synchronously from `AdminTokenStore` (past-expiry → `LoggedOut`); expose `session: StateFlow<AdminSession>` and `token(): String?` (reads `_session.value` synchronously — no suspend, no I/O — so it is safe to call from the OkHttp interceptor thread).
-- [ ] Extract a pure top-level `isExpired(expiresAt: String, nowUtcIso: String): Boolean` (lexicographic compare; `now` formatted UTC `yyyy-MM-dd'T'HH:mm:ss'Z'` per Technical Details).
-- [ ] `login(email, password): LoginOutcome` (`Success`/`InvalidCredentials`/`RateLimited`/`Offline`/`Error`) — on success persist + update flow; map via a pure `loginOutcome(result)` helper.
-- [ ] `logout()` — fire `apiClient.logout()` best-effort, then **always** `store.clear()` + set `LoggedOut`.
-- [ ] `onUnauthorized()` — `store.clear()` + `LoggedOut`.
-- [ ] Extract pure top-level `adminErrorMessage(outcome): String` (RU strings, ambiguous credential message).
-- [ ] Write tests: outcome mapping (each branch), `logout()` clears even when API returns `Offline`, `onUnauthorized()` clears, `isExpired` (past → true, future → false, exact-format boundary), seed treats past-expiry as `LoggedOut`, `adminErrorMessage` strings.
-- [ ] Run tests — must pass before Task 7.
+- [x] `AdminSession` sealed: `LoggedOut` | `LoggedIn(email, token, expiresAt)`. Constructor takes `apiClient` + `adminTokenStore` (constructor injection, mirroring how repos take DAOs) so tests can inject a fake `ApiClient` — required to test `logout()`-clears-on-`Offline`.
+- [x] `_session: MutableStateFlow<AdminSession>` seeded synchronously from `AdminTokenStore` (past-expiry → `LoggedOut`); expose `session: StateFlow<AdminSession>` and `token(): String?` (reads `_session.value` synchronously — no suspend, no I/O — so it is safe to call from the OkHttp interceptor thread).
+- [x] Extract a pure top-level `isExpired(expiresAt: String, nowUtcIso: String): Boolean` (lexicographic compare; `now` formatted UTC `yyyy-MM-dd'T'HH:mm:ss'Z'` per Technical Details).
+- [x] `login(email, password): LoginOutcome` (`Success`/`InvalidCredentials`/`RateLimited`/`Offline`/`Error`) — on success persist + update flow; map via a pure `loginOutcome(result)` helper.
+- [x] `logout()` — fire `apiClient.logout()` best-effort, then **always** `store.clear()` + set `LoggedOut`.
+- [x] `onUnauthorized()` — `store.clear()` + `LoggedOut`.
+- [x] Extract pure top-level `adminErrorMessage(outcome): String` (RU strings, ambiguous credential message).
+- [x] Write tests: outcome mapping (each branch), `logout()` clears even when API returns `Offline`, `onUnauthorized()` clears, `isExpired` (past → true, future → false, exact-format boundary), seed treats past-expiry as `LoggedOut`, `adminErrorMessage` strings.
+- [x] Run tests — must pass before Task 7.
 
 ### Task 7: Wire auth into `AppContainer`
 
