@@ -116,6 +116,51 @@ fun chipCodeFromHex(hex: String): ByteArray =
 
 private val HEX = "0123456789ABCDEF".toCharArray()
 
+/** Ultralight / NTAG GET_VERSION opcode — returns an 8-byte product identifier. */
+private const val CMD_GET_VERSION = 0x60.toByte()
+
+/**
+ * Map an 8-byte GET_VERSION response to a human-readable chip-model label. Product type lives at
+ * byte 2 (`0x04` = NTAG, `0x03` = MIFARE Ultralight) and storage size at byte 6 (`0x0F` = NTAG213,
+ * `0x11` = NTAG215, `0x13` = NTAG216). A short/empty response → "неизвестно". Pure — never throws.
+ */
+fun chipModelFromVersion(resp: ByteArray): String {
+    if (resp.size < 8) return "неизвестно"
+    val productType = resp[2].toInt() and 0xFF
+    val storageSize = resp[6].toInt() and 0xFF
+    return when (productType) {
+        0x04 -> when (storageSize) {
+            0x0F -> "NTAG213"
+            0x11 -> "NTAG215"
+            0x13 -> "NTAG216"
+            else -> "NTAG (неизвестно)"
+        }
+        0x03 -> "MIFARE Ultralight"
+        else -> "неизвестно"
+    }
+}
+
+/**
+ * Read the 8-byte GET_VERSION product identifier over NfcA raw [CMD_GET_VERSION]. Returns the bytes,
+ * or null when the tag exposes no NfcA tech, NAKs the command, or errors. Blocking I/O — call off
+ * the main thread; never throws. Pair with [chipModelFromVersion] for a label.
+ */
+fun readChipVersion(tag: Tag): ByteArray? {
+    val nfcA = NfcA.get(tag) ?: return null
+    return try {
+        nfcA.connect()
+        val resp = nfcA.transceive(byteArrayOf(CMD_GET_VERSION))
+        if (resp.size < 8) null else resp
+    } catch (_: IOException) {
+        null
+    } finally {
+        try {
+            nfcA.close()
+        } catch (_: IOException) {
+        }
+    }
+}
+
 /** Ultralight / NTAG WRITE opcode — writes one 4-byte page: `[0xA2, page, b0, b1, b2, b3]`. */
 private const val CMD_WRITE = 0xA2.toByte()
 

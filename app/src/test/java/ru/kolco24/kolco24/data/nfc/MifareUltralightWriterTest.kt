@@ -146,4 +146,52 @@ class MifareUltralightWriterTest {
         val code = newChipCode()
         assertArrayEquals(code, parseChipRecord(buildChipRecord(CHIP_TYPE_KP, code)))
     }
+
+    // --- GET_VERSION model parsing ------------------------------------------
+
+    @Test
+    fun chipModelFromVersion_ntag213Vector() {
+        val resp = byteArrayOf(0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x0F, 0x03)
+        assertEquals("NTAG213", chipModelFromVersion(resp))
+    }
+
+    @Test
+    fun chipModelFromVersion_ntag215Vector() {
+        val resp = byteArrayOf(0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x11, 0x03)
+        assertEquals("NTAG215", chipModelFromVersion(resp))
+    }
+
+    @Test
+    fun chipModelFromVersion_ntag216Vector() {
+        val resp = byteArrayOf(0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x13, 0x03)
+        assertEquals("NTAG216", chipModelFromVersion(resp))
+    }
+
+    @Test
+    fun chipModelFromVersion_ultralightProductByte() {
+        val resp = byteArrayOf(0x00, 0x04, 0x03, 0x01, 0x01, 0x00, 0x0B, 0x03)
+        assertEquals("MIFARE Ultralight", chipModelFromVersion(resp))
+    }
+
+    @Test
+    fun chipModelFromVersion_unknownNtagStorage() {
+        val resp = byteArrayOf(0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x7F, 0x03)
+        assertEquals("NTAG (неизвестно)", chipModelFromVersion(resp))
+    }
+
+    @Test
+    fun chipModelFromVersion_unknownProductType() {
+        val resp = byteArrayOf(0x00, 0x04, 0x99.toByte(), 0x02, 0x01, 0x00, 0x0F, 0x03)
+        assertEquals("неизвестно", chipModelFromVersion(resp))
+    }
+
+    @Test
+    fun chipModelFromVersion_emptyResponse_returnsUnknown() {
+        assertEquals("неизвестно", chipModelFromVersion(ByteArray(0)))
+    }
+
+    @Test
+    fun chipModelFromVersion_shortResponse_returnsUnknown() {
+        assertEquals("неизвестно", chipModelFromVersion(byteArrayOf(0x00, 0x04, 0x04)))
+    }
 }

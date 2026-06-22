@@ -267,12 +267,12 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriter.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriterTest.kt`
 
-- [ ] add pure `chipModelFromVersion(resp: ByteArray): String` (NTAG213/215/216 + Ultralight labels;
+- [x] add pure `chipModelFromVersion(resp: ByteArray): String` (NTAG213/215/216 + Ultralight labels;
       short/empty → "неизвестно"; never throws)
-- [ ] add `readChipVersion(tag: Tag): ByteArray?` NfcA I/O wrapper (connect, `0x60`, 8 bytes or null;
+- [x] add `readChipVersion(tag: Tag): ByteArray?` NfcA I/O wrapper (connect, `0x60`, 8 bytes or null;
       blocking, never throws)
-- [ ] write tests: NTAG213 vector → "NTAG213"; Ultralight product byte → label; empty/short → "неизвестно"
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] write tests: NTAG213 vector → "NTAG213"; Ultralight product byte → label; empty/short → "неизвестно"
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 3: Rewrite `writeChipCode` + `readChipCode` to raw header format (keep NDEF funcs for now)
 
