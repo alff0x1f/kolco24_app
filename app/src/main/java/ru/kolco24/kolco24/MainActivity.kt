@@ -590,9 +590,9 @@ private fun Kolco24AppRoot(
         // Some other overlay is up: dropping the tap (rather than yanking the user out) keeps the
         // current flow intact. The live-idle binder path can't even reach here while a bind/provision/
         // verify hook is armed, but warm/cold intents and Settings/confirm states still can.
-        val busy = teamFlowStep != TeamFlowStep.None || confirmTeamId != null || showSettings ||
-            showAdmin || showProvisioning || showCheckChip || bindSlot != null || unbindSlot != null ||
-            chipWriterCode != null
+        val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
+            showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
+            unbindSlot != null || chipWriterCode != null
         if (busy) { act.nfcLaunchScan.value = null; return@LaunchedEffect }
         when (teamState) {
             is SelectedTeamState.Present -> {
@@ -751,7 +751,7 @@ private fun Kolco24AppRoot(
         BackHandler(enabled = showScan) { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false }
         if (showScan) {
             // Fresh DB-side take bookkeeping per opened overlay (parallels ScanScreen's UI session).
-            val scanTake = remember(showScan) { ScanTakeState() }
+            val scanTake = remember { ScanTakeState() }
             ScanScreen(
                 roster = scanRoster,
                 chipNumbers = scanChipNumbers,
@@ -864,7 +864,7 @@ private fun Kolco24AppRoot(
                     }
                     event
                 },
-                onClose = { showScan = false; showSettings = false },
+                onClose = { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false },
                 modifier = Modifier.fillMaxSize(),
             )
         }

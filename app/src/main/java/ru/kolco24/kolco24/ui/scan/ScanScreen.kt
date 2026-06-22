@@ -149,6 +149,7 @@ fun ScanScreen(
         }
         onDispose {
             activity?.onTagForMark = null
+            activity?.pendingScan = null
         }
     }
 
