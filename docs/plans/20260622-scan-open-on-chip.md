@@ -229,16 +229,16 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add top-level `data class CapturedScan(code: ByteArray?, uid: String, capturedAt: Long)` and
+- [x] add top-level `data class CapturedScan(code: ByteArray?, uid: String, capturedAt: Long)` and
       `sealed interface ScanInput { Live(tag), Captured(code, uid) }`
-- [ ] refactor the inline `onScanTag` lambda body into a processor `suspend (ScanInput, now: Long) ->
+- [x] refactor the inline `onScanTag` lambda body into a processor `suspend (ScanInput, now: Long) ->
       ScanEvent` (preserve the existing `now` threading): `Live` reads
       `readChipCode`/`normalizeNfcUid`; `Captured` uses code+uid directly; shared tail
       (unlock → classifyTag → startKpTake/addMember bookkeeping) unchanged
-- [ ] update `ScanScreen`'s `onTagForMark` call site to wrap the live tag as `ScanInput.Live(tag)` and
+- [x] update `ScanScreen`'s `onTagForMark` call site to wrap the live tag as `ScanInput.Live(tag)` and
       pass the tap-time `now`
-- [ ] confirm `reduce`/`classifyTag` and `ScanTagDecisionTest`/`ScanSessionTest` are untouched
-- [ ] `./gradlew assembleDebug` compiles; `./gradlew testDebugUnitTest` still green
+- [x] confirm `reduce`/`classifyTag` and `ScanTagDecisionTest`/`ScanSessionTest` are untouched
+- [x] `./gradlew assembleDebug` compiles; `./gradlew testDebugUnitTest` still green
 
 ### Task 3: Idle recognition + cold/warm intent → `nfcLaunchScan`
 

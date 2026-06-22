@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.MainActivity
+import ru.kolco24.kolco24.ScanInput
 import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.ui.theme.BrandRed
 
@@ -83,7 +84,7 @@ fun ScanScreen(
     roster: List<TeamMemberItem>,
     chipNumbers: Map<Int, Int>,
     nfcAvailable: Boolean,
-    onScanTag: suspend (Tag, Long) -> ScanEvent,
+    onScanTag: suspend (ScanInput, Long) -> ScanEvent,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -108,7 +109,7 @@ fun ScanScreen(
             val now = System.currentTimeMillis()
             scope.launch {
                 scanMutex.withLock {
-                    val event = currentOnScanTag(tag, now)
+                    val event = currentOnScanTag(ScanInput.Live(tag), now)
                     when (event) {
                         ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
                         is ScanEvent.BadKp -> diagnostic = event.reason

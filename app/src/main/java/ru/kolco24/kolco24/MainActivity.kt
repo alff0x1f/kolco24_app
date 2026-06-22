@@ -316,6 +316,33 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 }
 
 /**
+ * One captured chip scan that opens / feeds the «Отметить КП» overlay. The three open-the-overlay
+ * entry points (live idle foreground tap, warm `onNewIntent`, cold `onCreate`) all converge on this
+ * single `(code, uid)` pair so no raw [Tag] replay is ever needed downstream.
+ *
+ * - [code] is the КП chip's code (`null` ⇒ a bound team-member bracelet, which only ever arrives via
+ *   the live idle path — bracelets are raw page bytes and cannot cold-launch).
+ * - [uid] is the normalized tag UID.
+ * - [capturedAt] is the tap-time millis stamped on the binder thread / in `handleNfcIntent`; it is the
+ *   `now` threaded into the scan processor (a cold launch can drain seconds later, so reusing
+ *   `System.currentTimeMillis()` at drain time would corrupt the window-expiry math).
+ *
+ * Identity equality is used as a [kotlinx.coroutines.flow.StateFlow] payload (set/cleared by
+ * reference); override `equals`/`hashCode` only if value equality is ever required.
+ */
+data class CapturedScan(val code: ByteArray?, val uid: String, val capturedAt: Long)
+
+/**
+ * Source of one scan fed to the «Отметить КП» processor. [Live] is an in-overlay subsequent tap whose
+ * code/uid are read off the live tag; [Captured] is the opening tap whose `(code, uid)` were already
+ * read (binder thread for live-idle, or the launch intent for cold/warm) — no second chip read.
+ */
+sealed interface ScanInput {
+    data class Live(val tag: Tag) : ScanInput
+    data class Captured(val code: ByteArray?, val uid: String) : ScanInput
+}
+
+/**
  * Bookkeeping for the DB side of one «Отметить КП» session, mirroring [ScanScreen]'s UI session so
  * `onScanTag` can persist takes. A fresh instance is `remember`-ed each time the scan overlay opens.
  *
@@ -656,7 +683,7 @@ private fun Kolco24AppRoot(
                 roster = scanRoster,
                 chipNumbers = scanChipNumbers,
                 nfcAvailable = nfcActiveForScan,
-                onScanTag = onScanTag@{ tag, now ->
+                onScanTag = onScanTag@{ input, now ->
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
                     // raceId/teamId come from the selection pointer, which survives the team row going
@@ -665,9 +692,21 @@ private fun Kolco24AppRoot(
                     if (raceId == null || teamId == null || scanRoster.isEmpty()) {
                         return@onScanTag ScanEvent.BadKp("команда не выбрана")
                     }
-                    val uid = normalizeNfcUid(tag.id)
-                    // readChipCode is blocking NfcA I/O; unlock is a suspend DAO+crypto path.
-                    val code = withContext(Dispatchers.IO) { readChipCode(tag) }
+                    // A Live in-overlay tap reads the chip now (readChipCode is blocking NfcA I/O); a
+                    // Captured opening tap already carries the code/uid read at capture time.
+                    val code: ByteArray?
+                    val uid: String
+                    when (input) {
+                        is ScanInput.Live -> {
+                            uid = normalizeNfcUid(input.tag.id)
+                            code = withContext(Dispatchers.IO) { readChipCode(input.tag) }
+                        }
+                        is ScanInput.Captured -> {
+                            uid = input.uid
+                            code = input.code
+                        }
+                    }
+                    // unlock is a suspend DAO+crypto path.
                     val unlock = if (code != null) legendRepo.unlock(raceId, code) else null
                     // For Revealed, checkpointsById is stale (recomposition hasn't fired) so we always
                     // re-read from the DAO. For IdentityOnly we also re-read: if the legend hasn't
