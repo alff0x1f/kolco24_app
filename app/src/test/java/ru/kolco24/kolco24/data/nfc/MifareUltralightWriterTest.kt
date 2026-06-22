@@ -4,6 +4,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 class MifareUltralightWriterTest {
 
@@ -193,5 +194,148 @@ class MifareUltralightWriterTest {
     @Test
     fun chipModelFromVersion_shortResponse_returnsUnknown() {
         assertEquals("неизвестно", chipModelFromVersion(byteArrayOf(0x00, 0x04, 0x04)))
+    }
+
+    // --- Transport-driven write/read sequencing (fake NfcTransport) ----------
+
+    /** Records every frame sent and answers via [responder] (which may throw to simulate I/O). */
+    private class FakeTransport(val responder: (ByteArray) -> ByteArray) : NfcTransport {
+        val frames = mutableListOf<ByteArray>()
+        override fun transceive(frame: ByteArray): ByteArray {
+            frames.add(frame.copyOf())
+            return responder(frame)
+        }
+    }
+
+    private val WRITE = 0xA2.toByte()
+    private val ACK = byteArrayOf(0x0A)
+    private val NAK = byteArrayOf(0x00)
+    private val FAST_READ = 0x3A.toByte()
+    private val READ = 0x30.toByte()
+
+    @Test
+    fun writeRecord_writesHeaderLast_andSucceeds() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                WRITE -> ACK
+                FAST_READ -> record // read-back sees the valid record
+                else -> NAK
+            }
+        }
+        assertEquals(ChipWriteResult.Success, writeRecord(t, record))
+
+        val writes = t.frames.filter { it[0] == WRITE }
+        assertEquals(6, writes.size) // page-4 invalidate + 4 code pages + page-4 header
+        // first write invalidates page 4 with an all-zero header
+        assertEquals(4.toByte(), writes[0][1])
+        assertArrayEquals(byteArrayOf(0, 0, 0, 0), writes[0].copyOfRange(2, 6))
+        // code pages 5..8 are written in between
+        assertEquals(listOf(5, 6, 7, 8), writes.subList(1, 5).map { it[1].toInt() })
+        // the valid header is committed to page 4 last
+        val last = writes.last()
+        assertEquals(4.toByte(), last[1])
+        assertArrayEquals(byteArrayOf(0x4B, 0x32, 0x34, 0x11), last.copyOfRange(2, 6))
+    }
+
+    @Test
+    fun writeRecord_nakOnWrite_failsWithNoFurtherFrames() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { NAK } // NAK every frame
+        assertTrue(writeRecord(t, record) is ChipWriteResult.Failed)
+        assertEquals(1, t.frames.size) // stopped after the first (invalidate) WRITE
+    }
+
+    @Test
+    fun writeRecord_readBackMismatch_returnsFailed() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                WRITE -> ACK
+                FAST_READ -> ByteArray(20) // all-zero → parses null → mismatch
+                else -> NAK
+            }
+        }
+        assertTrue(writeRecord(t, record) is ChipWriteResult.Failed)
+    }
+
+    @Test
+    fun readRecord_fastReadHappyPath_returnsCode() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame -> if (frame[0] == FAST_READ) record else NAK }
+        assertArrayEquals(sampleCode, readRecord(t))
+    }
+
+    /** Page-4 READ → record bytes 0..15; page-8 READ → bytes 16..19 (+ padding). */
+    private fun fallbackRead(record: ByteArray, frame: ByteArray): ByteArray = when (frame[1]) {
+        4.toByte() -> record.copyOfRange(0, 16)
+        8.toByte() -> record.copyOfRange(16, 20) + ByteArray(12)
+        else -> NAK
+    }
+
+    @Test
+    fun readRecord_fastReadThrows_fallsBackToReads() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                FAST_READ -> throw IOException("no fast_read")
+                READ -> fallbackRead(record, frame)
+                else -> NAK
+            }
+        }
+        assertArrayEquals(sampleCode, readRecord(t))
+    }
+
+    @Test
+    fun readRecord_fastReadNak_fallsBackToReads() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                FAST_READ -> NAK // 1-byte NAK, shorter than 20 bytes
+                READ -> fallbackRead(record, frame)
+                else -> NAK
+            }
+        }
+        assertArrayEquals(sampleCode, readRecord(t))
+    }
+
+    @Test
+    fun readRecord_shortSecondRead_returnsNull() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            when {
+                frame[0] == FAST_READ -> NAK
+                frame[0] == READ && frame[1] == 4.toByte() -> record.copyOfRange(0, 16)
+                frame[0] == READ && frame[1] == 8.toByte() -> NAK // short second READ
+                else -> NAK
+            }
+        }
+        assertEquals(null, readRecord(t))
+    }
+
+    @Test
+    fun readRecord_ioExceptionOnFirstRead_returnsNull() {
+        val t = FakeTransport { frame ->
+            when {
+                frame[0] == FAST_READ -> NAK
+                frame[0] == READ && frame[1] == 4.toByte() -> throw IOException("read fail")
+                else -> NAK
+            }
+        }
+        assertEquals(null, readRecord(t))
+    }
+
+    @Test
+    fun readRecord_ioExceptionOnSecondRead_returnsNull() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            when {
+                frame[0] == FAST_READ -> NAK
+                frame[0] == READ && frame[1] == 4.toByte() -> record.copyOfRange(0, 16)
+                frame[0] == READ && frame[1] == 8.toByte() -> throw IOException("read fail")
+                else -> NAK
+            }
+        }
+        assertEquals(null, readRecord(t))
     }
 }

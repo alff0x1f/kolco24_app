@@ -280,31 +280,31 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriter.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriterTest.kt`
 
-- [ ] add the `fun interface NfcTransport { fun transceive(frame: ByteArray): ByteArray }` seam (P2
+- [x] add the `fun interface NfcTransport { fun transceive(frame: ByteArray): ByteArray }` seam (P2
       testability) and `CMD_FAST_READ = 0x3A`
-- [ ] add `internal fun writeRecord(t: NfcTransport, record: ByteArray): ChipWriteResult` — issue the
+- [x] add `internal fun writeRecord(t: NfcTransport, record: ByteArray): ChipWriteResult` — issue the
       **header-last** `0xA2` WRITE frames, ACK-checked per frame: (1) page 4 ← invalid all-zero header;
       (2) pages 5–8 ← record bytes 4..19 (code); (3) page 4 ← record bytes 0..3 (valid header) commit
       marker; then call `readRecord(t)` **on the same transport** and return `Failed` unless the parsed
       code equals `record[4..19]`
-- [ ] add `internal fun readRecord(t: NfcTransport): ByteArray?` — FAST_READ `0x3A 04 08`; treat
+- [x] add `internal fun readRecord(t: NfcTransport): ByteArray?` — FAST_READ `0x3A 04 08`; treat
       **`IOException` OR a response < 20 bytes** (e.g. a 1-byte NAK) as FAST_READ failure → fall back
       (P1). Fallback = READ page 4 + READ page 8 (`0x30`); **each must return ≥ `READ_BLOCK` (16)
       bytes** — a short/NAK response or `IOException` on either READ → return `null` without throwing
       or indexing past the buffer (P2). On success concatenate the first 20 bytes → `parseChipRecord`.
       **No NDEF-read fallback** — no installed base of NDEF chips (Context → "No NDEF chips in the
       field"); raw `K24` only. **Keep** `CMD_READ = 0x30`, `READ_BLOCK`, `PAGE_SIZE`/`USER_PAGE_START`
-- [ ] rewrite `writeChipCode(tag, code)` as a thin adapter: build the record, open **one** NfcA
+- [x] rewrite `writeChipCode(tag, code)` as a thin adapter: build the record, open **one** NfcA
       connection, wrap as `NfcTransport`, call `writeRecord(t, record)` (writes **and** reads back over
       that same open connection), close in `finally`. **P1 fix:** the read-back must NOT call the public
       `readChipCode(tag)` — a second `connect()` to the same `Tag` is disallowed and would always fail
-- [ ] rewrite `readChipCode(tag)` as a thin adapter: open NfcA, wrap as `NfcTransport`, `readRecord(t)`,
+- [x] rewrite `readChipCode(tag)` as a thin adapter: open NfcA, wrap as `NfcTransport`, `readRecord(t)`,
       close. Signature `(tag) -> ByteArray?` unchanged, so scan/verify callers keep working
-- [ ] **leave `writeChipCodeNdef` / `chipCodeFromNdef` (+ their NDEF/TLV helpers and imports) in place
+- [x] **leave `writeChipCodeNdef` / `chipCodeFromNdef` (+ their NDEF/TLV helpers and imports) in place
       for now** — unused by the new `readChipCode` but still called by ProvisioningScreen and
       MainActivity; deleting here would break the build. Removal is the final step of Task 6, after
       every caller is migrated (Tasks 4–6)
-- [ ] write JVM tests with a **fake `NfcTransport`** (records frames sent, returns canned responses) —
+- [x] write JVM tests with a **fake `NfcTransport`** (records frames sent, returns canned responses) —
       P2 coverage of the critical new logic:
       - `writeRecord` issues frames in order **invalidate page 4 → pages 5–8 → header page 4** (assert
         the recorded frame sequence + that the page-4 header frame is last)
@@ -316,7 +316,7 @@ in a debug-only Settings row for one-time verification of the physical stock.
       - fallback robustness (P2 / never-throws): a **short or NAK second READ** (< 16 bytes) → `null`,
         no exception; an `IOException` on the page-4 READ and on the page-8 READ → `null`
       - read-back mismatch (fake returns a different/zeroed record) → `writeRecord` returns `Failed`
-- [ ] `./gradlew testDebugUnitTest` green (incl. the new transport tests); `./gradlew assembleDebug`
+- [x] `./gradlew testDebugUnitTest` green (incl. the new transport tests); `./gradlew assembleDebug`
       green (signatures unchanged; NDEF funcs still present for their callers)
 
 ### Task 4: Switch provisioning to raw write

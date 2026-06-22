@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.data.nfc
 
-import android.nfc.FormatException
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.Tag
@@ -167,32 +166,116 @@ private const val CMD_WRITE = 0xA2.toByte()
 /** 4-bit ACK the tag returns for a successful WRITE (surfaced by NfcA as a single byte). */
 private const val ACK = 0x0A.toByte()
 
+/** NTAG21x / Ultralight EV1 FAST_READ — `[0x3A, start, end]` returns pages start..end in one frame. */
+private const val CMD_FAST_READ = 0x3A.toByte()
+
 /**
- * Write [code] (exactly [CHIP_CODE_BYTES] bytes) to an Ultralight/NTAG tag's user memory
- * (pages 4..7) over **NfcA** raw commands. We talk NfcA directly rather than via
- * `MifareUltralight.get()` because Android omits the MifareUltralight tech for many NTAG/Ultralight
- * chips (exposing only NfcA + Ndef), which would otherwise be misread as "not an Ultralight tag".
- * Blocking I/O — call off the main thread. Never throws; returns a [ChipWriteResult].
+ * Minimal seam over an open NfcA connection: send one raw frame, get the response (or throw
+ * [IOException]). Lets the command-sequencing logic in [writeRecord]/[readRecord] be JVM-tested
+ * with a fake — the real adapter is `{ frame -> nfcA.transceive(frame) }`.
+ */
+fun interface NfcTransport {
+    @Throws(IOException::class)
+    fun transceive(frame: ByteArray): ByteArray
+}
+
+/** WRITE one page from `src[from until from+4]`; returns [ChipWriteResult.Failed] on NAK, else null. */
+private fun writePage(t: NfcTransport, page: Int, src: ByteArray, from: Int): ChipWriteResult? {
+    val frame = byteArrayOf(
+        CMD_WRITE,
+        page.toByte(),
+        src[from], src[from + 1], src[from + 2], src[from + 3],
+    )
+    val response = t.transceive(frame)
+    return if (response.isEmpty() || response[0] != ACK) {
+        ChipWriteResult.Failed("Метка отклонила запись страницы $page")
+    } else {
+        null
+    }
+}
+
+/**
+ * Write the 20-byte [record] (header page 4 + code pages 5..8) over [t] in **header-last** order so
+ * the header acts as a commit marker (an interrupted tap can never leave a valid header over a
+ * half-written code):
+ * 1. invalidate page 4 with an all-zero header (kills any prior magic before the code is overwritten),
+ * 2. write the code (pages 5..8 = record bytes 4..19),
+ * 3. write the valid header last (page 4 = record bytes 0..3).
+ * Then read back over the **same** transport and return [ChipWriteResult.Failed] unless the parsed
+ * code equals `record[4..19]`. Never throws.
+ */
+internal fun writeRecord(t: NfcTransport, record: ByteArray): ChipWriteResult {
+    require(record.size == CHIP_RECORD_BYTES) { "record must be $CHIP_RECORD_BYTES bytes" }
+    return try {
+        // 1. invalidate page 4 (all-zero) before the code is touched.
+        writePage(t, HEADER_PAGE, ByteArray(PAGE_SIZE), 0)?.let { return it }
+        // 2. code pages 5..8 (record bytes 4..19).
+        for (i in 0 until CHIP_CODE_BYTES / PAGE_SIZE) {
+            val page = CODE_PAGE_START + i
+            val from = PAGE_SIZE + i * PAGE_SIZE
+            writePage(t, page, record, from)?.let { return it }
+        }
+        // 3. valid header last (commit marker).
+        writePage(t, HEADER_PAGE, record, 0)?.let { return it }
+        // Read back over the same open connection and verify the code round-trips.
+        val expected = record.copyOfRange(PAGE_SIZE, CHIP_RECORD_BYTES)
+        val readBack = readRecord(t)
+        if (readBack == null || !readBack.contentEquals(expected)) {
+            return ChipWriteResult.Failed("Чтение после записи не совпало")
+        }
+        ChipWriteResult.Success
+    } catch (e: IOException) {
+        ChipWriteResult.Failed(e.message ?: "Ошибка записи")
+    }
+}
+
+/**
+ * Read the 20-byte record (pages 4..8) over [t] and parse it. Tries **FAST_READ** (`0x3A 04 08`) in
+ * one transceive; treats an [IOException] **or** any response shorter than [CHIP_RECORD_BYTES] (a tag
+ * may answer an unsupported command with a 1-byte NAK instead of throwing) as failure and falls back
+ * to two plain **READ**s — page 4 (bytes 0..15) + page 8 (first 4 bytes = record bytes 16..19). Each
+ * READ must return at least [READ_BLOCK] bytes; a short/NAK response or an [IOException] on either
+ * READ → null. Returns the КП code via [parseChipRecord], or null. Never throws.
+ */
+internal fun readRecord(t: NfcTransport): ByteArray? {
+    val fast = try {
+        t.transceive(byteArrayOf(CMD_FAST_READ, HEADER_PAGE.toByte(), (HEADER_PAGE + 4).toByte()))
+    } catch (_: IOException) {
+        null
+    }
+    if (fast != null && fast.size >= CHIP_RECORD_BYTES) {
+        return parseChipRecord(fast)
+    }
+    return try {
+        val head = t.transceive(byteArrayOf(CMD_READ, HEADER_PAGE.toByte()))
+        if (head.size < READ_BLOCK) return null
+        val tail = t.transceive(byteArrayOf(CMD_READ, (HEADER_PAGE + 4).toByte()))
+        if (tail.size < READ_BLOCK) return null
+        val combined = ByteArray(CHIP_RECORD_BYTES)
+        head.copyInto(combined, 0, 0, READ_BLOCK)
+        tail.copyInto(combined, READ_BLOCK, 0, CHIP_RECORD_BYTES - READ_BLOCK)
+        parseChipRecord(combined)
+    } catch (_: IOException) {
+        null
+    }
+}
+
+/**
+ * Write [code] (exactly [CHIP_CODE_BYTES] bytes) onto an Ultralight/NTAG tag as the raw header
+ * record (magic `K24` + packed version/type byte with type=КП + 16-byte code) over **NfcA** raw
+ * commands. We talk NfcA directly rather than via `MifareUltralight.get()` because Android omits the
+ * MifareUltralight tech for many NTAG/Ultralight chips (exposing only NfcA + Ndef), which would
+ * otherwise be misread as "not an Ultralight tag". The write is header-last (commit marker) and is
+ * verified by a read-back over the **same open connection** (see [writeRecord]). Blocking I/O — call
+ * off the main thread. Never throws; returns a [ChipWriteResult].
  */
 fun writeChipCode(tag: Tag, code: ByteArray): ChipWriteResult {
     require(code.size == CHIP_CODE_BYTES) { "code must be $CHIP_CODE_BYTES bytes" }
+    val record = buildChipRecord(CHIP_TYPE_KP, code)
     val nfcA = NfcA.get(tag) ?: return ChipWriteResult.Unsupported
     return try {
         nfcA.connect()
-        for (i in 0 until CHIP_CODE_BYTES / PAGE_SIZE) {
-            val page = USER_PAGE_START + i
-            val from = i * PAGE_SIZE
-            val frame = byteArrayOf(
-                CMD_WRITE,
-                page.toByte(),
-                code[from], code[from + 1], code[from + 2], code[from + 3],
-            )
-            val response = nfcA.transceive(frame)
-            if (response.isEmpty() || response[0] != ACK) {
-                return ChipWriteResult.Failed("Метка отклонила запись страницы $page")
-            }
-        }
-        ChipWriteResult.Success
+        writeRecord({ frame -> nfcA.transceive(frame) }, record)
     } catch (e: IOException) {
         ChipWriteResult.Failed(e.message ?: "Ошибка записи")
     } finally {
@@ -295,37 +378,19 @@ private const val CMD_READ = 0x30.toByte()
 private const val READ_BLOCK = PAGE_SIZE * 4
 
 /**
- * Read a chip [code] back from a tag written by [writeChipCodeNdef], over NfcA raw READ — used in
- * reader mode (foreground), where the system NDEF dispatch is bypassed so the launch-intent path
- * doesn't fire. Reads the NDEF TLV at page 4, parses the message, and returns the embedded code,
- * or null if the tag carries no valid kolco24 code. Blocking I/O — call off the main thread;
- * never throws.
+ * Read the КП [code] back from a tag provisioned by [writeChipCode], over **NfcA** raw READ — used
+ * in reader mode (foreground), where the system NDEF dispatch is bypassed. Delegates the frame
+ * sequencing (FAST_READ with plain-READ fallback) to [readRecord] and returns the 16-byte code for a
+ * valid `K24` КП chip, or null for a foreign, blank, or non-КП tag. Signature `(tag) -> ByteArray?`
+ * is preserved so scan/verify callers keep working. Blocking I/O — call off the main thread; never
+ * throws.
  */
 fun readChipCode(tag: Tag): ByteArray? {
     val nfcA = NfcA.get(tag) ?: return null
     return try {
         nfcA.connect()
-        // First block from page 4 holds the TLV header: 0x03 <len> ...
-        val head = nfcA.transceive(byteArrayOf(CMD_READ, USER_PAGE_START.toByte()))
-        if (head.size < READ_BLOCK || head[0] != TLV_NDEF) return null
-        val len = head[1].toInt() and 0xFF
-        if (len == 0 || len >= 0xFF) return null // empty, or long-form TLV we never write
-        val total = 2 + len // TLV header (0x03 + len byte) + NDEF message bytes
-        val buffer = ByteArray(((total + READ_BLOCK - 1) / READ_BLOCK) * READ_BLOCK)
-        head.copyInto(buffer, 0, 0, READ_BLOCK)
-        var offset = READ_BLOCK
-        var page = USER_PAGE_START + 4
-        while (offset < total) {
-            val block = nfcA.transceive(byteArrayOf(CMD_READ, page.toByte()))
-            if (block.size < READ_BLOCK) return null
-            block.copyInto(buffer, offset, 0, READ_BLOCK)
-            offset += READ_BLOCK
-            page += 4
-        }
-        chipCodeFromNdef(arrayOf(NdefMessage(buffer.copyOfRange(2, total))))
+        readRecord { frame -> nfcA.transceive(frame) }
     } catch (_: IOException) {
-        null
-    } catch (_: FormatException) {
         null
     } finally {
         try {
