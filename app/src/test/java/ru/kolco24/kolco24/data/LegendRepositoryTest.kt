@@ -24,6 +24,8 @@ import ru.kolco24.kolco24.data.crypto.EncBlob
 import ru.kolco24.kolco24.data.crypto.LegendCrypto
 import ru.kolco24.kolco24.data.db.CheckpointDao
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.data.db.LegendMetaDao
+import ru.kolco24.kolco24.data.db.LegendMetaEntity
 import ru.kolco24.kolco24.data.db.SyncMetaDao
 import ru.kolco24.kolco24.data.db.SyncMetaEntity
 import ru.kolco24.kolco24.data.db.TagDao
@@ -38,6 +40,7 @@ class LegendRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var checkpointDao: FakeCheckpointDao
     private lateinit var tagDao: FakeTagDao
+    private lateinit var legendMetaDao: FakeLegendMetaDao
     private lateinit var syncMetaDao: FakeLegendSyncMetaDao
     private lateinit var repository: LegendRepository
     private lateinit var origin: String
@@ -45,8 +48,12 @@ class LegendRepositoryTest {
     private val json = Json { ignoreUnknownKeys = true }
     private val callLog = mutableListOf<String>()
 
-    private fun legendJson(raceId: Int = 8, checkpointIds: List<Int> = listOf(101)) = buildString {
-        append("""{"race":$raceId,"checkpoints":[""")
+    private fun legendJson(
+        raceId: Int = 8,
+        checkpointIds: List<Int> = listOf(101),
+        totalCost: Int = 10,
+    ) = buildString {
+        append("""{"race":$raceId,"total_cost":$totalCost,"checkpoints":[""")
         checkpointIds.forEachIndexed { index, id ->
             if (index > 0) append(",")
             append("""{"id":$id,"number":${index + 1},"cost":10,"type":"kp","description":"КП $id"}""")
@@ -69,8 +76,9 @@ class LegendRepositoryTest {
         val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
         checkpointDao = FakeCheckpointDao(callLog)
         tagDao = FakeTagDao(callLog)
+        legendMetaDao = FakeLegendMetaDao(callLog)
         syncMetaDao = FakeLegendSyncMetaDao(callLog)
-        repository = LegendRepository(apiClient, checkpointDao, tagDao, syncMetaDao, origin, json)
+        repository = LegendRepository(apiClient, checkpointDao, tagDao, legendMetaDao, syncMetaDao, origin, json)
     }
 
     @After
@@ -123,7 +131,7 @@ class LegendRepositoryTest {
 
         repository.refreshLegend(8)
 
-        assertEquals(listOf("replaceAllForRace", "replaceAllTags", "upsertEtag"), callLog)
+        assertEquals(listOf("replaceAllForRace", "replaceAllTags", "upsertLegendMeta", "upsertEtag"), callLog)
     }
 
     @Test
@@ -134,7 +142,24 @@ class LegendRepositoryTest {
 
         assertEquals(1, repository.checkpointsForRace(8).first().size)
         assertNull(syncMetaDao.getEtag(origin, "race/8/legend"))
-        assertEquals(listOf("replaceAllForRace", "replaceAllTags"), callLog)
+        assertEquals(listOf("replaceAllForRace", "replaceAllTags", "upsertLegendMeta"), callLog)
+    }
+
+    @Test
+    fun success_persistsTotalCost() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody(legendJson(checkpointIds = listOf(101, 102), totalCost = 42)),
+        )
+
+        repository.refreshLegend(8)
+
+        assertEquals(42, repository.totalCostForRace(8).first())
+    }
+
+    @Test
+    fun totalCost_defaultsToZeroBeforeSync() = runTest {
+        assertEquals(0, repository.totalCostForRace(8).first())
     }
 
     @Test
@@ -439,6 +464,18 @@ private class FakeTagDao(private val callLog: MutableList<String>) : TagDao {
         deleteTagsForRace(raceId)
         insertTags(tags)
         callLog.add("replaceAllTags")
+    }
+}
+
+private class FakeLegendMetaDao(private val callLog: MutableList<String>) : LegendMetaDao {
+    private val store = MutableStateFlow<List<LegendMetaEntity>>(emptyList())
+
+    override fun observeForRace(raceId: Int): Flow<LegendMetaEntity?> =
+        store.map { list -> list.firstOrNull { it.raceId == raceId } }
+
+    override suspend fun upsert(meta: LegendMetaEntity) {
+        store.value = store.value.filterNot { it.raceId == meta.raceId } + meta
+        callLog.add("upsertLegendMeta")
     }
 }
 

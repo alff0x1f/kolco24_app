@@ -12,8 +12,11 @@ import ru.kolco24.kolco24.data.crypto.EncBlob
 import ru.kolco24.kolco24.data.crypto.LegendCrypto
 import ru.kolco24.kolco24.data.crypto.UnlockResult
 import ru.kolco24.kolco24.data.crypto.UnlockTag
+import kotlinx.coroutines.flow.map
 import ru.kolco24.kolco24.data.db.CheckpointDao
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.data.db.LegendMetaDao
+import ru.kolco24.kolco24.data.db.LegendMetaEntity
 import ru.kolco24.kolco24.data.db.SyncMetaDao
 import ru.kolco24.kolco24.data.db.SyncMetaEntity
 import ru.kolco24.kolco24.data.db.TagDao
@@ -37,6 +40,7 @@ class LegendRepository(
     private val apiClient: ApiClient,
     private val checkpointDao: CheckpointDao,
     private val tagDao: TagDao,
+    private val legendMetaDao: LegendMetaDao,
     private val syncMetaDao: SyncMetaDao,
     private val origin: String,
     private val json: Json,
@@ -44,6 +48,15 @@ class LegendRepository(
     /** Offline-readable checkpoints of one race, ordered by number then id. */
     fun checkpointsForRace(raceId: Int): Flow<List<CheckpointEntity>> =
         checkpointDao.observeCheckpointsForRace(raceId)
+
+    /**
+     * Offline-readable sum of **all** checkpoint costs of one race (open + locked) — the correct
+     * denominator for the legend progress bar. Emits `0` until the first `200` populates `legend_meta`
+     * (no row yet), which collapses the bar to 0% rather than skewing it; the server always sends the
+     * field, so this is only the pre-sync window.
+     */
+    fun totalCostForRace(raceId: Int): Flow<Int> =
+        legendMetaDao.observeForRace(raceId).map { it?.totalCost ?: 0 }
 
     /** One-shot snapshot — re-reads after an offline [unlock] to get the just-revealed cost. */
     suspend fun checkpointsSnapshot(raceId: Int): List<CheckpointEntity> =
@@ -76,6 +89,7 @@ class LegendRepository(
                     raceId = raceId,
                     tags = response.tags.map { it.toEntity(raceId) },
                 )
+                legendMetaDao.upsert(LegendMetaEntity(raceId, response.totalCost))
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(origin, resource, result.etag))
                 }

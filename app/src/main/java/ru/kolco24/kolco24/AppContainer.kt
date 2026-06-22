@@ -83,6 +83,7 @@ class AppContainer(private val context: Context) {
             apiClient = apiClient,
             checkpointDao = database.checkpointDao(),
             tagDao = database.tagDao(),
+            legendMetaDao = database.legendMetaDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
             json = json,

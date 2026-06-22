@@ -20,8 +20,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MemberTagEntity::class,
         MemberChipBindingEntity::class,
         MarkEntity::class,
+        LegendMetaEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class, IntListConverter::class)
@@ -35,6 +36,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memberTagDao(): MemberTagDao
     abstract fun memberChipBindingDao(): MemberChipBindingDao
     abstract fun markDao(): MarkDao
+    abstract fun legendMetaDao(): LegendMetaDao
 
     companion object {
         /**
@@ -249,6 +251,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the `legend_meta` table — a race-level aggregate ([LegendMetaEntity]) holding the
+         * legend's `total_cost`. Purely additive (a plain `CREATE TABLE`, like [MIGRATION_4_5]); no
+         * existing table is touched, so all prior data survives the upgrade. SQL must match Room's
+         * generated schema (see schemas/.../9.json) exactly, or the validation check fails at runtime.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `legend_meta` (`raceId` INTEGER NOT NULL, " +
+                        "`totalCost` INTEGER NOT NULL, PRIMARY KEY(`raceId`))"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -263,6 +280,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .build()
     }

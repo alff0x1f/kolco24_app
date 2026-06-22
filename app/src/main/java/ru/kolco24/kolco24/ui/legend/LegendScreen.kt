@@ -86,6 +86,7 @@ fun LegendScreen(
     hasTeam: Boolean,
     onChooseTeam: () -> Unit,
     takenIds: Set<Int> = emptySet(),
+    totalScore: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -98,23 +99,24 @@ fun LegendScreen(
 
         when {
             !hasTeam -> LegendNoTeam(onChooseTeam = onChooseTeam)
-            else -> LegendList(checkpoints = checkpoints, takenIds = takenIds)
+            else -> LegendList(checkpoints = checkpoints, takenIds = takenIds, totalScore = totalScore)
         }
     }
 }
 
 @Composable
-private fun LegendList(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>) {
+private fun LegendList(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>, totalScore: Int) {
     var showOnlyOpen by rememberSaveable { mutableStateOf(false) }
 
     val visible = if (showOnlyOpen) checkpoints.filter { it.id !in takenIds } else checkpoints
 
     val takenCount = checkpoints.count { it.id in takenIds }
     val totalCount = checkpoints.size
-    // cost is nullable now (locked CPs hide it until unlocked); sum only the known costs. Locked-
-    // unrevealed CPs are surfaced as a «+N закрытых КП» hint instead of skewing the score.
+    // The numerator sums known costs of taken CPs (taking a locked CP reveals its cost). The
+    // denominator [totalScore] is the server's `total_cost` — sum of ALL CP costs, incl. locked
+    // ones whose individual cost is hidden — so the bar can't fill to 100% before locked CPs are
+    // taken. Locked-unrevealed CPs are surfaced as a «+N закрытых КП» hint via [lockedCount].
     val takenScore = checkpoints.filter { it.id in takenIds }.mapNotNull { it.cost }.sum()
-    val totalScore = checkpoints.mapNotNull { it.cost }.sum()
     val lockedCount = checkpoints.count { it.locked }
 
     LazyColumn(
