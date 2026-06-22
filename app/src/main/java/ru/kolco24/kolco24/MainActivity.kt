@@ -170,6 +170,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      */
     @Volatile var boundUidsSnapshot: Set<String> = emptySet()
 
+    /**
+     * The opening tap handed off to [ScanScreen] to drain exactly once when it arms its mark hook.
+     * Set by the host collector right before it flips `showScan = true`; cleared by the overlay after
+     * the drain. Holds the already-captured `(code, uid)` plus the tap-time millis so the first tap is
+     * fed through the same processor path as subsequent in-overlay taps.
+     */
+    @Volatile var pendingScan: CapturedScan? = null
+
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
         private set
@@ -563,6 +571,51 @@ private fun Kolco24AppRoot(
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
     // re-open the sheet/dialog for an unrelated member on the newly selected team.
     LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false }
+
+    // Mirror the roster-filtered bound uids onto the Activity so the binder-thread idle path can
+    // recognize a bound bracelet (open the overlay) without touching Compose state. A coarse open-gate
+    // only: it may briefly lag a team switch, so a stale bracelet could open an overlay that then reads
+    // UnboundChip — the authoritative scanBindings still governs scoring.
+    LaunchedEffect(scanBindings) { activity?.boundUidsSnapshot = scanBindings.keys }
+
+    // The captured opening tap (live idle / warm onNewIntent / cold onCreate), published by the
+    // Activity. A bare collectAsState gives the value; the dispatch itself is a keyed LaunchedEffect so
+    // the side effects never run during composition and the cold-launch Loading → Present transition
+    // re-fires the deferral.
+    val captured by (activity?.nfcLaunchScan ?: remember { MutableStateFlow<CapturedScan?>(null) })
+        .collectAsState()
+    LaunchedEffect(captured, teamState) {
+        val scan = captured ?: return@LaunchedEffect
+        val act = activity ?: return@LaunchedEffect
+        // Some other overlay is up: dropping the tap (rather than yanking the user out) keeps the
+        // current flow intact. The live-idle binder path can't even reach here while a bind/provision/
+        // verify hook is armed, but warm/cold intents and Settings/confirm states still can.
+        val busy = teamFlowStep != TeamFlowStep.None || confirmTeamId != null || showSettings ||
+            showAdmin || showProvisioning || showCheckChip || bindSlot != null || unbindSlot != null ||
+            chipWriterCode != null
+        if (busy) { act.nfcLaunchScan.value = null; return@LaunchedEffect }
+        when (teamState) {
+            is SelectedTeamState.Present -> {
+                // Same overlay resets as onScanClick, then hand the captured tap to ScanScreen to drain.
+                teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
+                showAdmin = false; showProvisioning = false; showCheckChip = false
+                bindSlot = null; unbindSlot = null; chipWriterCode = null
+                act.pendingScan = scan
+                showScan = true
+                act.nfcLaunchScan.value = null
+            }
+            SelectedTeamState.None, SelectedTeamState.Missing -> {
+                // No team to score against — route to team selection (mirrors the FAB's no-team path).
+                pickerRaceId = selectedRaceId
+                teamFlowStep = TeamFlowStep.CompPicker
+                act.nfcLaunchScan.value = null
+            }
+            SelectedTeamState.Loading -> {
+                // Wait: keep the captured scan so the Loading → Present transition re-runs this effect
+                // (the cold-launch race the design solves — the tap lands before Room emits the team).
+            }
+        }
+    }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {

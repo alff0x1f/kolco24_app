@@ -261,16 +261,16 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `@Volatile var pendingScan: CapturedScan? = null` to `MainActivity`
-- [ ] add `LaunchedEffect(scanBindings) { activity.boundUidsSnapshot = scanBindings.keys }` in the host
-- [ ] read `captured` via `nfcLaunchScan.collectAsState()`, then add a **`LaunchedEffect(captured,
+- [x] add `@Volatile var pendingScan: CapturedScan? = null` to `MainActivity`
+- [x] add `LaunchedEffect(scanBindings) { activity.boundUidsSnapshot = scanBindings.keys }` in the host
+- [x] read `captured` via `nfcLaunchScan.collectAsState()`, then add a **`LaunchedEffect(captured,
       teamState)`** dispatcher (side effects must not run in composition; keying on `teamState` makes
       the cold-launch `Loading → Present` deferral re-fire) branching on `SelectedTeamState`:
       busy-overlay (incl. `showSettings`/`confirmTeamId`) → drop+clear; `Present` → reset overlays +
       `pendingScan = captured; showScan = true` + clear; `None`/`Missing` → open comp picker + clear;
       `Loading` → return without clearing
-- [ ] ensure the `Present` branch performs the same overlay resets as `onScanClick`
-- [ ] `./gradlew assembleDebug` compiles
+- [x] ensure the `Present` branch performs the same overlay resets as `onScanClick`
+- [x] `./gradlew assembleDebug` compiles
 
 ### Task 5: `ScanScreen` drains `pendingScan`
 
