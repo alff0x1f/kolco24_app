@@ -303,13 +303,13 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
       `isComplete` false, timer effect early-returns; stays open until manual close)
 
 ### Task 7: Verify acceptance criteria
-- [ ] КП-first idle tap opens the overlay with the КП identified; member taps then complete it
-- [ ] member-first idle tap (bound bracelet) opens the overlay and buffers the member
-- [ ] unrecognized/foreign tag idle → nothing happens (no overlay)
-- [ ] idle tap with no team selected → comp picker opens
-- [ ] window expiry → overlay closes; КП + all members → success beat → overlay closes
-- [ ] run full suite: `./gradlew testDebugUnitTest`
-- [ ] `./gradlew assembleDebug` and `./gradlew lintDebug` pass
+- [x] КП-first idle tap opens the overlay with the КП identified; member taps then complete it (manual NFC — skipped, not automatable; covered in Post-Completion)
+- [x] member-first idle tap (bound bracelet) opens the overlay and buffers the member (manual NFC — skipped, not automatable)
+- [x] unrecognized/foreign tag idle → nothing happens (no overlay) (manual NFC — skipped, not automatable)
+- [x] idle tap with no team selected → comp picker opens (manual NFC — skipped, not automatable)
+- [x] window expiry → overlay closes; КП + all members → success beat → overlay closes (manual NFC — skipped, not automatable)
+- [x] run full suite: `./gradlew testDebugUnitTest`
+- [x] `./gradlew assembleDebug` and `./gradlew lintDebug` pass
 
 ### Task 8: [Final] Docs + plan move
 - [ ] update `CLAUDE.md` (NFC infra + Scan overlay sections) to describe the `nfcLaunchScan` /
