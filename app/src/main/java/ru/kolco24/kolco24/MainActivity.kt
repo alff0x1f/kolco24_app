@@ -171,12 +171,12 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     @Volatile var boundUidsSnapshot: Set<String> = emptySet()
 
     /**
-     * The opening tap handed off to [ScanScreen] to drain exactly once when it arms its mark hook.
-     * Set by the host collector right before it flips `showScan = true`; cleared by the overlay after
-     * the drain. Holds the already-captured `(code, uid)` plus the tap-time millis so the first tap is
-     * fed through the same processor path as subsequent in-overlay taps.
+     * The opening tap handed off to [ScanScreen]. Set by the host collector; observed reactively by
+     * [ScanScreen] via a [kotlinx.coroutines.flow.StateFlow] collect so that a scan buffered after
+     * the overlay's [DisposableEffect] enter phase is still delivered. Cleared by the overlay's
+     * collector after processing.
      */
-    @Volatile var pendingScan: CapturedScan? = null
+    val pendingScan = MutableStateFlow<CapturedScan?>(null)
 
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
@@ -242,18 +242,34 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     }
 
     /**
-     * Parse a chip [code] out of an NFC launch intent. Only `NDEF_DISCOVERED` is handled (our
-     * manifest filter is scoped to the `kolco24.ru:cp` external type). The NDEF message is
-     * captured by the OS at scan time, so the code is available even if the tag was already lifted.
+     * Open the «Отметить КП» overlay when the app is launched by an `NDEF_DISCOVERED` intent (our
+     * manifest filter is scoped to the `kolco24.ru:cp` external type). The NDEF message is captured
+     * by the OS at scan time so the code is available even if the tag was already lifted.
+     *
+     * Security: intent extras (`EXTRA_NDEF_MESSAGES`, `EXTRA_ID`, `EXTRA_TAG`) are
+     * attacker-controllable — a third-party app can craft a fake `NDEF_DISCOVERED` intent with a
+     * replayed checkpoint code and send it to this exported activity. To prevent fraudulent takes,
+     * the captured scan is marked [CapturedScan.openOnly]: the overlay opens but does NOT pre-seed a
+     * pending score. Scoring happens only via the live reader-mode path (`onTagDiscovered`) once the
+     * physical chip is re-detected after `onResume` enables reader mode — which requires the chip to
+     * be physically present.
      */
     private fun handleNfcIntent(intent: Intent) {
         if (intent.action != NfcAdapter.ACTION_NDEF_DISCOVERED) return
+        // Check that EXTRA_TAG is present without deserializing it — extras are attacker-controllable
+        // and the deprecated getter throws ClassCastException on API < 33 for a mismatched type.
+        if (!intent.hasExtra(NfcAdapter.EXTRA_TAG)) return
         val messages = ndefMessagesOf(intent) ?: return
-        val code = chipCodeFromNdef(messages) ?: return
-        // Cold/warm launches are always КП chips (only КП chips are written NDEF+AAR). The uid rides
-        // along on EXTRA_ID; require both before opening the overlay so a malformed intent is a no-op.
+        chipCodeFromNdef(messages) ?: return
+        // Cold/warm launches are always КП chips (only КП chips are written NDEF+AAR). Require
+        // EXTRA_ID so a malformed intent without a uid is a no-op.
         val rawId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID) ?: return
-        nfcLaunchScan.value = CapturedScan(code, normalizeNfcUid(rawId), System.currentTimeMillis())
+        // openOnly=true: opens the overlay without scoring. Scoring requires the physical chip via
+        // reader mode (onTagDiscovered), which activates in onResume after the cold/warm launch.
+        nfcLaunchScan.value = CapturedScan(
+            code = null, uid = normalizeNfcUid(rawId),
+            capturedAt = System.currentTimeMillis(), openOnly = true,
+        )
     }
 
     /** Version-safe read of `EXTRA_NDEF_MESSAGES`; null when absent or empty. */
@@ -330,6 +346,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val uid = normalizeNfcUid(tag.id)
         val code = readChipCode(tag)
         if (code == null && uid !in boundUidsSnapshot) return
+        // Publish the already-read (code, uid) — no second chip read. If onTagForMark was armed
+        // while readChipCode was blocking (the overlay opened concurrently), the dispatcher sees
+        // showScan=true and routes to pendingScan; the ScanScreen's continuous collect drain
+        // processes it as ScanInput.Captured. The old one-shot DisposableEffect drain race that
+        // motivated a raw-tag recheck is gone now that the drain is a LaunchedEffect collect.
         nfcLaunchScan.value = CapturedScan(code, uid, System.currentTimeMillis())
     }
 
@@ -358,12 +379,23 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
  * Identity equality is used as a [kotlinx.coroutines.flow.StateFlow] payload (set/cleared by
  * reference); override `equals`/`hashCode` only if value equality is ever required.
  */
-data class CapturedScan(val code: ByteArray?, val uid: String, val capturedAt: Long)
+data class CapturedScan(
+    val code: ByteArray?,
+    val uid: String,
+    val capturedAt: Long,
+    /**
+     * When true the dispatcher opens the scan overlay without pre-seeding a pending score.
+     * Used by cold/warm NFC launches so scoring goes through the live reader-mode path
+     * (onTagDiscovered) rather than trusting attacker-controllable intent extras.
+     */
+    val openOnly: Boolean = false,
+)
 
 /**
  * Source of one scan fed to the «Отметить КП» processor. [Live] is an in-overlay subsequent tap whose
- * code/uid are read off the live tag; [Captured] is the opening tap whose `(code, uid)` were already
- * read (binder thread for live-idle, or the launch intent for cold/warm) — no second chip read.
+ * code/uid are read off the live tag; [Captured] is the opening tap (live-idle binder path) whose
+ * `(code, uid)` were already read — no second chip read. Cold/warm NFC launches open the overlay via
+ * [CapturedScan.openOnly] and score through the [Live] path once reader mode re-detects the chip.
  */
 sealed interface ScanInput {
     data class Live(val tag: Tag) : ScanInput
@@ -593,14 +625,25 @@ private fun Kolco24AppRoot(
         val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
             showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
             unbindSlot != null || chipWriterCode != null
-        if (busy) { act.nfcLaunchScan.value = null; return@LaunchedEffect }
+        if (busy) {
+            // Narrow race: showScan is true but onTagForMark is not yet armed (DisposableEffect
+            // hasn't run). The idle path fires and publishes a live non-openOnly scan here instead
+            // of routing to the hook. Buffer it so the overlay drains it on arm. Safe because the
+            // idle path is only reachable when onTagForMark is null — once the hook is armed, the
+            // binder thread routes to it directly and never reaches the idle publish.
+            if (showScan && !scan.openOnly && act.pendingScan.value == null) act.pendingScan.value = scan
+            act.nfcLaunchScan.value = null
+            return@LaunchedEffect
+        }
         when (teamState) {
             is SelectedTeamState.Present -> {
                 // Same overlay resets as onScanClick, then hand the captured tap to ScanScreen to drain.
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
                 bindSlot = null; unbindSlot = null; chipWriterCode = null
-                act.pendingScan = scan
+                // openOnly scans (cold/warm NFC launch) just open the overlay; scoring is deferred
+                // to the live reader-mode path (onTagDiscovered) once the physical chip is present.
+                if (!scan.openOnly) act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
             }

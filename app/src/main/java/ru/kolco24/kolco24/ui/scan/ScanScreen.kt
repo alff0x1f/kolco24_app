@@ -140,16 +140,24 @@ fun ScanScreen(
                 val now = System.currentTimeMillis()
                 scope.launch { process(ScanInput.Live(tag), now) }
             }
-            // Drain the tap that opened this overlay (live idle / cold / warm) once, as the first
-            // scan, using its capture-time `now` so the window math matches when the chip was tapped.
-            act.pendingScan?.let { scan ->
-                act.pendingScan = null
-                scope.launch { process(ScanInput.Captured(scan.code, scan.uid), scan.capturedAt) }
-            }
         }
         onDispose {
             activity?.onTagForMark = null
-            activity?.pendingScan = null
+            activity?.let { it.pendingScan.value = null }
+        }
+    }
+
+    // Reactive drain of the captured opening tap. DisposableEffect runs synchronously in the
+    // commit phase while LaunchedEffect runs async after commit. When both showScan and captured
+    // change in the same Compose frame, the commit-phase drain would see pendingScan == null and
+    // miss a scan that the host's LaunchedEffect writes post-commit. A continuous collect catches
+    // writes that arrive after DisposableEffect enters.
+    LaunchedEffect(activity) {
+        val act = activity ?: return@LaunchedEffect
+        act.pendingScan.collect { scan ->
+            scan ?: return@collect
+            act.pendingScan.value = null
+            process(ScanInput.Captured(scan.code, scan.uid), scan.capturedAt)
         }
     }
 
@@ -190,8 +198,24 @@ fun ScanScreen(
         if (allScanned && !completed) {
             completed = true
             delay(SUCCESS_HOLD_MS)
-            finalizeSession()
-            currentOnClose()
+            // Re-validate under the mutex after the hold: a КП switch may have arrived during the
+            // delay and be mid-processing inside scanMutex (suspended on NFC/Room IO) without having
+            // updated `session` yet, so the Compose cancellation of this effect hasn't fired.
+            // Mirrors the expiry handler pattern: finalize+close only if still complete.
+            var shouldClose = false
+            scanMutex.withLock {
+                if (isComplete(session, roster.size)) {
+                    finalizeSession()
+                    shouldClose = true
+                } else {
+                    completed = false
+                }
+            }
+            if (shouldClose) currentOnClose()
+        } else if (!allScanned) {
+            // A КП switch during the success hold makes allScanned false and cancels the delay above.
+            // Reset completed so the next full-roster scan can trigger the beat again.
+            completed = false
         }
     }
 
