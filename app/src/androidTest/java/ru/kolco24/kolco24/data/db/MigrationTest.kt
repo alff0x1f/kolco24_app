@@ -600,6 +600,73 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate8To9_keepsDataAndAddsLegendMetaTable() {
+        val dbName = "migration-8to9-test.db"
+
+        // Reach v8, then seed a race + a checkpoint so we can assert existing data survives.
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(
+            dbName,
+            8,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus) " +
+                    "VALUES (7, 'Кольцо', 'kolco', '2026-08-01', NULL, 'Лес', 'open')"
+            )
+            db.execSQL(
+                "INSERT INTO checkpoints (id, raceId, number, cost, type, description, locked, encIv, encCt, color) " +
+                    "VALUES (1, 7, 5, 10, 'kp', 'У пня', 0, NULL, NULL, '')"
+            )
+        }
+
+        // Run 8→9; MigrationTestHelper validates the resulting schema against 9.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            9,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+            AppDatabase.MIGRATION_8_9,
+        )
+
+        // Existing rows survive the additive migration.
+        db.query("SELECT name FROM races WHERE id = 7").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Кольцо", cursor.getString(0))
+        }
+        db.query("SELECT description FROM checkpoints WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("У пня", cursor.getString(0))
+        }
+
+        // New table exists, is empty, and accepts the entity column set — a camelCase/snake_case
+        // mismatch only surfaces here.
+        db.query("SELECT count(*) FROM legend_meta").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.execSQL("INSERT INTO legend_meta (raceId, totalCost) VALUES (7, 42)")
+        db.query("SELECT totalCost FROM legend_meta WHERE raceId = 7").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(42, cursor.getInt(0))
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate2To3_indexExists() {
         val dbName = "migration-2to3-index-test.db"
         helper.createDatabase(dbName, 1).close()

@@ -426,6 +426,12 @@ private fun Kolco24AppRoot(
     // prior race during the brief window before the new flow emits (mirrors the safeMarks guard).
     val safeCheckpoints = if (selectedRaceId != null) legendCheckpoints.filter { it.raceId == selectedRaceId } else emptyList()
 
+    // Legend progress denominator: sum of ALL CP costs (open + locked), from the server's
+    // `total_cost` (locked CPs hide their individual cost, so it can't be summed client-side).
+    val legendTotalCost by remember(selectedRaceId) {
+        selectedRaceId?.let { legendRepo.totalCostForRace(it) } ?: flowOf(0)
+    }.collectAsState(initial = 0)
+
     // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
     val bindingsList by remember(selectedTeamId) {
         selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList())
@@ -581,6 +587,7 @@ private fun Kolco24AppRoot(
                         hasTeam = teamState !is SelectedTeamState.None,
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
                         takenIds = takenIds,
+                        totalScore = legendTotalCost,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     2 -> TeamScreen(

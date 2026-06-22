@@ -3,10 +3,17 @@ package ru.kolco24.kolco24.data.api.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Top-level payload of `GET /app/race/<race_id>/legend/` (see docs/design/API.md). */
+/**
+ * Top-level payload of `GET /app/race/<race_id>/legend/` (see docs/design/API.md).
+ *
+ * [totalCost] is the sum of **every** checkpoint's `cost` — open AND locked — so the legend progress
+ * bar has a correct denominator even when locked CPs hide their individual `cost`. Defaulted to `0`
+ * for forward-compat (a payload without the field parses safely); persisted per-race in `legend_meta`.
+ */
 @Serializable
 data class LegendResponse(
     val race: Int,
+    @SerialName("total_cost") val totalCost: Int = 0,
     val checkpoints: List<CheckpointDto>,
     val tags: List<TagDto> = emptyList(),
 )
