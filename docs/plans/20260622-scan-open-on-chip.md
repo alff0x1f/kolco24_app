@@ -217,12 +217,12 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanSession.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/scan/ScanSessionTest.kt`
 
-- [ ] add `fun isComplete(session: ScanSession?, rosterSize: Int): Boolean` to `ScanSession.kt`
+- [x] add `fun isComplete(session: ScanSession?, rosterSize: Int): Boolean` to `ScanSession.kt`
       (`point != null && rosterSize > 0 && present.size >= rosterSize`)
-- [ ] write test: КП set + `present` covers full roster → `true`
-- [ ] write tests for edge cases: `null` session → false; `point == null` (only buffered) → false;
+- [x] write test: КП set + `present` covers full roster → `true`
+- [x] write tests for edge cases: `null` session → false; `point == null` (only buffered) → false;
       partial roster → false; `rosterSize == 0` → false; `present` larger than roster → true
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 2: `CapturedScan` / `ScanInput` types + `ScanInput`-keyed processor
 

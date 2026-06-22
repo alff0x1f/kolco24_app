@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.scan
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -116,6 +117,52 @@ class ScanSessionTest {
         assertEquals(42, s!!.point)
         assertEquals(setOf(1, 2), s.present)
         assertEquals(300L, s.lastScanAt)
+    }
+
+    @Test
+    fun isComplete_kpAndFullRoster_isTrue() {
+        var s = reduce(null, kp(), now = 0L)
+        s = reduce(s, ScanEvent.Member(1), now = 10L)
+        s = reduce(s, ScanEvent.Member(2), now = 20L)
+        s = reduce(s, ScanEvent.Member(3), now = 30L)
+        assertTrue(isComplete(s, rosterSize = 3))
+    }
+
+    @Test
+    fun isComplete_nullSession_isFalse() {
+        assertFalse(isComplete(null, rosterSize = 3))
+    }
+
+    @Test
+    fun isComplete_noKp_onlyBuffered_isFalse() {
+        var s = reduce(null, ScanEvent.Member(1), now = 0L)
+        s = reduce(s, ScanEvent.Member(2), now = 10L)
+        s = reduce(s, ScanEvent.Member(3), now = 20L)
+        // КП not yet scanned — members are buffered, present is empty, so not complete.
+        assertFalse(isComplete(s, rosterSize = 3))
+    }
+
+    @Test
+    fun isComplete_partialRoster_isFalse() {
+        var s = reduce(null, kp(), now = 0L)
+        s = reduce(s, ScanEvent.Member(1), now = 10L)
+        s = reduce(s, ScanEvent.Member(2), now = 20L)
+        assertFalse(isComplete(s, rosterSize = 3))
+    }
+
+    @Test
+    fun isComplete_rosterZero_isFalse() {
+        val s = reduce(null, kp(), now = 0L)
+        assertFalse(isComplete(s, rosterSize = 0))
+    }
+
+    @Test
+    fun isComplete_presentLargerThanRoster_isTrue() {
+        var s = reduce(null, kp(), now = 0L)
+        s = reduce(s, ScanEvent.Member(1), now = 10L)
+        s = reduce(s, ScanEvent.Member(2), now = 20L)
+        s = reduce(s, ScanEvent.Member(3), now = 30L)
+        assertTrue(isComplete(s, rosterSize = 2))
     }
 
     @Test
