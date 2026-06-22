@@ -566,6 +566,8 @@ private fun Kolco24AppRoot(
                     0 -> MarksScreen(
                         marks = safeMarks,
                         checkpointColors = checkpointColors,
+                        totalKp = safeCheckpoints.size,
+                        totalCost = legendTotalCost,
                         nfcAvailable = nfcActiveForScan,
                         onScanClick = {
                             // Scanning needs a resolved team with a roster. With no team (or a

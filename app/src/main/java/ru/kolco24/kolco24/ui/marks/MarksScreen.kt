@@ -124,12 +124,14 @@ private fun CheckpointColor.barColor(): Color = when (this) {
 fun MarksScreen(
     marks: List<MarkEntity> = emptyList(),
     checkpointColors: Map<Int, String> = emptyMap(),
+    totalKp: Int = 0,
+    totalCost: Int = 0,
     nfcAvailable: Boolean = true,
     onScanClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val totalKp = takenPointCount(marks)
-    val score = totalScore(marks)
+    val takenKp = takenPointCount(marks)
+    val takenScore = totalScore(marks)
     val tiles = marksToTiles(marks) { parseCheckpointColor(checkpointColors[it.point] ?: "") }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -147,7 +149,13 @@ fun MarksScreen(
             ) {
                 item("metrics") {
                     // «ДО КВ» has no real source yet — placeholder until control-time lands.
-                    MetricsCard(kpCount = totalKp, score = score, timeToKv = "—")
+                    MetricsCard(
+                        takenKp = takenKp,
+                        totalKp = totalKp,
+                        takenScore = takenScore,
+                        totalCost = totalCost,
+                        timeToKv = "—",
+                    )
                 }
                 if (tiles.isEmpty()) {
                     item("empty") {
@@ -225,7 +233,13 @@ private fun MarksEmpty(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MetricsCard(kpCount: Int, score: Int, timeToKv: String) {
+private fun MetricsCard(
+    takenKp: Int,
+    totalKp: Int,
+    takenScore: Int,
+    totalCost: Int,
+    timeToKv: String,
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -237,33 +251,59 @@ private fun MetricsCard(kpCount: Int, score: Int, timeToKv: String) {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MetricItem(value = "$kpCount", unit = "КП", label = "ВЗЯТО", modifier = Modifier.weight(1f))
+            // Show the «/total» only once the legend has loaded (total > 0), so a cold start
+            // doesn't flash a «8/0».
+            MetricItem(
+                label = "ВЗЯТО",
+                value = "$takenKp",
+                total = totalKp.takeIf { it > 0 }?.toString(),
+                unit = "КП",
+                modifier = Modifier.weight(1f),
+            )
             VerticalDivider(
                 modifier = Modifier.height(36.dp).padding(horizontal = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
-            MetricItem(value = "$score", unit = "бал.", label = "СУММА", modifier = Modifier.weight(1f))
+            MetricItem(
+                label = "СУММА",
+                value = "$takenScore",
+                total = totalCost.takeIf { it > 0 }?.toString(),
+                unit = "бал.",
+                modifier = Modifier.weight(1f),
+            )
             VerticalDivider(
                 modifier = Modifier.height(36.dp).padding(horizontal = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
-            MetricItem(value = timeToKv, label = "ДО КВ", isWarn = true, modifier = Modifier.weight(1f))
+            MetricItem(label = "ДО КВ", value = timeToKv, isWarn = true, modifier = Modifier.weight(1f))
         }
     }
 }
 
+/**
+ * One metric column: the caption sits **above** the value (per the Отметки design), and an optional
+ * «/total» denominator (e.g. «8/15 КП») mirrors the Легенда's score progress so взято/сумма read as
+ * fractions of the race total rather than bare counts. [total] is null until the legend has loaded.
+ */
 @Composable
 private fun MetricItem(
-    value: String,
-    unit: String? = null,
     label: String,
+    value: String,
+    total: String? = null,
+    unit: String? = null,
     isWarn: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.padding(vertical = 10.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(2.dp))
         Row(
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = value,
@@ -271,20 +311,23 @@ private fun MetricItem(
                 fontFamily = if (isWarn) RobotoMono else null,
                 color = if (isWarn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
+            if (total != null) {
+                Text(
+                    text = "/$total",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+            }
             if (unit != null) {
                 Text(
                     text = unit,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 3.dp),
+                    modifier = Modifier.padding(start = 2.dp, bottom = 3.dp),
                 )
             }
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
