@@ -48,6 +48,7 @@ import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.MemberChipBindingEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.db.TeamMemberItem
+import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
@@ -81,6 +82,8 @@ fun TeamScreen(
     onBindMember: (TeamMemberItem) -> Unit = {},
     onUnbindMember: (TeamMemberItem) -> Unit = {},
     nfcAvailable: Boolean = false,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -101,6 +104,7 @@ fun TeamScreen(
     Column(modifier = modifier.fillMaxSize()) {
         TeamTopBar()
 
+        RefreshableList(isRefreshing = isRefreshing, onRefresh = onRefresh) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 16.dp),
@@ -133,6 +137,7 @@ fun TeamScreen(
             item("misc") {
                 MiscSection(onOpenSettings = onOpenSettings)
             }
+        }
         }
     }
 }

@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.theme.CpColorBlue
 import ru.kolco24.kolco24.ui.theme.CpColorPurple
 import ru.kolco24.kolco24.ui.theme.CpColorRed
@@ -87,6 +88,8 @@ fun LegendScreen(
     onChooseTeam: () -> Unit,
     takenIds: Set<Int> = emptySet(),
     totalScore: Int = 0,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -98,8 +101,11 @@ fun LegendScreen(
         )
 
         when {
+            // No team → no race to pull, so the gesture isn't offered on this empty state.
             !hasTeam -> LegendNoTeam(onChooseTeam = onChooseTeam)
-            else -> LegendList(checkpoints = checkpoints, takenIds = takenIds, totalScore = totalScore)
+            else -> RefreshableList(isRefreshing = isRefreshing, onRefresh = onRefresh) {
+                LegendList(checkpoints = checkpoints, takenIds = takenIds, totalScore = totalScore)
+            }
         }
     }
 }

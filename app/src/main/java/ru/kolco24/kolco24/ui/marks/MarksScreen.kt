@@ -393,45 +393,46 @@ private fun ScorecardTile(mark: Mark) {
 
 @Composable
 private fun NfcTileBody(mark: Mark) {
-    // Per-element padding (not a shared inset) so the number can center on the WHOLE tile while
-    // «+N» clears the top color stripe and the time hugs the bottom.
+    // Per-element placement (not a shared inset) so the «стоимость-номер» token centers on the WHOLE
+    // tile while the take time hugs the bottom-right like a chat-message timestamp.
     Box(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "+${mark.cost}",
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 8.dp),
-        )
-        Text(
-            text = mark.number,
+            text = scoreToken(mark),
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
             // includeFontPadding=false + centered/trimmed line height so the digits sit optically
-            // centered — without it the font's top padding makes the number look pushed down.
+            // centered — without it the font's top padding makes the token look pushed down.
             style = TextStyle(
                 fontFamily = RobotoMono,
                 fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-                lineHeight = 28.sp,
-                letterSpacing = (-0.8).sp,
+                fontSize = 23.sp,
+                lineHeight = 23.sp,
+                letterSpacing = (-1).sp,
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                 lineHeightStyle = LineHeightStyle(
                     alignment = LineHeightStyle.Alignment.Center,
                     trim = LineHeightStyle.Trim.Both,
                 ),
             ),
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 6.dp),
         )
         Text(
             text = mark.time,
             fontFamily = RobotoMono,
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 7.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
     }
 }
+
+/**
+ * The Легенда's checkpoint identity token — `<стоимость>-<номер>`, e.g. `3-01` — reused on the marks
+ * tiles so a КП reads the same way here as in the legend. [Mark.number] is already zero-padded.
+ */
+private fun scoreToken(mark: Mark): String = "${mark.cost}-${mark.number}"
 
 @Composable
 private fun PhotoTileBody(mark: Mark) {
@@ -441,35 +442,30 @@ private fun PhotoTileBody(mark: Mark) {
             .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
     ) {
         MiniCpBadge(
-            number = mark.number,
-            modifier = Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 10.dp),
-        )
-        Text(
-            text = "+${mark.cost}",
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.88f),
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 6.dp),
+            label = scoreToken(mark),
+            modifier = Modifier.align(Alignment.Center),
         )
         Text(
             text = mark.time,
             fontFamily = RobotoMono,
             fontSize = 11.sp,
             color = Color.White.copy(alpha = 0.82f),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
     }
 }
 
 @Composable
-private fun MiniCpBadge(number: String, modifier: Modifier = Modifier) {
+private fun MiniCpBadge(label: String, modifier: Modifier = Modifier) {
+    // White КП marker carrying the «стоимость-номер» token over its red reflective stripe — a pill
+    // (not a fixed square) so a wider token like `15-12` still reads cleanly on the photo seat.
     Box(
         modifier = modifier
-            .size(24.dp)
-            .shadow(1.dp, RoundedCornerShape(3.dp))
-            .clip(RoundedCornerShape(3.dp))
-            .background(Color.White),
+            .height(26.dp)
+            .shadow(1.dp, RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color.White)
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -480,11 +476,12 @@ private fun MiniCpBadge(number: String, modifier: Modifier = Modifier) {
                 .background(RedBand.copy(alpha = 0.78f)),
         )
         Text(
-            text = number,
+            text = label,
             fontFamily = RobotoMono,
             fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            letterSpacing = (-0.2).sp,
+            fontSize = 14.sp,
+            maxLines = 1,
+            letterSpacing = (-0.4).sp,
             color = PhotoInk,
         )
     }
