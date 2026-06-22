@@ -79,12 +79,15 @@ enum class MarkKind { NFC, PHOTO }
  * row that is kept in the DB for the future server log but never tiled here, matching the
  * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
  * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
- * front. [colorOf] resolves a take's checkpoint color token (point id → server token) for the tile's
+ * front. [costOf] resolves a take's **live** checkpoint cost (point id → current cost) so a tile reflects
+ * an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
+ * [colorOf] resolves a take's checkpoint color token (point id → server token) for the tile's
  * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
  * map. Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
  */
 fun marksToTiles(
     marks: List<MarkEntity>,
+    costOf: (MarkEntity) -> Int = { it.cost },
     colorOf: (MarkEntity) -> CheckpointColor? = { null },
 ): List<Mark> {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
@@ -94,7 +97,7 @@ fun marksToTiles(
         .map { m ->
             Mark(
                 number = m.checkpointNumber.toString().padStart(2, '0'),
-                cost = m.cost,
+                cost = costOf(m),
                 kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
                 time = fmt.format(Date(m.takenAt)),
                 color = colorOf(m),
@@ -124,6 +127,7 @@ private fun CheckpointColor.barColor(): Color = when (this) {
 fun MarksScreen(
     marks: List<MarkEntity> = emptyList(),
     checkpointColors: Map<Int, String> = emptyMap(),
+    checkpointCosts: Map<Int, Int> = emptyMap(),
     totalKp: Int = 0,
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
@@ -131,8 +135,12 @@ fun MarksScreen(
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
-    val takenScore = totalScore(marks)
-    val tiles = marksToTiles(marks) { parseCheckpointColor(checkpointColors[it.point] ?: "") }
+    // Score off the live checkpoint cost (joined by point id), falling back to the mark's snapshot for
+    // a point dropped from the legend — so СУММА tracks the «Легенда» score after an organizer cost edit
+    // rather than the stale value baked into the mark row.
+    val costOf: (MarkEntity) -> Int = { checkpointCosts[it.point] ?: it.cost }
+    val takenScore = totalScore(marks, costOf)
+    val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.point] ?: "") }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
