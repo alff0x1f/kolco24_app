@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,8 +57,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -186,6 +190,9 @@ fun CheckChipScreen(
         Spacer(Modifier.height(16.dp))
         CheckChipHero(
             result = lastResult,
+            // The chip scanned just before this one — recent[0] is the current result, recent[1] the
+            // previous; their UID diff highlights the digits that changed between the two.
+            previousUid = recent.getOrNull(1)?.uid,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
@@ -202,7 +209,10 @@ fun CheckChipScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(recent) { result -> RecentCheckRow(result) }
+                itemsIndexed(recent) { index, result ->
+                    // recent is newest-first, so the scan before this row is the next (older) item.
+                    RecentCheckRow(result, previousUid = recent.getOrNull(index + 1)?.uid)
+                }
             }
         }
     }
@@ -234,6 +244,7 @@ private fun CheckChipHint(text: String) {
 @Composable
 private fun CheckChipHero(
     result: ChipCheckResult?,
+    previousUid: String?,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -243,12 +254,13 @@ private fun CheckChipHero(
     ) {
         when (result) {
             null -> IdleHero()
-            is ChipCheckResult.Ok -> OkHero(result)
+            is ChipCheckResult.Ok -> OkHero(result, previousUid)
             is ChipCheckResult.UnknownChip -> MessageHero(
                 color = OrangeCta,
                 icon = Icons.Filled.Warning,
                 title = "Чип не привязан к КП этой гонки (другая гонка или устаревший список)",
                 uid = result.uid,
+                previousUid = previousUid,
                 diagnostic = "bid ${result.bid}",
             )
             is ChipCheckResult.Inconsistent -> MessageHero(
@@ -256,6 +268,7 @@ private fun CheckChipHero(
                 icon = Icons.Filled.Error,
                 title = "КП id=${result.pointId} нет в легенде — обновите данные",
                 uid = result.uid,
+                previousUid = previousUid,
                 diagnostic = "bid ${result.bid}",
             )
             is ChipCheckResult.NoCode -> MessageHero(
@@ -263,6 +276,7 @@ private fun CheckChipHero(
                 icon = Icons.Filled.HelpOutline,
                 title = "Нет кода КП: пустой чип, браслет участника или ошибка чтения — приложите ещё раз",
                 uid = result.uid,
+                previousUid = previousUid,
                 diagnostic = null,
             )
         }
@@ -308,7 +322,7 @@ private fun IdleHero() {
 
 /** The «Привязан корректно» hero: color band + КП number + cost + green check + diagnostics. */
 @Composable
-private fun OkHero(result: ChipCheckResult.Ok) {
+private fun OkHero(result: ChipCheckResult.Ok, previousUid: String?) {
     val band = result.color?.barColor() ?: Color.Transparent
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -360,12 +374,7 @@ private fun OkHero(result: ChipCheckResult.Ok) {
                 )
             }
             Spacer(Modifier.height(12.dp))
-            Text(
-                text = result.uid,
-                fontFamily = RobotoMono,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            UidDiff(uid = result.uid, previousUid = previousUid, fontSize = 18.sp)
             val others = (result.chipsOnKp - 1).coerceAtLeast(0)
             if (others > 0) {
                 Text(
@@ -390,6 +399,7 @@ private fun MessageHero(
     icon: ImageVector,
     title: String,
     uid: String,
+    previousUid: String?,
     diagnostic: String?,
 ) {
     Column(
@@ -417,12 +427,7 @@ private fun MessageHero(
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
-        Text(
-            text = uid,
-            fontFamily = RobotoMono,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        UidDiff(uid = uid, previousUid = previousUid, fontSize = 18.sp)
         if (diagnostic != null) {
             Text(
                 text = diagnostic,
@@ -433,9 +438,54 @@ private fun MessageHero(
     }
 }
 
-/** One «Недавние проверки» row: color dot + КП label + status icon + uid tail. */
+/**
+ * The chip UID in monospace, grouped into byte pairs (`1D C7 60 63 03 10 80`), with the nibbles that
+ * changed since [previousUid] lit up in [OrangeCta] and the shared boilerplate dimmed — so the digits
+ * that differ between two chips are the only thing the eye lands on. With no [previousUid] (the first
+ * chip of the session, or a rescan of the same chip) the uid renders plain at full emphasis.
+ */
 @Composable
-private fun RecentCheckRow(result: ChipCheckResult) {
+private fun UidDiff(
+    uid: String,
+    previousUid: String?,
+    fontSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    val baseColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val dimColor = baseColor.copy(alpha = 0.5f)
+    val text = remember(uid, previousUid, baseColor) {
+        val changed = changedNibbles(uid, previousUid)
+        // A previous uid exists but nothing changed (rescanned the same chip) → still dim, not plain.
+        val hasBaseline = !previousUid.isNullOrEmpty()
+        buildAnnotatedString {
+            uid.forEachIndexed { i, c ->
+                if (i > 0 && i % 2 == 0) append(' ') // group into bytes for at-a-glance comparison
+                val isChanged = i in changed
+                withStyle(
+                    SpanStyle(
+                        color = when {
+                            isChanged -> OrangeCta
+                            hasBaseline -> dimColor
+                            else -> baseColor
+                        },
+                        fontWeight = if (isChanged) FontWeight.Bold else FontWeight.Normal,
+                        background = if (isChanged) OrangeCta.copy(alpha = 0.14f) else Color.Transparent,
+                    ),
+                ) { append(c) }
+            }
+        }
+    }
+    Text(
+        text = text,
+        fontFamily = RobotoMono,
+        fontSize = fontSize,
+        modifier = modifier,
+    )
+}
+
+/** One «Недавние проверки» row: color dot + КП label + diff-highlighted uid + status icon. */
+@Composable
+private fun RecentCheckRow(result: ChipCheckResult, previousUid: String?) {
     val neutral = MaterialTheme.colorScheme.outlineVariant
     val dot: Color
     val label: String
@@ -491,12 +541,7 @@ private fun RecentCheckRow(result: ChipCheckResult) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.weight(1f))
-            Text(
-                text = chipTokenLabel(result.uid),
-                fontFamily = RobotoMono,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            UidDiff(uid = result.uid, previousUid = previousUid, fontSize = 13.sp)
             Icon(
                 imageVector = icon,
                 contentDescription = null,

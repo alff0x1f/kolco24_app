@@ -75,6 +75,23 @@ sealed interface ChipCheckResult {
  * Branch order: `bid == null` → [ChipCheckResult.NoCode]; `tag == null` → [ChipCheckResult.UnknownChip];
  * `checkpoint == null` → [ChipCheckResult.Inconsistent]; else [ChipCheckResult.Ok].
  */
+/**
+ * Positions in [uid] whose hex nibble differs from [previous] at the same index — the digits that
+ * changed since the previous scan. A position past the end of [previous] counts as changed (a longer
+ * uid). Returns an empty set when [previous] is null or blank (no baseline to diff against, e.g. the
+ * first chip of a session) so the host renders the uid plain instead of fully dimmed.
+ *
+ * Compared by raw nibble index, before any byte-pair grouping the host adds for display. Pure.
+ */
+fun changedNibbles(uid: String, previous: String?): Set<Int> {
+    if (previous.isNullOrEmpty()) return emptySet()
+    val out = mutableSetOf<Int>()
+    for (i in uid.indices) {
+        if (i >= previous.length || uid[i] != previous[i]) out += i
+    }
+    return out
+}
+
 fun classifyChipCheck(
     uid: String,
     bid: String?,

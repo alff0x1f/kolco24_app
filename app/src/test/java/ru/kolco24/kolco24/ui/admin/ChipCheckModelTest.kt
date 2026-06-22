@@ -127,4 +127,29 @@ class ChipCheckModelTest {
         )
         assertEquals(ChipCheckResult.NoCode("DEADBEEF"), result)
     }
+
+    @Test
+    fun changedNibbles_noPrevious_isEmpty() {
+        assertEquals(emptySet<Int>(), changedNibbles("1DC76063031080", null))
+        assertEquals(emptySet<Int>(), changedNibbles("1DC76063031080", ""))
+    }
+
+    @Test
+    fun changedNibbles_marksOnlyDifferingPositions() {
+        // 1D69... vs 1DC7... differ only at indices 2 and 3.
+        assertEquals(
+            setOf(2, 3),
+            changedNibbles("1DC76063031080", "1D696063031080"),
+        )
+    }
+
+    @Test
+    fun changedNibbles_identicalUid_isEmpty() {
+        assertEquals(emptySet<Int>(), changedNibbles("1DC76063031080", "1DC76063031080"))
+    }
+
+    @Test
+    fun changedNibbles_longerUid_marksTrailingPositions() {
+        assertEquals(setOf(4, 5), changedNibbles("1DC780", "1DC7"))
+    }
 }
