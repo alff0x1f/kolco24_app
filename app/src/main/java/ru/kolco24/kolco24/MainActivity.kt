@@ -38,6 +38,8 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,6 +68,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
@@ -367,6 +370,11 @@ private fun Kolco24AppRoot(
     var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
     // false = raw bytes to pages 4–7; true = NDEF message + AAR (tag stays NDEF, auto-opens the app).
     var chipWriterNdef by rememberSaveable { mutableStateOf(false) }
+    // Pull-to-refresh spinners — one per server-synced tab (both pages stay composed under the pager,
+    // so a refresh on one can be in flight while the other is shown). Snackbar surfaces failures only.
+    var legendRefreshing by remember { mutableStateOf(false) }
+    var teamRefreshing by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
@@ -396,6 +404,19 @@ private fun Kolco24AppRoot(
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
+
+    // Pull-to-refresh: toggle the tab's spinner around a suspending refresh, then surface failures only
+    // (success is silent — the Room flow updates the list). Composition scope: a foreground gesture,
+    // and the repos write data-then-ETag as separate transactions, so a cancelled refresh self-heals.
+    fun pullRefresh(setSpinner: (Boolean) -> Unit, refresh: suspend (Int) -> RefreshResult) {
+        val raceId = selectedRaceId ?: return
+        setSpinner(true)
+        scope.launch {
+            val result = refresh(raceId)
+            setSpinner(false)
+            refreshErrorMessage(result)?.let { snackbarHostState.showSnackbar(it) }
+        }
+    }
 
     val teamState by produceState<SelectedTeamState>(SelectedTeamState.Loading) {
         teamRepo.selectedTeam.collectLatest { selection ->
@@ -515,6 +536,7 @@ private fun Kolco24AppRoot(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                     val activePage = pagerState.targetPage
@@ -590,6 +612,8 @@ private fun Kolco24AppRoot(
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
                         takenIds = takenIds,
                         totalScore = legendTotalCost,
+                        isRefreshing = legendRefreshing,
+                        onRefresh = { pullRefresh({ legendRefreshing = it }, legendRepo::refreshLegend) },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     2 -> TeamScreen(
@@ -605,6 +629,8 @@ private fun Kolco24AppRoot(
                         // user confirms in the AlertDialog below (guards against accidental unbinds).
                         onUnbindMember = { member -> unbindSlot = member.numberInTeam },
                         nfcAvailable = nfcAvailable,
+                        isRefreshing = teamRefreshing,
+                        onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
