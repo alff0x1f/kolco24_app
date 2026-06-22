@@ -290,16 +290,17 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt`
 
-- [ ] add `private const val SUCCESS_HOLD_MS = 1_000L`, `val currentOnClose by rememberUpdatedState(onClose)`,
+- [x] add `private const val SUCCESS_HOLD_MS = 1_000L`, `val currentOnClose by rememberUpdatedState(onClose)`,
       and a `var completed` flag (reset to `false` in `finalizeSession()`)
-- [ ] expiry branch: track whether `finalizeSession()` fired inside the `scanMutex.withLock`, then call
+- [x] expiry branch: track whether `finalizeSession()` fired inside the `scanMutex.withLock`, then call
       `currentOnClose()` **after** the `withLock` block (only when it fired) — never hold the mutex
       across the close
-- [ ] add `LaunchedEffect(allScanned)` where `allScanned = isComplete(session, roster.size)`: guard
+- [x] add `LaunchedEffect(allScanned)` where `allScanned = isComplete(session, roster.size)`: guard
       `if (allScanned && !completed)`, set `completed = true` before `delay(SUCCESS_HOLD_MS)`, then
       `finalizeSession()` + `currentOnClose()`
-- [ ] swap the hero card to a green "Готово!" check state while `completed`
-- [ ] confirm the FAB-opened-with-no-scan path (null session) does not auto-close
+- [x] swap the hero card to a green "Готово!" check state while `completed`
+- [x] confirm the FAB-opened-with-no-scan path (null session) does not auto-close (null session →
+      `isComplete` false, timer effect early-returns; stays open until manual close)
 
 ### Task 7: Verify acceptance criteria
 - [ ] КП-first idle tap opens the overlay with the КП identified; member taps then complete it
