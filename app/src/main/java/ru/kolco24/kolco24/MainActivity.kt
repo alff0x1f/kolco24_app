@@ -593,7 +593,7 @@ private fun Kolco24AppRoot(
                 // Same overlay resets as onScanClick, then hand the captured tap to ScanScreen to drain.
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                bindSlot = null; unbindSlot = null; chipWriterCode = null
+                bindSlot = null; unbindSlot = null; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
                 act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
@@ -703,7 +703,7 @@ private fun Kolco24AppRoot(
                             if (teamForTab != null) {
                                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                                bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true
+                                bindSlot = null; unbindSlot = null; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null; showScan = true
                             } else {
                                 pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
                             }
