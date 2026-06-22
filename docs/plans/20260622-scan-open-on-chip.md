@@ -245,16 +245,16 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `val nfcLaunchScan = MutableStateFlow<CapturedScan?>(null)` and
+- [x] add `val nfcLaunchScan = MutableStateFlow<CapturedScan?>(null)` and
       `@Volatile var boundUidsSnapshot: Set<String> = emptySet()` to `MainActivity`
-- [ ] rewrite `onTagDiscovered` idle branch: read `code`+`uid`, stamp `now`,
+- [x] rewrite `onTagDiscovered` idle branch: read `code`+`uid`, stamp `now`,
       `recognized = code != null || uid in boundUidsSnapshot`; on hit
       `nfcLaunchScan.value = CapturedScan(code, uid, now)`; else drop (remove the Toast)
-- [ ] rewrite `handleNfcIntent`: extract `code` via `chipCodeFromNdef(ndefMessagesOf(intent))` and
+- [x] rewrite `handleNfcIntent`: extract `code` via `chipCodeFromNdef(ndefMessagesOf(intent))` and
       `uid` via `normalizeNfcUid(intent.getByteArrayExtra(NfcAdapter.EXTRA_ID))`; if both present set
       `nfcLaunchScan.value = CapturedScan(code, uid, System.currentTimeMillis())` (remove the Toast);
       keep null-safety when `EXTRA_ID` absent
-- [ ] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean (no `NewApi`/unused warnings)
+- [x] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean (no `NewApi`/unused warnings)
 
 ### Task 4: Host collector, snapshot updater, and `pendingScan` plumbing
 

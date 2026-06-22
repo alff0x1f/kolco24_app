@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
@@ -61,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -156,6 +156,20 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      */
     @Volatile var onTagForMark: ((Tag) -> Unit)? = null
 
+    /**
+     * Single entry point for all three open-the-«Отметить КП»-overlay sources (live idle foreground
+     * tap, warm [onNewIntent], cold [onCreate]). A host collector decides what to do based on the
+     * selected-team state. Thread-safe: set from the binder thread and the main thread.
+     */
+    val nfcLaunchScan = MutableStateFlow<CapturedScan?>(null)
+
+    /**
+     * Bound member-bracelet uids for the selected team, mirrored here so the binder-thread idle path
+     * can recognize a bracelet (open the overlay) without touching Compose state. A coarse open-gate
+     * only — the authoritative roster-filtered `scanBindings` still governs scoring.
+     */
+    @Volatile var boundUidsSnapshot: Set<String> = emptySet()
+
     /** Recomputed on every resume; composables observe it to render the bind affordances. */
     var nfcState by mutableStateOf(NfcState.NoHardware)
         private set
@@ -228,8 +242,10 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         if (intent.action != NfcAdapter.ACTION_NDEF_DISCOVERED) return
         val messages = ndefMessagesOf(intent) ?: return
         val code = chipCodeFromNdef(messages) ?: return
-        // Temporary visible consumer — the real read path (legend unlock) replaces this Toast.
-        Toast.makeText(this, "Чип: ${chipCodeHex(code)}", Toast.LENGTH_LONG).show()
+        // Cold/warm launches are always КП chips (only КП chips are written NDEF+AAR). The uid rides
+        // along on EXTRA_ID; require both before opening the overlay so a malformed intent is a no-op.
+        val rawId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID) ?: return
+        nfcLaunchScan.value = CapturedScan(code, normalizeNfcUid(rawId), System.currentTimeMillis())
     }
 
     /** Version-safe read of `EXTRA_NDEF_MESSAGES`; null when absent or empty. */
@@ -299,10 +315,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             mainHandler.post { scanHook(uid) }
             return
         }
-        val code = readChipCode(tag) ?: return
-        mainHandler.post {
-            Toast.makeText(this, "Чип: ${chipCodeHex(code)}", Toast.LENGTH_LONG).show()
-        }
+        // Idle foreground: recognize our own chips and stash the read so the host can open the
+        // «Отметить КП» overlay (a КП chip has a parseable code; a bound member bracelet matches the
+        // selected team's uid snapshot). The (code, uid) read here is reused downstream — no second
+        // chip read. An unrecognized tag is dropped silently.
+        val uid = normalizeNfcUid(tag.id)
+        val code = readChipCode(tag)
+        if (code == null && uid !in boundUidsSnapshot) return
+        nfcLaunchScan.value = CapturedScan(code, uid, System.currentTimeMillis())
     }
 
     private companion object {
