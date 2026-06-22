@@ -338,10 +338,10 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 - Modify: `app/src/main/AndroidManifest.xml`
 
-- [ ] remove `handleNfcIntent` and its `onCreate`/`onNewIntent` calls, the `ndefMessagesOf` helper,
+- [x] remove `handleNfcIntent` and its `onCreate`/`onNewIntent` calls, the `ndefMessagesOf` helper,
       and the `chipCodeFromNdef` + `android.nfc.NdefMessage` imports; the cold/warm
       `CapturedScan(openOnly = true)` publish goes away
-- [ ] remove `CapturedScan.openOnly` (its only producer was `handleNfcIntent`; the live-idle producer
+- [x] remove `CapturedScan.openOnly` (its only producer was `handleNfcIntent`; the live-idle producer
       at `onTagDiscovered:354` already uses the default `false`). Simplify the two dispatcher guards
       that special-cased it — `!scan.openOnly` (~line 634) and `if (!scan.openOnly)` (~line 646) —
       to unconditional. **Keep** the `pendingScan` narrow-race buffering at ~634 and the live-idle
@@ -349,15 +349,15 @@ in a debug-only Settings row for one-time verification of the physical stock.
       and the `teamState`-keyed dispatcher `LaunchedEffect` (~619) — now reachable only via live-idle
       during a team switch; add a one-line comment noting the cold-launch race it originally solved is
       gone but the branch stays as a defensive guard
-- [ ] update stale KDoc/comments that name "warm onNewIntent / cold onCreate / NDEF launch":
+- [x] update stale KDoc/comments that name "warm onNewIntent / cold onCreate / NDEF launch":
       `CapturedScan` KDoc (~370, 375), dispatcher comments (~613, 624, 630, 644–645)
-- [ ] remove the `NDEF_DISCOVERED` `<intent-filter>` from `AndroidManifest.xml` (lines ~38–47); keep
+- [x] remove the `NDEF_DISCOVERED` `<intent-filter>` from `AndroidManifest.xml` (lines ~38–47); keep
       the NFC permission, `uses-feature`, and reader-mode infra. **Reader-mode flags
       (incl. `FLAG_READER_SKIP_NDEF_CHECK`, ~358–363) are intentionally unchanged** — we read raw NfcA
-- [ ] reconsider `android:launchMode="singleTop"` — it backed `onNewIntent` NDEF re-delivery; note in
+- [x] reconsider `android:launchMode="singleTop"` — it backed `onNewIntent` NDEF re-delivery; note in
       a comment whether it's kept (harmless) or removed; leaving it is acceptable
-- [ ] (no unit tests — Activity/manifest, untested per convention)
-- [ ] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean
+- [x] (no unit tests — Activity/manifest, untested per convention)
+- [x] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean
 
 ### Task 6: Debug surface (drop NDEF write row, add "Инфо о чипе") + delete dead NDEF API
 

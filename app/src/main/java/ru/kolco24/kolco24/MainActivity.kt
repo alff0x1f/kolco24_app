@@ -1,10 +1,8 @@
 package ru.kolco24.kolco24
 
 import android.content.Intent
-import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -72,7 +70,6 @@ import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
-import ru.kolco24.kolco24.data.nfc.chipCodeFromNdef
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
 import ru.kolco24.kolco24.data.nfc.newChipCode
 import ru.kolco24.kolco24.data.nfc.readChipCode
@@ -157,9 +154,9 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     @Volatile var onTagForMark: ((Tag) -> Unit)? = null
 
     /**
-     * Single entry point for all three open-the-«Отметить КП»-overlay sources (live idle foreground
-     * tap, warm [onNewIntent], cold [onCreate]). A host collector decides what to do based on the
-     * selected-team state. Thread-safe: set from the binder thread and the main thread.
+     * Entry point for opening the «Отметить КП» overlay from the live idle foreground tap
+     * ([onTagDiscovered]). A host collector decides what to do based on the selected-team state.
+     * Thread-safe: set from the binder thread and the main thread.
      */
     val nfcLaunchScan = MutableStateFlow<CapturedScan?>(null)
 
@@ -229,60 +226,6 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 )
             }
         }
-        // Cold/background launch from an NFC tap: the launching intent already carries the tag's
-        // NDEF data (no second scan needed). Skip on recreation — the intent is stale by then.
-        if (savedInstanceState == null) handleNfcIntent(intent)
-    }
-
-    /** singleTop: a tap while the activity is already resumed re-delivers the intent here. */
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleNfcIntent(intent)
-    }
-
-    /**
-     * Open the «Отметить КП» overlay when the app is launched by an `NDEF_DISCOVERED` intent (our
-     * manifest filter is scoped to the `kolco24.ru:cp` external type). The NDEF message is captured
-     * by the OS at scan time so the code is available even if the tag was already lifted.
-     *
-     * Security: intent extras (`EXTRA_NDEF_MESSAGES`, `EXTRA_ID`, `EXTRA_TAG`) are
-     * attacker-controllable — a third-party app can craft a fake `NDEF_DISCOVERED` intent with a
-     * replayed checkpoint code and send it to this exported activity. To prevent fraudulent takes,
-     * the captured scan is marked [CapturedScan.openOnly]: the overlay opens but does NOT pre-seed a
-     * pending score. Scoring happens only via the live reader-mode path (`onTagDiscovered`) once the
-     * physical chip is re-detected after `onResume` enables reader mode — which requires the chip to
-     * be physically present.
-     */
-    private fun handleNfcIntent(intent: Intent) {
-        if (intent.action != NfcAdapter.ACTION_NDEF_DISCOVERED) return
-        // Check that EXTRA_TAG is present without deserializing it — extras are attacker-controllable
-        // and the deprecated getter throws ClassCastException on API < 33 for a mismatched type.
-        if (!intent.hasExtra(NfcAdapter.EXTRA_TAG)) return
-        val messages = ndefMessagesOf(intent) ?: return
-        chipCodeFromNdef(messages) ?: return
-        // Cold/warm launches are always КП chips (only КП chips are written NDEF+AAR). Require
-        // EXTRA_ID so a malformed intent without a uid is a no-op.
-        val rawId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID) ?: return
-        // openOnly=true: opens the overlay without scoring. Scoring requires the physical chip via
-        // reader mode (onTagDiscovered), which activates in onResume after the cold/warm launch.
-        nfcLaunchScan.value = CapturedScan(
-            code = null, uid = normalizeNfcUid(rawId),
-            capturedAt = System.currentTimeMillis(), openOnly = true,
-        )
-    }
-
-    /** Version-safe read of `EXTRA_NDEF_MESSAGES`; null when absent or empty. */
-    private fun ndefMessagesOf(intent: Intent): Array<NdefMessage>? {
-        val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES, NdefMessage::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
-                ?.filterIsInstance<NdefMessage>()
-                ?.toTypedArray()
-        }
-        return raw?.takeIf { it.isNotEmpty() }
     }
 
     override fun onResume() {
@@ -308,8 +251,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
      * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
      * the raw [Tag]; an armed scan flow (bind sheet) gets the
-     * normalized UID; otherwise — idle foreground — we read the tag's NDEF and surface our own code
-     * chips, mirroring the cold-launch intent path (which reader mode would otherwise suppress).
+     * normalized UID; otherwise — idle foreground — we read the tag's raw code and surface our own
+     * code chips so the host can open the «Отметить КП» overlay.
      * Tag I/O runs here on the binder thread.
      */
     override fun onTagDiscovered(tag: Tag) {
@@ -365,15 +308,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 }
 
 /**
- * One captured chip scan that opens / feeds the «Отметить КП» overlay. The three open-the-overlay
- * entry points (live idle foreground tap, warm `onNewIntent`, cold `onCreate`) all converge on this
- * single `(code, uid)` pair so no raw [Tag] replay is ever needed downstream.
+ * One captured chip scan that opens / feeds the «Отметить КП» overlay. The live idle foreground tap
+ * ([MainActivity.onTagDiscovered]) reads a `(code, uid)` pair so no raw [Tag] replay is ever needed
+ * downstream.
  *
- * - [code] is the КП chip's code (`null` ⇒ a bound team-member bracelet, which only ever arrives via
- *   the live idle path — bracelets are raw page bytes and cannot cold-launch).
+ * - [code] is the КП chip's code (`null` ⇒ a bound team-member bracelet).
  * - [uid] is the normalized tag UID.
- * - [capturedAt] is the tap-time millis stamped on the binder thread / in `handleNfcIntent`; it is the
- *   `now` threaded into the scan processor (a cold launch can drain seconds later, so reusing
+ * - [capturedAt] is the tap-time millis stamped on the binder thread; it is the `now` threaded into
+ *   the scan processor (the overlay can drain it slightly later, so reusing
  *   `System.currentTimeMillis()` at drain time would corrupt the window-expiry math).
  *
  * Identity equality is used as a [kotlinx.coroutines.flow.StateFlow] payload (set/cleared by
@@ -383,19 +325,12 @@ data class CapturedScan(
     val code: ByteArray?,
     val uid: String,
     val capturedAt: Long,
-    /**
-     * When true the dispatcher opens the scan overlay without pre-seeding a pending score.
-     * Used by cold/warm NFC launches so scoring goes through the live reader-mode path
-     * (onTagDiscovered) rather than trusting attacker-controllable intent extras.
-     */
-    val openOnly: Boolean = false,
 )
 
 /**
  * Source of one scan fed to the «Отметить КП» processor. [Live] is an in-overlay subsequent tap whose
  * code/uid are read off the live tag; [Captured] is the opening tap (live-idle binder path) whose
- * `(code, uid)` were already read — no second chip read. Cold/warm NFC launches open the overlay via
- * [CapturedScan.openOnly] and score through the [Live] path once reader mode re-detects the chip.
+ * `(code, uid)` were already read — no second chip read.
  */
 sealed interface ScanInput {
     data class Live(val tag: Tag) : ScanInput
@@ -610,10 +545,9 @@ private fun Kolco24AppRoot(
     // UnboundChip — the authoritative scanBindings still governs scoring.
     LaunchedEffect(scanBindings) { activity?.boundUidsSnapshot = scanBindings.keys }
 
-    // The captured opening tap (live idle / warm onNewIntent / cold onCreate), published by the
-    // Activity. A bare collectAsState gives the value; the dispatch itself is a keyed LaunchedEffect so
-    // the side effects never run during composition and the cold-launch Loading → Present transition
-    // re-fires the deferral.
+    // The captured opening tap (live idle foreground tap), published by the Activity. A bare
+    // collectAsState gives the value; the dispatch itself is a keyed LaunchedEffect so the side
+    // effects never run during composition and a Loading → Present transition re-fires the deferral.
     val captured by (activity?.nfcLaunchScan ?: remember { MutableStateFlow<CapturedScan?>(null) })
         .collectAsState()
     LaunchedEffect(captured, teamState) {
@@ -621,17 +555,17 @@ private fun Kolco24AppRoot(
         val act = activity ?: return@LaunchedEffect
         // Some other overlay is up: dropping the tap (rather than yanking the user out) keeps the
         // current flow intact. The live-idle binder path can't even reach here while a bind/provision/
-        // verify hook is armed, but warm/cold intents and Settings/confirm states still can.
+        // verify hook is armed, but Settings/confirm states still can.
         val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
             showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
             unbindSlot != null || chipWriterCode != null
         if (busy) {
             // Narrow race: showScan is true but onTagForMark is not yet armed (DisposableEffect
-            // hasn't run). The idle path fires and publishes a live non-openOnly scan here instead
-            // of routing to the hook. Buffer it so the overlay drains it on arm. Safe because the
-            // idle path is only reachable when onTagForMark is null — once the hook is armed, the
-            // binder thread routes to it directly and never reaches the idle publish.
-            if (showScan && !scan.openOnly && act.pendingScan.value == null) act.pendingScan.value = scan
+            // hasn't run). The idle path fires and publishes a live scan here instead of routing to
+            // the hook. Buffer it so the overlay drains it on arm. Safe because the idle path is only
+            // reachable when onTagForMark is null — once the hook is armed, the binder thread routes
+            // to it directly and never reaches the idle publish.
+            if (showScan && act.pendingScan.value == null) act.pendingScan.value = scan
             act.nfcLaunchScan.value = null
             return@LaunchedEffect
         }
@@ -641,9 +575,7 @@ private fun Kolco24AppRoot(
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
                 bindSlot = null; unbindSlot = null; chipWriterCode = null
-                // openOnly scans (cold/warm NFC launch) just open the overlay; scoring is deferred
-                // to the live reader-mode path (onTagDiscovered) once the physical chip is present.
-                if (!scan.openOnly) act.pendingScan.value = scan
+                act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
             }
@@ -654,8 +586,10 @@ private fun Kolco24AppRoot(
                 act.nfcLaunchScan.value = null
             }
             SelectedTeamState.Loading -> {
-                // Wait: keep the captured scan so the Loading → Present transition re-runs this effect
-                // (the cold-launch race the design solves — the tap lands before Room emits the team).
+                // Wait: keep the captured scan so the Loading → Present transition re-runs this effect.
+                // The original cold-launch race (tap arriving before Room emits the team) is gone with
+                // the NDEF launch path, but the branch stays as a defensive guard for a live-idle tap
+                // landing mid team-switch.
             }
         }
     }

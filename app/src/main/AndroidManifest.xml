@@ -19,6 +19,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Kolco24">
+        <!-- launchMode="singleTop" originally backed onNewIntent NDEF re-delivery; the NDEF
+             cold/warm launch path is gone (raw chips have no NDEF), but singleTop is kept as it is
+             harmless and avoids a second activity instance on any future foreground intent. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -29,21 +32,6 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
-            <!-- Open the app (and deliver the tag's NDEF data) only for our own checkpoint chips:
-                 NDEF external type kolco24.ru:cp, which Android maps to the URI
-                 vnd.android.nfc://ext/kolco24.ru:cp. Targeted on purpose — a plain
-                 TECH_DISCOVERED filter would open the app on any NfcA tag. -->
-            <intent-filter>
-                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data
-                    android:host="ext"
-                    android:pathPrefix="/kolco24.ru:cp"
-                    android:scheme="vnd.android.nfc" />
             </intent-filter>
         </activity>
     </application>
