@@ -55,6 +55,7 @@
 - **Отметки** получают времена: `trustedTakenAt` (зачёт + порядок), `takenAt` (сырой wall), `elapsedRealtimeAt` + `bootCount` (монотонная метка + boot-сессия для форензики Δ).
 - **Окно скана** переводится на монотонный таймер.
 - **UI-баннер**: `Skewed` — глобально (под `TopAppBar`) **и** акцентом в скане; `NoSync` — мягкая плашка **только в скане** (глобально не рендерится).
+- **Подпись запросов** (`X-App-Ts`) переходит на доверенное время (Task 4b): при уехавших часах синк не умирает (`403` → якорь по `Date` даже на `403` → пере-подпись доверенным `ts` → `200`), приложение самочинится; баннер всё равно нудит «поправьте часы».
 
 ## Technical Details
 
@@ -124,7 +125,8 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - [ ] `onServerTime(serverMs, anchorElapsed, wallNow, bootNow)` — приём: нет текущего / **оба** boot non-null и различны (новая сессия) / иначе `anchorElapsed >= current.anchorElapsedMs`; `bootNow == null` падает в монотонную ветку (не «всегда побеждает»). Транзишн под `synchronized`
 - [ ] **`sample(): TimeSample` — единый снимок (P1):** один `state = ref.get()`, один `elapsedNow`, один `wallNow`, один `bootNow`; `trustedMs = computeTrusted(state, elapsedNow, bootNow)`, `elapsedMs = elapsedNow`, `wallMs = wallNow`, `bootCount = bootNow` — без повторных `.get()`/провайдеров
 - [ ] `recomputeStatus()` — публичный метод для локального тика; **выполняется под тем же `synchronized(lock)`**, что и `onServerTime` (читает текущий state и пишет `statusFlow` атомарно) — иначе гонка «тик прочитал старый state → сервер записал `Ok` → тик затёр `NoSync`». При отсутствии trusted → `NoSync` (без throw); `MutableStateFlow` сам дедупит равные значения → нет лишних рекомпозиций каждые 5 c; зафиксировать KDoc-инвариант `TimeSample.elapsedMs == elapsedProvider()` (сырой `elapsedRealtime`)
-- [ ] написать `TrustedClockTest`: формула `trusted` (verified); тёплый старт — persisted с совпадающим non-null `bootCount` → `trusted()` non-null без `onServerTime`; **`null == null` (persisted.bootCount=null + provider=null) → `verified=false`/`NoSync`**; persisted с другим `bootCount` (reboot) → `null`/`NoSync`; reboot-детект на чтении; out-of-order — поздний `onServerTime` с меньшим `anchorElapsed` в той же сессии отбрасывается, с другим non-null `bootCount` принимается; **`bootNow=null` не понижает хороший якорь** (падает в монотонную ветку); **persist/statusFlow упорядочены — после серии конкурентных `onServerTime` последний persisted якорь и `statusFlow.value` соответствуют победителю (наибольший `anchorElapsed`)**, не только in-memory; `persist` вызывается на приёме; границы порога 60 c (59 999/60 000/60 001); знак skew
+- [ ] **`signingSeconds(): Long`** (источник `ts` для подписи, Task 4b) `= (trusted() ?: wallProvider()) / 1000` — доверенные секунды при verified, иначе честный fallback на wall; снимок `AtomicReference`, зовётся с OkHttp-потоков
+- [ ] написать `TrustedClockTest`: формула `trusted` (verified); **`signingSeconds()` — trusted-секунды при verified, wall при NoSync**; тёплый старт — persisted с совпадающим non-null `bootCount` → `trusted()` non-null без `onServerTime`; **`null == null` (persisted.bootCount=null + provider=null) → `verified=false`/`NoSync`**; persisted с другим `bootCount` (reboot) → `null`/`NoSync`; reboot-детект на чтении; out-of-order — поздний `onServerTime` с меньшим `anchorElapsed` в той же сессии отбрасывается, с другим non-null `bootCount` принимается; **`bootNow=null` не понижает хороший якорь** (падает в монотонную ветку); **persist/statusFlow упорядочены — после серии конкурентных `onServerTime` последний persisted якорь и `statusFlow.value` соответствуют победителю (наибольший `anchorElapsed`)**, не только in-memory; `persist` вызывается на приёме; границы порога 60 c (59 999/60 000/60 001); знак skew
 - [ ] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 2
 
 ### Task 2: `ClockAnchorStore` (персистентность)
@@ -163,8 +165,23 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - [ ] lazy `clockAnchorStore = ClockAnchorStore.fromSharedPreferences(context)` и lazy `trustedClock = TrustedClock(elapsedProvider = { SystemClock.elapsedRealtime() }, wallProvider = { System.currentTimeMillis() }, bootCountProvider = { cachedBootCount }, persist = clockAnchorStore::write, persisted = clockAnchorStore.read())`
 - [ ] **персистентность решена в Task 1**: `persist` инъектируется в `TrustedClock`, контейнер передаёт `clockAnchorStore::write` — никакой записи в лямбде интерсептора
 - [ ] в `apiClient`-блоке создать `ServerTimeInterceptor` с `onServerTime = { s, e, w, b -> trustedClock.onServerTime(s, e, w, b) }`-лямбдой (разрыв цикла как `tokenProvider`), прокинуть в `defaultOkHttpClient`
-- [ ] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 5
+- [ ] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 4b
 - [ ] (тестов в этой задаче нет: только DI-проводка тонких адаптеров — по конвенции репо не тестируется; пометка обязательна)
+
+### Task 4b: Подпись запросов доверенным временем + self-heal на clock-403
+
+Цель: при уехавших часах (>±300 c) подпись перестаёт проходить (`403`) и синк умирает. Подписываем `ts` доверенным временем (когда verified) → синк выживает; `ServerTimeInterceptor` якорится даже на `403` (несёт `Date`), поэтому приложение **самочинится**. Время взятия КП уже защищено `trustedTakenAt` независимо; баннер о расхождении остаётся (мягкое давление «поправьте часы»).
+
+**Files:**
+- Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt` (`nowSeconds`-провайдер интерсептора)
+- Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/AppSignatureInterceptor.kt` (опц. ретрай-один-раз)
+- Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/SigningTest.kt`
+
+- [ ] в `AppContainer`: передать `nowSeconds = { trustedClock.signingSeconds() }` в `AppSignatureInterceptor` вместо дефолта-wall (лямбда срабатывает в момент запроса — цикла нет, `TrustedClock` не трогает `apiClient`)
+- [ ] **порядок интерсепторов:** `AppSignatureInterceptor` добавлен **первым** (внешний), `ServerTimeInterceptor` — вторым (внутренний), чтобы к возврату из `proceed()` в подписи якорь уже стоял (anchor-on-`403`); зафиксировать комментарием в `defaultOkHttpClient`
+- [ ] **опц. ретрай-один-раз** в `AppSignatureInterceptor.intercept`: после `proceed()` если `response.code == 403 && !retried && request.body?.isOneShot() != true && nowSeconds() != usedTs` → `response.close()`, пере-подписать тем же телом (`ByteArray`-боди ре-отправляемо), `proceed` ещё раз, вернуть. Гард `nowSeconds() != usedTs` — ретрай только когда доверенное время дало другой `ts` (причина в часах), «честный» `403` (ключ/подпись) `ts` не меняет → петли нет
+- [ ] `SigningTest`: без регресса (фикс. `nowSeconds`); ретрай — `403`+изменившийся `ts` → один ретрай и второй `proceed`; `403`+тот же `ts` → без ретрая; `isOneShot` тело → без ретрая; `200` с первого раза → без ретрая
+- [ ] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 5
 
 ### Task 5: Room 9 → 10 — колонки времени в `marks`
 
@@ -246,10 +263,11 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - [ ] `onServerTime` потокобезопасен, поздний out-of-order ответ не перезаписывает свежий якорь; midpoint+RTT-reject применён к `Date`
 - [ ] баннер `Skewed` появляется в течение ~5 c после перевода часов без событий; `NoSync` — мягкая плашка в скане
 - [ ] `Date == null`/смена таймзоны не дают ложных срабатываний
+- [ ] подпись `ts` идёт доверенным временем при verified (Task 4b); при часах >±300 c синк самочинится (`403`→якорь→пере-подпись→`200`), не остаётся пустым
 - [ ] полный прогон: `./gradlew testDebugUnitTest`, `./gradlew connectedDebugAndroidTest`, `./gradlew lintDebug`
 
 ### Task 11: [Final] Документация
-- [ ] обновить `CLAUDE.md`: новый раздел про `TrustedClock`/`ServerTimeInterceptor`/`ClockAnchorStore`, три времени в `MarkEntity`, монотонное окно скана, баннер; зафиксировать Room v10 + `MIGRATION_9_10`
+- [ ] обновить `CLAUDE.md`: новый раздел про `TrustedClock`/`ServerTimeInterceptor`/`ClockAnchorStore`, три времени в `MarkEntity`, монотонное окно скана, баннер, **подпись `ts` доверенным временем + self-heal на clock-403**; зафиксировать Room v10 + `MIGRATION_9_10`
 - [ ] обновить `docs/design/API.md` при необходимости (использование заголовка `Date` как источника серверного времени)
 - [ ] переместить этот план в `docs/plans/completed/`
 
@@ -261,6 +279,7 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - reboot устройства офлайн посреди «гонки» → статус `NoSync`, отметка пишет wall+elapsed, после ресинка статус восстанавливается.
 - смена таймзоны (без правки UTC) → баннер НЕ появляется.
 - холодная установка офлайн → `NoSync`, `trustedTakenAt == null`, мягкая плашка только в скане.
+- перевести часы на >10 мин **онлайн** → первый запрос `403`, затем синк самочинится (легенда/команды грузятся), баннер `Skewed` висит до правки часов.
 
 **Будущие серверные/upload-изменения (когда появится аплоад отметок):**
 - сервер при приёме сверяет Δwall и Δelapsed между взятиями → детект скачка часов задним числом; **сверка Δelapsed валидна только в пределах одной boot-сессии** — сравнивать `elapsedRealtimeAt` лишь у строк с равным `bootCount` (иначе разные монотонные шкалы дадут ложный скачок); строки с NULL `bootCount`/`elapsedRealtimeAt` (legacy) из сверки исключать.
