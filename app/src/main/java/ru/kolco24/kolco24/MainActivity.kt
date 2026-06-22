@@ -496,6 +496,13 @@ private fun Kolco24AppRoot(
     // Per-checkpoint color token (point id → server color), so «Отметки» tiles can paint the same
     // leading color bar the Легенда rows use. Race-scoped public data, joined off the mark's point.
     val checkpointColors = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.color } }
+    // Live per-checkpoint cost (point id → current cost), so «Отметки» СУММА/tiles score off the latest
+    // legend value rather than the cost snapshotted onto the mark row at take time (which goes stale if
+    // the organizer edits a КП cost afterwards). Locked CPs (null cost) are omitted; the mark snapshot
+    // fills in for any point missing from the map.
+    val checkpointCosts = remember(safeCheckpoints) {
+        safeCheckpoints.mapNotNull { cp -> cp.cost?.let { cp.id to it } }.toMap()
+    }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
@@ -588,6 +595,7 @@ private fun Kolco24AppRoot(
                     0 -> MarksScreen(
                         marks = safeMarks,
                         checkpointColors = checkpointColors,
+                        checkpointCosts = checkpointCosts,
                         totalKp = safeCheckpoints.size,
                         totalCost = legendTotalCost,
                         nfcAvailable = nfcActiveForScan,

@@ -137,4 +137,39 @@ class MarksMappingTest {
         assertEquals(2, takenPointCount(marks))
         assertEquals(5, totalScore(marks)) // 2 + 3, repeat of point 1 not double-counted
     }
+
+    @Test
+    fun `totalScore with a live cost resolver scores off current cost not the snapshot`() {
+        // Point 1 was taken when its cost was 0 (stale snapshot); the legend now says 5.
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 0, complete = true),
+            mark("b", point = 2, number = 4, cost = 3, complete = true),
+        )
+        val liveCost = mapOf(1 to 5, 2 to 3)
+        // Snapshot path under-counts (0 + 3); the live resolver matches the legend (5 + 3).
+        assertEquals(3, totalScore(marks))
+        assertEquals(8, totalScore(marks) { liveCost[it.point] ?: it.cost })
+    }
+
+    @Test
+    fun `totalScore live resolver falls back to the snapshot for a point absent from the legend`() {
+        val marks = listOf(mark("a", point = 9, number = 1, cost = 4, complete = true))
+        // Point 9 dropped from the legend → resolver misses → snapshot (4) is used.
+        assertEquals(4, totalScore(marks) { emptyMap<Int, Int>()[it.point] ?: it.cost })
+    }
+
+    @Test
+    fun `marksToTiles costOf resolves the live tile cost`() {
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 0, complete = true)),
+            costOf = { mapOf(1 to 5)[it.point] ?: it.cost },
+        )
+        assertEquals(5, tiles.single().cost)
+    }
+
+    @Test
+    fun `marksToTiles cost defaults to the snapshot without a resolver`() {
+        val tiles = marksToTiles(listOf(mark("a", point = 1, number = 1, cost = 7)))
+        assertEquals(7, tiles.single().cost)
+    }
 }

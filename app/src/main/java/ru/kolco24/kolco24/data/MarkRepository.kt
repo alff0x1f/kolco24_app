@@ -96,6 +96,19 @@ fun takenPointCount(marks: List<MarkEntity>): Int =
 fun takenPoints(marks: List<MarkEntity>): Set<Int> =
     marks.filter { it.complete }.mapTo(HashSet()) { it.point }
 
-/** Sum of cost over distinct scored checkpoints — a repeat take of the same point does not double-count. */
-fun totalScore(marks: List<MarkEntity>): Int =
-    marks.filter { it.complete }.distinctBy { it.point }.sumOf { it.cost }
+/**
+ * Sum of cost over distinct scored checkpoints — a repeat take of the same point does not double-count.
+ * Uses the cost snapshotted onto the mark row at take time. Prefer the [costOf] overload for any
+ * user-facing total: the snapshot goes stale if the organizer edits a КП cost after it was taken (a
+ * 0→5 edit leaves the snapshot at 0), which makes the «Отметки» СУММА diverge from the «Легенда» score.
+ */
+fun totalScore(marks: List<MarkEntity>): Int = totalScore(marks) { it.cost }
+
+/**
+ * Sum of cost over distinct scored checkpoints using a **live** cost resolver instead of the snapshot
+ * baked into the mark row. [costOf] returns the current checkpoint cost for a take (the legend's live
+ * `CheckpointEntity.cost`), falling back to the mark's snapshot when the point is absent from the
+ * legend. This keeps the «Отметки» СУММА in step with the «Легенда» score after a server cost edit.
+ */
+fun totalScore(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int =
+    marks.filter { it.complete }.distinctBy { it.point }.sumOf { costOf(it) }
