@@ -71,10 +71,11 @@ import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
+import ru.kolco24.kolco24.data.nfc.chipModelFromVersion
 import ru.kolco24.kolco24.data.nfc.newChipCode
 import ru.kolco24.kolco24.data.nfc.readChipCode
+import ru.kolco24.kolco24.data.nfc.readChipVersion
 import ru.kolco24.kolco24.data.nfc.writeChipCode
-import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
@@ -120,6 +121,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
     @Volatile var onTagScanned: ((String) -> Unit)? = null
+
+    /**
+     * Sink for the next raw [Tag] when the debug «Инфо о чипе» flow is active. Placed **first** in the
+     * [onTagDiscovered] priority ladder: it and the debug writer are never armed together, but a
+     * distinct hook keeps each `DisposableEffect` owning exactly one hook (CLAUDE.md convention) and
+     * avoids any collision with [onTagForWrite]. Reads GET_VERSION off the raw Tag; no write.
+     */
+    @Volatile var onTagForChipInfo: ((Tag) -> Unit)? = null
 
     /**
      * Sink for the next raw [Tag] when a write flow is active (debug chip writer). When set it takes
@@ -247,7 +256,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     }
 
     /**
-     * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
+     * Reader-mode callback (binder thread). Priority: an armed chip-info flow gets the raw [Tag]; an
+     * armed write flow gets the raw [Tag]; an
      * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
      * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
      * the raw [Tag]; an armed scan flow (bind sheet) gets the
@@ -256,6 +266,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      * Tag I/O runs here on the binder thread.
      */
     override fun onTagDiscovered(tag: Tag) {
+        val chipInfoHook = onTagForChipInfo
+        if (chipInfoHook != null) {
+            mainHandler.post { chipInfoHook(tag) }
+            return
+        }
         val writeHook = onTagForWrite
         if (writeHook != null) {
             mainHandler.post { writeHook(tag) }
@@ -390,8 +405,10 @@ private fun Kolco24AppRoot(
     var showCheckChip by rememberSaveable { mutableStateOf(false) }
     // Debug chip writer: hex of the code being written (uuid), or null when the dialog is closed.
     var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
-    // false = raw bytes to pages 4–7; true = NDEF message + AAR (tag stays NDEF, auto-opens the app).
-    var chipWriterNdef by rememberSaveable { mutableStateOf(false) }
+    // Debug «Инфо о чипе»: GET_VERSION model label awaiting display, or null when no read is pending.
+    var chipInfoModel by rememberSaveable { mutableStateOf<String?>(null) }
+    // Set true while a chip-info read is armed (drives the DisposableEffect that arms onTagForChipInfo).
+    var chipInfoArmed by rememberSaveable { mutableStateOf(false) }
     // Pull-to-refresh spinners — one per server-synced tab (both pages stay composed under the pager,
     // so a refresh on one can be in flight while the other is shown). Snackbar surfaces failures only.
     var legendRefreshing by remember { mutableStateOf(false) }
@@ -850,13 +867,15 @@ private fun Kolco24AppRoot(
         // on top when both are active). Its BackHandler only fires when nothing else is layered above it.
         BackHandler(
             enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
-        ) { showSettings = false; chipWriterCode = null }
+        ) { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null }
         if (showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) {
             SettingsScreen(
-                onBack = { showSettings = false; chipWriterCode = null },
+                onBack = { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null },
                 onChangeTeam = {
                     showSettings = false
                     chipWriterCode = null
+                    chipInfoArmed = false
+                    chipInfoModel = null
                     confirmTeamId = null
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
@@ -885,12 +904,12 @@ private fun Kolco24AppRoot(
                     null
                 },
                 onWriteChip = if (BuildConfig.DEBUG) {
-                    { chipWriterNdef = false; chipWriterCode = chipCodeHex(newChipCode()) }
+                    { chipWriterCode = chipCodeHex(newChipCode()) }
                 } else {
                     null
                 },
-                onWriteChipNdef = if (BuildConfig.DEBUG) {
-                    { chipWriterNdef = true; chipWriterCode = chipCodeHex(newChipCode()) }
+                onReadChipInfo = if (BuildConfig.DEBUG) {
+                    { chipInfoModel = null; chipInfoArmed = true }
                 } else {
                     null
                 },
@@ -912,11 +931,7 @@ private fun Kolco24AppRoot(
                         scope.launch {
                             val bytes = chipCodeFromHex(activeChipCode)
                             val result = withContext(Dispatchers.IO) {
-                                if (chipWriterNdef) {
-                                    writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
-                                } else {
-                                    writeChipCode(tag, bytes)
-                                }
+                                writeChipCode(tag, bytes)
                             }
                             writeState = when (result) {
                                 ChipWriteResult.Success -> WriteChipState.Success
@@ -934,6 +949,41 @@ private fun Kolco24AppRoot(
                 nfcDisabled = nfcState != NfcState.Available,
                 onReset = { chipWriterCode = chipCodeHex(newChipCode()) },
                 onDismiss = { chipWriterCode = null },
+            )
+        }
+
+        // Debug «Инфо о чипе» — reads the chip's GET_VERSION model and shows it in a dialog. Floats
+        // above the open Settings overlay (the row that opens it lives there); arms onTagForChipInfo
+        // while waiting for a tap, then displays chipModelFromVersion(...). DEBUG-only (the row that
+        // arms it is gated on a DEBUG-only callback in SettingsScreen).
+        if ((chipInfoArmed || chipInfoModel != null) && showSettings) {
+            DisposableEffect(chipInfoArmed) {
+                val host = activity
+                if (chipInfoArmed) {
+                    host?.onTagForChipInfo = { tag ->
+                        scope.launch {
+                            val resp = withContext(Dispatchers.IO) { readChipVersion(tag) }
+                            chipInfoModel = resp?.let { chipModelFromVersion(it) } ?: "неизвестно"
+                            chipInfoArmed = false
+                        }
+                    }
+                }
+                onDispose { host?.onTagForChipInfo = null }
+            }
+            AlertDialog(
+                onDismissRequest = { chipInfoArmed = false; chipInfoModel = null },
+                title = { Text("Инфо о чипе") },
+                text = {
+                    Text(
+                        if (chipInfoModel != null) "Модель: $chipInfoModel"
+                        else "Приложите чип к телефону",
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { chipInfoArmed = false; chipInfoModel = null }) {
+                        Text("Закрыть")
+                    }
+                },
             )
         }
 

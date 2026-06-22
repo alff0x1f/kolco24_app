@@ -1,7 +1,5 @@
 package ru.kolco24.kolco24.data.nfc
 
-import android.nfc.NdefMessage
-import android.nfc.NdefRecord
 import android.nfc.Tag
 import android.nfc.tech.NfcA
 import java.io.IOException
@@ -22,9 +20,6 @@ sealed interface ChipWriteResult {
 
 /** Bytes per MifareUltralight page. */
 private const val PAGE_SIZE = 4
-
-/** First user-memory page (pages 0–3 hold the UID/lock/OTP bytes — never written here). */
-private const val USER_PAGE_START = 4
 
 /** A code is one UUID = 16 bytes = 4 pages (4..7), present on every Ultralight variant. */
 const val CHIP_CODE_BYTES = PAGE_SIZE * 4
@@ -284,91 +279,6 @@ fun writeChipCode(tag: Tag, code: ByteArray): ChipWriteResult {
         } catch (_: IOException) {
         }
     }
-}
-
-/** External-type record carrying the checkpoint code bytes (type `kolco24.ru:cp`). */
-private const val NDEF_DOMAIN = "kolco24.ru"
-private const val NDEF_TYPE = "cp"
-
-/** NDEF TLV markers in the tag's user memory: `0x03 <len> <message…> 0xFE`. */
-private const val TLV_NDEF: Byte = 0x03
-private const val TLV_TERMINATOR = 0xFE.toByte()
-
-/**
- * Write [code] to an Ultralight/NTAG tag as a proper **NDEF message** over NfcA raw WRITE: an
- * external-type record holding the 16 code bytes plus a trailing **Android Application Record**
- * for [packageName], so the tag stays NDEF-formatted (readable by NFC Tools) and scanning it with
- * the app closed auto-opens the app.
- *
- * Layout from page 4: TLV `0x03 <len> <ndef> 0xFE`, zero-padded to a page boundary. The Capability
- * Container (page 3) is left untouched — assumes the tag was already NDEF-formatted (true for our
- * chips; we only ever overwrote pages 4+). Blocking I/O — call off the main thread. Never throws.
- */
-fun writeChipCodeNdef(tag: Tag, code: ByteArray, packageName: String): ChipWriteResult {
-    require(code.size == CHIP_CODE_BYTES) { "code must be $CHIP_CODE_BYTES bytes" }
-    val message = NdefMessage(
-        arrayOf(
-            NdefRecord.createExternal(NDEF_DOMAIN, NDEF_TYPE, code),
-            // AAR must be the last record so Android treats it as the dispatch hint.
-            NdefRecord.createApplicationRecord(packageName),
-        ),
-    )
-    val ndef = message.toByteArray()
-    if (ndef.size >= 0xFF) return ChipWriteResult.Failed("NDEF слишком большой")
-    val tlv = byteArrayOf(TLV_NDEF, ndef.size.toByte()) + ndef + byteArrayOf(TLV_TERMINATOR)
-    val padded = tlv + ByteArray((PAGE_SIZE - tlv.size % PAGE_SIZE) % PAGE_SIZE)
-
-    val nfcA = NfcA.get(tag) ?: return ChipWriteResult.Unsupported
-    return try {
-        nfcA.connect()
-        for (i in 0 until padded.size / PAGE_SIZE) {
-            val page = USER_PAGE_START + i
-            val from = i * PAGE_SIZE
-            val frame = byteArrayOf(
-                CMD_WRITE,
-                page.toByte(),
-                padded[from], padded[from + 1], padded[from + 2], padded[from + 3],
-            )
-            val response = nfcA.transceive(frame)
-            if (response.isEmpty() || response[0] != ACK) {
-                return ChipWriteResult.Failed("Метка отклонила запись страницы $page")
-            }
-        }
-        ChipWriteResult.Success
-    } catch (e: IOException) {
-        ChipWriteResult.Failed(e.message ?: "Ошибка записи")
-    } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
-    }
-}
-
-/**
- * The external record's type bytes as written by [NdefRecord.createExternal]: `domain:type`,
- * lower-cased ASCII (`kolco24.ru:cp`). The manifest `NDEF_DISCOVERED` filter matches the same
- * value via the `vnd.android.nfc://ext/$NDEF_DOMAIN:$NDEF_TYPE` URI.
- */
-private val NDEF_EXTERNAL_TYPE = "$NDEF_DOMAIN:$NDEF_TYPE".toByteArray(Charsets.US_ASCII)
-
-/**
- * Extract the chip [code] (16 bytes) from the NDEF [messages] delivered in an NFC launch intent —
- * i.e. the external-type record written by [writeChipCodeNdef]. Ignores the trailing AAR and any
- * other records. Returns null if no matching, correctly-sized record is present.
- */
-fun chipCodeFromNdef(messages: Array<NdefMessage>): ByteArray? {
-    for (message in messages) {
-        for (record in message.records) {
-            if (record.tnf == NdefRecord.TNF_EXTERNAL_TYPE &&
-                record.type.contentEquals(NDEF_EXTERNAL_TYPE) &&
-                record.payload.size == CHIP_CODE_BYTES
-            ) {
-                return record.payload
-            }
-        }
-    }
-    return null
 }
 
 /** NTAG/Ultralight READ — returns 16 bytes (4 pages) from the given page, wrapping past the end. */

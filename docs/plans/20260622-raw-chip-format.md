@@ -366,26 +366,30 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriter.kt`
 
-- [ ] in `MainActivity`: remove `chipWriterNdef` state and the `onWriteChipNdef` wiring + the
+- [x] in `MainActivity`: remove `chipWriterNdef` state and the `onWriteChipNdef` wiring + the
       `if (chipWriterNdef) writeChipCodeNdef(...) else writeChipCode(...)` branch (now always raw write)
-- [ ] add a **new** `@Volatile var onTagForChipInfo: ((Tag) -> Unit)? = null` hook (mirrors the
+- [x] add a **new** `@Volatile var onTagForChipInfo: ((Tag) -> Unit)? = null` hook (mirrors the
       existing `onTagFor*` hooks; CLAUDE.md convention = each `DisposableEffect` owns exactly one hook)
       and insert it into the `onTagDiscovered` priority ladder (~315–341) — place it **before**
       `onTagForWrite` (it and the write dialog are never armed together, but a distinct hook avoids the
       `onTagForWrite` collision the reviewer flagged); document its position
-- [ ] add a debug-only `onReadChipInfo` flow armed via a `DisposableEffect` that sets/clears
+- [x] add a debug-only `onReadChipInfo` flow armed via a `DisposableEffect` that sets/clears
       `onTagForChipInfo`, calls `readChipVersion(tag)` off-main, and surfaces `chipModelFromVersion(...)`
       in a dialog/snackbar. DEBUG-only, mirroring the existing debug chip-write flow
-- [ ] in `SettingsScreen`: remove the `onWriteChipNdef` param + its `DebugRow`; add an
+- [x] in `SettingsScreen`: remove the `onWriteChipNdef` param + its `DebugRow`; add an
       `onReadChipInfo: (() -> Unit)? = null` param + a "Инфо о чипе" `DebugRow` (DEBUG builds only)
-- [ ] **now that the last caller is gone** (ProvisioningScreen in Task 4, `handleNfcIntent` in Task 5,
+- [x] **now that the last caller is gone** (ProvisioningScreen in Task 4, `handleNfcIntent` in Task 5,
       the debug writer above), delete the dead NDEF API from `MifareUltralightWriter.kt`:
       `writeChipCodeNdef`, `chipCodeFromNdef`, the NDEF/TLV helpers (`NDEF_DOMAIN`, `NDEF_TYPE`,
       `TLV_*`, `NDEF_EXTERNAL_TYPE`), the `catch (_: FormatException)` in the old read path, and the
-      imports `android.nfc.FormatException`/`NdefMessage`/`NdefRecord`. **Keep** `CMD_READ`/`READ_BLOCK`/
-      `PAGE_SIZE`/`USER_PAGE_START` (READ fallback uses them). `grep` confirms no references remain
-- [ ] (no unit tests — Compose host + NfcA I/O, untested per convention)
-- [ ] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean (no unused-symbol warnings)
+      imports `android.nfc.FormatException`/`NdefMessage`/`NdefRecord`. (Note: those NDEF read-path
+      imports + `FormatException` catch were already removed when `readChipCode` was rewritten in
+      Task 3; this task removed the remaining `NdefMessage`/`NdefRecord` imports and the write/parse
+      NDEF API.) **Kept** `CMD_READ`/`READ_BLOCK`/`PAGE_SIZE`; removed `USER_PAGE_START` (it was only
+      referenced by the deleted `writeChipCodeNdef` — the READ fallback uses `HEADER_PAGE`, so keeping
+      it would leave an unused-symbol warning). `grep` confirms no references remain
+- [x] (no unit tests — Compose host + NfcA I/O, untested per convention)
+- [x] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean (no unused-symbol warnings)
 
 ### Task 7: Verify acceptance criteria
 - [ ] `classifyTag`/`ScanSession.kt` confirmed untouched; `ScanSessionTest`/`ScanTagDecisionTest` green

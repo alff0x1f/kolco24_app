@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
@@ -64,7 +65,7 @@ fun SettingsScreen(
     onResetTeam: (() -> Unit)? = null,
     onClearDatabase: (() -> Unit)? = null,
     onWriteChip: (() -> Unit)? = null,
-    onWriteChipNdef: (() -> Unit)? = null,
+    onReadChipInfo: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -133,7 +134,7 @@ fun SettingsScreen(
         }
 
         // Debug-only: caller passes non-null callbacks only in debug builds (see MainActivity).
-        if (onResetTeam != null || onClearDatabase != null || onWriteChip != null || onWriteChipNdef != null) {
+        if (onResetTeam != null || onClearDatabase != null || onWriteChip != null || onReadChipInfo != null) {
             Text(
                 text = "Отладка",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -172,12 +173,12 @@ fun SettingsScreen(
                             onClick = onWriteChip,
                         )
                     }
-                    if (onWriteChipNdef != null) {
+                    if (onReadChipInfo != null) {
                         DebugRow(
-                            icon = Icons.Filled.Nfc,
-                            title = "Записать code на чип (NDEF)",
-                            subtitle = "Debug: NDEF + AAR — метка открывает приложение",
-                            onClick = onWriteChipNdef,
+                            icon = Icons.Filled.Info,
+                            title = "Инфо о чипе",
+                            subtitle = "Debug: модель метки (GET_VERSION)",
+                            onClick = onReadChipInfo,
                         )
                     }
                 }
