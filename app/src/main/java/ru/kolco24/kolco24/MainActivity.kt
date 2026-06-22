@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -885,13 +886,13 @@ private fun Kolco24AppRoot(
                 onThemeModeChange = onThemeModeChange,
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
-                onOpenAdmin = { showSettings = false; showAdmin = true },
+                onOpenAdmin = { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the
                         // closing overlay — same reasoning as selectTeam below.
                         container.applicationScope.launch { teamRepo.clearSelectedTeam() }
-                        showSettings = false
+                        showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
                     }
                 } else {
                     null
@@ -899,7 +900,7 @@ private fun Kolco24AppRoot(
                 onClearDatabase = if (BuildConfig.DEBUG) {
                     {
                         container.applicationScope.launch { container.clearDatabase() }
-                        showSettings = false
+                        showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
                     }
                 } else {
                     null
@@ -960,16 +961,25 @@ private fun Kolco24AppRoot(
         if ((chipInfoArmed || chipInfoModel != null) && showSettings) {
             DisposableEffect(chipInfoArmed) {
                 val host = activity
+                var pendingJob: Job? = null
+                var disposed = false
                 if (chipInfoArmed) {
                     host?.onTagForChipInfo = { tag ->
-                        scope.launch {
-                            val resp = withContext(Dispatchers.IO) { readChipVersion(tag) }
-                            chipInfoModel = resp?.let { chipModelFromVersion(it) } ?: "неизвестно"
-                            chipInfoArmed = false
+                        // Guard against: (1) a mainHandler.post that was already queued when onDispose
+                        // fired (stale-post race); (2) a second tap arriving while the first job is
+                        // still running (duplicate-launch — only the first tap wins).
+                        if (!disposed && pendingJob == null) {
+                            pendingJob = scope.launch {
+                                val resp = withContext(Dispatchers.IO) { readChipVersion(tag) }
+                                if (!disposed) {
+                                    chipInfoModel = resp?.let { chipModelFromVersion(it) } ?: "неизвестно"
+                                    chipInfoArmed = false
+                                }
+                            }
                         }
                     }
                 }
-                onDispose { host?.onTagForChipInfo = null }
+                onDispose { disposed = true; host?.onTagForChipInfo = null; pendingJob?.cancel() }
             }
             AlertDialog(
                 onDismissRequest = { chipInfoArmed = false; chipInfoModel = null },
