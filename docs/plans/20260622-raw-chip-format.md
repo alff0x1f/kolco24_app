@@ -392,17 +392,17 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - [x] `./gradlew assembleDebug` compiles; `./gradlew lintDebug` clean (no unused-symbol warnings)
 
 ### Task 7: Verify acceptance criteria
-- [ ] `classifyTag`/`ScanSession.kt` confirmed untouched; `ScanSessionTest`/`ScanTagDecisionTest` green
-- [ ] КП provisioning writes the raw header record; reader-mode `readChipCode` reads it back to the
+- [x] `classifyTag`/`ScanSession.kt` confirmed untouched; `ScanSessionTest`/`ScanTagDecisionTest` green
+- [x] КП provisioning writes the raw header record; reader-mode `readChipCode` reads it back to the
       same code (covered by `buildChipRecord`/`parseChipRecord` round-trip unit test)
-- [ ] foreign/blank chip → `parseChipRecord` returns null (unit test) → reader-mode ignores it
-- [ ] write-order (invalidate → code → header-last), ACK/NAK, FAST_READ fallback, and read-back
+- [x] foreign/blank chip → `parseChipRecord` returns null (unit test) → reader-mode ignores it
+- [x] write-order (invalidate → code → header-last), ACK/NAK, FAST_READ fallback, and read-back
       mismatch covered by the fake-`NfcTransport` unit tests (Task 3); a forced physical partial write
       additionally confirmed manually (Post-Completion)
-- [ ] no remaining references to `writeChipCodeNdef`/`chipCodeFromNdef`/`NDEF_DISCOVERED`
+- [x] no remaining references to `writeChipCodeNdef`/`chipCodeFromNdef`/`NDEF_DISCOVERED`
       (`grep` clean)
-- [ ] run full suite: `./gradlew testDebugUnitTest`
-- [ ] `./gradlew assembleDebug` and `./gradlew lintDebug` pass
+- [x] run full suite: `./gradlew testDebugUnitTest`
+- [x] `./gradlew assembleDebug` and `./gradlew lintDebug` pass
 
 ### Task 8: [Final] Docs + plan move
 - [ ] update `CLAUDE.md`: `MifareUltralightWriter.kt` bullet (raw header format, FAST_READ/fallback,
