@@ -66,10 +66,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.MainActivity
+import ru.kolco24.kolco24.ScanInput
 import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.ui.theme.BrandRed
 
 private const val TIMER_TICK_MS = 250L
+private const val SUCCESS_HOLD_MS = 1_000L
 
 data class ScanChip(
     val chipNumber: Int?,
@@ -83,7 +85,7 @@ fun ScanScreen(
     roster: List<TeamMemberItem>,
     chipNumbers: Map<Int, Int>,
     nfcAvailable: Boolean,
-    onScanTag: suspend (Tag, Long) -> ScanEvent,
+    onScanTag: suspend (ScanInput, Long) -> ScanEvent,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -91,45 +93,71 @@ fun ScanScreen(
     val scope = rememberCoroutineScope()
     val scanMutex = remember { Mutex() }
     val currentOnScanTag by rememberUpdatedState(onScanTag)
+    val currentOnClose by rememberUpdatedState(onClose)
     var session by remember { mutableStateOf<ScanSession?>(null) }
     var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
+    // Set true once the КП + full roster have all been scanned; drives the green "Готово!" success
+    // beat before the overlay auto-closes. Reset on finalize so a fresh open starts clean.
+    var completed by remember { mutableStateOf(false) }
 
     fun finalizeSession() {
         session = null
         remainingMillis = SCAN_WINDOW_MS
         diagnostic = null
+        completed = false
+    }
+
+    // Shared scan-processing body for both the live in-overlay hook and the opening-tap drain. Keeps
+    // the opening tap byte-for-byte identical to subsequent taps.
+    suspend fun process(input: ScanInput, now: Long) {
+        scanMutex.withLock {
+            val event = currentOnScanTag(input, now)
+            when (event) {
+                ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
+                is ScanEvent.BadKp -> diagnostic = event.reason
+                else -> {
+                    diagnostic = null
+                    // If the 20 s window had already elapsed at tap time, the DB side
+                    // started a fresh take; discard the expired UI session so reduce
+                    // also starts fresh instead of extending the stale one.
+                    val effectiveSession = if (session != null &&
+                        (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
+                    // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
+                    // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
+                    // so the ring must keep counting down rather than flash back to full.
+                    session = reduce(effectiveSession, event, now)
+                }
+            }
+        }
     }
 
     DisposableEffect(activity, scope) {
-        activity?.onTagForMark = { tag ->
-            // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
-            // slow NFC or DB work is dated when the user tapped, not when processing starts.
-            val now = System.currentTimeMillis()
-            scope.launch {
-                scanMutex.withLock {
-                    val event = currentOnScanTag(tag, now)
-                    when (event) {
-                        ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
-                        is ScanEvent.BadKp -> diagnostic = event.reason
-                        else -> {
-                            diagnostic = null
-                            // If the 20 s window had already elapsed at tap time, the DB side
-                            // started a fresh take; discard the expired UI session so reduce
-                            // also starts fresh instead of extending the stale one.
-                            val effectiveSession = if (session != null &&
-                                (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
-                            // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
-                            // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
-                            // so the ring must keep counting down rather than flash back to full.
-                            session = reduce(effectiveSession, event, now)
-                        }
-                    }
-                }
+        activity?.let { act ->
+            act.onTagForMark = { tag ->
+                // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
+                // slow NFC or DB work is dated when the user tapped, not when processing starts.
+                val now = System.currentTimeMillis()
+                scope.launch { process(ScanInput.Live(tag), now) }
             }
         }
         onDispose {
             activity?.onTagForMark = null
+            activity?.let { it.pendingScan.value = null }
+        }
+    }
+
+    // Reactive drain of the captured opening tap. DisposableEffect runs synchronously in the
+    // commit phase while LaunchedEffect runs async after commit. When both showScan and captured
+    // change in the same Compose frame, the commit-phase drain would see pendingScan == null and
+    // miss a scan that the host's LaunchedEffect writes post-commit. A continuous collect catches
+    // writes that arrive after DisposableEffect enters.
+    LaunchedEffect(activity) {
+        val act = activity ?: return@LaunchedEffect
+        act.pendingScan.collect { scan ->
+            scan ?: return@collect
+            act.pendingScan.value = null
+            process(ScanInput.Captured(scan.code, scan.uid), scan.capturedAt)
         }
     }
 
@@ -146,12 +174,48 @@ fun ScanScreen(
                 // awaiting a DB write after its IO finished). Wait for it to complete; if the scan
                 // extended the window (updated session.lastScanAt), skip finalization — the new
                 // LaunchedEffect will pick it up.
+                var finalized = false
                 scanMutex.withLock {
-                    if (session?.lastScanAt == lastScanAt) finalizeSession()
+                    if (session?.lastScanAt == lastScanAt) {
+                        finalizeSession()
+                        finalized = true
+                    }
                 }
+                // Close after releasing the mutex, only when the window actually expired (the scan
+                // didn't extend it). A completion auto-close may have already closed the overlay.
+                if (finalized) currentOnClose()
                 break
             }
             delay(TIMER_TICK_MS)
+        }
+    }
+
+    // Auto-close on completion: КП identified + all roster members present. Show a brief green
+    // "Готово!" beat, then finalize and close. `completed` is set before the delay so a recomposition
+    // during the hold can't trigger a second close.
+    val allScanned = isComplete(session, roster.size)
+    LaunchedEffect(allScanned) {
+        if (allScanned && !completed) {
+            completed = true
+            delay(SUCCESS_HOLD_MS)
+            // Re-validate under the mutex after the hold: a КП switch may have arrived during the
+            // delay and be mid-processing inside scanMutex (suspended on NFC/Room IO) without having
+            // updated `session` yet, so the Compose cancellation of this effect hasn't fired.
+            // Mirrors the expiry handler pattern: finalize+close only if still complete.
+            var shouldClose = false
+            scanMutex.withLock {
+                if (isComplete(session, roster.size)) {
+                    finalizeSession()
+                    shouldClose = true
+                } else {
+                    completed = false
+                }
+            }
+            if (shouldClose) currentOnClose()
+        } else if (!allScanned) {
+            // A КП switch during the success hold makes allScanned false and cancels the delay above.
+            // Reset completed so the next full-roster scan can trigger the beat again.
+            completed = false
         }
     }
 
@@ -192,12 +256,16 @@ fun ScanScreen(
                 )
             }
             item("hero_timer") {
-                HeroTimerCard(
-                    seconds = remainingMillis / 1_000f,
-                    total = SCAN_WINDOW_MS / 1_000f,
-                    remainingScans = remaining,
-                    waitingForCheckpoint = session?.point == null,
-                )
+                if (completed) {
+                    HeroSuccessCard()
+                } else {
+                    HeroTimerCard(
+                        seconds = remainingMillis / 1_000f,
+                        total = SCAN_WINDOW_MS / 1_000f,
+                        remainingScans = remaining,
+                        waitingForCheckpoint = session?.point == null,
+                    )
+                }
             }
             item("cp_waiting") {
                 CpWaitingCard(session = session)
@@ -535,6 +603,50 @@ private fun WaitingChipIcon() {
             tint = onSurfaceVariantColor,
             modifier = Modifier.size(14.dp),
         )
+    }
+}
+
+@Composable
+private fun HeroSuccessCard() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 14.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.tertiary,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(56.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Готово!",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "КП и вся команда отсканированы",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+            }
+        }
     }
 }
 

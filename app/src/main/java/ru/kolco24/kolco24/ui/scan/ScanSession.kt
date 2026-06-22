@@ -157,3 +157,14 @@ fun classifyTag(
     val numberInTeam = bindings[uid] ?: return ScanEvent.UnboundChip
     return ScanEvent.Member(numberInTeam)
 }
+
+/**
+ * UI-close decision: is the take "complete" — a КП identified and every roster member present?
+ *
+ * Mirrors the **shape** of `MarkRepository`'s `complete = present.size >= expectedCount`, but for a
+ * purely cosmetic overlay-close decision: scoring is persisted incrementally and is independent of
+ * this. Requires [ScanSession.point] != null (pre-КП members live in [ScanSession.bufferedBeforeKp]
+ * and are drained into [ScanSession.present] only once the КП lands) and a non-empty roster.
+ */
+fun isComplete(session: ScanSession?, rosterSize: Int): Boolean =
+    session?.point != null && rosterSize > 0 && session.present.size >= rosterSize
