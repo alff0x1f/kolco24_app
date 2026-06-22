@@ -30,6 +30,63 @@ private const val USER_PAGE_START = 4
 /** A code is one UUID = 16 bytes = 4 pages (4..7), present on every Ultralight variant. */
 const val CHIP_CODE_BYTES = PAGE_SIZE * 4
 
+// ---------------------------------------------------------------------------
+// Raw on-chip format (header-first): page 4 = 'K' '2' '4' <packed>, pages 5–8 = 16-byte code.
+// `packed = (version << 4) | type`; high nibble = version, low nibble = type. See docs/plans.
+// Type/version constants are Int so the nibble math + the Int `type` param don't clash with Byte.
+// ---------------------------------------------------------------------------
+
+/** 24-bit magic 'K' '2' '4' (Kolco24 brand) — the "this is our chip" sentinel in page 4 bytes 0..2. */
+val MAGIC = byteArrayOf(0x4B, 0x32, 0x34)
+
+/** Low-nibble chip type: КП (checkpoint) — the only value written by this effort. */
+const val CHIP_TYPE_KP = 0x1
+
+/** Low-nibble chip type: participant — reserved/unused (future effort). */
+const val CHIP_TYPE_PARTICIPANT = 0x2
+
+/** High-nibble format version. */
+const val CHIP_FORMAT_VERSION = 0x1
+
+/** Page holding the 4-byte header (magic + packed byte). */
+const val HEADER_PAGE = 4
+
+/** First page of the 16-byte code (pages 5..8). */
+const val CODE_PAGE_START = 5
+
+/** Header (4 bytes) + code (16 bytes) = 20 bytes = 5 pages (4..8). */
+const val CHIP_RECORD_BYTES = PAGE_SIZE + CHIP_CODE_BYTES
+
+/**
+ * Build the raw chip record: 3-byte [MAGIC] + packed (`version<<4 | type`) byte + [code] (16 bytes),
+ * 20 bytes total. Pure — no Android. `type` is an Int (nibble, 0..15); [code] must be 16 bytes.
+ */
+fun buildChipRecord(type: Int, code: ByteArray): ByteArray {
+    require(code.size == CHIP_CODE_BYTES) { "code must be $CHIP_CODE_BYTES bytes" }
+    require(type in 0..15) { "type must fit in a nibble (0..15)" }
+    val packed = (((CHIP_FORMAT_VERSION shl 4) or type) and 0xFF).toByte()
+    return MAGIC + packed + code
+}
+
+/**
+ * Parse a raw chip record read from pages 4.. Returns the 16-byte КП code, or null when [pages] is
+ * too short, the magic mismatches, the version nibble is not [CHIP_FORMAT_VERSION] (forward-incompat
+ * guard), or the type nibble is not [CHIP_TYPE_KP] (КП-only reader). Trailing padding is tolerated.
+ * Pure — no Android.
+ */
+fun parseChipRecord(pages: ByteArray): ByteArray? {
+    if (pages.size < CHIP_RECORD_BYTES) return null
+    for (i in MAGIC.indices) {
+        if (pages[i] != MAGIC[i]) return null
+    }
+    val packed = pages[MAGIC.size].toInt() and 0xFF
+    val version = (packed ushr 4) and 0x0F
+    val type = packed and 0x0F
+    if (version != CHIP_FORMAT_VERSION) return null
+    if (type != CHIP_TYPE_KP) return null
+    return pages.copyOfRange(PAGE_SIZE, PAGE_SIZE + CHIP_CODE_BYTES)
+}
+
 /**
  * Generate a fresh 16-byte chip code (a random UUID's big-endian bytes). The `code` is what the
  * legend crypto hashes into a `bid`; here it's just provisioned onto a blank tag.

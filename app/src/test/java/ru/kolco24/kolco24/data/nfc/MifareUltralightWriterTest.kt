@@ -54,4 +54,96 @@ class MifareUltralightWriterTest {
         val code = newChipCode()
         assertArrayEquals(code, chipCodeFromHex(chipCodeHex(code)))
     }
+
+    // --- Raw chip record format ---------------------------------------------
+
+    private val sampleCode = byteArrayOf(
+        0x04, 0xA2.toByte(), 0xB3.toByte(), 0xC4.toByte(),
+        0xD5.toByte(), 0xE6.toByte(), 0x80.toByte(), 0x01,
+        0x7F, 0x00, 0xFF.toByte(), 0x55, 0xAA.toByte(), 0x12, 0x34, 0x56,
+    )
+
+    @Test
+    fun buildChipRecord_length_is20() {
+        assertEquals(20, buildChipRecord(CHIP_TYPE_KP, sampleCode).size)
+    }
+
+    @Test
+    fun buildChipRecord_byteVector_magicPackedCode() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val expected = byteArrayOf(0x4B, 0x32, 0x34, 0x11) + sampleCode
+        assertArrayEquals(expected, record)
+    }
+
+    @Test
+    fun buildChipRecord_packedByte_isVersion1TypeKp() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        assertEquals(0x11.toByte(), record[3])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun buildChipRecord_wrongSizeCode_throws() {
+        buildChipRecord(CHIP_TYPE_KP, byteArrayOf(0x00, 0x01))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun buildChipRecord_typeOutOfNibbleRange_throws() {
+        buildChipRecord(16, sampleCode)
+    }
+
+    @Test
+    fun parseChipRecord_validKp_returnsCode() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        assertArrayEquals(sampleCode, parseChipRecord(record))
+    }
+
+    @Test
+    fun parseChipRecord_wrongMagicFirstByte_returnsNull() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        record[0] = 0x00
+        assertEquals(null, parseChipRecord(record))
+    }
+
+    @Test
+    fun parseChipRecord_wrongMagicThirdByte_returnsNull() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        record[2] = 0x35
+        assertEquals(null, parseChipRecord(record))
+    }
+
+    @Test
+    fun parseChipRecord_allZero_returnsNull() {
+        assertEquals(null, parseChipRecord(ByteArray(20)))
+    }
+
+    @Test
+    fun parseChipRecord_tooShort_returnsNull() {
+        assertEquals(null, parseChipRecord(ByteArray(19)))
+    }
+
+    @Test
+    fun parseChipRecord_participantType_returnsNull() {
+        // version 1, type 2 (participant) → packed 0x12
+        val record = byteArrayOf(0x4B, 0x32, 0x34, 0x12) + sampleCode
+        assertEquals(null, parseChipRecord(record))
+    }
+
+    @Test
+    fun parseChipRecord_unknownVersion_returnsNull() {
+        // version 2, type 1 (КП) → packed 0x21
+        val record = byteArrayOf(0x4B, 0x32, 0x34, 0x21) + sampleCode
+        assertEquals(null, parseChipRecord(record))
+    }
+
+    @Test
+    fun parseChipRecord_trailingPadding_tolerated() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode) + ByteArray(8)
+        assertArrayEquals(sampleCode, parseChipRecord(record))
+    }
+
+    @Test
+    fun parseChipRecord_roundTripWithBuildChipRecord() {
+        val code = newChipCode()
+        assertArrayEquals(code, parseChipRecord(buildChipRecord(CHIP_TYPE_KP, code)))
+    }
 }

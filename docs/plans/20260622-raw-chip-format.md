@@ -244,22 +244,22 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriter.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriterTest.kt`
 
-- [ ] add format constants as **`Int`** (`MAGIC = byteArrayOf(0x4B, 0x32, 0x34)`, `CHIP_TYPE_KP = 0x1`,
+- [x] add format constants as **`Int`** (`MAGIC = byteArrayOf(0x4B, 0x32, 0x34)`, `CHIP_TYPE_KP = 0x1`,
       `CHIP_TYPE_PARTICIPANT = 0x2`, `CHIP_FORMAT_VERSION = 0x1`, `HEADER_PAGE`, `CODE_PAGE_START`) to
       `MifareUltralightWriter.kt` — Int (not Byte) so the packed nibble math and the `Int` `type` param
       line up without literal-type clashes (P2)
-- [ ] add pure `buildChipRecord(type: Int, code: ByteArray): ByteArray` (require 16-byte code +
+- [x] add pure `buildChipRecord(type: Int, code: ByteArray): ByteArray` (require 16-byte code +
       `type in 0..15`; 3-byte magic + packed `(((version shl 4) or type) and 0xFF).toByte()` + code =
       20 bytes)
-- [ ] add pure `parseChipRecord(pages: ByteArray): ByteArray?` (validate length + 3 magic bytes +
+- [x] add pure `parseChipRecord(pages: ByteArray): ByteArray?` (validate length + 3 magic bytes +
       high-nibble `version == CHIP_FORMAT_VERSION` + low-nibble `type == КП`; return the 16-byte code
       or null — any mismatch incl. unknown version → null)
-- [ ] write tests: `buildChipRecord` byte-vector + packed-byte (0x11) + length + wrong-size `require` +
+- [x] write tests: `buildChipRecord` byte-vector + packed-byte (0x11) + length + wrong-size `require` +
       out-of-nibble-range `type` (e.g. 16) `require`
-- [ ] write tests: `parseChipRecord` valid КП → code; wrong magic → null; all-zero → null; short → null;
+- [x] write tests: `parseChipRecord` valid КП → code; wrong magic → null; all-zero → null; short → null;
       future type nibble 0x2 → null; **unknown version nibble (0x2) → null**; trailing padding
       tolerated; round-trip with `buildChipRecord`
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 2: GET_VERSION reader + pure model parser (+ tests)
 
