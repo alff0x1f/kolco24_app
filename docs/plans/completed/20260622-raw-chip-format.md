@@ -405,11 +405,11 @@ in a debug-only Settings row for one-time verification of the physical stock.
 - [x] `./gradlew assembleDebug` and `./gradlew lintDebug` pass
 
 ### Task 8: [Final] Docs + plan move
-- [ ] update `CLAUDE.md`: `MifareUltralightWriter.kt` bullet (raw header format, FAST_READ/fallback,
+- [x] update `CLAUDE.md`: `MifareUltralightWriter.kt` bullet (raw header format, FAST_READ/fallback,
       GET_VERSION, NDEF functions removed), the NFC reader-mode infra section (drop `NDEF_DISCOVERED`,
       `handleNfcIntent`, cold/warm auto-open, `chipWriterNdef`), the chip-scan-open section (live-idle
       only), and the `SettingsScreen` debug-row description
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
