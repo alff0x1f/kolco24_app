@@ -324,12 +324,12 @@ in a debug-only Settings row for one-time verification of the physical stock.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/admin/ProvisioningScreen.kt`
 
-- [ ] replace the `writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)` call (~line 270) with
+- [x] replace the `writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)` call (~line 270) with
       `writeChipCode(tag, bytes)`; drop the now-unused `writeChipCodeNdef` import; remove the
       orphaned `BuildConfig` import if `APPLICATION_ID` was its only use
-- [ ] update the КП recognition KDoc/comment that references `writeChipCodeNdef` (~line 99)
-- [ ] (no unit tests — Compose host, untested per convention)
-- [ ] `./gradlew assembleDebug` compiles **green** (the now-unused `writeChipCodeNdef` still exists —
+- [x] update the КП recognition KDoc/comment that references `writeChipCodeNdef` (~line 99)
+- [x] (no unit tests — Compose host, untested per convention)
+- [x] `./gradlew assembleDebug` compiles **green** (the now-unused `writeChipCodeNdef` still exists —
       it is removed in Task 6 after its last caller goes)
 
 ### Task 5: Remove NDEF cold/warm launch path in MainActivity + manifest

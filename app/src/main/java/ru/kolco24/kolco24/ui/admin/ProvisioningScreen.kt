@@ -62,14 +62,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import ru.kolco24.kolco24.BuildConfig
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.nfc.CHIP_CODE_BYTES
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
-import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
+import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
@@ -96,8 +95,8 @@ import ru.kolco24.kolco24.ui.theme.Tertiary
  * Stateful host of the bulk chip-provisioning pager. Pages over the [raceId] race's checkpoints (one
  * КП per page); NFC is armed throughout via [MainActivity.onTagForProvision]. A chip tapped while the
  * pager is **settled** (not mid-swipe) binds to the current КП (`POST .../tags/`) and the
- * server-returned hex `code` is written onto it ([writeChipCodeNdef]) so the app can recognise the КП
- * offline. The rail/hero/rack are pre-seeded from cached [TagEntity] counts and this session's fresh
+ * server-returned hex `code` is written onto it ([writeChipCode], raw `K24` header format) so the app
+ * can recognise the КП offline. The rail/hero/rack are pre-seeded from cached [TagEntity] counts and this session's fresh
  * writes. [raceId] is the selected team's race — `null` shows a hint. [onClose] dismisses the overlay.
  *
  * No client-side type filter: the server is authoritative on which checkpoints are bindable, so a tap
@@ -267,7 +266,7 @@ fun ProvisioningScreen(
                                     return@launch
                                 }
                                 val written = withContext(Dispatchers.IO) {
-                                    writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
+                                    writeChipCode(tag, bytes)
                                 }
                                 if (written == ChipWriteResult.Success) {
                                     // provisioningFreshTokens is a MutableStateFlow — thread-safe,
