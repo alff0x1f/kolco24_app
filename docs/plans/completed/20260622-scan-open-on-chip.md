@@ -312,9 +312,9 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 - [x] `./gradlew assembleDebug` and `./gradlew lintDebug` pass
 
 ### Task 8: [Final] Docs + plan move
-- [ ] update `CLAUDE.md` (NFC infra + Scan overlay sections) to describe the `nfcLaunchScan` /
+- [x] update `CLAUDE.md` (NFC infra + Scan overlay sections) to describe the `nfcLaunchScan` /
       `CapturedScan` / `ScanInput` open path and the expiry/completion auto-close
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
