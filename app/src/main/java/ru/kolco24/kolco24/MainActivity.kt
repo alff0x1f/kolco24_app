@@ -98,6 +98,7 @@ import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
 import ru.kolco24.kolco24.ui.admin.AdminScreen
+import ru.kolco24.kolco24.ui.admin.CheckChipScreen
 import ru.kolco24.kolco24.ui.admin.ProvisioningScreen
 import ru.kolco24.kolco24.ui.theme.Kolco24Theme
 import ru.kolco24.kolco24.ui.theme.OrangeCta
@@ -134,6 +135,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      * owning exactly one hook; provisioning and the debug writer are never armed simultaneously.
      */
     @Volatile var onTagForProvision: ((Tag) -> Unit)? = null
+
+    /**
+     * Sink for the next raw [Tag] when the admin chip-verification overlay is active
+     * (CheckChipScreen). When set it yields to [onTagForWrite]/[onTagForProvision] but takes
+     * priority over [onTagForMark]/[onTagScanned] — verification reads the chip's code off the raw
+     * Tag to resolve which КП it is bound to. Read-only: no writes, no server, no admin token.
+     * Provisioning and verify never co-open, so the relative order with [onTagForProvision] is
+     * cosmetic, but a distinct hook keeps each `DisposableEffect` owning exactly one hook.
+     */
+    @Volatile var onTagForVerify: ((Tag) -> Unit)? = null
 
     /**
      * Sink for the next raw [Tag] when the «Отметить КП» scan flow is active (ScanScreen). When set
@@ -251,7 +262,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
-     * armed provisioning flow (admin pager) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
+     * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
+     * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
      * the raw [Tag]; an armed scan flow (bind sheet) gets the
      * normalized UID; otherwise — idle foreground — we read the tag's NDEF and surface our own code
      * chips, mirroring the cold-launch intent path (which reader mode would otherwise suppress).
@@ -266,6 +278,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val provisionHook = onTagForProvision
         if (provisionHook != null) {
             mainHandler.post { provisionHook(tag) }
+            return
+        }
+        val verifyHook = onTagForVerify
+        if (verifyHook != null) {
+            mainHandler.post { verifyHook(tag) }
             return
         }
         val markHook = onTagForMark
@@ -344,6 +361,8 @@ private fun Kolco24AppRoot(
     var showAdmin by rememberSaveable { mutableStateOf(false) }
     // Admin chip-provisioning pager (sub-overlay opened from the admin home, drawn above AdminScreen).
     var showProvisioning by rememberSaveable { mutableStateOf(false) }
+    // Admin chip-check overlay (read-only verify, sub-overlay opened from the admin home, drawn above AdminScreen).
+    var showCheckChip by rememberSaveable { mutableStateOf(false) }
     // Debug chip writer: hex of the code being written (uuid), or null when the dialog is closed.
     var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
     // false = raw bytes to pages 4–7; true = NDEF message + AAR (tag stays NDEF, auto-opens the app).
@@ -462,7 +481,7 @@ private fun Kolco24AppRoot(
     var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
     // re-open the sheet/dialog for an unrelated member on the newly selected team.
-    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false }
+    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false }
 
     // Teams/categories of the race being browsed in the picker (and source for the confirm sheet).
     val pickerTeamsState by produceState(PickerTeamsState(), pickerRaceId) {
@@ -549,7 +568,7 @@ private fun Kolco24AppRoot(
                             // would only error on the first tap and could log an orphan take.
                             if (teamForTab != null) {
                                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
-                                showAdmin = false; showProvisioning = false
+                                showAdmin = false; showProvisioning = false; showCheckChip = false
                                 bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true
                             } else {
                                 pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
@@ -586,7 +605,7 @@ private fun Kolco24AppRoot(
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
         // !showScan guards on both of them they would win (Compose gives priority to the last registered
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
-        BackHandler(enabled = showScan) { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false }
+        BackHandler(enabled = showScan) { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false }
         if (showScan) {
             // Fresh DB-side take bookkeeping per opened overlay (parallels ScanScreen's UI session).
             val scanTake = remember(showScan) { ScanTakeState() }
@@ -790,13 +809,14 @@ private fun Kolco24AppRoot(
         // from inside admin draws on top). Opened from the Settings «Администратор» row; its BackHandler
         // only fires when nothing else is layered above it.
         BackHandler(
-            enabled = showAdmin && !showProvisioning && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+            enabled = showAdmin && !showProvisioning && !showCheckChip && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { showAdmin = false }
         if (showAdmin) {
             AdminScreen(
                 session = adminSession,
-                onClose = { showAdmin = false; showProvisioning = false },
-                onOpenProvisioning = { showProvisioning = true },
+                onClose = { showAdmin = false; showProvisioning = false; showCheckChip = false },
+                onOpenProvisioning = { showCheckChip = false; showProvisioning = true },
+                onOpenCheckChip = { showProvisioning = false; showCheckChip = true },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -805,12 +825,26 @@ private fun Kolco24AppRoot(
         // registered after admin's (and admin's is guarded with !showProvisioning) so it wins the back
         // press when both overlays are stacked. raceId is the selected team's race (null → hint screen).
         BackHandler(
-            enabled = showProvisioning && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+            enabled = showProvisioning && !showCheckChip && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { showProvisioning = false }
-        if (showProvisioning && !showScan) {
+        if (showProvisioning && !showCheckChip && !showScan) {
             ProvisioningScreen(
                 raceId = selectedRaceId,
                 onClose = { showProvisioning = false },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // Chip-check overlay — read-only verify, opened from the admin home, drawn above AdminScreen.
+        // Its BackHandler is registered after admin's (and admin's is guarded with !showCheckChip) so it
+        // wins the back press when both overlays are stacked. raceId is the selected team's race.
+        BackHandler(
+            enabled = showCheckChip && !showScan && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+        ) { showCheckChip = false }
+        if (showCheckChip && !showScan) {
+            CheckChipScreen(
+                raceId = selectedRaceId,
+                onClose = { showCheckChip = false },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -910,13 +944,13 @@ private fun Kolco24AppRoot(
             null
         }
         BackHandler(
-            enabled = bindSlot != null && !showScan && !showSettings && !showAdmin && !showProvisioning && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+            enabled = bindSlot != null && !showScan && !showSettings && !showAdmin && !showProvisioning && !showCheckChip && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { bindSlot = null }
         // Keyed by race; caches within this composition whether the pool is known-synced, so repeated
         // offline opens within a session skip the DB lookup. Durable state (across activity recreation
         // and startup warm-ups) is tracked in sync_meta via memberTagsRepo.hasBeenSynced().
         val hasSyncedPool = remember(activeRaceId) { booleanArrayOf(false) }
-        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null && !showSettings && !showAdmin && !showProvisioning) {
+        if (activeBindSlot != null && bindMember != null && activeTeamId != null && activeRaceId != null && !showSettings && !showAdmin && !showProvisioning && !showCheckChip) {
             val currentSlot = SlotKey(activeTeamId, activeBindSlot)
             // Reset per opened slot; survives recomposition while the same slot stays open.
             var sheetState by remember(activeBindSlot) { mutableStateOf<BindSheetState>(BindSheetState.Waiting) }
@@ -1043,9 +1077,9 @@ private fun Kolco24AppRoot(
         }
         val unbindBinding = activeUnbindSlot?.let { bindings[it] }
         BackHandler(
-            enabled = unbindSlot != null && !showScan && !showSettings && !showAdmin && !showProvisioning && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
+            enabled = unbindSlot != null && !showScan && !showSettings && !showAdmin && !showProvisioning && !showCheckChip && teamFlowStep == TeamFlowStep.None && confirmTeamId == null,
         ) { unbindSlot = null }
-        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null && !showSettings && !showAdmin && !showProvisioning) {
+        if (activeUnbindSlot != null && unbindMember != null && unbindBinding != null && selectedTeamId != null && !showSettings && !showAdmin && !showProvisioning && !showCheckChip) {
             val teamId = selectedTeamId
             AlertDialog(
                 onDismissRequest = { unbindSlot = null },
