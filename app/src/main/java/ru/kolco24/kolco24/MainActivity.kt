@@ -1,10 +1,8 @@
 package ru.kolco24.kolco24
 
 import android.content.Intent
-import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -58,6 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,12 +71,12 @@ import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
-import ru.kolco24.kolco24.data.nfc.chipCodeFromNdef
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
+import ru.kolco24.kolco24.data.nfc.chipModelFromVersion
 import ru.kolco24.kolco24.data.nfc.newChipCode
 import ru.kolco24.kolco24.data.nfc.readChipCode
+import ru.kolco24.kolco24.data.nfc.readChipVersion
 import ru.kolco24.kolco24.data.nfc.writeChipCode
-import ru.kolco24.kolco24.data.nfc.writeChipCodeNdef
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
@@ -125,6 +124,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     @Volatile var onTagScanned: ((String) -> Unit)? = null
 
     /**
+     * Sink for the next raw [Tag] when the debug «Инфо о чипе» flow is active. Placed **first** in the
+     * [onTagDiscovered] priority ladder: it and the debug writer are never armed together, but a
+     * distinct hook keeps each `DisposableEffect` owning exactly one hook (CLAUDE.md convention) and
+     * avoids any collision with [onTagForWrite]. Reads GET_VERSION off the raw Tag; no write.
+     */
+    @Volatile var onTagForChipInfo: ((Tag) -> Unit)? = null
+
+    /**
      * Sink for the next raw [Tag] when a write flow is active (debug chip writer). When set it takes
      * priority over [onTagScanned] in [onTagDiscovered] — writing needs the full Tag, not just the uid.
      */
@@ -132,10 +139,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Sink for the next raw [Tag] when the admin chip-provisioning pager is active. When set it
-     * yields only to [onTagForWrite] (the debug writer) and takes priority over [onTagForMark]/
-     * [onTagScanned] — provisioning needs the full Tag to write the server-returned `code` onto the
-     * chip. A distinct hook (rather than reusing [onTagForWrite]) keeps each `DisposableEffect`
-     * owning exactly one hook; provisioning and the debug writer are never armed simultaneously.
+     * yields to [onTagForChipInfo] and [onTagForWrite] (both debug-only) and takes priority over
+     * [onTagForMark]/[onTagScanned] — provisioning needs the full Tag to write the server-returned
+     * `code` onto the chip. A distinct hook (rather than reusing [onTagForWrite]) keeps each
+     * `DisposableEffect` owning exactly one hook; provisioning and the debug writer are never armed
+     * simultaneously.
      */
     @Volatile var onTagForProvision: ((Tag) -> Unit)? = null
 
@@ -157,9 +165,9 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     @Volatile var onTagForMark: ((Tag) -> Unit)? = null
 
     /**
-     * Single entry point for all three open-the-«Отметить КП»-overlay sources (live idle foreground
-     * tap, warm [onNewIntent], cold [onCreate]). A host collector decides what to do based on the
-     * selected-team state. Thread-safe: set from the binder thread and the main thread.
+     * Entry point for opening the «Отметить КП» overlay from the live idle foreground tap
+     * ([onTagDiscovered]). A host collector decides what to do based on the selected-team state.
+     * Thread-safe: set from the binder thread and the main thread.
      */
     val nfcLaunchScan = MutableStateFlow<CapturedScan?>(null)
 
@@ -229,60 +237,6 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 )
             }
         }
-        // Cold/background launch from an NFC tap: the launching intent already carries the tag's
-        // NDEF data (no second scan needed). Skip on recreation — the intent is stale by then.
-        if (savedInstanceState == null) handleNfcIntent(intent)
-    }
-
-    /** singleTop: a tap while the activity is already resumed re-delivers the intent here. */
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleNfcIntent(intent)
-    }
-
-    /**
-     * Open the «Отметить КП» overlay when the app is launched by an `NDEF_DISCOVERED` intent (our
-     * manifest filter is scoped to the `kolco24.ru:cp` external type). The NDEF message is captured
-     * by the OS at scan time so the code is available even if the tag was already lifted.
-     *
-     * Security: intent extras (`EXTRA_NDEF_MESSAGES`, `EXTRA_ID`, `EXTRA_TAG`) are
-     * attacker-controllable — a third-party app can craft a fake `NDEF_DISCOVERED` intent with a
-     * replayed checkpoint code and send it to this exported activity. To prevent fraudulent takes,
-     * the captured scan is marked [CapturedScan.openOnly]: the overlay opens but does NOT pre-seed a
-     * pending score. Scoring happens only via the live reader-mode path (`onTagDiscovered`) once the
-     * physical chip is re-detected after `onResume` enables reader mode — which requires the chip to
-     * be physically present.
-     */
-    private fun handleNfcIntent(intent: Intent) {
-        if (intent.action != NfcAdapter.ACTION_NDEF_DISCOVERED) return
-        // Check that EXTRA_TAG is present without deserializing it — extras are attacker-controllable
-        // and the deprecated getter throws ClassCastException on API < 33 for a mismatched type.
-        if (!intent.hasExtra(NfcAdapter.EXTRA_TAG)) return
-        val messages = ndefMessagesOf(intent) ?: return
-        chipCodeFromNdef(messages) ?: return
-        // Cold/warm launches are always КП chips (only КП chips are written NDEF+AAR). Require
-        // EXTRA_ID so a malformed intent without a uid is a no-op.
-        val rawId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID) ?: return
-        // openOnly=true: opens the overlay without scoring. Scoring requires the physical chip via
-        // reader mode (onTagDiscovered), which activates in onResume after the cold/warm launch.
-        nfcLaunchScan.value = CapturedScan(
-            code = null, uid = normalizeNfcUid(rawId),
-            capturedAt = System.currentTimeMillis(), openOnly = true,
-        )
-    }
-
-    /** Version-safe read of `EXTRA_NDEF_MESSAGES`; null when absent or empty. */
-    private fun ndefMessagesOf(intent: Intent): Array<NdefMessage>? {
-        val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES, NdefMessage::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
-                ?.filterIsInstance<NdefMessage>()
-                ?.toTypedArray()
-        }
-        return raw?.takeIf { it.isNotEmpty() }
     }
 
     override fun onResume() {
@@ -304,15 +258,21 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     }
 
     /**
-     * Reader-mode callback (binder thread). Priority: an armed write flow gets the raw [Tag]; an
+     * Reader-mode callback (binder thread). Priority: an armed chip-info flow gets the raw [Tag]; an
+     * armed write flow gets the raw [Tag]; an
      * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
      * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
      * the raw [Tag]; an armed scan flow (bind sheet) gets the
-     * normalized UID; otherwise — idle foreground — we read the tag's NDEF and surface our own code
-     * chips, mirroring the cold-launch intent path (which reader mode would otherwise suppress).
+     * normalized UID; otherwise — idle foreground — we read the tag's raw code and surface our own
+     * code chips so the host can open the «Отметить КП» overlay.
      * Tag I/O runs here on the binder thread.
      */
     override fun onTagDiscovered(tag: Tag) {
+        val chipInfoHook = onTagForChipInfo
+        if (chipInfoHook != null) {
+            mainHandler.post { chipInfoHook(tag) }
+            return
+        }
         val writeHook = onTagForWrite
         if (writeHook != null) {
             mainHandler.post { writeHook(tag) }
@@ -365,15 +325,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 }
 
 /**
- * One captured chip scan that opens / feeds the «Отметить КП» overlay. The three open-the-overlay
- * entry points (live idle foreground tap, warm `onNewIntent`, cold `onCreate`) all converge on this
- * single `(code, uid)` pair so no raw [Tag] replay is ever needed downstream.
+ * One captured chip scan that opens / feeds the «Отметить КП» overlay. The live idle foreground tap
+ * ([MainActivity.onTagDiscovered]) reads a `(code, uid)` pair so no raw [Tag] replay is ever needed
+ * downstream.
  *
- * - [code] is the КП chip's code (`null` ⇒ a bound team-member bracelet, which only ever arrives via
- *   the live idle path — bracelets are raw page bytes and cannot cold-launch).
+ * - [code] is the КП chip's code (`null` ⇒ a bound team-member bracelet).
  * - [uid] is the normalized tag UID.
- * - [capturedAt] is the tap-time millis stamped on the binder thread / in `handleNfcIntent`; it is the
- *   `now` threaded into the scan processor (a cold launch can drain seconds later, so reusing
+ * - [capturedAt] is the tap-time millis stamped on the binder thread; it is the `now` threaded into
+ *   the scan processor (the overlay can drain it slightly later, so reusing
  *   `System.currentTimeMillis()` at drain time would corrupt the window-expiry math).
  *
  * Identity equality is used as a [kotlinx.coroutines.flow.StateFlow] payload (set/cleared by
@@ -383,19 +342,12 @@ data class CapturedScan(
     val code: ByteArray?,
     val uid: String,
     val capturedAt: Long,
-    /**
-     * When true the dispatcher opens the scan overlay without pre-seeding a pending score.
-     * Used by cold/warm NFC launches so scoring goes through the live reader-mode path
-     * (onTagDiscovered) rather than trusting attacker-controllable intent extras.
-     */
-    val openOnly: Boolean = false,
 )
 
 /**
  * Source of one scan fed to the «Отметить КП» processor. [Live] is an in-overlay subsequent tap whose
  * code/uid are read off the live tag; [Captured] is the opening tap (live-idle binder path) whose
- * `(code, uid)` were already read — no second chip read. Cold/warm NFC launches open the overlay via
- * [CapturedScan.openOnly] and score through the [Live] path once reader mode re-detects the chip.
+ * `(code, uid)` were already read — no second chip read.
  */
 sealed interface ScanInput {
     data class Live(val tag: Tag) : ScanInput
@@ -455,8 +407,10 @@ private fun Kolco24AppRoot(
     var showCheckChip by rememberSaveable { mutableStateOf(false) }
     // Debug chip writer: hex of the code being written (uuid), or null when the dialog is closed.
     var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
-    // false = raw bytes to pages 4–7; true = NDEF message + AAR (tag stays NDEF, auto-opens the app).
-    var chipWriterNdef by rememberSaveable { mutableStateOf(false) }
+    // Debug «Инфо о чипе»: GET_VERSION model label awaiting display, or null when no read is pending.
+    var chipInfoModel by rememberSaveable { mutableStateOf<String?>(null) }
+    // Set true while a chip-info read is armed (drives the DisposableEffect that arms onTagForChipInfo).
+    var chipInfoArmed by rememberSaveable { mutableStateOf(false) }
     // Pull-to-refresh spinners — one per server-synced tab (both pages stay composed under the pager,
     // so a refresh on one can be in flight while the other is shown). Snackbar surfaces failures only.
     var legendRefreshing by remember { mutableStateOf(false) }
@@ -610,10 +564,9 @@ private fun Kolco24AppRoot(
     // UnboundChip — the authoritative scanBindings still governs scoring.
     LaunchedEffect(scanBindings) { activity?.boundUidsSnapshot = scanBindings.keys }
 
-    // The captured opening tap (live idle / warm onNewIntent / cold onCreate), published by the
-    // Activity. A bare collectAsState gives the value; the dispatch itself is a keyed LaunchedEffect so
-    // the side effects never run during composition and the cold-launch Loading → Present transition
-    // re-fires the deferral.
+    // The captured opening tap (live idle foreground tap), published by the Activity. A bare
+    // collectAsState gives the value; the dispatch itself is a keyed LaunchedEffect so the side
+    // effects never run during composition and a Loading → Present transition re-fires the deferral.
     val captured by (activity?.nfcLaunchScan ?: remember { MutableStateFlow<CapturedScan?>(null) })
         .collectAsState()
     LaunchedEffect(captured, teamState) {
@@ -621,17 +574,17 @@ private fun Kolco24AppRoot(
         val act = activity ?: return@LaunchedEffect
         // Some other overlay is up: dropping the tap (rather than yanking the user out) keeps the
         // current flow intact. The live-idle binder path can't even reach here while a bind/provision/
-        // verify hook is armed, but warm/cold intents and Settings/confirm states still can.
+        // verify hook is armed, but Settings/confirm states still can.
         val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
             showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
             unbindSlot != null || chipWriterCode != null
         if (busy) {
             // Narrow race: showScan is true but onTagForMark is not yet armed (DisposableEffect
-            // hasn't run). The idle path fires and publishes a live non-openOnly scan here instead
-            // of routing to the hook. Buffer it so the overlay drains it on arm. Safe because the
-            // idle path is only reachable when onTagForMark is null — once the hook is armed, the
-            // binder thread routes to it directly and never reaches the idle publish.
-            if (showScan && !scan.openOnly && act.pendingScan.value == null) act.pendingScan.value = scan
+            // hasn't run). The idle path fires and publishes a live scan here instead of routing to
+            // the hook. Buffer it so the overlay drains it on arm. Safe because the idle path is only
+            // reachable when onTagForMark is null — once the hook is armed, the binder thread routes
+            // to it directly and never reaches the idle publish.
+            if (showScan && act.pendingScan.value == null) act.pendingScan.value = scan
             act.nfcLaunchScan.value = null
             return@LaunchedEffect
         }
@@ -640,10 +593,8 @@ private fun Kolco24AppRoot(
                 // Same overlay resets as onScanClick, then hand the captured tap to ScanScreen to drain.
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                bindSlot = null; unbindSlot = null; chipWriterCode = null
-                // openOnly scans (cold/warm NFC launch) just open the overlay; scoring is deferred
-                // to the live reader-mode path (onTagDiscovered) once the physical chip is present.
-                if (!scan.openOnly) act.pendingScan.value = scan
+                bindSlot = null; unbindSlot = null; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
+                act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
             }
@@ -654,8 +605,10 @@ private fun Kolco24AppRoot(
                 act.nfcLaunchScan.value = null
             }
             SelectedTeamState.Loading -> {
-                // Wait: keep the captured scan so the Loading → Present transition re-runs this effect
-                // (the cold-launch race the design solves — the tap lands before Room emits the team).
+                // Wait: keep the captured scan so the Loading → Present transition re-runs this effect.
+                // The original cold-launch race (tap arriving before Room emits the team) is gone with
+                // the NDEF launch path, but the branch stays as a defensive guard for a live-idle tap
+                // landing mid team-switch.
             }
         }
     }
@@ -750,7 +703,7 @@ private fun Kolco24AppRoot(
                             if (teamForTab != null) {
                                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                                bindSlot = null; unbindSlot = null; chipWriterCode = null; showScan = true
+                                bindSlot = null; unbindSlot = null; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null; showScan = true
                             } else {
                                 pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
                             }
@@ -916,13 +869,15 @@ private fun Kolco24AppRoot(
         // on top when both are active). Its BackHandler only fires when nothing else is layered above it.
         BackHandler(
             enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
-        ) { showSettings = false; chipWriterCode = null }
+        ) { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null }
         if (showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) {
             SettingsScreen(
-                onBack = { showSettings = false; chipWriterCode = null },
+                onBack = { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null },
                 onChangeTeam = {
                     showSettings = false
                     chipWriterCode = null
+                    chipInfoArmed = false
+                    chipInfoModel = null
                     confirmTeamId = null
                     pickerRaceId = selectedRaceId
                     teamFlowStep = TeamFlowStep.CompPicker
@@ -931,13 +886,13 @@ private fun Kolco24AppRoot(
                 onThemeModeChange = onThemeModeChange,
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
-                onOpenAdmin = { showSettings = false; showAdmin = true },
+                onOpenAdmin = { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the
                         // closing overlay — same reasoning as selectTeam below.
                         container.applicationScope.launch { teamRepo.clearSelectedTeam() }
-                        showSettings = false
+                        showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
                     }
                 } else {
                     null
@@ -945,18 +900,18 @@ private fun Kolco24AppRoot(
                 onClearDatabase = if (BuildConfig.DEBUG) {
                     {
                         container.applicationScope.launch { container.clearDatabase() }
-                        showSettings = false
+                        showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
                     }
                 } else {
                     null
                 },
                 onWriteChip = if (BuildConfig.DEBUG) {
-                    { chipWriterNdef = false; chipWriterCode = chipCodeHex(newChipCode()) }
+                    { chipWriterCode = chipCodeHex(newChipCode()) }
                 } else {
                     null
                 },
-                onWriteChipNdef = if (BuildConfig.DEBUG) {
-                    { chipWriterNdef = true; chipWriterCode = chipCodeHex(newChipCode()) }
+                onReadChipInfo = if (BuildConfig.DEBUG) {
+                    { chipInfoModel = null; chipInfoArmed = true }
                 } else {
                     null
                 },
@@ -978,11 +933,7 @@ private fun Kolco24AppRoot(
                         scope.launch {
                             val bytes = chipCodeFromHex(activeChipCode)
                             val result = withContext(Dispatchers.IO) {
-                                if (chipWriterNdef) {
-                                    writeChipCodeNdef(tag, bytes, BuildConfig.APPLICATION_ID)
-                                } else {
-                                    writeChipCode(tag, bytes)
-                                }
+                                writeChipCode(tag, bytes)
                             }
                             writeState = when (result) {
                                 ChipWriteResult.Success -> WriteChipState.Success
@@ -1000,6 +951,50 @@ private fun Kolco24AppRoot(
                 nfcDisabled = nfcState != NfcState.Available,
                 onReset = { chipWriterCode = chipCodeHex(newChipCode()) },
                 onDismiss = { chipWriterCode = null },
+            )
+        }
+
+        // Debug «Инфо о чипе» — reads the chip's GET_VERSION model and shows it in a dialog. Floats
+        // above the open Settings overlay (the row that opens it lives there); arms onTagForChipInfo
+        // while waiting for a tap, then displays chipModelFromVersion(...). DEBUG-only (the row that
+        // arms it is gated on a DEBUG-only callback in SettingsScreen).
+        if ((chipInfoArmed || chipInfoModel != null) && showSettings) {
+            DisposableEffect(chipInfoArmed) {
+                val host = activity
+                var pendingJob: Job? = null
+                var disposed = false
+                if (chipInfoArmed) {
+                    host?.onTagForChipInfo = { tag ->
+                        // Guard against: (1) a mainHandler.post that was already queued when onDispose
+                        // fired (stale-post race); (2) a second tap arriving while the first job is
+                        // still running (duplicate-launch — only the first tap wins).
+                        if (!disposed && pendingJob == null) {
+                            pendingJob = scope.launch {
+                                val resp = withContext(Dispatchers.IO) { readChipVersion(tag) }
+                                if (!disposed) {
+                                    chipInfoModel = resp?.let { chipModelFromVersion(it) } ?: "неизвестно"
+                                    chipInfoArmed = false
+                                }
+                            }
+                        }
+                    }
+                }
+                onDispose { disposed = true; host?.onTagForChipInfo = null; pendingJob?.cancel() }
+            }
+            AlertDialog(
+                onDismissRequest = { chipInfoArmed = false; chipInfoModel = null },
+                title = { Text("Инфо о чипе") },
+                text = {
+                    Text(
+                        if (chipInfoModel != null) "Модель: $chipInfoModel"
+                        else "Приложите чип к телефону",
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { chipInfoArmed = false; chipInfoModel = null }) {
+                        Text("Закрыть")
+                    }
+                },
             )
         }
 
