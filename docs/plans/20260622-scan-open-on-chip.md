@@ -277,13 +277,13 @@ into `present` when the КП lands, so `point != null` is the correct guard.)
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt`
 
-- [ ] extract the inline `onTagForMark` body (diagnostic + expired-session discard + `reduce`) into a
+- [x] extract the inline `onTagForMark` body (diagnostic + expired-session discard + `reduce`) into a
       local `suspend fun process(input: ScanInput, now: Long)` used by both the hook and the drain
-- [ ] in the arm-`onTagForMark` `DisposableEffect`, after arming, if `activity.pendingScan != null`
+- [x] in the arm-`onTagForMark` `DisposableEffect`, after arming, if `activity.pendingScan != null`
       call `process(ScanInput.Captured(it.code, it.uid), it.capturedAt)` once, then set
       `activity.pendingScan = null`
-- [ ] verify a fresh `scanTake`/`session` per overlay open still holds (the captured tap seeds them)
-- [ ] `./gradlew assembleDebug` compiles
+- [x] verify a fresh `scanTake`/`session` per overlay open still holds (the captured tap seeds them)
+- [x] `./gradlew assembleDebug` compiles
 
 ### Task 6: Auto-close on expiry and completion + success beat
 

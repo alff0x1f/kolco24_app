@@ -102,31 +102,43 @@ fun ScanScreen(
         diagnostic = null
     }
 
-    DisposableEffect(activity, scope) {
-        activity?.onTagForMark = { tag ->
-            // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
-            // slow NFC or DB work is dated when the user tapped, not when processing starts.
-            val now = System.currentTimeMillis()
-            scope.launch {
-                scanMutex.withLock {
-                    val event = currentOnScanTag(ScanInput.Live(tag), now)
-                    when (event) {
-                        ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
-                        is ScanEvent.BadKp -> diagnostic = event.reason
-                        else -> {
-                            diagnostic = null
-                            // If the 20 s window had already elapsed at tap time, the DB side
-                            // started a fresh take; discard the expired UI session so reduce
-                            // also starts fresh instead of extending the stale one.
-                            val effectiveSession = if (session != null &&
-                                (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
-                            // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
-                            // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
-                            // so the ring must keep counting down rather than flash back to full.
-                            session = reduce(effectiveSession, event, now)
-                        }
-                    }
+    // Shared scan-processing body for both the live in-overlay hook and the opening-tap drain. Keeps
+    // the opening tap byte-for-byte identical to subsequent taps.
+    suspend fun process(input: ScanInput, now: Long) {
+        scanMutex.withLock {
+            val event = currentOnScanTag(input, now)
+            when (event) {
+                ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
+                is ScanEvent.BadKp -> diagnostic = event.reason
+                else -> {
+                    diagnostic = null
+                    // If the 20 s window had already elapsed at tap time, the DB side
+                    // started a fresh take; discard the expired UI session so reduce
+                    // also starts fresh instead of extending the stale one.
+                    val effectiveSession = if (session != null &&
+                        (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
+                    // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
+                    // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
+                    // so the ring must keep counting down rather than flash back to full.
+                    session = reduce(effectiveSession, event, now)
                 }
+            }
+        }
+    }
+
+    DisposableEffect(activity, scope) {
+        activity?.let { act ->
+            act.onTagForMark = { tag ->
+                // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
+                // slow NFC or DB work is dated when the user tapped, not when processing starts.
+                val now = System.currentTimeMillis()
+                scope.launch { process(ScanInput.Live(tag), now) }
+            }
+            // Drain the tap that opened this overlay (live idle / cold / warm) once, as the first
+            // scan, using its capture-time `now` so the window math matches when the chip was tapped.
+            act.pendingScan?.let { scan ->
+                act.pendingScan = null
+                scope.launch { process(ScanInput.Captured(scan.code, scan.uid), scan.capturedAt) }
             }
         }
         onDispose {
