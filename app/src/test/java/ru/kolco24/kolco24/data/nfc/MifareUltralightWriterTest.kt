@@ -106,6 +106,13 @@ class MifareUltralightWriterTest {
     }
 
     @Test
+    fun parseChipRecord_wrongMagicSecondByte_returnsNull() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        record[1] = 0x00
+        assertEquals(null, parseChipRecord(record))
+    }
+
+    @Test
     fun parseChipRecord_wrongMagicThirdByte_returnsNull() {
         val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
         record[2] = 0x35
@@ -230,8 +237,15 @@ class MifareUltralightWriterTest {
         // first write invalidates page 4 with an all-zero header
         assertEquals(4.toByte(), writes[0][1])
         assertArrayEquals(byteArrayOf(0, 0, 0, 0), writes[0].copyOfRange(2, 6))
-        // code pages 5..8 are written in between
+        // code pages 5..8 are written in between, with correct payload bytes
         assertEquals(listOf(5, 6, 7, 8), writes.subList(1, 5).map { it[1].toInt() })
+        for (i in 0..3) {
+            assertArrayEquals(
+                "code page ${5 + i} payload",
+                record.copyOfRange(4 + i * 4, 8 + i * 4),
+                writes[1 + i].copyOfRange(2, 6),
+            )
+        }
         // the valid header is committed to page 4 last
         val last = writes.last()
         assertEquals(4.toByte(), last[1])
@@ -244,6 +258,32 @@ class MifareUltralightWriterTest {
         val t = FakeTransport { NAK } // NAK every frame
         assertTrue(writeRecord(t, record) is ChipWriteResult.Failed)
         assertEquals(1, t.frames.size) // stopped after the first (invalidate) WRITE
+    }
+
+    @Test
+    fun writeRecord_nakOnCodePage_returnsFailed() {
+        // Invalidate (page 4) ACKs, but the first code page (page 5) NAKs → Failed, stops early.
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        var writeCount = 0
+        val t = FakeTransport { frame ->
+            if (frame[0] == WRITE) {
+                writeCount++
+                if (writeCount == 1) ACK else NAK // ACK invalidate, NAK code page 5
+            } else NAK
+        }
+        assertTrue(writeRecord(t, record) is ChipWriteResult.Failed)
+        // Only 2 WRITEs: the invalidate + the first code page (which NAKed).
+        val writes = t.frames.filter { it[0] == WRITE }
+        assertEquals(2, writes.size)
+    }
+
+    @Test
+    fun writeRecord_ioExceptionOnWrite_returnsFailed() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame ->
+            if (frame[0] == WRITE) throw IOException("connection lost") else NAK
+        }
+        assertTrue(writeRecord(t, record) is ChipWriteResult.Failed)
     }
 
     @Test

@@ -31,7 +31,7 @@ const val CHIP_CODE_BYTES = PAGE_SIZE * 4
 // ---------------------------------------------------------------------------
 
 /** 24-bit magic 'K' '2' '4' (Kolco24 brand) — the "this is our chip" sentinel in page 4 bytes 0..2. */
-val MAGIC = byteArrayOf(0x4B, 0x32, 0x34)
+private val MAGIC = byteArrayOf(0x4B, 0x32, 0x34)
 
 /** Low-nibble chip type: КП (checkpoint) — the only value written by this effort. */
 const val CHIP_TYPE_KP = 0x1
@@ -103,10 +103,12 @@ fun chipCodeHex(code: ByteArray): String {
 }
 
 /** Inverse of [chipCodeHex]; used to recover the bytes from the saveable hex state. */
-fun chipCodeFromHex(hex: String): ByteArray =
-    ByteArray(hex.length / 2) { i ->
+fun chipCodeFromHex(hex: String): ByteArray {
+    require(hex.length % 2 == 0) { "hex must have even length" }
+    return ByteArray(hex.length / 2) { i ->
         ((hex[i * 2].digitToInt(16) shl 4) or hex[i * 2 + 1].digitToInt(16)).toByte()
     }
+}
 
 private val HEX = "0123456789ABCDEF".toCharArray()
 

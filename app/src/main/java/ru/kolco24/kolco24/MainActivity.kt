@@ -138,10 +138,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Sink for the next raw [Tag] when the admin chip-provisioning pager is active. When set it
-     * yields only to [onTagForWrite] (the debug writer) and takes priority over [onTagForMark]/
-     * [onTagScanned] — provisioning needs the full Tag to write the server-returned `code` onto the
-     * chip. A distinct hook (rather than reusing [onTagForWrite]) keeps each `DisposableEffect`
-     * owning exactly one hook; provisioning and the debug writer are never armed simultaneously.
+     * yields to [onTagForChipInfo] and [onTagForWrite] (both debug-only) and takes priority over
+     * [onTagForMark]/[onTagScanned] — provisioning needs the full Tag to write the server-returned
+     * `code` onto the chip. A distinct hook (rather than reusing [onTagForWrite]) keeps each
+     * `DisposableEffect` owning exactly one hook; provisioning and the debug writer are never armed
+     * simultaneously.
      */
     @Volatile var onTagForProvision: ((Tag) -> Unit)? = null
 
