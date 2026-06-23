@@ -355,7 +355,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
  * Identity equality is used as a [kotlinx.coroutines.flow.StateFlow] payload (set/cleared by
  * reference); override `equals`/`hashCode` only if value equality is ever required.
  */
-data class CapturedScan(
+class CapturedScan(
     val code: ByteArray?,
     val uid: String,
     val sample: TimeSample,
