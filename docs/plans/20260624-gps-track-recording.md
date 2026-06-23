@@ -109,12 +109,12 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 - Modify: `gradle/libs.versions.toml`
 - Modify: `app/build.gradle.kts`
 
-- [ ] добавить версию и библиотеку `play-services-location` (актуальная стабильная) в `libs.versions.toml`
-- [ ] подключить `implementation(libs.play.services.location)` в `app/build.gradle.kts`
-- [ ] добавить `BuildConfig.LOCAL_API_BASE_URL`: читать `kolco24.localApiBaseUrl` из `local.properties`, fallback env `KOLCO24_LOCAL_API_BASE_URL`, дефолт `http://192.168.1.5/` (по образцу `API_BASE_URL`, но с дефолтом — не падать если ключа нет)
-- [ ] ⚠️ **(из ревью) хост и cleartext связаны.** `network_security_config.xml` (Task 11) разрешает cleartext только для `192.168.1.5`. Значит **хост зафиксирован by design** — конфиг-ключ меняет порт/путь/схему, но смена *хоста* требует синхронной правки `network_security_config.xml`. Зафиксировать это коммент-доком у ключа и в `network_security_config.xml`; если в будущем нужен произвольный LAN-хост — отдельная задача (debug-only широкий cleartext или ввод хоста с динамическим security-config, что Android из коробки не умеет)
-- [ ] `./gradlew help` / sync — проект конфигурируется без ошибок
-- [ ] (тестов нет — конфигурация сборки; проверка = успешный sync)
+- [x] добавить версию и библиотеку `play-services-location` (актуальная стабильная) в `libs.versions.toml`
+- [x] подключить `implementation(libs.play.services.location)` в `app/build.gradle.kts`
+- [x] добавить `BuildConfig.LOCAL_API_BASE_URL`: читать `kolco24.localApiBaseUrl` из `local.properties`, fallback env `KOLCO24_LOCAL_API_BASE_URL`, дефолт `http://192.168.1.5/` (по образцу `API_BASE_URL`, но с дефолтом — не падать если ключа нет)
+- [x] ⚠️ **(из ревью) хост и cleartext связаны.** `network_security_config.xml` (Task 11) разрешает cleartext только для `192.168.1.5`. Значит **хост зафиксирован by design** — конфиг-ключ меняет порт/путь/схему, но смена *хоста* требует синхронной правки `network_security_config.xml`. Зафиксировать это коммент-доком у ключа и в `network_security_config.xml`; если в будущем нужен произвольный LAN-хост — отдельная задача (debug-only широкий cleartext или ввод хоста с динамическим security-config, что Android из коробки не умеет) — коммент-док добавлен у `localApiBaseUrl` в `app/build.gradle.kts` (часть про `network_security_config.xml` — Task 11)
+- [x] `./gradlew help` / sync — проект конфигурируется без ошибок (`./gradlew help` зелёный, `play-services-location:21.3.0` резолвится в `debugRuntimeClasspath`)
+- [x] (тестов нет — конфигурация сборки; проверка = успешный sync)
 
 ### Task 2: Обобщить TrustedClock для произвольного elapsedAt
 

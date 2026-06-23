@@ -38,6 +38,18 @@ val apiBaseUrl = secret("kolco24.apiBaseUrl", "KOLCO24_API_BASE_URL")
 val appKeyId = secret("kolco24.appKeyId", "KOLCO24_APP_KEY_ID")
 val appSecret = secret("kolco24.appSecret", "KOLCO24_APP_SECRET")
 
+// Local LAN upload target for GPS tracks (second, cleartext host). Unlike the secrets above this
+// has a default so the build never fails when the key is absent (it is optional infrastructure).
+//
+// HOST ↔ CLEARTEXT COUPLING (by design): res/xml/network_security_config.xml permits cleartext
+// traffic ONLY for the literal host 192.168.1.5. This config key may freely change the port, path,
+// or scheme, but changing the *host* requires a synchronous edit to network_security_config.xml
+// (Android cannot select a cleartext domain-config at runtime). A future arbitrary-LAN-host
+// feature would be a separate task (debug-only broad cleartext, or runtime host entry with a
+// dynamic security config — not supported out of the box).
+val localApiBaseUrl = secret("kolco24.localApiBaseUrl", "KOLCO24_LOCAL_API_BASE_URL")
+    ?: "http://192.168.1.5/"
+
 run {
     val missing = buildList {
         if (apiBaseUrl == null) add("kolco24.apiBaseUrl / KOLCO24_API_BASE_URL")
@@ -73,6 +85,7 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl!!.escapeJavaLiteral()}\"")
         buildConfigField("String", "APP_KEY_ID", "\"${appKeyId!!.escapeJavaLiteral()}\"")
         buildConfigField("String", "APP_SECRET", "\"${appSecret!!.escapeJavaLiteral()}\"")
+        buildConfigField("String", "LOCAL_API_BASE_URL", "\"${localApiBaseUrl.escapeJavaLiteral()}\"")
     }
 
     buildTypes {
@@ -116,6 +129,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.play.services.location)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
