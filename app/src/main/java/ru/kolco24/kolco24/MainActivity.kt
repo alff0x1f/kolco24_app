@@ -74,14 +74,9 @@ import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.ui.common.ClockWarningBanner
 import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
-import ru.kolco24.kolco24.data.nfc.ChipWriteResult
-import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
-import ru.kolco24.kolco24.data.nfc.chipCodeHex
 import ru.kolco24.kolco24.data.nfc.chipModelFromVersion
-import ru.kolco24.kolco24.data.nfc.newChipCode
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.nfc.readChipVersion
-import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
@@ -97,8 +92,6 @@ import ru.kolco24.kolco24.ui.scan.ScanEvent
 import ru.kolco24.kolco24.ui.scan.classifyTag
 import ru.kolco24.kolco24.ui.scan.isWindowExpired
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
-import ru.kolco24.kolco24.ui.settings.WriteChipDialog
-import ru.kolco24.kolco24.ui.settings.WriteChipState
 import ru.kolco24.kolco24.ui.team.BindChipSheet
 import ru.kolco24.kolco24.ui.team.BindOutcome
 import ru.kolco24.kolco24.ui.team.BindSheetState
@@ -142,31 +135,22 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Sink for the next raw [Tag] when the debug «Инфо о чипе» flow is active. Placed **first** in the
-     * [onTagDiscovered] priority ladder: it and the debug writer are never armed together, but a
-     * distinct hook keeps each `DisposableEffect` owning exactly one hook (CLAUDE.md convention) and
-     * avoids any collision with [onTagForWrite]. Reads GET_VERSION off the raw Tag; no write.
+     * [onTagDiscovered] priority ladder. A distinct hook keeps each `DisposableEffect` owning exactly
+     * one hook (CLAUDE.md convention). Reads GET_VERSION off the raw Tag; no write.
      */
     @Volatile var onTagForChipInfo: ((Tag) -> Unit)? = null
 
     /**
-     * Sink for the next raw [Tag] when a write flow is active (debug chip writer). When set it takes
-     * priority over [onTagScanned] in [onTagDiscovered] — writing needs the full Tag, not just the uid.
-     */
-    @Volatile var onTagForWrite: ((Tag) -> Unit)? = null
-
-    /**
      * Sink for the next raw [Tag] when the admin chip-provisioning pager is active. When set it
-     * yields to [onTagForChipInfo] and [onTagForWrite] (both debug-only) and takes priority over
-     * [onTagForMark]/[onTagScanned] — provisioning needs the full Tag to write the server-returned
-     * `code` onto the chip. A distinct hook (rather than reusing [onTagForWrite]) keeps each
-     * `DisposableEffect` owning exactly one hook; provisioning and the debug writer are never armed
-     * simultaneously.
+     * yields to [onTagForChipInfo] (debug-only) and takes priority over [onTagForMark]/[onTagScanned]
+     * — provisioning needs the full Tag to write the server-returned `code` onto the chip. A distinct
+     * hook keeps each `DisposableEffect` owning exactly one hook.
      */
     @Volatile var onTagForProvision: ((Tag) -> Unit)? = null
 
     /**
      * Sink for the next raw [Tag] when the admin chip-verification overlay is active
-     * (CheckChipScreen). When set it yields to [onTagForWrite]/[onTagForProvision] but takes
+     * (CheckChipScreen). When set it yields to [onTagForProvision] but takes
      * priority over [onTagForMark]/[onTagScanned] — verification reads the chip's code off the raw
      * Tag to resolve which КП it is bound to. Read-only: no writes, no server, no admin token.
      * Provisioning and verify never co-open, so the relative order with [onTagForProvision] is
@@ -176,8 +160,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Sink for the next raw [Tag] when the «Отметить КП» scan flow is active (ScanScreen). When set
-     * it takes priority over [onTagScanned] but yields to [onTagForWrite] in [onTagDiscovered] —
-     * marking needs the full Tag to both read the CP chip's code and fall back to the member uid.
+     * it takes priority over [onTagScanned] in [onTagDiscovered] — marking needs the full Tag to both
+     * read the CP chip's code and fall back to the member uid.
      */
     @Volatile var onTagForMark: ((Tag) -> Unit)? = null
 
@@ -276,7 +260,6 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /**
      * Reader-mode callback (binder thread). Priority: an armed chip-info flow gets the raw [Tag]; an
-     * armed write flow gets the raw [Tag]; an
      * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
      * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
      * the raw [Tag]; an armed scan flow (bind sheet) gets the
@@ -288,11 +271,6 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val chipInfoHook = onTagForChipInfo
         if (chipInfoHook != null) {
             mainHandler.post { chipInfoHook(tag) }
-            return
-        }
-        val writeHook = onTagForWrite
-        if (writeHook != null) {
-            mainHandler.post { writeHook(tag) }
             return
         }
         val provisionHook = onTagForProvision
@@ -428,8 +406,6 @@ private fun Kolco24AppRoot(
     var showProvisioning by rememberSaveable { mutableStateOf(false) }
     // Admin chip-check overlay (read-only verify, sub-overlay opened from the admin home, drawn above AdminScreen).
     var showCheckChip by rememberSaveable { mutableStateOf(false) }
-    // Debug chip writer: hex of the code being written (uuid), or null when the dialog is closed.
-    var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }
     // Debug «Инфо о чипе»: GET_VERSION model label awaiting display, or null when no read is pending.
     var chipInfoModel by rememberSaveable { mutableStateOf<String?>(null) }
     // Set true while a chip-info read is armed (drives the DisposableEffect that arms onTagForChipInfo).
@@ -610,7 +586,7 @@ private fun Kolco24AppRoot(
         // verify hook is armed, but Settings/confirm states still can.
         val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
             showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
-            unbindSlot != null || chipWriterCode != null
+            unbindSlot != null
         if (busy) {
             // Narrow race: showScan is true but onTagForMark is not yet armed (DisposableEffect
             // hasn't run). The idle path fires and publishes a live scan here instead of routing to
@@ -626,7 +602,7 @@ private fun Kolco24AppRoot(
                 // Same overlay resets as onScanClick, then hand the captured tap to ScanScreen to drain.
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                bindSlot = null; unbindSlot = null; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
+                bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
                 act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
@@ -750,7 +726,7 @@ private fun Kolco24AppRoot(
                             if (teamForTab != null) {
                                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                                bindSlot = null; unbindSlot = null; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null; showScan = true
+                                bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null; showScan = true
                             } else {
                                 pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
                             }
@@ -923,13 +899,12 @@ private fun Kolco24AppRoot(
         // on top when both are active). Its BackHandler only fires when nothing else is layered above it.
         BackHandler(
             enabled = showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
-        ) { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null }
+        ) { showSettings = false; chipInfoArmed = false; chipInfoModel = null }
         if (showSettings && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) {
             SettingsScreen(
-                onBack = { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null },
+                onBack = { showSettings = false; chipInfoArmed = false; chipInfoModel = null },
                 onChangeTeam = {
                     showSettings = false
-                    chipWriterCode = null
                     chipInfoArmed = false
                     chipInfoModel = null
                     confirmTeamId = null
@@ -940,13 +915,13 @@ private fun Kolco24AppRoot(
                 onThemeModeChange = onThemeModeChange,
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
-                onOpenAdmin = { showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
+                onOpenAdmin = { showSettings = false; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
                 onResetTeam = if (BuildConfig.DEBUG) {
                     {
                         // applicationScope (not composition scope) so the delete outlives the
                         // closing overlay — same reasoning as selectTeam below.
                         container.applicationScope.launch { teamRepo.clearSelectedTeam() }
-                        showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
+                        showSettings = false; chipInfoArmed = false; chipInfoModel = null
                     }
                 } else {
                     null
@@ -954,13 +929,8 @@ private fun Kolco24AppRoot(
                 onClearDatabase = if (BuildConfig.DEBUG) {
                     {
                         container.applicationScope.launch { container.clearDatabase() }
-                        showSettings = false; chipWriterCode = null; chipInfoArmed = false; chipInfoModel = null
+                        showSettings = false; chipInfoArmed = false; chipInfoModel = null
                     }
-                } else {
-                    null
-                },
-                onWriteChip = if (BuildConfig.DEBUG) {
-                    { chipWriterCode = chipCodeHex(newChipCode()) }
                 } else {
                     null
                 },
@@ -970,41 +940,6 @@ private fun Kolco24AppRoot(
                     null
                 },
                 modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        // Debug chip writer dialog — floats above the open Settings overlay. Renders only while Settings
-        // is open (the row that opens it lives there); arms onTagForWrite for the duration.
-        val activeChipCode = chipWriterCode
-        if (activeChipCode != null && showSettings) {
-            var writeState by remember(activeChipCode) { mutableStateOf<WriteChipState>(WriteChipState.Waiting) }
-            DisposableEffect(activeChipCode) {
-                val host = activity
-                host?.onTagForWrite = { tag ->
-                    // Only act on a fresh tap; ignore re-presentations during/after a write.
-                    if (writeState is WriteChipState.Waiting) {
-                        writeState = WriteChipState.Writing
-                        scope.launch {
-                            val bytes = chipCodeFromHex(activeChipCode)
-                            val result = withContext(Dispatchers.IO) {
-                                writeChipCode(tag, bytes)
-                            }
-                            writeState = when (result) {
-                                ChipWriteResult.Success -> WriteChipState.Success
-                                ChipWriteResult.Unsupported -> WriteChipState.Unsupported
-                                is ChipWriteResult.Failed -> WriteChipState.Failed(result.message)
-                            }
-                        }
-                    }
-                }
-                onDispose { host?.onTagForWrite = null }
-            }
-            WriteChipDialog(
-                codeHex = activeChipCode,
-                state = writeState,
-                nfcDisabled = nfcState != NfcState.Available,
-                onReset = { chipWriterCode = chipCodeHex(newChipCode()) },
-                onDismiss = { chipWriterCode = null },
             )
         }
 

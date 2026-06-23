@@ -64,16 +64,16 @@ Delete the write-chip code path end to end: the dialog file, the Settings row + 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] remove imports `WriteChipDialog`, `WriteChipState` (~lines 100–101) **and all five chip symbols** `ChipWriteResult` (~77), `chipCodeFromHex` (~78), `chipCodeHex` (~79), `newChipCode` (~81), `writeChipCode` (~84) — all are used only inside the deleted block
-- [ ] remove `@Volatile var onTagForWrite: ((Tag) -> Unit)? = null` and its KDoc (~line 155)
-- [ ] in `onTagDiscovered` remove the `val writeHook = onTagForWrite` branch (~lines 293–297); chain becomes `chipInfo → provision → verify → mark → scan`
-- [ ] remove `var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }` (~line 432)
-- [ ] remove `|| chipWriterCode != null` from the overlay guard (~line 613) and every `chipWriterCode = null` reset (~lines 629, 753, 926, 929, 932, 943, 949, 957)
-- [ ] remove the `onWriteChip = if (BuildConfig.DEBUG) { { chipWriterCode = chipCodeHex(newChipCode()) } } else null` argument to `SettingsScreen` (~lines 962–963), leaving `onReadChipInfo`
-- [ ] remove the entire `DisposableEffect`/`WriteChipDialog` render block that arms `onTagForWrite` (~lines 976–1009)
-- [ ] clean up `onTagForWrite` mentions in the KDoc of neighbouring hooks (`onTagForChipInfo`, `onTagForProvision`, `onTagForVerify`, `onTagForMark`)
-- [ ] grep `MainActivity.kt` for `ChipWriteResult`, `chipCodeFromHex`, `chipCodeHex`, `writeChipCode`, `newChipCode` → zero hits remain (all five imports gone, no stray usage)
-- [ ] `./gradlew assembleDebug` compiles clean (no unresolved refs, no unused-import lint)
+- [x] remove imports `WriteChipDialog`, `WriteChipState` (~lines 100–101) **and all five chip symbols** `ChipWriteResult` (~77), `chipCodeFromHex` (~78), `chipCodeHex` (~79), `newChipCode` (~81), `writeChipCode` (~84) — all are used only inside the deleted block
+- [x] remove `@Volatile var onTagForWrite: ((Tag) -> Unit)? = null` and its KDoc (~line 155)
+- [x] in `onTagDiscovered` remove the `val writeHook = onTagForWrite` branch (~lines 293–297); chain becomes `chipInfo → provision → verify → mark → scan`
+- [x] remove `var chipWriterCode by rememberSaveable { mutableStateOf<String?>(null) }` (~line 432)
+- [x] remove `|| chipWriterCode != null` from the overlay guard (~line 613) and every `chipWriterCode = null` reset (~lines 629, 753, 926, 929, 932, 943, 949, 957)
+- [x] remove the `onWriteChip = if (BuildConfig.DEBUG) { { chipWriterCode = chipCodeHex(newChipCode()) } } else null` argument to `SettingsScreen` (~lines 962–963), leaving `onReadChipInfo`
+- [x] remove the entire `DisposableEffect`/`WriteChipDialog` render block that arms `onTagForWrite` (~lines 976–1009)
+- [x] clean up `onTagForWrite` mentions in the KDoc of neighbouring hooks (`onTagForChipInfo`, `onTagForProvision`, `onTagForVerify`, `onTagForMark`)
+- [x] grep `MainActivity.kt` for `ChipWriteResult`, `chipCodeFromHex`, `chipCodeHex`, `writeChipCode`, `newChipCode` → zero hits remain (all five imports gone, no stray usage)
+- [x] `./gradlew assembleDebug` compiles clean (no unresolved refs, no unused-import lint)
 
 ### Task 3: Remove orphaned newChipCode() and fix its tests
 
