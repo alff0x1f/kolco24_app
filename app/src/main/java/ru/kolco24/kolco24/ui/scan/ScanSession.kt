@@ -8,6 +8,17 @@ import ru.kolco24.kolco24.data.nfc.chipCodeHex
 internal const val SCAN_WINDOW_MS = 20_000L
 
 /**
+ * Has the 20 s sliding window elapsed between [lastScanAt] and [now]?
+ *
+ * Both arguments are **monotonic** `SystemClock.elapsedRealtime()` ms (immune to wall-clock changes —
+ * translating the phone clock can no longer collapse or freeze the window). A null [lastScanAt] (no
+ * scan yet) is never expired. The boundary is `>=`: exactly [SCAN_WINDOW_MS] after the last scan
+ * counts as expired (matches the host's prior `>=` guard).
+ */
+fun isWindowExpired(lastScanAt: Long?, now: Long): Boolean =
+    lastScanAt != null && (now - lastScanAt) >= SCAN_WINDOW_MS
+
+/**
  * In-flight state of one «Отметить КП» session — a sliding 20 s window that accumulates the team's
  * present-set around a single checkpoint chip. Pure value type: no Android, no I/O, no timer. The
  * stateful host ([ScanScreen]) owns the clock and the Room writes; this only describes what has been
@@ -15,8 +26,9 @@ internal const val SCAN_WINDOW_MS = 20_000L
  *
  * The KP chip and the member bracelets can be scanned in any order. Until the KP chip is read
  * ([point] == null), member scans are held in [bufferedBeforeKp]; once the KP arrives, the buffer is
- * drained into [present] (see [reduce]). [lastScanAt] is the epoch-ms of the most recent **accepted**
- * scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and does **not** advance it.
+ * drained into [present] (see [reduce]). [lastScanAt] is the **monotonic** `elapsedRealtime` ms of the
+ * most recent **accepted** scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and
+ * does **not** advance it. (Monotonic, not wall-clock, so translating the phone clock can't skew it.)
  */
 data class ScanSession(
     val point: Int?,
@@ -69,7 +81,8 @@ sealed interface ScanEvent {
 }
 
 /**
- * Folds one [event] into the [session] at time [now]. Pure; the only state machine of the scan flow.
+ * Folds one [event] into the [session] at time [now] (monotonic `elapsedRealtime` ms). Pure; the only
+ * state machine of the scan flow.
  *
  * - [ScanEvent.Kp] sets the KP fields and **drains** [ScanSession.bufferedBeforeKp] into
  *   [ScanSession.present] (members scanned before the chip count once the chip lands). A repeat KP

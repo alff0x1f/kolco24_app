@@ -222,14 +222,14 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanSession.kt` (комментарии о смысле `Long`; граница окна)
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/scan/ScanSessionTest.kt`
 
-- [ ] ⚠️ **захват `TimeSample` в момент касания (P1)**: текущий код намеренно снимает `now` **до** `Mutex`/NFC-I/O/Room, чтобы медленная предыдущая операция не «протухлила» 20-секундное окно. Снимать `val sample = trustedClock.sample()` **там же**, **до** `scope.launch`: для **Live**-пути — первой строкой лямбды `onTagForMark` (она идёт через `mainHandler.post` → **main-поток**, как сейчас `now` в `ScanScreen.kt:140`); для **opening/Captured**-пути — в idle-ветке `onTagDiscovered` (**binder-поток**). `sample()` потокобезопасен (снимок `AtomicReference`) и валиден на обоих потоках. **Не** вызывать `sample()` внутри `onScanTag` (это уже во время обработки)
-- [ ] `ScanInput.Live(tag)` → нести `sample` вместе с тегом (или менять сигнатуру `onScanTag` на приём `sample`); `CapturedScan.capturedAt: Long` → `sample: TimeSample`
-- [ ] ⚠️ **исправить `0L`-сентинел**: `ScanTakeState.lastScanAt` сейчас `Long`=`0L` с гардом `lastScanAt != 0L` (`MainActivity.kt:791`). С монотонным таймером `0L` легально сразу после reboot (целевой сценарий) → заменить на `Long?` (или `hasScan: Boolean`)
-- [ ] окно/`ScanTakeState`-истечение по `sample.elapsedMs`, граница **`>=`** (как в текущем коде `MainActivity.kt:791`): `lastScanAt != null && sample.elapsedMs − lastScanAt >= SCAN_WINDOW_MS`; в `startKpTake`/`addMember` передавать `sample`
-- [ ] `reduce(...)` вызывать с `now = sample.elapsedMs` (монотонное «сейчас»); подтвердить инвариант Task 1 (`sample.elapsedMs` — сырой `elapsedRealtime`, один источник с тикером `ScanScreen`)
-- [ ] `ScanSessionTest`: подтвердить незыблемость (тип `Long`); добавить **граничные тесты окна 19_999 / 20_000 / 20_001** (фиксируем `>=`); комментарий о монотонности `now`
-- [ ] подтвердить `ScanSessionTest` зелёным (тип `Long` сохранён); добавить тест-комментарий, что `now` теперь монотонный
-- [ ] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 8
+- [x] ⚠️ **захват `TimeSample` в момент касания (P1)**: текущий код намеренно снимает `now` **до** `Mutex`/NFC-I/O/Room, чтобы медленная предыдущая операция не «протухлила» 20-секундное окно. Снимать `val sample = trustedClock.sample()` **там же**, **до** `scope.launch`: для **Live**-пути — первой строкой лямбды `onTagForMark` (она идёт через `mainHandler.post` → **main-поток**, как сейчас `now` в `ScanScreen.kt:140`); для **opening/Captured**-пути — в idle-ветке `onTagDiscovered` (**binder-поток**). `sample()` потокобезопасен (снимок `AtomicReference`) и валиден на обоих потоках. **Не** вызывать `sample()` внутри `onScanTag` (это уже во время обработки)
+- [x] `ScanInput.Live(tag)` → нести `sample` вместе с тегом (или менять сигнатуру `onScanTag` на приём `sample`); `CapturedScan.capturedAt: Long` → `sample: TimeSample`
+- [x] ⚠️ **исправить `0L`-сентинел**: `ScanTakeState.lastScanAt` сейчас `Long`=`0L` с гардом `lastScanAt != 0L` (`MainActivity.kt:791`). С монотонным таймером `0L` легально сразу после reboot (целевой сценарий) → заменить на `Long?` (или `hasScan: Boolean`)
+- [x] окно/`ScanTakeState`-истечение по `sample.elapsedMs`, граница **`>=`** (как в текущем коде `MainActivity.kt:791`): `lastScanAt != null && sample.elapsedMs − lastScanAt >= SCAN_WINDOW_MS`; в `startKpTake`/`addMember` передавать `sample`
+- [x] `reduce(...)` вызывать с `now = sample.elapsedMs` (монотонное «сейчас»); подтвердить инвариант Task 1 (`sample.elapsedMs` — сырой `elapsedRealtime`, один источник с тикером `ScanScreen`)
+- [x] `ScanSessionTest`: подтвердить незыблемость (тип `Long`); добавить **граничные тесты окна 19_999 / 20_000 / 20_001** (фиксируем `>=`); комментарий о монотонности `now`
+- [x] подтвердить `ScanSessionTest` зелёным (тип `Long` сохранён); добавить тест-комментарий, что `now` теперь монотонный
+- [x] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 8
 
 ### Task 8: `ScanScreen` тикер + плитки `marksToTiles`
 
