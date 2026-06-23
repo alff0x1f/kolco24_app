@@ -270,9 +270,9 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - [x] полный прогон: `./gradlew testDebugUnitTest`, `./gradlew connectedDebugAndroidTest`, `./gradlew lintDebug` (testDebugUnitTest + lintDebug — BUILD SUCCESSFUL в этой итерации; connectedDebugAndroidTest — нет подключённого эмулятора в этой сессии, 15 инструментальных тестов вкл. `migrate9To10` зелёные в Task 5 на Medium_Phone_API_36.1)
 
 ### Task 11: [Final] Документация
-- [ ] обновить `CLAUDE.md`: новый раздел про `TrustedClock`/`ServerTimeInterceptor`/`ClockAnchorStore`, три времени в `MarkEntity`, монотонное окно скана, баннер, **подпись `ts` доверенным временем + self-heal на clock-403**; зафиксировать Room v10 + `MIGRATION_9_10`
-- [ ] обновить `docs/design/API.md` при необходимости (использование заголовка `Date` как источника серверного времени)
-- [ ] переместить этот план в `docs/plans/completed/`
+- [x] обновить `CLAUDE.md`: новый раздел про `TrustedClock`/`ServerTimeInterceptor`/`ClockAnchorStore`, три времени в `MarkEntity`, монотонное окно скана, баннер, **подпись `ts` доверенным временем + self-heal на clock-403**; зафиксировать Room v10 + `MIGRATION_9_10`
+- [x] обновить `docs/design/API.md` при необходимости (использование заголовка `Date` как источника серверного времени)
+- [x] переместить этот план в `docs/plans/completed/`
 
 ## Post-Completion
 *Без чекбоксов — ручные/внешние действия.*
