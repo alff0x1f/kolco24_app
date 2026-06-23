@@ -139,13 +139,13 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 - Create: `app/src/test/java/.../track/TrackMetricsTest.kt`
 - Create: `app/src/test/java/.../track/TrackPointMappingTest.kt`
 
-- [ ] `data class RawFix(lat, lon, accuracy, gpsTimeMs, elapsedRealtimeNanos)` — Android-free value type
-- [ ] чистая `trackLengthMeters(points: List<TrackPointEntity или общий тип>): Double` — сумма гаверсинусов между соседними по `elapsedRealtimeAt`
-- [ ] чистая `filterPoints(points, maxAccuracyMeters: Float = 50f): List<...>` — отбрасывает грубые фиксы (для показа/длины; в БД пишем всё)
-- [ ] чистый маппер `RawFix.toTrackPoint(raceId, teamId, wallMs, trustedMs, bootCount, idFactory): TrackPointEntity` (`elapsedRealtimeAt = elapsedRealtimeNanos/1_000_000`) — `idFactory`/`trustedMs` инжектятся, чтобы маппер был детерминирован и тестируем
-- [ ] write tests `TrackMetricsTest`: длина по известным координатам (напр. 0.001° ≈ ожидаемые метры), `filterPoints` отбрасывает `accuracy>50`, пустой/одноточечный список → 0
-- [ ] write tests `TrackPointMappingTest`: `elapsedRealtimeAt` = nanos/1e6, поля проброшены, `trustedMs` берётся из инжектированного значения (имитируя расчёт из `elapsedRealtimeNanos`)
-- [ ] run tests — должны пройти перед Task 4
+- [x] `data class RawFix(lat, lon, accuracy, gpsTimeMs, elapsedRealtimeNanos)` — Android-free value type
+- [x] чистая `trackLengthMeters(points: List<TrackPointEntity или общий тип>): Double` — сумма гаверсинусов между соседними по `elapsedRealtimeAt` (через интерфейс `TrackPointLike`, отсортировано по `elapsedRealtimeAt`)
+- [x] чистая `filterPoints(points, maxAccuracyMeters: Float = 50f): List<...>` — отбрасывает грубые фиксы (для показа/длины; в БД пишем всё)
+- [x] чистый маппер `RawFix.toTrackPoint(raceId, teamId, wallMs, trustedMs, bootCount, idFactory): TrackPointEntity` (`elapsedRealtimeAt = elapsedRealtimeNanos/1_000_000`) — `idFactory`/`trustedMs` инжектятся, чтобы маппер был детерминирован и тестируем (создан `data/db/TrackPointEntity.kt` — нужен типу маппера; реализует `TrackPointLike`. Регистрация в `AppDatabase`/DAO/миграция/`11.json` остаются в Task 4)
+- [x] write tests `TrackMetricsTest`: длина по известным координатам (напр. 0.001° ≈ ожидаемые метры), `filterPoints` отбрасывает `accuracy>50`, пустой/одноточечный список → 0
+- [x] write tests `TrackPointMappingTest`: `elapsedRealtimeAt` = nanos/1e6, поля проброшены, `trustedMs` берётся из инжектированного значения (имитируя расчёт из `elapsedRealtimeNanos`)
+- [x] run tests — должны пройти перед Task 4
 
 ### Task 4: Room v11 — TrackPointEntity, TrackDao, миграция
 
