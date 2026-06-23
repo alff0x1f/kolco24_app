@@ -53,11 +53,11 @@ Delete the write-chip code path end to end: the dialog file, the Settings row + 
 - Delete: `app/src/main/java/ru/kolco24/kolco24/ui/settings/WriteChipDialog.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 
-- [ ] delete `WriteChipDialog.kt` entirely (`sealed interface WriteChipState` + `@Composable WriteChipDialog`)
-- [ ] in `SettingsScreen.kt` remove the `onWriteChip: (() -> Unit)? = null` parameter (~line 67)
-- [ ] remove the `if (onWriteChip != null) { DebugRow(...) }` block (~lines 168–175)
-- [ ] change the debug-card visibility condition (~line 137) to `onResetTeam != null || onClearDatabase != null || onReadChipInfo != null` (drop `onWriteChip != null`)
-- [ ] no unit tests for these (Compose UI untested by repo convention) — note in commit
+- [x] delete `WriteChipDialog.kt` entirely (`sealed interface WriteChipState` + `@Composable WriteChipDialog`)
+- [x] in `SettingsScreen.kt` remove the `onWriteChip: (() -> Unit)? = null` parameter (~line 67)
+- [x] remove the `if (onWriteChip != null) { DebugRow(...) }` block (~lines 168–175); also dropped the now-unused `Icons.Filled.Nfc` import
+- [x] change the debug-card visibility condition (~line 137) to `onResetTeam != null || onClearDatabase != null || onReadChipInfo != null` (drop `onWriteChip != null`)
+- [x] no unit tests for these (Compose UI untested by repo convention) — note in commit
 
 ### Task 2: Remove the write-chip hook, state and effect from MainActivity
 
