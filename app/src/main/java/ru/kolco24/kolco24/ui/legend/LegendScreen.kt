@@ -32,7 +32,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -179,6 +178,7 @@ private fun ScoreCard(
     totalCount: Int,
 ) {
     val progress = if (totalScore > 0) takenScore.toFloat() / totalScore else 0f
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         modifier = Modifier
@@ -187,48 +187,76 @@ private fun ScoreCard(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = "$takenScore",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "/ $totalScore баллов",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                }
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            // One baseline-aligned row: score + «/ N баллов» on the left, «N/M КП» pushed right.
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "$takenScore",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.4).sp,
+                    ),
+                    // Mono digits (tabular by construction) keep the score from shifting as it grows.
+                    fontFamily = RobotoMono,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.alignByBaseline(),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "/ $totalScore баллов",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = muted,
+                    modifier = Modifier.alignByBaseline(),
+                )
+                Spacer(Modifier.weight(1f))
                 Text(
                     text = "$takenCount/$totalCount КП",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    fontFamily = RobotoMono,
+                    color = muted,
+                    modifier = Modifier.alignByBaseline(),
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(9.dp))
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.tertiary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            )
+            ProgressBar(progress = progress)
         }
+    }
+}
+
+/**
+ * Score progress bar — a 6dp rounded grey track with a two-stop green gradient fill. Custom (not
+ * [LinearProgressIndicator]) so the fill can be a horizontal gradient and the height/track color
+ * match the spec exactly. [fraction] is `takenScore / totalScore`; at 0 the fill collapses and only
+ * the track shows. Both ends stay rounded (3dp radius), per design.
+ */
+@Composable
+private fun ProgressBar(progress: Float, modifier: Modifier = Modifier) {
+    val fillGradient = Brush.horizontalGradient(listOf(Color(0xFF1F7A3D), Color(0xFF2FA055)))
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            // Grey trough: rgba(60, 60, 67, 0.10).
+            .background(Color(0x1A3C3C43)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .clip(RoundedCornerShape(3.dp))
+                .background(fillGradient),
+        )
     }
 }
 
@@ -314,21 +342,12 @@ private fun LockedHero(lockedCount: Int) {
 
 @Composable
 private fun CheckpointListCard(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>) {
+    val groups = groupCheckpointsByColor(checkpoints)
+
     Column(modifier = Modifier.padding(horizontal = 8.dp)) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            Column {
-                checkpoints.forEachIndexed { index, cp ->
-                    CheckpointRow(
-                        cp = cp,
-                        taken = cp.id in takenIds,
-                        isLast = index == checkpoints.size - 1,
-                    )
-                }
-            }
+        groups.forEachIndexed { index, group ->
+            CheckpointGroupCard(group = group, takenIds = takenIds)
+            if (index != groups.lastIndex) Spacer(Modifier.height(10.dp))
         }
 
         Text(
@@ -337,6 +356,73 @@ private fun CheckpointListCard(checkpoints: List<CheckpointEntity>, takenIds: Se
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Splits the ordered checkpoint list into contiguous runs that share the same color, mirroring the
+ * grouped cards in `docs/design/legend.png`: КП of one color form a single card with one continuous
+ * left color bar. Grouping is by the **parsed** color, so `""`/unknown tokens all fold into one
+ * neutral run (`null == null`) and render exactly like the previous single uncolored card. The input
+ * order (number, id — set by [CheckpointDao]) is preserved; a color that recurs in two separate runs
+ * stays two cards, which is the intent (КП are laid out in route order, not sorted by color).
+ */
+internal fun groupCheckpointsByColor(
+    checkpoints: List<CheckpointEntity>,
+): List<List<CheckpointEntity>> {
+    val groups = mutableListOf<MutableList<CheckpointEntity>>()
+    for (cp in checkpoints) {
+        val color = parseCheckpointColor(cp.color)
+        val current = groups.lastOrNull()
+        if (current != null && parseCheckpointColor(current.first().color) == color) {
+            current.add(cp)
+        } else {
+            groups.add(mutableListOf(cp))
+        }
+    }
+    return groups
+}
+
+/**
+ * One color group from [groupCheckpointsByColor]: a [shapes.large] card whose single 4dp left bar
+ * runs the **full card height** (clipped by the rounded corners) instead of the old per-row gutter.
+ * `null` (neutral `""`/unknown) → transparent bar, so an uncolored group looks like the prior card.
+ * Rows keep their 12dp start padding (12 + 4dp bar = 16dp) and the 72dp divider inset, so per-row
+ * text alignment is pixel-identical to the pre-grouping layout.
+ */
+@Composable
+private fun CheckpointGroupCard(group: List<CheckpointEntity>, takenIds: Set<Int>) {
+    val barColor = parseCheckpointColor(group.first().color)?.barColor() ?: Color.Transparent
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(barColor),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                group.forEachIndexed { index, cp ->
+                    if (cp.locked) {
+                        LockedCheckpointRow(cp)
+                    } else {
+                        OpenCheckpointRow(cp, taken = cp.id in takenIds)
+                    }
+
+                    if (index != group.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 72.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -393,41 +479,6 @@ private fun CheckpointColor.barColor(): Color = when (this) {
     CheckpointColor.YELLOW -> CpColorYellow
     CheckpointColor.ORANGE -> OrangeCta
     CheckpointColor.PURPLE -> CpColorPurple
-}
-
-@Composable
-private fun CheckpointRow(cp: CheckpointEntity, taken: Boolean, isLast: Boolean) {
-    // `color` is race-scoped public data (present on open AND locked rows), so the bar shows even
-    // before reveal. Neutral (`null` = `""`/unknown token) → transparent → the row looks as today.
-    // The 4dp bar is a fixed gutter in every row so spacing is identical across colored/uncolored
-    // rows; the inner rows drop 4dp of leading padding to keep text alignment pixel-identical.
-    val barColor = parseCheckpointColor(cp.color)?.barColor() ?: Color.Transparent
-
-    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .fillMaxHeight()
-                .background(barColor),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            // A locked CP keeps its plaintext on the server until an NFC scan reveals it, so the row
-            // is masked: a lock chip + the bare КП number, with the description shown as skeleton bars
-            // (screen A2b in docs/design — see `LockedLegendRow`) instead of any real text.
-            if (cp.locked) {
-                LockedCheckpointRow(cp)
-            } else {
-                OpenCheckpointRow(cp, taken = taken)
-            }
-
-            if (!isLast) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 72.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
-            }
-        }
-    }
 }
 
 @Composable
