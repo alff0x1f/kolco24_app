@@ -162,4 +162,55 @@ class TrackUploadTest {
 
         assertEquals(PostResult.Offline, apiClient.uploadTrack(8, 42, emptyList()))
     }
+
+    /**
+     * Builds a second [ApiClient] the way [AppContainer.localApiClient] does — shared signature
+     * interceptor, NO [ServerTimeInterceptor], short timeouts via [ApiClient.defaultOkHttpClient]
+     * — pointed at the same MockWebServer. The local upload target is just another instance of the
+     * same class, so the same `uploadTrack` method drives it (status mapping + offline).
+     */
+    private fun localApiClientFor(server: MockWebServer): ApiClient {
+        val interceptor = AppSignatureInterceptor(
+            keyId = "android-v1",
+            secret = "test-secret-123",
+            installIdProvider = { "install-abc" },
+            appVersion = "2.0.1",
+            nowSeconds = { 1718200000L },
+        )
+        val client = ApiClient.defaultOkHttpClient(
+            interceptor,
+            connectTimeoutMs = 3_000,
+            readTimeoutMs = 3_000,
+        )
+        return ApiClient(server.url("/").toString(), client, json)
+    }
+
+    @Test
+    fun localInstance_uploadTrack_200_returnsAccepted() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"accepted":["a"]}"""))
+
+        val local = localApiClientFor(server)
+        val result = local.uploadTrack(8, 42, listOf(entity("a").toDto()))
+
+        assertTrue(result is PostResult.Success)
+        assertEquals(listOf("a"), (result as PostResult.Success).data.accepted)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/race/8/track/", recorded.path)
+    }
+
+    @Test
+    fun localInstance_uploadTrack_403_returnsForbidden() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        assertEquals(PostResult.Forbidden, localApiClientFor(server).uploadTrack(8, 42, emptyList()))
+    }
+
+    @Test
+    fun localInstance_uploadTrack_offline_returnsOffline() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertEquals(PostResult.Offline, localApiClientFor(server).uploadTrack(8, 42, emptyList()))
+    }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  HOST ↔ CLEARTEXT COUPLING (by design): cleartext HTTP is permitted ONLY for the local race
+  server at 192.168.1.5 (the LAN upload target). Everything else stays on the platform default
+  (HTTPS-only, no cleartext). This pins the local host: BuildConfig.LOCAL_API_BASE_URL may change
+  the port/path/scheme, but pointing it at a DIFFERENT host requires editing this domain-config in
+  lockstep — otherwise the new host's cleartext traffic is blocked. Supporting an arbitrary LAN
+  host would need a separate task (debug-only broad cleartext, or a dynamic security config, which
+  Android does not support out of the box). Keep in sync with the localApiBaseUrl comment in
+  app/build.gradle.kts.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.5</domain>
+    </domain-config>
+</network-security-config>

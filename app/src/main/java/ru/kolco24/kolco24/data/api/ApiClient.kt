@@ -237,19 +237,25 @@ class ApiClient(
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
         /**
-         * OkHttp client with 10 s connect/read timeouts and the signing interceptor. The optional
-         * [serverTimeInterceptor] (the trusted-clock re-anchor) is added **after** signing so it is
-         * the inner interceptor — by the time `proceed()` returns to the signing interceptor the
-         * anchor is already updated (enables anchor-on-`403` self-heal in Task 4b). No response
-         * `Cache` is configured, so every `Date` header (incl. on `304`) is a live network value.
+         * OkHttp client with the signing interceptor and configurable connect/read timeouts (default
+         * 10 s — the cloud client's prior fixed behaviour, unchanged). The local LAN client passes
+         * shorter timeouts (3 s) so an upload doesn't hang ~10 s when the phone is off the event's
+         * Wi-Fi. The optional [serverTimeInterceptor] (the trusted-clock re-anchor) is added **after**
+         * signing so it is the inner interceptor — by the time `proceed()` returns to the signing
+         * interceptor the anchor is already updated (enables anchor-on-`403` self-heal in Task 4b).
+         * The local client deliberately omits it (a LAN host must not anchor trusted time). No
+         * response `Cache` is configured, so every `Date` header (incl. on `304`) is a live network
+         * value.
          */
         fun defaultOkHttpClient(
             signatureInterceptor: AppSignatureInterceptor,
             serverTimeInterceptor: ServerTimeInterceptor? = null,
+            connectTimeoutMs: Long = 10_000,
+            readTimeoutMs: Long = 10_000,
         ): OkHttpClient =
             OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
+                .connectTimeout(connectTimeoutMs, TimeUnit.MILLISECONDS)
+                .readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS)
                 .addInterceptor(signatureInterceptor)
                 .apply { serverTimeInterceptor?.let { addInterceptor(it) } }
                 .build()
