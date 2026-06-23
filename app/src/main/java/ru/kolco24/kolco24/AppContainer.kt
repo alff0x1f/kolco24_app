@@ -207,6 +207,9 @@ class AppContainer(private val context: Context) {
             idFactory = { UUID.randomUUID().toString() },
             wallProvider = { System.currentTimeMillis() },
             elapsedProvider = { SystemClock.elapsedRealtime() },
+            // Each target is one ApiClient instance: cloud HTTPS vs the LAN cleartext localApiClient.
+            cloudUploader = { raceId, teamId, points -> apiClient.uploadTrack(raceId, teamId, points) },
+            localUploader = { raceId, teamId, points -> localApiClient.uploadTrack(raceId, teamId, points) },
         )
     }
 

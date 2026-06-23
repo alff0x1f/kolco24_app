@@ -6,9 +6,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.kolco24.kolco24.data.api.PostResult
+import ru.kolco24.kolco24.data.api.dto.TrackPointDto
+import ru.kolco24.kolco24.data.api.dto.TrackUploadResponse
 import ru.kolco24.kolco24.data.db.TrackDao
 import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
@@ -40,6 +44,8 @@ class TrackRepositoryTest {
         boot: Int? = 7,
         wallNow: Long = 2_000_000L,
         elapsedNow: Long = 100_000L,
+        cloud: TrackUploader = TrackUploader { _, _, _ -> PostResult.Offline },
+        local: TrackUploader = TrackUploader { _, _, _ -> PostResult.Offline },
     ): TrackRepository {
         var n = 0
         return TrackRepository(
@@ -49,7 +55,28 @@ class TrackRepositoryTest {
             idFactory = { "id-${n++}" },
             wallProvider = { wallNow },
             elapsedProvider = { elapsedNow },
+            cloudUploader = cloud,
+            localUploader = local,
         )
+    }
+
+    /** Records calls and replies with [reply]; defaults to accepting every id in the batch. */
+    private class FakeUploader(
+        val reply: suspend (List<TrackPointDto>) -> PostResult<TrackUploadResponse> = { pts ->
+            PostResult.Success(TrackUploadResponse(pts.map { it.id }))
+        },
+    ) : TrackUploader {
+        var calls = 0
+            private set
+
+        override suspend fun upload(
+            raceId: Int,
+            teamId: Int,
+            points: List<TrackPointDto>,
+        ): PostResult<TrackUploadResponse> {
+            calls++
+            return reply(points)
+        }
     }
 
     private fun rawFix(
@@ -160,6 +187,115 @@ class TrackRepositoryTest {
         r.deleteForTeam(7)
         assertTrue(r.observeTrack(7).first().isEmpty())
         assertEquals(1, r.observeTrack(8).first().size)
+    }
+
+    // ---- Task 12: dual batch upload ----
+
+    @Test
+    fun uploadPending_marksPerTargetIndependently() = runTest {
+        // Local succeeds, cloud is offline → only uploadedLocal flips; cloud stays pending.
+        val dao = FakeTrackDao()
+        val local = FakeUploader()
+        val cloud = FakeUploader { PostResult.Offline }
+        val r = repo(dao, cloud = cloud, local = local)
+        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        val rows = dao.observeForTeam(7).first()
+        assertTrue(rows.all { it.uploadedLocal })
+        assertFalse(rows.any { it.uploadedCloud })
+        assertEquals(1, local.calls) // one batch drained then empty
+    }
+
+    @Test
+    fun uploadPending_doesNotRetryAlreadyUploaded() = runTest {
+        val dao = FakeTrackDao()
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+        r.uploadPending(raceId = 1, teamId = 7) // second pass: nothing pending
+
+        assertEquals(1, cloud.calls)
+        assertEquals(1, local.calls)
+        val row = dao.observeForTeam(7).first().single()
+        assertTrue(row.uploadedLocal && row.uploadedCloud)
+    }
+
+    @Test
+    fun uploadPending_partialAccepted_marksOnlyAccepted_thenBreaks() = runTest {
+        // Two points; the server accepts only the first id, ever. The second must stay pending and the
+        // loop must not spin: once the first is marked, the next batch's id isn't accepted → break.
+        val dao = FakeTrackDao()
+        var firstId: String? = null
+        val cloud = FakeUploader { pts ->
+            if (firstId == null) firstId = pts.first().id
+            PostResult.Success(TrackUploadResponse(listOf(firstId!!)))
+        }
+        val r = repo(dao, cloud = cloud)
+        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        val rows = dao.observeForTeam(7).first()
+        assertEquals(1, rows.count { it.uploadedCloud })
+        assertEquals(1, rows.count { !it.uploadedCloud })
+        assertEquals(2, cloud.calls) // batch1 (marks first), batch2 (no progress → break)
+    }
+
+    @Test
+    fun uploadPending_emptyAccepted_breaksWithoutLooping() = runTest {
+        val dao = FakeTrackDao()
+        val cloud = FakeUploader { PostResult.Success(TrackUploadResponse(emptyList())) }
+        val r = repo(dao, cloud = cloud)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertFalse(dao.observeForTeam(7).first().single().uploadedCloud)
+        assertEquals(1, cloud.calls) // one attempt, then break — no infinite loop
+    }
+
+    @Test
+    fun uploadAllPending_walksEveryScope() = runTest {
+        val dao = FakeTrackDao()
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(61_000L)), raceId = 2, teamId = 8)
+
+        r.uploadAllPending()
+
+        // Both distinct (raceId, teamId) scopes fully flushed.
+        assertTrue(dao.observeForTeam(7).first().all { it.uploadedLocal && it.uploadedCloud })
+        assertTrue(dao.observeForTeam(8).first().all { it.uploadedLocal && it.uploadedCloud })
+    }
+
+    @Test
+    fun upload_reentrantUnderHeldMutex_isNoOp() = runTest {
+        // While the outer flush holds the mutex, a re-entrant call must tryLock-fail and do nothing.
+        val dao = FakeTrackDao()
+        lateinit var r: TrackRepository
+        var reentered = false
+        val cloud = FakeUploader { pts ->
+            if (!reentered) {
+                reentered = true
+                r.uploadAllPending() // held mutex → no-op; must not produce extra upload calls
+            }
+            PostResult.Success(TrackUploadResponse(pts.map { it.id }))
+        }
+        r = repo(dao, cloud = cloud)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(reentered)
+        assertEquals(1, cloud.calls) // re-entrant call added nothing
+        assertTrue(dao.observeForTeam(7).first().single().uploadedCloud)
     }
 }
 
