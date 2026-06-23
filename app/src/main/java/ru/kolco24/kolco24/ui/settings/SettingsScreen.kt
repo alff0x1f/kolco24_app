@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -64,7 +63,6 @@ fun SettingsScreen(
     onOpenAdmin: () -> Unit,
     onResetTeam: (() -> Unit)? = null,
     onClearDatabase: (() -> Unit)? = null,
-    onWriteChip: (() -> Unit)? = null,
     onReadChipInfo: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -134,7 +132,7 @@ fun SettingsScreen(
         }
 
         // Debug-only: caller passes non-null callbacks only in debug builds (see MainActivity).
-        if (onResetTeam != null || onClearDatabase != null || onWriteChip != null || onReadChipInfo != null) {
+        if (onResetTeam != null || onClearDatabase != null || onReadChipInfo != null) {
             Text(
                 text = "Отладка",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -163,14 +161,6 @@ fun SettingsScreen(
                             title = "Очистить базу данных",
                             subtitle = "Debug: удалить гонки, команды, легенду и ETag",
                             onClick = onClearDatabase,
-                        )
-                    }
-                    if (onWriteChip != null) {
-                        DebugRow(
-                            icon = Icons.Filled.Nfc,
-                            title = "Записать code на чип",
-                            subtitle = "Debug: записать uuid на метку MifareUltralight",
-                            onClick = onWriteChip,
                         )
                     }
                     if (onReadChipInfo != null) {

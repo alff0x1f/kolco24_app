@@ -9,19 +9,6 @@ import java.io.IOException
 class MifareUltralightWriterTest {
 
     @Test
-    fun newChipCode_alwaysReturns16Bytes() {
-        assertEquals(CHIP_CODE_BYTES, newChipCode().size)
-    }
-
-    @Test
-    fun newChipCode_twoCalls_produceDifferentCodes() {
-        val a = newChipCode()
-        val b = newChipCode()
-        // Astronomically unlikely to collide; if it does, the RNG is broken.
-        assertTrue(!a.contentEquals(b))
-    }
-
-    @Test
     fun chipCodeHex_knownVector_zeroAndFF() {
         assertEquals("00FF", chipCodeHex(byteArrayOf(0x00, 0xFF.toByte())))
     }
@@ -48,12 +35,6 @@ class MifareUltralightWriterTest {
             0xD5.toByte(), 0xE6.toByte(), 0x80.toByte(), 0x01,
             0x7F, 0x00, 0xFF.toByte(), 0x55, 0xAA.toByte(), 0x12, 0x34, 0x56)
         assertArrayEquals(original, chipCodeFromHex(chipCodeHex(original)))
-    }
-
-    @Test
-    fun chipCodeHex_thenFromHex_roundTripForFullRandomCode() {
-        val code = newChipCode()
-        assertArrayEquals(code, chipCodeFromHex(chipCodeHex(code)))
     }
 
     // --- Raw chip record format ---------------------------------------------
@@ -151,8 +132,7 @@ class MifareUltralightWriterTest {
 
     @Test
     fun parseChipRecord_roundTripWithBuildChipRecord() {
-        val code = newChipCode()
-        assertArrayEquals(code, parseChipRecord(buildChipRecord(CHIP_TYPE_KP, code)))
+        assertArrayEquals(sampleCode, parseChipRecord(buildChipRecord(CHIP_TYPE_KP, sampleCode)))
     }
 
     // --- GET_VERSION model parsing ------------------------------------------
