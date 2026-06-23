@@ -39,4 +39,22 @@ data class MarkEntity(
     val updatedAt: Long,
     val uploadedLocal: Boolean = false,
     val uploadedCloud: Boolean = false,
+    /**
+     * Trusted take time (monotonic-anchored server time) — the scoring/order source. NULL on legacy
+     * rows and whenever no clock sync has happened (the raw [takenAt] wall time is the fallback).
+     */
+    val trustedTakenAt: Long? = null,
+    /**
+     * Monotonic timestamp (`SystemClock.elapsedRealtime()`) at take time. **Nullable**: NULL on legacy
+     * rows honestly distinguishes "no data" from a real `0` right after boot. Paired with [bootCount]
+     * for forensic Δelapsed reconciliation.
+     */
+    val elapsedRealtimeAt: Long? = null,
+    /**
+     * Boot-session id (`Settings.Global.BOOT_COUNT`) of the [elapsedRealtimeAt] mark. Required so a
+     * future Δelapsed reconciliation never mixes monotonic marks from different boot sessions (which
+     * live on different timelines and would otherwise read as a false jump). NULL on legacy rows or
+     * when the boot count could not be read.
+     */
+    val bootCount: Int? = null,
 )

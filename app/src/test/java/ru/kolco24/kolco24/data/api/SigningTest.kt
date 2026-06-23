@@ -6,6 +6,7 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -126,6 +127,109 @@ class SigningTest {
             buildCanonical("GET", "/app/races/", "100", EMPTY_BODY_SHA256),
         )
         assertEquals(expected, captured.header("X-App-Sig"))
+    }
+
+    @Test
+    fun interceptor_retriesGetOnceOn403WhenTsChanged() {
+        val ts = mutableListOf(100L, 200L).iterator()
+        val codes = mutableListOf(403, 200).iterator()
+        val result = runWithChain(
+            nowSeconds = { ts.next() },
+            codes = codes,
+        ) { Request.Builder().url("https://example.test/app/races/").get().build() }
+
+        assertEquals(2, result.proceedCount)
+        // The retry re-signed with the new ts=200.
+        assertEquals("200", result.signedRequests.last().header("X-App-Ts"))
+        assertEquals(200, result.finalCode)
+    }
+
+    @Test
+    fun interceptor_doesNotRetryGetWhenTsUnchanged() {
+        val codes = mutableListOf(403).iterator()
+        val result = runWithChain(
+            nowSeconds = { 100L },
+            codes = codes,
+        ) { Request.Builder().url("https://example.test/app/races/").get().build() }
+
+        assertEquals(1, result.proceedCount)
+        assertEquals(403, result.finalCode)
+    }
+
+    @Test
+    fun interceptor_doesNotRetryPostEvenWhenTsChangedAnd403() {
+        val ts = mutableListOf(100L, 200L).iterator()
+        val codes = mutableListOf(403).iterator()
+        val body = """{"k":"v"}""".toRequestBody("application/json".toMediaType())
+        val result = runWithChain(
+            nowSeconds = { ts.next() },
+            codes = codes,
+        ) { Request.Builder().url("https://example.test/app/login/").post(body).build() }
+
+        assertEquals(1, result.proceedCount)
+        assertEquals(403, result.finalCode)
+    }
+
+    @Test
+    fun interceptor_doesNotRetryGetOn200() {
+        val ts = mutableListOf(100L, 200L).iterator()
+        val codes = mutableListOf(200).iterator()
+        val result = runWithChain(
+            nowSeconds = { ts.next() },
+            codes = codes,
+        ) { Request.Builder().url("https://example.test/app/races/").get().build() }
+
+        assertEquals(1, result.proceedCount)
+        assertEquals(200, result.finalCode)
+    }
+
+    private class ChainResult(
+        val proceedCount: Int,
+        val finalCode: Int,
+        val signedRequests: List<Request>,
+    )
+
+    /** Runs the interceptor against a chain that returns [codes] in order, tracking proceed calls. */
+    private fun runWithChain(
+        nowSeconds: () -> Long,
+        codes: Iterator<Int>,
+        build: () -> Request,
+    ): ChainResult {
+        val interceptor = AppSignatureInterceptor(
+            keyId = "kid",
+            secret = "secret",
+            installIdProvider = { "install" },
+            appVersion = "1.0",
+            nowSeconds = nowSeconds,
+            tokenProvider = { null },
+        )
+        val signedRequests = mutableListOf<Request>()
+        var proceedCount = 0
+        val chain = object : Interceptor.Chain {
+            private val req = build()
+            override fun request(): Request = req
+            override fun proceed(request: Request): Response {
+                proceedCount++
+                signedRequests += request
+                return Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(codes.next())
+                    .message("msg")
+                    .body("".toResponseBody(null))
+                    .build()
+            }
+            override fun connection() = null
+            override fun call() = throw UnsupportedOperationException()
+            override fun connectTimeoutMillis() = 0
+            override fun withConnectTimeout(timeout: Int, unit: java.util.concurrent.TimeUnit) = this
+            override fun readTimeoutMillis() = 0
+            override fun withReadTimeout(timeout: Int, unit: java.util.concurrent.TimeUnit) = this
+            override fun writeTimeoutMillis() = 0
+            override fun withWriteTimeout(timeout: Int, unit: java.util.concurrent.TimeUnit) = this
+        }
+        val response = interceptor.intercept(chain)
+        return ChainResult(proceedCount, response.code, signedRequests)
     }
 
     /** Runs the interceptor against [build] with a fixed clock and captures the signed request. */

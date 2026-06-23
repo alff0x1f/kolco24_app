@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -67,6 +71,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.ui.common.ClockWarningBanner
 import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
@@ -80,6 +85,9 @@ import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
+import ru.kolco24.kolco24.data.time.ClockStatus
+import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
@@ -87,6 +95,7 @@ import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.scan.ScanEvent
 import ru.kolco24.kolco24.ui.scan.classifyTag
+import ru.kolco24.kolco24.ui.scan.isWindowExpired
 import ru.kolco24.kolco24.ui.settings.SettingsScreen
 import ru.kolco24.kolco24.ui.settings.WriteChipDialog
 import ru.kolco24.kolco24.ui.settings.WriteChipState
@@ -119,6 +128,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     /** Main-thread handler so tag reads (delivered on a binder thread) hop to the UI thread. */
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Trusted clock used to stamp scan takes with monotonic + trusted time. Snapshotted via
+     * [TrustedClock.sample] at the moment of a tap — on the binder thread (idle opening tap in
+     * [onTagDiscovered]) and on the main thread (live tap in `ScanScreen`'s `onTagForMark`); both are
+     * safe because `sample()` is a lock-free `AtomicReference` read.
+     */
+    val trustedClock: TrustedClock by lazy { (applicationContext as Kolco24App).container.trustedClock }
 
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
     @Volatile var onTagScanned: ((String) -> Unit)? = null
@@ -304,14 +321,17 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         // selected team's uid snapshot). The (code, uid) read here is reused downstream — no second
         // chip read. An unrecognized tag is dropped silently.
         val uid = normalizeNfcUid(tag.id)
+        // Snapshot the trusted clock before the blocking NFC read so the sample reflects actual tap
+        // time, not post-I/O time. The overlay may drain slightly later; resampling at drain time
+        // would corrupt both window-expiry math and the stored take time.
+        val sample = trustedClock.sample()
         val code = readChipCode(tag)
         if (code == null && uid !in boundUidsSnapshot) return
         // Publish the already-read (code, uid) — no second chip read. If onTagForMark was armed
         // while readChipCode was blocking (the overlay opened concurrently), the dispatcher sees
         // showScan=true and routes to pendingScan; the ScanScreen's continuous collect drain
-        // processes it as ScanInput.Captured. The old one-shot DisposableEffect drain race that
-        // motivated a raw-tag recheck is gone now that the drain is a LaunchedEffect collect.
-        nfcLaunchScan.value = CapturedScan(code, uid, System.currentTimeMillis())
+        // processes it as ScanInput.Captured.
+        nfcLaunchScan.value = CapturedScan(code, uid, sample)
     }
 
     private companion object {
@@ -331,17 +351,18 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
  *
  * - [code] is the КП chip's code (`null` ⇒ a bound team-member bracelet).
  * - [uid] is the normalized tag UID.
- * - [capturedAt] is the tap-time millis stamped on the binder thread; it is the `now` threaded into
- *   the scan processor (the overlay can drain it slightly later, so reusing
- *   `System.currentTimeMillis()` at drain time would corrupt the window-expiry math).
+ * - [sample] is the trusted-clock snapshot taken on the binder thread at tap time; it carries the
+ *   monotonic `elapsedMs` threaded into the scan processor's window math and the trusted/wall/boot
+ *   fields persisted with the take (the overlay can drain it slightly later, so resampling at drain
+ *   time would corrupt both the window-expiry math and the stored take time).
  *
  * Identity equality is used as a [kotlinx.coroutines.flow.StateFlow] payload (set/cleared by
  * reference); override `equals`/`hashCode` only if value equality is ever required.
  */
-data class CapturedScan(
+class CapturedScan(
     val code: ByteArray?,
     val uid: String,
-    val capturedAt: Long,
+    val sample: TimeSample,
 )
 
 /**
@@ -363,7 +384,9 @@ sealed interface ScanInput {
  * - [present] mirrors the slots already credited to the open take so a re-scan of an already-counted
  *   member is idempotent and does **not** refresh [lastScanAt] (mirrors [reduce]).
  * - [lastScanAt] lazily detects window expiry (a scan more than [SCAN_WINDOW_MS] after the previous one
- *   starts a new take), keeping the persisted rows in step with the UI's timer-driven finalize.
+ *   starts a new take), keeping the persisted rows in step with the UI's timer-driven finalize. It is
+ *   a **monotonic** `elapsedRealtime` ms (from [TimeSample.elapsedMs]); `null` means "no scan yet" —
+ *   a nullable sentinel because `0L` is a legal monotonic reading right after a reboot.
  */
 private class ScanTakeState {
     var markId: String? = null
@@ -371,7 +394,7 @@ private class ScanTakeState {
     var expectedCount: Int = 0
     val buffer = mutableSetOf<Int>()
     val present = mutableSetOf<Int>()
-    var lastScanAt: Long = 0L
+    var lastScanAt: Long? = null
 }
 
 /** Step of the team-selection overlay flow, layered over the tab Scaffold (no navigation library). */
@@ -442,6 +465,16 @@ private fun Kolco24AppRoot(
     val races by raceRepo.races.collectAsState(initial = emptyList())
     // Reactive race-admin session (source of truth for the admin overlay + the Settings «Администратор» row).
     val adminSession by container.adminAuthRepository.session.collectAsState()
+    // Trusted-clock status: drives the global skew banner (under each tab's TopAppBar) and the scan
+    // notice. A local 5 s tick recomputes it so a wall-clock change with no network event still surfaces
+    // within ~5 s; equal values are deduped by the StateFlow, so no spurious recompositions.
+    val clockStatus by container.trustedClock.status.collectAsState()
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5_000)
+            container.trustedClock.recomputeStatus()
+        }
+    }
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
@@ -682,9 +715,23 @@ private fun Kolco24AppRoot(
                 }
             },
         ) { innerPadding ->
+          Column(modifier = Modifier.fillMaxSize()) {
+            // Global skew nag above all tabs. The per-tab TopAppBar reserves the status-bar inset, so
+            // give the banner statusBarsPadding too; it renders nothing unless Skewed (no regression in
+            // the normal case — empty composable, zero height).
+            // When the banner IS showing we consume the status-bar inset for the pager subtree so the
+            // per-tab TopAppBars don't add a duplicate status-bar gap below the banner.
+            ClockWarningBanner(
+                status = clockStatus,
+                modifier = Modifier.statusBarsPadding(),
+            )
+            val pagerModifier = if (clockStatus is ClockStatus.Skewed)
+                Modifier.fillMaxSize().weight(1f).consumeWindowInsets(WindowInsets.statusBars)
+            else
+                Modifier.fillMaxSize().weight(1f)
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = pagerModifier,
                 beyondViewportPageCount = 1,
             ) { page ->
                 when (page) {
@@ -739,6 +786,7 @@ private fun Kolco24AppRoot(
                     )
                 }
             }
+          }
         }
 
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
@@ -752,7 +800,10 @@ private fun Kolco24AppRoot(
                 roster = scanRoster,
                 chipNumbers = scanChipNumbers,
                 nfcAvailable = nfcActiveForScan,
-                onScanTag = onScanTag@{ input, now ->
+                onScanTag = onScanTag@{ input, sample ->
+                    // Monotonic "now" for the sliding window; immune to wall-clock changes. The full
+                    // sample (trusted/wall/boot) is persisted with the take below.
+                    val now = sample.elapsedMs
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
                     // raceId/teamId come from the selection pointer, which survives the team row going
@@ -788,8 +839,7 @@ private fun Kolco24AppRoot(
                             checkpointsById
                         }
                     val event = classifyTag(code, uid, unlock, scanBindings, localCheckpointsById)
-                    val expired = scanTake.lastScanAt != 0L &&
-                        (now - scanTake.lastScanAt) >= SCAN_WINDOW_MS
+                    val expired = isWindowExpired(scanTake.lastScanAt, now)
                     when (event) {
                         is ScanEvent.Kp -> {
                             // A new KP, an expired window, or a switch of CP starts a fresh take row;
@@ -813,7 +863,10 @@ private fun Kolco24AppRoot(
                                         cpCode = event.cpCode,
                                         expectedCount = rosterSize,
                                         bufferedMembers = buffered,
-                                        now = now,
+                                        // The touch-moment sample: monotonic window + trusted/wall/boot
+                                        // fields, captured before scope.launch so slow NFC/Room work
+                                        // can't stale the take time.
+                                        sample = sample,
                                     )
                                 }.await()
                                 scanTake.markId = id
@@ -849,7 +902,8 @@ private fun Kolco24AppRoot(
                                         point = point,
                                         numberInTeam = event.numberInTeam,
                                         expectedCount = scanTake.expectedCount,
-                                        now = now,
+                                        // The touch-moment sample (monotonic window + trusted/wall/boot).
+                                        sample = sample,
                                     )
                                 }.await()
                             }

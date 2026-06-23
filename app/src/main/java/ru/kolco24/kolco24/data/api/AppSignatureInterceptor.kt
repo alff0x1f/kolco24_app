@@ -41,6 +41,17 @@ fun sign(secret: String, canonical: String): String {
  *
  * `ts` is read fresh on each invocation (including retries), so the signature is always
  * recomputed against the current time — the ±300 s window stays satisfied on retries.
+ *
+ * **Clock-skew self-heal (Task 4b):** [nowSeconds] is fed the trusted clock's `signingSeconds()`,
+ * so when the phone wall-clock has drifted past the server's ±300 s window the signature still
+ * carries a server-aligned `ts`. On a cold start the trusted clock has no anchor yet and falls back
+ * to wall — that first request can still `403` on a skewed phone. Because [ServerTimeInterceptor]
+ * re-anchors off the `Date` header carried even on a `403`, a **single retry for safe GET/HEAD
+ * requests** (only) re-signs with the now-trusted `ts` and recovers without user action. POST is
+ * **never** retried: the server returns a generic `403` for both clock-skew and auth failures, so a
+ * skew-only retry can't be told apart from a genuine auth failure, and POSTs (`login`/`logout`/
+ * `bindTag`) aren't safe to silently replay — they self-heal on the next user-initiated action,
+ * whose signature is already trusted.
  */
 class AppSignatureInterceptor(
     private val keyId: String,
@@ -53,24 +64,46 @@ class AppSignatureInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val usedTs = nowSeconds()
+        val response = chain.proceed(signedRequest(request, usedTs))
+
+        // Single retry for safe methods only: by the time `proceed()` returns, the inner
+        // ServerTimeInterceptor has re-anchored off the response's `Date` header (present even on a
+        // `403`), so a fresh `signingSeconds()` may now produce a server-aligned `ts`. The
+        // `nowSeconds() != usedTs` guard is necessary (no point re-signing with the same `ts`) but
+        // not sufficient — a benign ±1 s drift on honest 403s can also trip it; the GET/HEAD
+        // restriction is what makes the retry safe, since a redundant retry just returns the same 403.
+        val nowTs = nowSeconds()
+        if (response.code == 403 &&
+            (request.method == "GET" || request.method == "HEAD") &&
+            nowTs != usedTs
+        ) {
+            response.close()
+            return chain.proceed(signedRequest(request, nowTs))
+        }
+        return response
+    }
+
+    /** Builds a copy of [request] carrying the six signing headers (and optional bearer) for [ts]. */
+    private fun signedRequest(request: okhttp3.Request, ts: Long): okhttp3.Request {
         val url = request.url
         val fullPath = buildString {
             append(url.encodedPath)
             url.encodedQuery?.let { append("?").append(it) }
         }
-        val ts = nowSeconds().toString()
-        val canonical = buildCanonical(request.method, fullPath, ts, bodyHash(request))
+        val tsString = ts.toString()
+        val canonical = buildCanonical(request.method, fullPath, tsString, bodyHash(request))
         val sig = sign(secret, canonical)
 
         val builder = request.newBuilder()
             .header("X-App-Key-Id", keyId)
             .header("X-App-Sig", sig)
-            .header("X-App-Ts", ts)
+            .header("X-App-Ts", tsString)
             .header("X-Install-Id", installIdProvider())
             .header("X-App-Platform", "android")
             .header("X-App-Version", appVersion)
         tokenProvider()?.let { builder.header("Authorization", "Bearer $it") }
-        return chain.proceed(builder.build())
+        return builder.build()
     }
 
     /**

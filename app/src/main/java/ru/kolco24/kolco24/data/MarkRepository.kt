@@ -4,6 +4,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.time.TimeSample
 
 /**
  * Single source of truth for the **local-only** checkpoint-taking events (взятия КП). Wraps [MarkDao]
@@ -31,6 +32,11 @@ class MarkRepository(
      * checkpoint metadata ([number]/[cost]) and roster size ([expectedCount]), seeds `present` with any
      * members already buffered before the chip ([bufferedMembers], deduplicated), recomputes `complete`,
      * and upserts the row. Returns the new id.
+     *
+     * The take time comes from a [TimeSample] captured at the moment of the touch: `takenAt`/`updatedAt`
+     * keep the raw wall ([TimeSample.wallMs]), `trustedTakenAt` gets the monotonic-anchored trusted time
+     * ([TimeSample.trustedMs], NULL when no clock sync has happened), and `elapsedRealtimeAt`/`bootCount`
+     * record the monotonic mark plus its boot session for forensic Δelapsed reconciliation.
      */
     suspend fun startKpTake(
         raceId: Int,
@@ -42,7 +48,7 @@ class MarkRepository(
         cpCode: String,
         expectedCount: Int,
         bufferedMembers: Set<Int>,
-        now: Long,
+        sample: TimeSample,
     ): String {
         val id = UUID.randomUUID().toString()
         val present = bufferedMembers.toList()
@@ -61,8 +67,11 @@ class MarkRepository(
                 present = present,
                 expectedCount = expectedCount,
                 complete = complete,
-                takenAt = now,
-                updatedAt = now,
+                takenAt = sample.wallMs,
+                updatedAt = sample.wallMs,
+                trustedTakenAt = sample.trustedMs,
+                elapsedRealtimeAt = sample.elapsedMs,
+                bootCount = sample.bootCount,
             ),
         )
         return id
@@ -78,9 +87,9 @@ class MarkRepository(
         point: Int,
         numberInTeam: Int,
         expectedCount: Int,
-        now: Long,
+        sample: TimeSample,
     ) {
-        markDao.addMember(markId, numberInTeam, now, expectedCount)
+        markDao.addMember(markId, numberInTeam, sample.wallMs, expectedCount)
     }
 }
 

@@ -187,6 +187,41 @@ class ScanSessionTest {
         assertFalse(isComplete(s, rosterSize = 2))
     }
 
+    // --- Window expiry (isWindowExpired) ---
+    // `now`/`lastScanAt` are monotonic elapsedRealtime ms; the boundary is `>=` (exactly 20 s after the
+    // last scan is expired). These pin that boundary so a refactor can't silently flip it.
+
+    @Test
+    fun windowExpired_nullLastScan_isNeverExpired() {
+        assertFalse(isWindowExpired(lastScanAt = null, now = 999_999L))
+    }
+
+    @Test
+    fun windowExpired_belowWindow_isFalse() {
+        // 19_999 ms since last scan — still inside the 20 s window.
+        assertFalse(isWindowExpired(lastScanAt = 1_000L, now = 1_000L + 19_999L))
+    }
+
+    @Test
+    fun windowExpired_exactlyAtWindow_isTrue() {
+        // 20_000 ms exactly — `>=` boundary counts as expired.
+        assertTrue(isWindowExpired(lastScanAt = 1_000L, now = 1_000L + 20_000L))
+    }
+
+    @Test
+    fun windowExpired_aboveWindow_isTrue() {
+        // 20_001 ms — past the window.
+        assertTrue(isWindowExpired(lastScanAt = 1_000L, now = 1_000L + 20_001L))
+    }
+
+    @Test
+    fun windowExpired_zeroLastScan_isLegalMonotonicReading() {
+        // 0L is a legal elapsedRealtime reading right after boot (not a "no scan" sentinel — that is
+        // null). It must behave like any other timestamp.
+        assertFalse(isWindowExpired(lastScanAt = 0L, now = 19_999L))
+        assertTrue(isWindowExpired(lastScanAt = 0L, now = 20_000L))
+    }
+
     @Test
     fun kp_switchCP_resetsPresentAndBufferDrains() {
         val kpB = ScanEvent.Kp(point = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")

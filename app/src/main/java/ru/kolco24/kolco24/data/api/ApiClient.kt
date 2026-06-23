@@ -216,12 +216,22 @@ class ApiClient(
     companion object {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
-        /** OkHttp client with the 10 s connect/read timeouts and the signing interceptor. */
-        fun defaultOkHttpClient(signatureInterceptor: AppSignatureInterceptor): OkHttpClient =
+        /**
+         * OkHttp client with 10 s connect/read timeouts and the signing interceptor. The optional
+         * [serverTimeInterceptor] (the trusted-clock re-anchor) is added **after** signing so it is
+         * the inner interceptor — by the time `proceed()` returns to the signing interceptor the
+         * anchor is already updated (enables anchor-on-`403` self-heal in Task 4b). No response
+         * `Cache` is configured, so every `Date` header (incl. on `304`) is a live network value.
+         */
+        fun defaultOkHttpClient(
+            signatureInterceptor: AppSignatureInterceptor,
+            serverTimeInterceptor: ServerTimeInterceptor? = null,
+        ): OkHttpClient =
             OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.SECONDS)
                 .addInterceptor(signatureInterceptor)
+                .apply { serverTimeInterceptor?.let { addInterceptor(it) } }
                 .build()
     }
 }

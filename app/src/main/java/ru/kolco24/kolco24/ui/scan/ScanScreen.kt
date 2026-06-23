@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.scan
 
 import android.nfc.Tag
+import android.os.SystemClock
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,7 +70,11 @@ import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.ScanInput
 import ru.kolco24.kolco24.data.db.TeamMemberItem
+import ru.kolco24.kolco24.data.time.ClockStatus
+import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.ui.common.ScanClockBanner
 import ru.kolco24.kolco24.ui.theme.BrandRed
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val TIMER_TICK_MS = 250L
 private const val SUCCESS_HOLD_MS = 1_000L
@@ -85,11 +91,18 @@ fun ScanScreen(
     roster: List<TeamMemberItem>,
     chipNumbers: Map<Int, Int>,
     nfcAvailable: Boolean,
-    onScanTag: suspend (ScanInput, Long) -> ScanEvent,
+    onScanTag: suspend (ScanInput, TimeSample) -> ScanEvent,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current as? MainActivity
+    // Trusted-clock status drives the in-scan notice: a bright accent on Skewed, a soft "time not
+    // verified" plate on NoSync (the only place NoSync is surfaced). Fall back to Ok when there is no
+    // activity (preview) so nothing renders.
+    val clockStatusFlow = remember(activity) {
+        activity?.trustedClock?.status ?: MutableStateFlow<ClockStatus>(ClockStatus.Ok)
+    }
+    val clockStatus by clockStatusFlow.collectAsState()
     val scope = rememberCoroutineScope()
     val scanMutex = remember { Mutex() }
     val currentOnScanTag by rememberUpdatedState(onScanTag)
@@ -109,10 +122,12 @@ fun ScanScreen(
     }
 
     // Shared scan-processing body for both the live in-overlay hook and the opening-tap drain. Keeps
-    // the opening tap byte-for-byte identical to subsequent taps.
-    suspend fun process(input: ScanInput, now: Long) {
+    // the opening tap byte-for-byte identical to subsequent taps. [sample] is the touch-moment trusted
+    // clock snapshot; its monotonic `elapsedMs` is the "now" the window math runs on.
+    suspend fun process(input: ScanInput, sample: TimeSample) {
+        val now = sample.elapsedMs
         scanMutex.withLock {
-            val event = currentOnScanTag(input, now)
+            val event = currentOnScanTag(input, sample)
             when (event) {
                 ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
                 is ScanEvent.BadKp -> diagnostic = event.reason
@@ -121,8 +136,8 @@ fun ScanScreen(
                     // If the 20 s window had already elapsed at tap time, the DB side
                     // started a fresh take; discard the expired UI session so reduce
                     // also starts fresh instead of extending the stale one.
-                    val effectiveSession = if (session != null &&
-                        (now - session!!.lastScanAt) >= SCAN_WINDOW_MS) null else session
+                    val effectiveSession =
+                        if (isWindowExpired(session?.lastScanAt, now)) null else session
                     // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
                     // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
                     // so the ring must keep counting down rather than flash back to full.
@@ -135,10 +150,11 @@ fun ScanScreen(
     DisposableEffect(activity, scope) {
         activity?.let { act ->
             act.onTagForMark = { tag ->
-                // Capture at tag-tap time, before launch/withLock, so that a scan queued behind
-                // slow NFC or DB work is dated when the user tapped, not when processing starts.
-                val now = System.currentTimeMillis()
-                scope.launch { process(ScanInput.Live(tag), now) }
+                // Snapshot the trusted clock at tag-tap time, before launch/withLock, so a scan queued
+                // behind slow NFC or DB work is dated when the user tapped, not when processing starts.
+                // Runs on the main thread (posted from the binder thread); sample() is lock-free.
+                val sample = act.trustedClock.sample()
+                scope.launch { process(ScanInput.Live(tag), sample) }
             }
         }
         onDispose {
@@ -157,7 +173,7 @@ fun ScanScreen(
         act.pendingScan.collect { scan ->
             scan ?: return@collect
             act.pendingScan.value = null
-            process(ScanInput.Captured(scan.code, scan.uid), scan.capturedAt)
+            process(ScanInput.Captured(scan.code, scan.uid), scan.sample)
         }
     }
 
@@ -167,7 +183,9 @@ fun ScanScreen(
             return@LaunchedEffect
         }
         while (session?.lastScanAt == lastScanAt) {
-            val remaining = SCAN_WINDOW_MS - (System.currentTimeMillis() - lastScanAt)
+            // Monotonic: lastScanAt is an elapsedRealtime stamp (TimeSample.elapsedMs), so the ring
+            // must measure against the same source — wall-clock here would jump if the user reset it.
+            val remaining = SCAN_WINDOW_MS - (SystemClock.elapsedRealtime() - lastScanAt)
             remainingMillis = remaining.coerceAtLeast(0L)
             if (remaining <= 0L) {
                 // A scan coroutine may be suspended inside scanMutex right at the deadline (e.g.
@@ -254,6 +272,14 @@ fun ScanScreen(
                         onClose()
                     },
                 )
+            }
+            if (clockStatus !is ClockStatus.Ok) {
+                item("clock_banner") {
+                    ScanClockBanner(
+                        status = clockStatus,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    )
+                }
             }
             item("hero_timer") {
                 if (completed) {

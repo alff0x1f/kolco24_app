@@ -83,7 +83,9 @@ enum class MarkKind { NFC, PHOTO }
  * an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
  * [colorOf] resolves a take's checkpoint color token (point id → server token) for the tile's
  * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
- * map. Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ * map. The tile time is the **trusted** take time (`trustedTakenAt`) when present, falling back to the
+ * raw wall `takenAt` for untrusted/legacy rows — so a phone clock reset doesn't shift displayed times.
+ * Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
  */
 fun marksToTiles(
     marks: List<MarkEntity>,
@@ -99,7 +101,9 @@ fun marksToTiles(
                 number = m.checkpointNumber.toString().padStart(2, '0'),
                 cost = costOf(m),
                 kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
-                time = fmt.format(Date(m.takenAt)),
+                // Prefer the trusted (clock-skew-proof) take time; fall back to raw wall for
+                // untrusted/legacy rows where no server time was anchored at take.
+                time = fmt.format(Date(m.trustedTakenAt ?: m.takenAt)),
                 color = colorOf(m),
             )
         }
