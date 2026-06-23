@@ -317,16 +317,17 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         // selected team's uid snapshot). The (code, uid) read here is reused downstream — no second
         // chip read. An unrecognized tag is dropped silently.
         val uid = normalizeNfcUid(tag.id)
+        // Snapshot the trusted clock before the blocking NFC read so the sample reflects actual tap
+        // time, not post-I/O time. The overlay may drain slightly later; resampling at drain time
+        // would corrupt both window-expiry math and the stored take time.
+        val sample = trustedClock.sample()
         val code = readChipCode(tag)
         if (code == null && uid !in boundUidsSnapshot) return
         // Publish the already-read (code, uid) — no second chip read. If onTagForMark was armed
         // while readChipCode was blocking (the overlay opened concurrently), the dispatcher sees
         // showScan=true and routes to pendingScan; the ScanScreen's continuous collect drain
-        // processes it as ScanInput.Captured. The old one-shot DisposableEffect drain race that
-        // motivated a raw-tag recheck is gone now that the drain is a LaunchedEffect collect.
-        // Snapshot the trusted clock at tap time (binder thread): the overlay may drain this slightly
-        // later, so the window/persist math must use the touch-moment monotonic+trusted sample.
-        nfcLaunchScan.value = CapturedScan(code, uid, trustedClock.sample())
+        // processes it as ScanInput.Captured.
+        nfcLaunchScan.value = CapturedScan(code, uid, sample)
     }
 
     private companion object {
