@@ -602,6 +602,12 @@ private fun Kolco24AppRoot(
     var showClearTrackDialog by rememberSaveable { mutableStateOf(false) }
     var showLocationDisabledDialog by rememberSaveable { mutableStateOf(false) }
     var showLocationDeniedDialog by rememberSaveable { mutableStateOf(false) }
+    // Tracks whether we have already launched a location permission request at least once this
+    // session. shouldShowRequestPermissionRationale returns false both before any request has
+    // been made (first ever ask) AND after a permanent denial — using it alone would show the
+    // "go to settings" dialog on the very first denial. Guard: only treat a no-rationale result
+    // as permanent when we know a prior request was already attempted.
+    var hasRequestedLocation by rememberSaveable { mutableStateOf(false) }
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
     // re-open the sheet/dialog for an unrelated member on the newly selected team. A team switch while
     // recording also stops the service — the running track belongs to the team we are leaving.
@@ -634,9 +640,13 @@ private fun Kolco24AppRoot(
                 TrackRecordingService.start(context, raceId, teamId)
             }
         } else {
-            // Permanent denial (no rationale) → only the app settings screen can re-grant.
-            val permanent = activity != null &&
-                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
+            // Permanent denial: no rationale for either permission AND we have already requested
+            // at least once. Without the hasRequestedLocation guard, shouldShowRequestPermissionRationale
+            // returning false on the very first denial would incorrectly route the user to settings.
+            val permanent = hasRequestedLocation && activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
+            hasRequestedLocation = true
             if (permanent) showLocationDeniedDialog = true
         }
     }

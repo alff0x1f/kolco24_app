@@ -90,6 +90,9 @@ class TrackRecordingService : Service() {
         container.trackRecordingState.value = TrackState.Recording(teamId, 0)
 
         // Reflect the DB truth in the state + notification as points land.
+        // Defensive: stop any engine from a prior start before creating a new one.
+        engine?.stop()
+        engine = null
         countJob?.cancel()
         countJob = serviceScope.launch {
             container.trackRepository.countForTeam(teamId, raceId).collectLatest { count ->
