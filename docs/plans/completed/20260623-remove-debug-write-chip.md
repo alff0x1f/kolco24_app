@@ -95,9 +95,9 @@ Delete the write-chip code path end to end: the dialog file, the Settings row + 
 - [x] run full suite: `./gradlew lintDebug testDebugUnitTest`
 
 ### Task 5: [Final] Update documentation
-- [ ] update `CLAUDE.md`: remove the `ui/settings/WriteChipDialog.kt` bullet; trim the `MainActivity.kt` bullet's `onTagForWrite` / `chipWriterCode` / chip-write-flow descriptions and the `SettingsScreen.kt` `onWriteChip` mention; update the hook priority chain to `chipInfo → provision → verify → mark → scan`; note `newChipCode()` removed from `MifareUltralightWriter.kt` bullet
-- [ ] grep `CLAUDE.md` for `onTagForWrite`, `WriteChip`, `chipWriterCode`, `onWriteChip`, `newChipCode` → zero stale mentions (the `onTagForWrite` prose appears in several sentences, not just the priority chain)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md`: remove the `ui/settings/WriteChipDialog.kt` bullet; trim the `MainActivity.kt` bullet's `onTagForWrite` / `chipWriterCode` / chip-write-flow descriptions and the `SettingsScreen.kt` `onWriteChip` mention; update the hook priority chain to `chipInfo → provision → verify → mark → scan`; note `newChipCode()` removed from `MifareUltralightWriter.kt` bullet
+- [x] grep `CLAUDE.md` for `onTagForWrite`, `WriteChip`, `chipWriterCode`, `onWriteChip`, `newChipCode` → zero stale mentions (the `onTagForWrite` prose appears in several sentences, not just the priority chain)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention — no checkboxes, informational only*
