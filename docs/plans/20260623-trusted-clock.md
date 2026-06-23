@@ -163,12 +163,12 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] **прочитать `BOOT_COUNT` один раз за процесс (P2):** `val cachedBootCount: Int? = runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT) }.getOrNull()` (API 24, без permission; константа на жизнь процесса — нет транзиентных ошибок mid-run); `bootCountProvider = { cachedBootCount }`
-- [ ] lazy `clockAnchorStore = ClockAnchorStore.fromSharedPreferences(context)` и lazy `trustedClock = TrustedClock(elapsedProvider = { SystemClock.elapsedRealtime() }, wallProvider = { System.currentTimeMillis() }, bootCountProvider = { cachedBootCount }, persist = clockAnchorStore::write, persisted = clockAnchorStore.read())`
-- [ ] **персистентность решена в Task 1**: `persist` инъектируется в `TrustedClock`, контейнер передаёт `clockAnchorStore::write` — никакой записи в лямбде интерсептора
-- [ ] в `apiClient`-блоке создать `ServerTimeInterceptor` с `onServerTime = { s, e, w, b -> trustedClock.onServerTime(s, e, w, b) }`-лямбдой (разрыв цикла как `tokenProvider`), прокинуть в `defaultOkHttpClient`
-- [ ] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 4b
-- [ ] (тестов в этой задаче нет: только DI-проводка тонких адаптеров — по конвенции репо не тестируется; пометка обязательна)
+- [x] **прочитать `BOOT_COUNT` один раз за процесс (P2):** `val cachedBootCount: Int? = runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT) }.getOrNull()` (API 24, без permission; константа на жизнь процесса — нет транзиентных ошибок mid-run); `bootCountProvider = { cachedBootCount }`
+- [x] lazy `clockAnchorStore = ClockAnchorStore.fromSharedPreferences(context)` и lazy `trustedClock = TrustedClock(elapsedProvider = { SystemClock.elapsedRealtime() }, wallProvider = { System.currentTimeMillis() }, bootCountProvider = { cachedBootCount }, persist = clockAnchorStore::write, persisted = clockAnchorStore.read())`
+- [x] **персистентность решена в Task 1**: `persist` инъектируется в `TrustedClock`, контейнер передаёт `clockAnchorStore::write` — никакой записи в лямбде интерсептора
+- [x] в `apiClient`-блоке создать `ServerTimeInterceptor` с `onServerTime = { s, e, w, b -> trustedClock.onServerTime(s, e, w, b) }`-лямбдой (разрыв цикла как `tokenProvider`), прокинуть в `defaultOkHttpClient`
+- [x] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 4b
+- [x] (тестов в этой задаче нет: только DI-проводка тонких адаптеров — по конвенции репо не тестируется; пометка обязательна)
 
 ### Task 4b: Подпись запросов доверенным временем + self-heal на clock-403
 
