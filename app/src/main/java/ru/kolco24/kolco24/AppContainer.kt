@@ -82,6 +82,11 @@ class AppContainer(private val context: Context) {
             secret = BuildConfig.APP_SECRET,
             installIdProvider = { installId },
             appVersion = BuildConfig.VERSION_NAME,
+            // Sign `ts` with trusted time (Task 4b): when the phone wall-clock has drifted past the
+            // server's ±300 s window, `signingSeconds()` still yields a server-aligned `ts` (or honest
+            // wall before the first anchor). Lambda fires at request time, so no construction cycle —
+            // `trustedClock` doesn't touch `apiClient`.
+            nowSeconds = { trustedClock.signingSeconds() },
             // Deferred to request time: invoked only after both `by lazy` blocks have initialized.
             // `token()` is a synchronous StateFlow.value read, so no init-time recursion and no
             // blocking on the interceptor thread. Bearer is never part of the canonical string.
