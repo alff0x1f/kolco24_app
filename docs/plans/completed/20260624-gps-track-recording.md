@@ -299,9 +299,9 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 - [x] manual test (skipped - no emulator/device in env): `./gradlew connectedDebugAndroidTest` — запустить вручную на эмуляторе/устройстве (guard миграции `MigrationTest.migrate10To11_*`)
 
 ### Task 14: [Final] Документация
-- [ ] обновить `CLAUDE.md`: новый `data/track/` слой, `TrackRecordingService`, Room v11, двойная выгрузка трека, `LOCAL_API_BASE_URL`/network-security-config, расширение `TrustedClock.trustedAt`
-- [ ] обновить `docs/API.md` контрактом `POST /app/race/<id>/track/` (или отметить как «спроектировано, ждёт backend»)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] обновить `CLAUDE.md`: новый `data/track/` слой, `TrackRecordingService`, Room v11, двойная выгрузка трека, `LOCAL_API_BASE_URL`/network-security-config, расширение `TrustedClock.trustedAt`
+- [x] обновить `docs/API.md` контрактом `POST /app/race/<id>/track/` (отмечено «спроектировано, ждёт backend» в `docs/design/API.md` — единственный API.md в репо; добавлена строка в таблицу эндпоинтов + раздел с телом/ответом/идемпотентностью)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Требуют внешних действий — без чекбоксов, информационно*
