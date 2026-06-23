@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -82,6 +85,7 @@ import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
+import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
@@ -715,15 +719,19 @@ private fun Kolco24AppRoot(
             // Global skew nag above all tabs. The per-tab TopAppBar reserves the status-bar inset, so
             // give the banner statusBarsPadding too; it renders nothing unless Skewed (no regression in
             // the normal case — empty composable, zero height).
+            // When the banner IS showing we consume the status-bar inset for the pager subtree so the
+            // per-tab TopAppBars don't add a duplicate status-bar gap below the banner.
             ClockWarningBanner(
                 status = clockStatus,
                 modifier = Modifier.statusBarsPadding(),
             )
+            val pagerModifier = if (clockStatus is ClockStatus.Skewed)
+                Modifier.fillMaxSize().weight(1f).consumeWindowInsets(WindowInsets.statusBars)
+            else
+                Modifier.fillMaxSize().weight(1f)
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f),
+                modifier = pagerModifier,
                 beyondViewportPageCount = 1,
             ) { page ->
                 when (page) {
