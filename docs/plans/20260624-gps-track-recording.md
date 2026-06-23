@@ -236,11 +236,11 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 
 ### Task 9: Verify Фаза 1
 
-- [ ] verify: запись стартует/стопится вручную, точки пишутся в Room, карточка показывает счётчик и длину, переживает сворачивание/поворот
-- [ ] verify edge cases: нет команды (кнопка дизейбл), GPS выключен (баннер+deep-link), смена команды (стоп), reboot (`START_NOT_STICKY`, не возобновляется)
-- [ ] run `./gradlew testDebugUnitTest` — все JVM-тесты зелёные
-- [ ] run `./gradlew lintDebug` — без новых ошибок (foreground-service-type, NewApi)
-- [ ] run `./gradlew connectedDebugAndroidTest` (эмулятор/устройство) — `MigrationTest` зелёный
+- [x] manual test (skipped - not automatable): запись стартует/стопится вручную, точки пишутся в Room, карточка показывает счётчик и длину, переживает сворачивание/поворот — требует устройства с GPS
+- [x] manual test (skipped - not automatable): edge cases — нет команды (кнопка дизейбл), GPS выключен (баннер+deep-link), смена команды (стоп), reboot (`START_NOT_STICKY`, не возобновляется)
+- [x] run `./gradlew testDebugUnitTest` — все JVM-тесты зелёные (BUILD SUCCESSFUL)
+- [x] run `./gradlew lintDebug` — без новых ошибок (BUILD SUCCESSFUL; foreground-service-type, NewApi чисто)
+- [x] manual test (skipped - no emulator/device in env): `./gradlew connectedDebugAndroidTest` — `MigrationTest` зелёный — запустить вручную на эмуляторе/устройстве
 
 ---
 
