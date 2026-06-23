@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -67,6 +68,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.ui.common.ClockWarningBanner
 import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
@@ -458,6 +460,16 @@ private fun Kolco24AppRoot(
     val races by raceRepo.races.collectAsState(initial = emptyList())
     // Reactive race-admin session (source of truth for the admin overlay + the Settings «Администратор» row).
     val adminSession by container.adminAuthRepository.session.collectAsState()
+    // Trusted-clock status: drives the global skew banner (under each tab's TopAppBar) and the scan
+    // notice. A local 5 s tick recomputes it so a wall-clock change with no network event still surfaces
+    // within ~5 s; equal values are deduped by the StateFlow, so no spurious recompositions.
+    val clockStatus by container.trustedClock.status.collectAsState()
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5_000)
+            container.trustedClock.recomputeStatus()
+        }
+    }
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
@@ -698,9 +710,19 @@ private fun Kolco24AppRoot(
                 }
             },
         ) { innerPadding ->
+          Column(modifier = Modifier.fillMaxSize()) {
+            // Global skew nag above all tabs. The per-tab TopAppBar reserves the status-bar inset, so
+            // give the banner statusBarsPadding too; it renders nothing unless Skewed (no regression in
+            // the normal case — empty composable, zero height).
+            ClockWarningBanner(
+                status = clockStatus,
+                modifier = Modifier.statusBarsPadding(),
+            )
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
                 beyondViewportPageCount = 1,
             ) { page ->
                 when (page) {
@@ -755,6 +777,7 @@ private fun Kolco24AppRoot(
                     )
                 }
             }
+          }
         }
 
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the

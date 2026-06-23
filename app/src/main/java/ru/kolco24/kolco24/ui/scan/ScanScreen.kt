@@ -41,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -69,8 +70,11 @@ import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.ScanInput
 import ru.kolco24.kolco24.data.db.TeamMemberItem
+import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.ui.common.ScanClockBanner
 import ru.kolco24.kolco24.ui.theme.BrandRed
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val TIMER_TICK_MS = 250L
 private const val SUCCESS_HOLD_MS = 1_000L
@@ -92,6 +96,13 @@ fun ScanScreen(
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current as? MainActivity
+    // Trusted-clock status drives the in-scan notice: a bright accent on Skewed, a soft "time not
+    // verified" plate on NoSync (the only place NoSync is surfaced). Fall back to Ok when there is no
+    // activity (preview) so nothing renders.
+    val clockStatusFlow = remember(activity) {
+        activity?.trustedClock?.status ?: MutableStateFlow<ClockStatus>(ClockStatus.Ok)
+    }
+    val clockStatus by clockStatusFlow.collectAsState()
     val scope = rememberCoroutineScope()
     val scanMutex = remember { Mutex() }
     val currentOnScanTag by rememberUpdatedState(onScanTag)
@@ -261,6 +272,14 @@ fun ScanScreen(
                         onClose()
                     },
                 )
+            }
+            if (clockStatus !is ClockStatus.Ok) {
+                item("clock_banner") {
+                    ScanClockBanner(
+                        status = clockStatus,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    )
+                }
             }
             item("hero_timer") {
                 if (completed) {

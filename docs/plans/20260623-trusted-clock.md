@@ -251,13 +251,13 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (`collectAsState` статуса; баннер под `TopAppBar`)
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt` (акцент-плашка)
 
-- [ ] **единое правило видимости (P2):** глобальный баннер — **только `Skewed`**; `NoSync` глобально **ничего не рендерит** (мягкая плашка про неподтверждённое время живёт только в скане, где пишется время). `Ok` — ничего
-- [ ] `ClockWarningBanner(status: ClockStatus, modifier)`: `Skewed` → красно/янтарная плашка «Часы телефона расходятся с сервером на N мин — проверьте дату и время» (N = `skewMs` → минуты); `NoSync`/`Ok` → ничего (баннер глобальный)
-- [ ] в `MainActivity`: `val clockStatus by container.trustedClock.statusFlow.collectAsState()`; рендер баннера под `TopAppBar` на всех вкладках (виден только при `Skewed`); локальный тик `LaunchedEffect { while(true){ delay(5000); container.trustedClock.recomputeStatus() } }`
-- [ ] в `ScanScreen`: яркий акцент при `Skewed`; **мягкая плашка «Время не подтверждено, подключитесь к сети» при `NoSync`** (отметку всё равно пишем) — это **единственное** место, где `NoSync` показывается
-- [ ] хелпер форматирования `skewMs → «N мин»` — чистая функция: **по модулю и `round`** (`Math.round(abs(skewMs) / 60_000.0)`). `round` (не `ceil`) согласован с тест-кейсами: 60_001 → «1 мин», 90_000 → «2 мин» (1.5→2), 119_000 → «2 мин». Баннер показывается только при `Skewed` (skew всегда `> 60_000`), так что `round` даёт ≥ «1 мин». Текст без направления → **abs** (отстающие часы дают отрицательный skew, нельзя «−2 мин»); `abs` считать в `Double` (`abs(skewMs.toDouble())`), **не** `abs(Long.MIN_VALUE)` напрямую. Мини-тест: оба знака (+90 000 и −90 000 → «2 мин»), 60 001 → «1 мин», 119 000 → «2 мин», `Long.MIN_VALUE` не падает/не отрицательно
-- [ ] (Compose-UI баннера/экранов не тестируется по конвенции — пометка; тестируется только чистый форматтер)
-- [ ] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 10
+- [x] **единое правило видимости (P2):** глобальный баннер — **только `Skewed`**; `NoSync` глобально **ничего не рендерит** (мягкая плашка про неподтверждённое время живёт только в скане, где пишется время). `Ok` — ничего
+- [x] `ClockWarningBanner(status: ClockStatus, modifier)`: `Skewed` → красно/янтарная плашка «Часы телефона расходятся с сервером на N мин — проверьте дату и время» (N = `skewMs` → минуты); `NoSync`/`Ok` → ничего (баннер глобальный)
+- [x] в `MainActivity`: `val clockStatus by container.trustedClock.status.collectAsState()` (поле называется `status`, не `statusFlow`); рендер баннера в `Column` над `HorizontalPager` (под `TopAppBar` каждой вкладки, виден только при `Skewed`, с `statusBarsPadding`); локальный тик `LaunchedEffect { while(true){ delay(5000); container.trustedClock.recomputeStatus() } }`
+- [x] в `ScanScreen`: `ScanClockBanner` — яркий акцент при `Skewed`; **мягкая плашка «Время не подтверждено — подключитесь к сети» при `NoSync`** (отметку всё равно пишем) — это **единственное** место, где `NoSync` показывается (item в LazyColumn, статус из `activity.trustedClock.status`)
+- [x] хелпер форматирования `skewMs → «N мин»` — чистая функция: **по модулю и `round`** (`Math.round(abs(skewMs.toDouble()) / 60_000.0)`). `round` (не `ceil`); 60_001 → «1 мин», 90_000 → «2 мин» (1.5→2), 119_000 → «2 мин». Текст без направления → **abs в `Double`** (не `abs(Long.MIN_VALUE)`). Мини-тест `ClockWarningBannerTest`: оба знака (+90 000 и −90 000 → «2 мин»), 60 001 → «1 мин», 119 000 → «2 мин», `Long.MIN_VALUE` не падает/не отрицательно
+- [x] (Compose-UI баннера/экранов не тестируется по конвенции — пометка; тестируется только чистый форматтер)
+- [x] запустить `./gradlew testDebugUnitTest` + `./gradlew lintDebug` — зелёно перед Task 10
 
 ### Task 10: Verify acceptance criteria
 - [ ] доверенное время пишется в `trustedTakenAt`, wall — в `takenAt`, монотонное — в `elapsedRealtimeAt` + `bootCount`; плитки **и порядок** — по `COALESCE(trustedTakenAt, takenAt)`
