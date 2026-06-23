@@ -172,7 +172,7 @@ private class FakeMarkDao : MarkDao {
     private val rows = MutableStateFlow<List<MarkEntity>>(emptyList())
 
     override fun observeForTeam(teamId: Int): Flow<List<MarkEntity>> =
-        rows.map { list -> list.filter { it.teamId == teamId }.sortedByDescending { it.takenAt } }
+        rows.map { list -> list.filter { it.teamId == teamId }.sortedByDescending { it.trustedTakenAt ?: it.takenAt } }
 
     override suspend fun getById(id: String): MarkEntity? = rows.value.firstOrNull { it.id == id }
 

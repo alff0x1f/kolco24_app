@@ -8,8 +8,10 @@ class ClockWarningBannerTest {
 
     @Test
     fun roundsHalfUp() {
-        // 90_000 ms = 1.5 min → round to 2 (banner only shows when |skew| > 60_000).
-        assertEquals("2 мин", formatSkewMinutes(90_000))
+        // 150_000 ms = exactly 2.5 min → rounds up to 3 (half-up semantics).
+        // 149_999 ms = 2.4999... min → rounds down to 2.
+        assertEquals("3 мин", formatSkewMinutes(150_000))
+        assertEquals("2 мин", formatSkewMinutes(149_999))
     }
 
     @Test

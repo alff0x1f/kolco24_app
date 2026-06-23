@@ -203,6 +203,31 @@ class TrustedClockTest {
     }
 
     @Test
+    fun sample_noSync_trustedMsIsNull() {
+        val f = Fakes(elapsed = 1_000L, wall = 5_000L, boot = 1)
+        val c = clock(f)
+        // No sync yet — trusted time must be null so MarkRepository persists NULL trustedTakenAt.
+        val s = c.sample()
+        assertNull(s.trustedMs)
+        assertEquals(1_000L, s.elapsedMs)
+        assertEquals(5_000L, s.wallMs)
+    }
+
+    @Test
+    fun onServerTime_differentBootId_acceptsNewAnchorUnconditionally() {
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 4_000L, wallNow = 0L, bootNow = 1)
+        assertEquals(10_000_000L + (5_000L - 4_000L), c.trusted())
+        // Reboot: boot id changes. New anchor has smaller anchorElapsed but must still be accepted
+        // (case c: both boot ids non-null and differ → unconditional accept, same as reboot).
+        c.onServerTime(20_000_000L, anchorElapsed = 100L, wallNow = 0L, bootNow = 2)
+        f.boot = 2
+        f.elapsed = 200L
+        assertEquals(20_000_000L + (200L - 100L), c.trusted())
+    }
+
+    @Test
     fun sample_isConsistentSnapshot() {
         val f = Fakes(elapsed = 2_000L, wall = 5_000L, boot = 4)
         val c = clock(f)

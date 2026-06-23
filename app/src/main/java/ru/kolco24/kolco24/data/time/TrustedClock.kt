@@ -162,7 +162,7 @@ class TrustedClock(
      * fallback to wall — so signing survives a skewed wall-clock once the anchor is established.
      * Lock-free; called from OkHttp threads.
      */
-    fun signingSeconds(): Long = (trusted() ?: wallProvider()) / 1000
+    fun signingSeconds(): Long = sample().let { it.trustedMs ?: it.wallMs } / 1000
 
     /**
      * Re-anchor from a network `Date` header. [anchorElapsed] is the RTT-corrected midpoint reading;
@@ -175,8 +175,8 @@ class TrustedClock(
      * sample with a smaller `anchorElapsed` in the same session is rejected by (d).
      */
     fun onServerTime(serverMs: Long, anchorElapsed: Long, wallNow: Long, bootNow: Int?) {
-        val elapsedNow = elapsedProvider()
         synchronized(lock) {
+            val elapsedNow = elapsedProvider()
             val current = ref.get()
             val cur = current.anchor
             val accept = when {
