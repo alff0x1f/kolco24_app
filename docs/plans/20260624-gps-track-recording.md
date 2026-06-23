@@ -76,8 +76,8 @@ elapsedRealtimeAt: Long         // location.elapsedRealtimeNanos / 1_000_000
 bootCount: Int?                 // INTEGER (nullable)
 wallMs: Long                    // System.currentTimeMillis() при записи (fallback)
 trustedMs: Long?                // INTEGER (nullable) — trusted из elapsedRealtimeAt
-uploadedLocal: Boolean = false  // INTEGER NOT NULL DEFAULT 0
-uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
+uploadedLocal: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без @ColumnInfo/DEFAULT — как MarkEntity)
+uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без @ColumnInfo/DEFAULT — как MarkEntity)
 ```
 
 ### API контракт (проектируется, эндпоинта пока нет)
@@ -112,6 +112,7 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
 - [ ] добавить версию и библиотеку `play-services-location` (актуальная стабильная) в `libs.versions.toml`
 - [ ] подключить `implementation(libs.play.services.location)` в `app/build.gradle.kts`
 - [ ] добавить `BuildConfig.LOCAL_API_BASE_URL`: читать `kolco24.localApiBaseUrl` из `local.properties`, fallback env `KOLCO24_LOCAL_API_BASE_URL`, дефолт `http://192.168.1.5/` (по образцу `API_BASE_URL`, но с дефолтом — не падать если ключа нет)
+- [ ] ⚠️ **(из ревью) хост и cleartext связаны.** `network_security_config.xml` (Task 11) разрешает cleartext только для `192.168.1.5`. Значит **хост зафиксирован by design** — конфиг-ключ меняет порт/путь/схему, но смена *хоста* требует синхронной правки `network_security_config.xml`. Зафиксировать это коммент-доком у ключа и в `network_security_config.xml`; если в будущем нужен произвольный LAN-хост — отдельная задача (debug-only широкий cleartext или ввод хоста с динамическим security-config, что Android из коробки не умеет)
 - [ ] `./gradlew help` / sync — проект конфигурируется без ошибок
 - [ ] (тестов нет — конфигурация сборки; проверка = успешный sync)
 
@@ -156,9 +157,11 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
 - Modify: `app/src/androidTest/java/.../MigrationTest.kt`
 
 - [ ] добавить `TrackPointEntity` (поля из Technical Details; `@Index` на `teamId` и `raceId`)
-- [ ] `TrackDao`: `observeForTeam(teamId): Flow<List<TrackPointEntity>>` (`ORDER BY elapsedRealtimeAt ASC`), `insertAll(points)`, `unuploadedLocal(limit)` (`WHERE uploadedLocal=0 ORDER BY elapsedRealtimeAt LIMIT`), `unuploadedCloud(limit)`, `markUploadedLocal(ids)`, `markUploadedCloud(ids)`, `countForTeam(teamId): Flow<Int>`, `deleteForTeam(teamId)`
+- [ ] `TrackDao`: `observeForTeam(teamId): Flow<List<TrackPointEntity>>` (`ORDER BY elapsedRealtimeAt ASC`), `insertAll(points)`, `markUploadedLocal(ids)`, `markUploadedCloud(ids)`, `countForTeam(teamId): Flow<Int>`, `deleteForTeam(teamId)`
+- [ ] ⚠️ **(из ревью) запросы выгрузки scoped по `(raceId, teamId)`** — иначе пачка может зацепить точки другой команды/гонки и уйти не на тот эндпоинт (`/race/<raceId>/track/`). Сигнатуры: `unuploadedLocal(raceId, teamId, limit)` (`WHERE raceId=:raceId AND teamId=:teamId AND uploadedLocal=0 ORDER BY elapsedRealtimeAt LIMIT :limit`), `unuploadedCloud(raceId, teamId, limit)` аналогично. `uploadPending` (Task 12) вызывается с `(raceId, teamId)` пары
 - [ ] в `AppDatabase`: bump version 10→11, добавить `TrackPointEntity` в `entities`, абстрактный `trackDao()`, `MIGRATION_10_11` (`CREATE TABLE track_points` + `CREATE INDEX index_track_points_teamId` + `CREATE INDEX index_track_points_raceId`), зарегистрировать миграцию
-- [ ] SQL колонок в `CREATE TABLE` дословно: `id TEXT NOT NULL PRIMARY KEY`, `raceId INTEGER NOT NULL`, `teamId INTEGER NOT NULL`, `lat REAL NOT NULL`, `lon REAL NOT NULL`, `accuracy REAL NOT NULL`, `gpsTimeMs INTEGER NOT NULL`, `elapsedRealtimeAt INTEGER NOT NULL`, `bootCount INTEGER` (nullable), `wallMs INTEGER NOT NULL`, `trustedMs INTEGER` (nullable), `uploadedLocal INTEGER NOT NULL DEFAULT 0`, `uploadedCloud INTEGER NOT NULL DEFAULT 0`
+- [ ] SQL колонок в `CREATE TABLE` дословно: `id TEXT NOT NULL PRIMARY KEY`, `raceId INTEGER NOT NULL`, `teamId INTEGER NOT NULL`, `lat REAL NOT NULL`, `lon REAL NOT NULL`, `accuracy REAL NOT NULL`, `gpsTimeMs INTEGER NOT NULL`, `elapsedRealtimeAt INTEGER NOT NULL`, `bootCount INTEGER` (nullable), `wallMs INTEGER NOT NULL`, `trustedMs INTEGER` (nullable), `uploadedLocal INTEGER NOT NULL`, `uploadedCloud INTEGER NOT NULL`
+- [ ] ⚠️ **(из ревью) БЕЗ `DEFAULT 0` в SQL.** Room не эмитит DB-level default, если у поля нет `@ColumnInfo(defaultValue = "0")` — а Kotlin `= false` его не создаёт. `DEFAULT 0` в migration SQL без аннотации → расхождение с `11.json` и крэш schema-валидации. Зеркалим `MarkEntity` (Kotlin-дефолт, без `@ColumnInfo`): в `CREATE TABLE` — `INTEGER NOT NULL` без `DEFAULT`. Для новой таблицы это безопасно — все вставки идут через Room и всегда передают значение
 - [ ] собрать (`assembleDebug`) — KSP генерирует `11.json`; сверить SQL миграции дословно с ним (имена индексов camelCase, типы, nullability); **закоммитить `11.json` в git** (не только сгенерировать — `MigrationTestHelper` читает его из schemas)
 - [ ] write instrumented test `MigrationTest.migrate10To11_keepsDataAndAddsTable`: предзаполнить v10-строку (напр. marks), мигрировать, проверить что строка жива и `track_points` существует
 - [ ] run `./gradlew testDebugUnitTest` (компиляция DAO) + по возможности `connectedDebugAndroidTest` — должны пройти перед Task 5
@@ -173,9 +176,10 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
 
 - [ ] `sealed interface TrackState { object Idle; data class Recording(teamId: Int, pointCount: Int) }`
 - [ ] `TrackRepository(trackDao)`: `insertAll(points)`, `observeTrack(teamId)`, `countForTeam(teamId)`, `deleteForTeam(teamId)`, чистые метрики через хелперы Task 3
-- [ ] **Решено (из ревью): маппинг владеет репозиторий.** Сигнатура `suspend fun insertAll(rawFixes: List<RawFix>, raceId: Int, teamId: Int)` — внутри для каждой точки `trustedMs = trustedClock.trustedAt(elapsedRealtimeNanos/1_000_000, bootAt)`, `wallMs = System.currentTimeMillis()` (инжектируемый провайдер для теста), `id = UUID` через `idFactory`, затем `trackDao.insertAll(entities)`. Сервис (Task 7) лишь форвардит `List<RawFix>` — никакой логики времени в сервисе. `TrackRepository` принимает `TrustedClock` + `idFactory` + `wallProvider`
-- [ ] в `AppContainer`: lazy `trackDao`, lazy `trackRepository`, публичный `val trackRecordingState = MutableStateFlow<TrackState>(Idle)` (пишет сервис, читает UI)
-- [ ] write tests `TrackRepositoryTest` (fake `TrackDao`): `insertAll` мапит и пишет, `deleteForTeam` чистит, метрики/счётчик корректны, `trustedMs` досчитывается из `elapsedRealtimeAt` (fake clock)
+- [ ] **Решено (из ревью): маппинг владеет репозиторий.** Сигнатура `suspend fun insertAll(rawFixes: List<RawFix>, raceId: Int, teamId: Int)` — внутри для каждой точки `bootAt = bootCountProvider()`, `trustedMs = trustedClock.trustedAt(elapsedRealtimeNanos/1_000_000, bootAt)`, `bootCount = bootAt` (пишется в колонку), `wallMs = wallProvider()`, `id = idFactory()`, затем `trackDao.insertAll(entities)`. Сервис (Task 7) лишь форвардит `List<RawFix>` — никакой логики времени в сервисе
+- [ ] ⚠️ **(из ревью) `bootCount` — через инъекцию, не в `RawFix`.** Фикс всегда снят в **текущей** boot-сессии (сервис работает сейчас), поэтому `bootAt = текущий cachedBootCount`. `TrackRepository` принимает `bootCountProvider: () -> Int?` (из `AppContainer.cachedBootCount`) + `TrustedClock` + `idFactory` + `wallProvider` — `RawFix` остаётся чистым гео-value-типом без boot/время-полей
+- [ ] в `AppContainer`: lazy `trackDao`, lazy `trackRepository` (передать `trustedClock`, `bootCountProvider = { cachedBootCount }`, `idFactory = { UUID.randomUUID().toString() }`, `wallProvider = { System.currentTimeMillis() }`), публичный `val trackRecordingState = MutableStateFlow<TrackState>(Idle)` (пишет сервис, читает UI)
+- [ ] write tests `TrackRepositoryTest` (fake `TrackDao`): `insertAll` мапит и пишет, `deleteForTeam` чистит, метрики/счётчик корректны, `trustedMs` досчитывается из `elapsedRealtimeAt` (fake clock), `bootCount`/`wallMs`/`id` берутся из инжектированных провайдеров (детерминированный тест)
 - [ ] run tests — должны пройти перед Task 6
 
 ### Task 6: LocationEngine seam + Fused + Legacy + Factory
@@ -204,7 +208,9 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
 - [ ] объявить permissions: `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`
 - [ ] объявить `<uses-feature android:name="android.hardware.location.gps" android:required="false" />` (из ревью: как `nfc required=false` — иначе Play фильтрует устройства без GPS, регрессия installability)
 - [ ] объявить `<service android:name=".TrackRecordingService" android:foregroundServiceType="location" android:exported="false"/>`
-- [ ] `TrackRecordingService`: `onStartCommand` **немедленно** вызывает `startForeground(id, notif, FOREGROUND_SERVICE_TYPE_LOCATION)` (<5с, до любых проверок — иначе на части OEM крэш «did not call startForeground»), читает `raceId`/`teamId` из extras, **затем** перепроверяет location-permission и `stopSelf()` если её нет (permission подтверждается лаунчером в Task 8 *до* `startForegroundService`); создаёт `LocationEngine` через factory, подписывается; `START_NOT_STICKY`
+- [ ] ⚠️ **(из ревью) permission — жёсткий precondition.** На target 34+ `startForeground(..., FOREGROUND_SERVICE_TYPE_LOCATION)` **без** выданного coarse/fine permission кидает `SecurityException`. Гарантия: Task 8 лаунчер подтверждает `ACCESS_FINE_LOCATION` *до* `startForegroundService` — сервис стартует только когда permission уже есть. В `onStartCommand` первым делом **перепроверить** permission (`ContextCompat.checkSelfPermission`); если её нет (TOCTOU: отозвали между лаунчером и стартом) → `startForeground` с location-типом **не вызывать**, `stopSelf()` и выйти
+- [ ] ⚠️ **(из ревью) GPS-тумблер ≠ permission.** Выключенные location services (тумблер GPS) `startForeground` НЕ ломают — сервис легально стартует, просто фиксов нет (показываем баннер + deep-link, как в Task 8). Блокирует старт только **отсутствие permission**, не выключенный тумблер. Если хочется ещё жёстче — опциональный fallback: поднять FGS с обычным (не-location) уведомлением и **promote** в location-тип только после подтверждения permission; для нашего флоу (permission гарантирован лаунчером) это избыточно, оставляем прямой старт
+- [ ] `TrackRecordingService`: при наличии permission `onStartCommand` **немедленно** (<5с) вызывает `startForeground(id, notif, FOREGROUND_SERVICE_TYPE_LOCATION)`, читает `raceId`/`teamId` из extras, создаёт `LocationEngine` через factory, подписывается; `START_NOT_STICKY`
 - [ ] note (из ревью): отказ в `POST_NOTIFICATIONS` — **не фатален**: канал всё равно создаётся, `startForeground` работает, уведомление просто не показывается; запись идёт
 - [ ] уведомление: канал «Запись трека» (low importance, без звука), текст «Идёт запись трека · N точек», `Action` «Стоп» (`PendingIntent` с `STOP` action → `stopSelf`), тап → открыть `MainActivity`
 - [ ] на каждую пачку `RawFix`: `applicationScope.launch { trackRepository.insertAll(...) }`, обновлять `container.trackRecordingState` (`Recording(teamId, count)`); на стоп — снять updates, `stopForeground`+`stopSelf`, `trackRecordingState = Idle`
@@ -272,10 +278,11 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
 - Modify: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
 - Modify: `app/src/test/java/.../track/TrackRepositoryTest.kt`
 
-- [ ] `TrackRepository.uploadPending(teamId)`: для каждого таргета независимо — читать `unuploadedLocal`/`unuploadedCloud` (LIMIT 500) пачками, слать через соответствующий инстанс (`localApiClient.uploadTrack` / `apiClient.uploadTrack`), на `Success` → `markUploadedLocal`/`markUploadedCloud(accepted)`; цикл пока есть неотправленные; ошибки таргета не валят другой (репо принимает оба `ApiClient` инстанса)
-- [ ] на стопе записи в сервисе → `applicationScope.launch { trackRepository.uploadPending(teamId) }`
-- [ ] оппортунистически в `Kolco24App` (Launch B / при выборе команды) → если есть unuploaded, дослать в `applicationScope`
-- [ ] write tests: `uploadPending` ставит правильный флаг по таргету, не дублирует уже выгруженное, частичный `accepted` помечает только принятые, ошибка одного таргета не мешает другому (fake DAO + fake ApiClient)
+- [ ] `TrackRepository.uploadPending(raceId, teamId)`: для каждого таргета независимо — читать `unuploadedLocal`/`unuploadedCloud(raceId, teamId, 500)` пачками, слать через соответствующий инстанс (`localApiClient.uploadTrack` / `apiClient.uploadTrack`), на `Success` → `markUploadedLocal`/`markUploadedCloud(accepted)`; ошибки таргета не валят другой (репо принимает оба `ApiClient` инстанса)
+- [ ] ⚠️ **(из ревью) break при отсутствии прогресса.** Цикл «пока есть неотправленные» обязан останавливаться, если за итерацию **не помечено ни одной** строки (`accepted` пустой или подмножество, не двигающее курсор) — иначе те же строки ретраятся в тугом бесконечном цикле. Условие выхода: `accepted.isEmpty()` ИЛИ ответ не `Success` → break (дошлём при следующем стопе/запуске); не `markUploaded` строки, которых нет в `accepted`
+- [ ] на стопе записи в сервисе → `applicationScope.launch { trackRepository.uploadPending(raceId, teamId) }`
+- [ ] оппортунистически в `Kolco24App` (Launch B / при выборе команды) → если есть unuploaded для `(raceId, teamId)`, дослать в `applicationScope`
+- [ ] write tests: `uploadPending` ставит правильный флаг по таргету, не дублирует уже выгруженное, частичный `accepted` помечает только принятые, **пустой `accepted` → break без зацикливания**, ошибка одного таргета не мешает другому (fake DAO + fake ApiClient)
 - [ ] run tests — должны пройти перед Task 13
 
 ### Task 13: Verify acceptance criteria
