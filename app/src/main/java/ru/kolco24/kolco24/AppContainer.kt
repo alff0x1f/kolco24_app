@@ -3,6 +3,7 @@ package ru.kolco24.kolco24
 import android.content.Context
 import android.os.SystemClock
 import android.provider.Settings
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,8 @@ import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
+import ru.kolco24.kolco24.data.track.TrackRepository
+import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.admin.ProvisionState
 
 /**
@@ -160,6 +163,26 @@ class AppContainer(private val context: Context) {
             markDao = database.markDao(),
         )
     }
+
+    /**
+     * Local-only GPS track store. Owns the [RawFix]→entity mapping; the recording service forwards
+     * raw fixes. `bootCountProvider` is the per-process [cachedBootCount] (a fix is captured in the
+     * running boot session), `idFactory` mints the client UUID, and `wallProvider`/`elapsedProvider`
+     * read the wall/monotonic clocks once per batch for the wall back-projection.
+     */
+    val trackRepository: TrackRepository by lazy {
+        TrackRepository(
+            trackDao = database.trackDao(),
+            trustedClock = trustedClock,
+            bootCountProvider = { cachedBootCount },
+            idFactory = { UUID.randomUUID().toString() },
+            wallProvider = { System.currentTimeMillis() },
+            elapsedProvider = { SystemClock.elapsedRealtime() },
+        )
+    }
+
+    /** GPS-track recording state: written by `TrackRecordingService`, read by the UI. */
+    val trackRecordingState: MutableStateFlow<TrackState> = MutableStateFlow(TrackState.Idle)
 
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }
