@@ -195,12 +195,12 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - Create: `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/10.json` (генерируется сборкой)
 - Modify: `app/src/androidTest/.../MigrationTest.kt`
 
-- [ ] в `MarkEntity` добавить (последними полями) `val trustedTakenAt: Long? = null`, `val elapsedRealtimeAt: Long? = null`, `val bootCount: Int? = null`; KDoc: NULL = legacy/неизвестно (отличается от реального `0` сразу после boot); `bootCount` нужен, чтобы Δelapsed-сверка не смешивала разные boot-сессии
-- [ ] поменять `MarkDao.observeForTeam` `ORDER BY takenAt DESC` → `ORDER BY COALESCE(trustedTakenAt, takenAt) DESC` (P1 — порядок по зачётному времени)
-- [ ] `version = 10`; добавить `MIGRATION_9_10` с тремя nullable `ALTER TABLE marks ADD COLUMN ...` (SQL из Technical Details, без `NOT NULL DEFAULT`); зарегистрировать в `addMigrations(...)`
-- [ ] собрать `./gradlew assembleDebug` для генерации `10.json`; **побайтово** сверить SQL миграции с дельтой `9.json`→`10.json`
-- [ ] добавить `MigrationTest.migrate9To10`: пред-вставка строки marks на v9, миграция, проверка — строка цела, `trustedTakenAt`/`elapsedRealtimeAt`/`bootCount` IS NULL
-- [ ] запустить `./gradlew connectedDebugAndroidTest` (эмулятор/устройство) — миграции зелёные перед Task 6
+- [x] в `MarkEntity` добавить (последними полями) `val trustedTakenAt: Long? = null`, `val elapsedRealtimeAt: Long? = null`, `val bootCount: Int? = null`; KDoc: NULL = legacy/неизвестно (отличается от реального `0` сразу после boot); `bootCount` нужен, чтобы Δelapsed-сверка не смешивала разные boot-сессии
+- [x] поменять `MarkDao.observeForTeam` `ORDER BY takenAt DESC` → `ORDER BY COALESCE(trustedTakenAt, takenAt) DESC` (P1 — порядок по зачётному времени)
+- [x] `version = 10`; добавить `MIGRATION_9_10` с тремя nullable `ALTER TABLE marks ADD COLUMN ...` (SQL из Technical Details, без `NOT NULL DEFAULT`); зарегистрировать в `addMigrations(...)`
+- [x] собрать `./gradlew assembleDebug` для генерации `10.json`; **побайтово** сверить SQL миграции с дельтой `9.json`→`10.json` (три nullable INTEGER колонки, совпадает с `ADD COLUMN ... INTEGER`)
+- [x] добавить `MigrationTest.migrate9To10`: пред-вставка строки marks на v9, миграция, проверка — строка цела, `trustedTakenAt`/`elapsedRealtimeAt`/`bootCount` IS NULL
+- [x] запустить `./gradlew connectedDebugAndroidTest` (эмулятор/устройство) — миграции зелёные перед Task 6 (15 тестов зелёные на Medium_Phone_API_36.1)
 
 ### Task 6: `MarkRepository` — приём `TimeSample`
 

@@ -22,7 +22,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MarkEntity::class,
         LegendMetaEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class, IntListConverter::class)
@@ -266,6 +266,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the trusted-clock time columns to `marks` (TrustedClock feature): `trustedTakenAt`
+         * (monotonic-anchored server time = scoring/order source), `elapsedRealtimeAt` (monotonic
+         * mark), and `bootCount` (boot-session id of that mark). All three are nullable with no
+         * default — NULL on legacy rows honestly marks "no data" (distinct from a real `0` right
+         * after boot). Purely additive (plain `ALTER TABLE ... ADD COLUMN`, like [MIGRATION_7_8]);
+         * no table recreate, no existing column touched. SQL must match Room's generated schema
+         * (see schemas/.../10.json) exactly, or the validation check fails at runtime.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `marks` ADD COLUMN `trustedTakenAt` INTEGER")
+                db.execSQL("ALTER TABLE `marks` ADD COLUMN `elapsedRealtimeAt` INTEGER")
+                db.execSQL("ALTER TABLE `marks` ADD COLUMN `bootCount` INTEGER")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -281,6 +298,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
+                    MIGRATION_9_10,
                 )
                 .build()
     }

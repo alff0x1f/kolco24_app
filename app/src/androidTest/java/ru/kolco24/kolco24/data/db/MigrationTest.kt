@@ -667,6 +667,81 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate9To10_keepsMarkRowAndAddsTimeColumns() {
+        val dbName = "migration-9to10-test.db"
+
+        // Reach v9, then seed a marks row (with the v9 column set, no trusted-clock columns).
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(
+            dbName,
+            9,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+            AppDatabase.MIGRATION_8_9,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO marks (id, raceId, teamId, point, checkpointNumber, cost, method, " +
+                    "cpUid, cpCode, present, expectedCount, complete, photoPath, takenAt, updatedAt, " +
+                    "uploadedLocal, uploadedCloud) " +
+                    "VALUES ('uuid-1', 7, 3, 1, 5, 10, 'nfc', '04A2B3C4', 'DEADBEEF', '[1,2]', 2, 1, " +
+                    "NULL, 1000, 1000, 0, 0)"
+            )
+        }
+
+        // Run 9→10; MigrationTestHelper validates the resulting schema against 10.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            10,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+            AppDatabase.MIGRATION_8_9,
+            AppDatabase.MIGRATION_9_10,
+        )
+
+        // The legacy row survives, and the three new columns are present and NULL on it.
+        db.query(
+            "SELECT point, complete, trustedTakenAt, elapsedRealtimeAt, bootCount " +
+                "FROM marks WHERE id = 'uuid-1'"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+            assertEquals(1, cursor.getInt(1))
+            assertTrue(cursor.isNull(2))
+            assertTrue(cursor.isNull(3))
+            assertTrue(cursor.isNull(4))
+        }
+        // The new columns accept real values too.
+        db.execSQL(
+            "INSERT INTO marks (id, raceId, teamId, point, checkpointNumber, cost, method, " +
+                "cpUid, cpCode, present, expectedCount, complete, photoPath, takenAt, updatedAt, " +
+                "uploadedLocal, uploadedCloud, trustedTakenAt, elapsedRealtimeAt, bootCount) " +
+                "VALUES ('uuid-2', 7, 3, 2, 6, 20, 'nfc', '04A2B3C5', 'BEEFCAFE', '[1,2]', 2, 1, " +
+                "NULL, 2000, 2000, 0, 0, 1500, 50, 11)"
+        )
+        db.query(
+            "SELECT trustedTakenAt, elapsedRealtimeAt, bootCount FROM marks WHERE id = 'uuid-2'"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1500, cursor.getInt(0))
+            assertEquals(50, cursor.getInt(1))
+            assertEquals(11, cursor.getInt(2))
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate2To3_indexExists() {
         val dbName = "migration-2to3-index-test.db"
         helper.createDatabase(dbName, 1).close()

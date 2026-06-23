@@ -8,7 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MarkDao {
-    @Query("SELECT * FROM marks WHERE teamId = :teamId ORDER BY takenAt DESC")
+    // Order by the scoring/take time: trusted time when present, else the raw wall time. After a
+    // clock change the tiles render trusted time, so they must also sort by it (untrusted rows fall
+    // back to wall — the best source available).
+    @Query("SELECT * FROM marks WHERE teamId = :teamId ORDER BY COALESCE(trustedTakenAt, takenAt) DESC")
     fun observeForTeam(teamId: Int): Flow<List<MarkEntity>>
 
     @Query("SELECT * FROM marks WHERE id = :id")
