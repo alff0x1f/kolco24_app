@@ -81,14 +81,14 @@ class TrackRepository(
         trackDao.insertAll(entities)
     }
 
-    /** Live track points for one team, ordered by `elapsedRealtimeAt` (capture order). */
-    fun observeTrack(teamId: Int): Flow<List<TrackPointEntity>> = trackDao.observeForTeam(teamId)
+    /** Live track points for one (raceId, teamId) scope, ordered by `elapsedRealtimeAt`. */
+    fun observeTrack(teamId: Int, raceId: Int): Flow<List<TrackPointEntity>> = trackDao.observeForTeam(teamId, raceId)
 
-    /** Live point count for one team. */
-    fun countForTeam(teamId: Int): Flow<Int> = trackDao.countForTeam(teamId)
+    /** Live point count for one (raceId, teamId) scope. */
+    fun countForTeam(teamId: Int, raceId: Int): Flow<Int> = trackDao.countForTeam(teamId, raceId)
 
-    /** Wipe a team's track (the «Очистить трек» action; only while not recording). */
-    suspend fun deleteForTeam(teamId: Int) = trackDao.deleteForTeam(teamId)
+    /** Wipe one (raceId, teamId) scope (the «Очистить трек» action; only while not recording). */
+    suspend fun deleteForTeam(teamId: Int, raceId: Int) = trackDao.deleteForTeam(teamId, raceId)
 
     /**
      * Flush all pending points for one `(raceId, teamId)` to **both** targets independently — a target

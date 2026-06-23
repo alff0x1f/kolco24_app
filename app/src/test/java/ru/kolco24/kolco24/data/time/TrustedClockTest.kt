@@ -271,8 +271,6 @@ class TrustedClockTest {
         val c = clock(f)
         c.onServerTime(10_000_000L, anchorElapsed = 5_000L, wallNow = 0L, bootNow = null)
         assertEquals(10_000_000L - 3_000L, c.trustedAt(elapsedAt = 2_000L, bootAt = null))
-        // anchor param unused (kept to mirror other tests' construction style).
-        assertEquals(null, anchor.bootCount)
     }
 
     @Test

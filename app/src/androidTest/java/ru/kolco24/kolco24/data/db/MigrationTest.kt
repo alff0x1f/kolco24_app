@@ -812,6 +812,7 @@ class MigrationTest {
             assertTrue(cursor.moveToFirst())
             assertEquals(55.75, cursor.getDouble(0), 0.0001)
             assertEquals(37.61, cursor.getDouble(1), 0.0001)
+            assertEquals(12.4f, cursor.getFloat(2), 0.01f)
             assertEquals(9876543, cursor.getLong(3))
             assertEquals(11, cursor.getInt(4))
             assertEquals(1718900000200, cursor.getLong(5))

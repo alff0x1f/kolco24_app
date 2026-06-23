@@ -92,7 +92,7 @@ class TrackRecordingService : Service() {
         // Reflect the DB truth in the state + notification as points land.
         countJob?.cancel()
         countJob = serviceScope.launch {
-            container.trackRepository.countForTeam(teamId).collectLatest { count ->
+            container.trackRepository.countForTeam(teamId, raceId).collectLatest { count ->
                 container.trackRecordingState.value = TrackState.Recording(teamId, count)
                 notificationManager.notify(NOTIF_ID, buildNotification(count))
             }

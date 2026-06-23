@@ -29,8 +29,8 @@ class LegacyLocationEngine(context: Context) : LocationEngine {
     @SuppressLint("MissingPermission") // permission is a hard precondition guaranteed by the launcher/service precheck.
     override fun start(onPoints: (List<RawFix>) -> Unit, onError: (Throwable) -> Unit) {
         val provider = when {
-            locationManager.allProviders.contains(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            locationManager.allProviders.contains(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
             else -> null
         }
         if (provider == null) {

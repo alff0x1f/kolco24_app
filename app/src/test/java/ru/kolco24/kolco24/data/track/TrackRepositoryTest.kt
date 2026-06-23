@@ -98,7 +98,7 @@ class TrackRepositoryTest {
         val dao = FakeTrackDao()
         repo(dao).insertAll(listOf(rawFix(elapsedMs = 60_000L)), raceId = 1, teamId = 7)
 
-        val points = dao.observeForTeam(7).first()
+        val points = dao.observeForTeam(7, 1).first()
         assertEquals(1, points.size)
         val p = points.single()
         assertEquals("id-0", p.id)
@@ -116,7 +116,7 @@ class TrackRepositoryTest {
     fun insertAll_emptyBatch_isNoOp() = runTest {
         val dao = FakeTrackDao()
         repo(dao).insertAll(emptyList(), raceId = 1, teamId = 7)
-        assertTrue(dao.observeForTeam(7).first().isEmpty())
+        assertTrue(dao.observeForTeam(7, 1).first().isEmpty())
     }
 
     @Test
@@ -129,7 +129,7 @@ class TrackRepositoryTest {
             raceId = 1,
             teamId = 7,
         )
-        val points = dao.observeForTeam(7).first() // ordered by elapsedRealtimeAt ASC
+        val points = dao.observeForTeam(7, 1).first() // ordered by elapsedRealtimeAt ASC
         assertEquals(listOf(60_000L, 64_000L), points.map { it.elapsedRealtimeAt })
 
         val (a, b) = points
@@ -146,7 +146,7 @@ class TrackRepositoryTest {
         val dao = FakeTrackDao()
         repo(dao, clock = trustedClock(boot = null), boot = null)
             .insertAll(listOf(rawFix(elapsedMs = 60_000L)), raceId = 1, teamId = 7)
-        val p = dao.observeForTeam(7).first().single()
+        val p = dao.observeForTeam(7, 1).first().single()
         assertNull(p.trustedMs)
         assertNull(p.bootCount)
         assertEquals(1_960_000L, p.wallMs) // wall fallback still honest per-point
@@ -157,8 +157,8 @@ class TrackRepositoryTest {
         val dao = FakeTrackDao()
         val r = repo(dao)
         r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7)
-        assertEquals(2, r.countForTeam(7).first())
-        assertEquals(2, r.observeTrack(7).first().size)
+        assertEquals(2, r.countForTeam(7, 1).first())
+        assertEquals(2, r.observeTrack(7, 1).first().size)
     }
 
     @Test
@@ -174,7 +174,7 @@ class TrackRepositoryTest {
             raceId = 1,
             teamId = 7,
         )
-        val length = trackLengthMeters(r.observeTrack(7).first())
+        val length = trackLengthMeters(r.observeTrack(7, 1).first())
         assertEquals(111.2, length, 1.0)
     }
 
@@ -184,9 +184,9 @@ class TrackRepositoryTest {
         val r = repo(dao)
         r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
         r.insertAll(listOf(rawFix(61_000L)), raceId = 1, teamId = 8)
-        r.deleteForTeam(7)
-        assertTrue(r.observeTrack(7).first().isEmpty())
-        assertEquals(1, r.observeTrack(8).first().size)
+        r.deleteForTeam(7, 1)
+        assertTrue(r.observeTrack(7, 1).first().isEmpty())
+        assertEquals(1, r.observeTrack(8, 1).first().size)
     }
 
     // ---- Task 12: dual batch upload ----
@@ -202,7 +202,7 @@ class TrackRepositoryTest {
 
         r.uploadPending(raceId = 1, teamId = 7)
 
-        val rows = dao.observeForTeam(7).first()
+        val rows = dao.observeForTeam(7, 1).first()
         assertTrue(rows.all { it.uploadedLocal })
         assertFalse(rows.any { it.uploadedCloud })
         assertEquals(1, local.calls) // one batch drained then empty
@@ -221,7 +221,7 @@ class TrackRepositoryTest {
 
         assertEquals(1, cloud.calls)
         assertEquals(1, local.calls)
-        val row = dao.observeForTeam(7).first().single()
+        val row = dao.observeForTeam(7, 1).first().single()
         assertTrue(row.uploadedLocal && row.uploadedCloud)
     }
 
@@ -240,7 +240,7 @@ class TrackRepositoryTest {
 
         r.uploadPending(raceId = 1, teamId = 7)
 
-        val rows = dao.observeForTeam(7).first()
+        val rows = dao.observeForTeam(7, 1).first()
         assertEquals(1, rows.count { it.uploadedCloud })
         assertEquals(1, rows.count { !it.uploadedCloud })
         assertEquals(2, cloud.calls) // batch1 (marks first), batch2 (no progress → break)
@@ -255,7 +255,7 @@ class TrackRepositoryTest {
 
         r.uploadPending(raceId = 1, teamId = 7)
 
-        assertFalse(dao.observeForTeam(7).first().single().uploadedCloud)
+        assertFalse(dao.observeForTeam(7, 1).first().single().uploadedCloud)
         assertEquals(1, cloud.calls) // one attempt, then break — no infinite loop
     }
 
@@ -271,8 +271,8 @@ class TrackRepositoryTest {
         r.uploadAllPending()
 
         // Both distinct (raceId, teamId) scopes fully flushed.
-        assertTrue(dao.observeForTeam(7).first().all { it.uploadedLocal && it.uploadedCloud })
-        assertTrue(dao.observeForTeam(8).first().all { it.uploadedLocal && it.uploadedCloud })
+        assertTrue(dao.observeForTeam(7, 1).first().all { it.uploadedLocal && it.uploadedCloud })
+        assertTrue(dao.observeForTeam(8, 2).first().all { it.uploadedLocal && it.uploadedCloud })
     }
 
     @Test
@@ -295,7 +295,7 @@ class TrackRepositoryTest {
 
         assertTrue(reentered)
         assertEquals(1, cloud.calls) // re-entrant call added nothing
-        assertTrue(dao.observeForTeam(7).first().single().uploadedCloud)
+        assertTrue(dao.observeForTeam(7, 1).first().single().uploadedCloud)
     }
 }
 
@@ -303,19 +303,19 @@ class TrackRepositoryTest {
 private class FakeTrackDao : TrackDao {
     private val rows = MutableStateFlow<List<TrackPointEntity>>(emptyList())
 
-    override fun observeForTeam(teamId: Int): Flow<List<TrackPointEntity>> =
-        rows.map { list -> list.filter { it.teamId == teamId }.sortedBy { it.elapsedRealtimeAt } }
+    override fun observeForTeam(teamId: Int, raceId: Int): Flow<List<TrackPointEntity>> =
+        rows.map { list -> list.filter { it.teamId == teamId && it.raceId == raceId }.sortedBy { it.elapsedRealtimeAt } }
 
-    override fun countForTeam(teamId: Int): Flow<Int> =
-        rows.map { list -> list.count { it.teamId == teamId } }
+    override fun countForTeam(teamId: Int, raceId: Int): Flow<Int> =
+        rows.map { list -> list.count { it.teamId == teamId && it.raceId == raceId } }
 
     override suspend fun insertAll(points: List<TrackPointEntity>) {
         val existingIds = rows.value.mapTo(HashSet()) { it.id }
         rows.value = rows.value + points.filterNot { it.id in existingIds } // OnConflict.IGNORE
     }
 
-    override suspend fun deleteForTeam(teamId: Int) {
-        rows.value = rows.value.filterNot { it.teamId == teamId }
+    override suspend fun deleteForTeam(teamId: Int, raceId: Int) {
+        rows.value = rows.value.filterNot { it.teamId == teamId && it.raceId == raceId }
     }
 
     override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<TrackPointEntity> =

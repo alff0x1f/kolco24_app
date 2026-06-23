@@ -15,19 +15,19 @@ data class TrackScope(val raceId: Int, val teamId: Int)
 
 @Dao
 interface TrackDao {
-    @Query("SELECT * FROM track_points WHERE teamId = :teamId ORDER BY elapsedRealtimeAt ASC")
-    fun observeForTeam(teamId: Int): Flow<List<TrackPointEntity>>
+    @Query("SELECT * FROM track_points WHERE teamId = :teamId AND raceId = :raceId ORDER BY elapsedRealtimeAt ASC")
+    fun observeForTeam(teamId: Int, raceId: Int): Flow<List<TrackPointEntity>>
 
-    @Query("SELECT count(*) FROM track_points WHERE teamId = :teamId")
-    fun countForTeam(teamId: Int): Flow<Int>
+    @Query("SELECT count(*) FROM track_points WHERE teamId = :teamId AND raceId = :raceId")
+    fun countForTeam(teamId: Int, raceId: Int): Flow<Int>
 
     // Every insert goes through Room and always supplies a value for the upload flags, so an
     // OnConflictStrategy.IGNORE keeps a re-delivered id (same client UUID) idempotent.
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(points: List<TrackPointEntity>)
 
-    @Query("DELETE FROM track_points WHERE teamId = :teamId")
-    suspend fun deleteForTeam(teamId: Int)
+    @Query("DELETE FROM track_points WHERE teamId = :teamId AND raceId = :raceId")
+    suspend fun deleteForTeam(teamId: Int, raceId: Int)
 
     // Upload queries are scoped by (raceId, teamId): a batch goes to /race/<raceId>/track/, so it must
     // never sweep up another race/team's points and POST them to the wrong endpoint.

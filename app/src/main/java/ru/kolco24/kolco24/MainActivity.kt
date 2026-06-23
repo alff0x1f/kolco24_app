@@ -536,7 +536,9 @@ private fun Kolco24AppRoot(
     // GPS-track points for the selected team. Mirror the safeMarks guard: collectAsState keeps the
     // prior team's value across a key change until the new flow emits, so filter on selectedTeamId.
     val track by remember(selectedTeamId) {
-        selectedTeamId?.let { trackRepo.observeTrack(it) } ?: flowOf(emptyList())
+        val tid = selectedTeamId
+        val rid = selectedRaceId
+        if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
     // Length/time metrics use the accuracy-filtered, capture-ordered points (raw count stays full).
@@ -605,6 +607,7 @@ private fun Kolco24AppRoot(
     // recording also stops the service — the running track belongs to the team we are leaving.
     LaunchedEffect(selectedTeamId) {
         bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false
+        showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
         if (container.trackRecordingState.value is TrackState.Recording) {
             TrackRecordingService.stop(context)
         }
@@ -1393,6 +1396,7 @@ private fun Kolco24AppRoot(
         // recording); the guard re-checks state so a wipe can never race an in-flight insert.
         if (showClearTrackDialog) {
             val clearTeamId = selectedTeamId
+            val clearRaceId = selectedRaceId
             AlertDialog(
                 onDismissRequest = { showClearTrackDialog = false },
                 title = { Text("Очистить трек?") },
@@ -1400,9 +1404,9 @@ private fun Kolco24AppRoot(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            if (clearTeamId != null && container.trackRecordingState.value is TrackState.Idle) {
+                            if (clearTeamId != null && clearRaceId != null && container.trackRecordingState.value is TrackState.Idle) {
                                 // applicationScope so the delete outlives the closing dialog (consistent with unbind).
-                                container.applicationScope.launch { trackRepo.deleteForTeam(clearTeamId) }
+                                container.applicationScope.launch { trackRepo.deleteForTeam(clearTeamId, clearRaceId) }
                             }
                             showClearTrackDialog = false
                         },
