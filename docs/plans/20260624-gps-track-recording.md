@@ -124,13 +124,13 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 
 ⚠️ **Важно (из ревью):** существующий `computeTrusted` инвалидирует по **монотонной регрессии** `anchorElapsedMs > elapsedNow` — это валидно только для «сейчас». Для *прошлого* фикса `elapsedAt < anchorElapsedMs` — **нормальный** случай (точка снята до того, как сеть поставила якорь сессии), и регрессия-гард ошибочно вернёт `null`, спутав «до якоря» с «reboot». Поэтому путь `trustedAt` НЕ должен использовать монотонную регрессию как признак reboot.
 
-- [ ] добавить публичный метод `trustedAt(elapsedAt: Long, bootAt: Int?): Long?` — берёт `AtomicReference` состояние один раз (lock-free `.get()`, как `trusted()`)
-- [ ] reboot-детект в `trustedAt` строить **только** на boot-сессии: если `bootAt != null && anchor.bootCount != null && bootAt != anchor.bootCount` → `null` (разные boot-сессии — нельзя сравнивать монотонные шкалы); иначе вернуть `serverEpochMs + (elapsedAt − anchorElapsedMs)` — формула корректно экстраполирует и назад (отрицательная Δ для pre-anchor точки)
-- [ ] не ломать существующий `computeTrusted`/`trusted()` (путь «сейчас» оставляет монотонную регрессию) — `trustedAt` это отдельная ветка
-- [ ] write tests: `trustedAt` для прошлого `elapsedAt` (точка пачки 4 мин назад) даёт время раньше «сейчас»; разница = Δelapsed
-- [ ] write tests: **pre-anchor точка** `elapsedAt < anchorElapsedMs` в **той же** boot-сессии → НЕ `null`, а корректное время раньше якоря (ключевой кейс из ревью)
-- [ ] write tests: `trustedAt` с `bootAt`, не совпадающим с `anchor.bootCount` → `null`; оба `bootCount` null → fallback-поведение задокументировать (нет данных о reboot → доверяем, экстраполируем)
-- [ ] run tests — `./gradlew testDebugUnitTest` должен пройти перед Task 3
+- [x] добавить публичный метод `trustedAt(elapsedAt: Long, bootAt: Int?): Long?` — берёт `AtomicReference` состояние один раз (lock-free `.get()`, как `trusted()`)
+- [x] reboot-детект в `trustedAt` строить **только** на boot-сессии: если `bootAt != null && anchor.bootCount != null && bootAt != anchor.bootCount` → `null` (разные boot-сессии — нельзя сравнивать монотонные шкалы); иначе вернуть `serverEpochMs + (elapsedAt − anchorElapsedMs)` — формула корректно экстраполирует и назад (отрицательная Δ для pre-anchor точки)
+- [x] не ломать существующий `computeTrusted`/`trusted()` (путь «сейчас» оставляет монотонную регрессию) — `trustedAt` это отдельная ветка
+- [x] write tests: `trustedAt` для прошлого `elapsedAt` (точка пачки 4 мин назад) даёт время раньше «сейчас»; разница = Δelapsed
+- [x] write tests: **pre-anchor точка** `elapsedAt < anchorElapsedMs` в **той же** boot-сессии → НЕ `null`, а корректное время раньше якоря (ключевой кейс из ревью)
+- [x] write tests: `trustedAt` с `bootAt`, не совпадающим с `anchor.bootCount` → `null`; оба `bootCount` null → fallback-поведение задокументировать (нет данных о reboot → доверяем, экстраполируем)
+- [x] run tests — `./gradlew testDebugUnitTest` должен пройти перед Task 3
 
 ### Task 3: Чистые модели трека — RawFix, маппинг, метрики
 
