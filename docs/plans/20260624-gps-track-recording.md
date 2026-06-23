@@ -1,0 +1,303 @@
+# GPS Track Recording During Race
+
+## Overview
+Добавить запись GPS-трека команды во время гонки: батарейно-эффективно (1 точка/мин), в фоне со спящим экраном (foreground service), с ручным стартом/стопом. Точки пишутся локально в Room (источник правды), позже выгружаются батчем на два таргета — облако (HTTPS) и локальный сервер события (cleartext LAN). Просмотр в MVP — только метрики (без карты).
+
+**Проблема, которую решает:** сейчас приложение не фиксирует маршрут команды — нет данных ни для участника (свой трек), ни для судейства/анти-фрода (доказательство пути).
+
+**Критерии приёмки:** (1) запись стартует/стопится вручную; (2) идёт в фоне со спящим экраном; (3) время точки корректно при батчинге (из `elapsedRealtimeNanos`, не из времени доставки), включая pre-anchor точки; (4) метрики (число/длина) видны без карты; (5) двойная выгрузка идемпотентна и независима по таргетам; (6) приложение устанавливается на устройства без GPS-железа.
+
+**Интеграция:** вписывается в существующие паттерны — Room v-bump + миграция + schema JSON + инструментальный `MigrationTest`; ручной DI через `AppContainer`; чистые модели отдельно от Android (как `ScanSession`/`CheckpointColor`); локальные данные с флагами `uploadedLocal`/`uploadedCloud` (как `MarkEntity`); подписанные запросы через `AppSignatureInterceptor`; trusted-время через `TrustedClock`/`TimeSample`.
+
+## Context (from discovery)
+- **Стек:** single-activity Jetpack Compose, minSdk 24 / targetSdk 36, Kotlin, Room (KSP), OkHttp + ручная HMAC-подпись, manual DI (`AppContainer`), нет ViewModel/Navigation.
+- **Геолокации сейчас НЕТ вообще:** ни permissions, ни play-services-location, ни foreground service, ни WorkManager — фича с нуля.
+- **Заложенные крючки в коде:**
+  - `MarkEntity` уже имеет `uploadedLocal` + `uploadedCloud` — паттерн двойной выгрузки.
+  - `SyncMetaEntity` — `origin` в композитном PK `(origin, resource)`.
+  - `TrustedClock` (`data/time/TrustedClock.kt`) с `computeTrusted(state, elapsedNow, bootNow)` и `TimeSample` — но публичный путь считает только «сейчас», нужен расчёт для произвольного `elapsedAt`.
+  - `AppContainer` — `applicationScope`, lazy-репозитории, `trustedClock`, `apiClient`, `database`.
+  - `ApiClient.post()` + `PostResult<T>` — готовый POST-путь со статус-маппингом (`bindTag` как образец).
+  - `AppSignatureInterceptor(tokenProvider, nowSeconds)` + `ServerTimeInterceptor` (single-host `/app/` HTTPS, без host-гейта).
+  - Room сейчас **v10**, `schemas/.../10.json`, `MigrationTest`/`MigrationTestHelper` в `app/src/androidTest`.
+- **Образцы для копирования:** `data/MarkRepository.kt`, `data/db/` (миграции), `data/NfcUid.kt` (чистый хелпер + тест), `data/nfc/MifareUltralightWriter.kt` (seam-интерфейс `NfcTransport`), `ui/marks/MarksScreen.kt` (метрики/тайлы), bind/unbind-диалог в `MainActivity`.
+
+## Development Approach
+- **testing approach**: Regular (код, затем JVM-тесты в той же задаче) — по конвенции репозитория: чистые модели/хелперы покрываются JVM-тестами, адаптеры (Service, реальные location-движки, Compose UI) не тестируются.
+- complete each task fully before moving to the next
+- make small, focused changes
+- **CRITICAL: каждая задача с изменением кода ОБЯЗАНА включать новые/обновлённые тесты** — для тестируемых частей (чистые модели, мапперы, DAO-логика, DTO, миграция). Для нетестируемых по конвенции частей (Service, FusedLocationEngine/LegacyLocationEngine реальные адаптеры, Compose) тест не пишется — это явно отмечается в задаче.
+- **CRITICAL: все тесты должны проходить перед началом следующей задачи**
+- run tests after each change
+- maintain backward compatibility (аддитивная миграция, существующие таблицы не трогаем)
+
+## Testing Strategy
+- **unit tests (JVM, `testDebugUnitTest`)**: `TrackMetricsTest`, `TrackPointMappingTest`, `LocationEngineFactoryTest`, `TrustedClockTest` (расширение), `TrackUploadTest` (MockWebServer как `ApiClientTest`).
+- **instrumented tests (`connectedDebugAndroidTest`)**: `MigrationTest.migrate10To11_*` (требует эмулятор/устройство; guard миграции Room).
+- **e2e/UI**: проект UI/Service/реальные движки не тестирует по конвенции — вместо этого граничная логика вынесена в чистые функции и покрыта JVM-тестами.
+- **lint**: `./gradlew lintDebug` должен проходить (особенно `NewApi` — minSdk 24; foreground-service-type на 14+).
+
+## Progress Tracking
+- mark completed items with `[x]` immediately when done
+- add newly discovered tasks with ➕ prefix
+- document issues/blockers with ⚠️ prefix
+- update plan if implementation deviates from original scope
+
+## Solution Overview
+**Сбор (вариант A — батчинг):** `FusedLocationEngine` где есть GMS, иначе `LegacyLocationEngine`. Fused: `LocationRequest(PRIORITY_BALANCED_POWER_ACCURACY, interval=60s, minUpdateInterval=60s, maxUpdateDelay=300s)` — точки приезжают пачкой ~раз в 5 мин, GPS-радио спит между сериями. Legacy: `requestLocationUpdates(GPS_PROVIDER, 60s)` без батчинга, fallback на `NETWORK_PROVIDER`.
+
+**Время точки из фикса:** каждый `Location` несёт `time` (`gpsTimeMs` — спутниковый хинт) и `elapsedRealtimeNanos` (монотонный момент фикса). `trustedMs` считается из `elapsedRealtimeNanos` каждой точки через `TrustedClock` (НЕ из времени доставки пачки — иначе при батчинге все точки получат почти одинаковое время). Порядок/длина трека — по `elapsedRealtimeAt`.
+
+**Хранение:** Room v11, аддитивная таблица `track_points`, все точки сырьём (фильтр грубых — только на чтении).
+
+**Фон:** `TrackRecordingService` (foreground, type=location), `START_NOT_STICKY`, уведомление с кнопкой «Стоп», состояние через `trackRecordingState: StateFlow<TrackState>` в `AppContainer`.
+
+**Выгрузка (фаза 2, батч не стрим):** на стопе + оппортунистически при запуске; два независимых таргета (cloud HTTPS / local cleartext `192.168.1.5`), идемпотентный upsert по client UUID, флаги `uploadedLocal`/`uploadedCloud`.
+
+## Technical Details
+
+### Ключевые решения и обоснование
+- **Foreground service + `START_NOT_STICKY`:** запись в кармане со спящим экраном требует foreground service; не возобновляем молча после kill системой (внезапный расход батареи нежелателен) — перезапуск только из UI.
+- **Без `ACCESS_BACKGROUND_LOCATION`:** foreground-service с типом `location`, запущенный из foreground, легально продолжает в фоне — упрощает онбординг.
+- **`BALANCED_POWER` (не `HIGH_ACCURACY`):** батарея — приоритет; для трека 1/мин точности сети+GPS достаточно.
+- **Отдельный OkHttpClient для local:** local — второй хост; изолируем доверие — БЕЗ `ServerTimeInterceptor` (не якорим trusted-часы от LAN-сервера), но с той же подписью.
+- **Двойная выгрузка через два флага:** зеркало `MarkEntity` — точка «доставлена» только когда улетела в оба (или в доступный); таргеты независимы.
+
+### TrackPointEntity (таблица `track_points`)
+```
+@PrimaryKey id: String          // client UUID — идемпотентность
+raceId: Int                     // @Index index_track_points_raceId
+teamId: Int                     // @Index index_track_points_teamId
+lat: Double
+lon: Double
+accuracy: Float                 // REAL NOT NULL
+gpsTimeMs: Long                 // location.time
+elapsedRealtimeAt: Long         // location.elapsedRealtimeNanos / 1_000_000
+bootCount: Int?                 // INTEGER (nullable)
+wallMs: Long                    // System.currentTimeMillis() при записи (fallback)
+trustedMs: Long?                // INTEGER (nullable) — trusted из elapsedRealtimeAt
+uploadedLocal: Boolean = false  // INTEGER NOT NULL DEFAULT 0
+uploadedCloud: Boolean = false  // INTEGER NOT NULL DEFAULT 0
+```
+
+### API контракт (проектируется, эндпоинта пока нет)
+`POST /app/race/<raceId>/track/` — батч точек команды.
+```json
+{ "team_id": 1234,
+  "points": [ { "id": "uuid", "lat": 55.75, "lon": 37.61, "accuracy": 12.4,
+    "gps_time_ms": 1718900000000, "trusted_ms": 1718900000123,
+    "elapsed_at": 9876543, "boot_count": 7 } ] }
+```
+Идемпотентность: upsert по client `id`. Ответ `200` со списком принятых `id` → `markUploaded(ids, target)`. Подпись — та же HMAC-схема, что у `bindTag`.
+
+### Конфиг local-сервера
+`BuildConfig.LOCAL_API_BASE_URL` (дефолт `http://192.168.1.5/`), ключ `kolco24.localApiBaseUrl` в `local.properties` + env-fallback `KOLCO24_LOCAL_API_BASE_URL`. Cleartext — `res/xml/network_security_config.xml` `domain-config` только для `192.168.1.5`.
+
+## What Goes Where
+- **Implementation Steps** (`[ ]`): код, тесты, манифест, gradle, миграции, schema JSON — всё в этом репозитории.
+- **Post-Completion** (без чекбоксов): подъём backend-эндпоинта `POST /app/race/<id>/track/`, реальный local-сервер события на `192.168.1.5`, ручная проверка фоновой записи на устройстве (расход батареи, экран выключен), запуск `connectedDebugAndroidTest` на эмуляторе/устройстве.
+
+---
+
+# ФАЗА 1 — Ядро локальной записи
+
+## Implementation Steps
+
+### Task 1: Зависимость play-services-location + конфиг local URL
+
+**Files:**
+- Modify: `gradle/libs.versions.toml`
+- Modify: `app/build.gradle.kts`
+
+- [ ] добавить версию и библиотеку `play-services-location` (актуальная стабильная) в `libs.versions.toml`
+- [ ] подключить `implementation(libs.play.services.location)` в `app/build.gradle.kts`
+- [ ] добавить `BuildConfig.LOCAL_API_BASE_URL`: читать `kolco24.localApiBaseUrl` из `local.properties`, fallback env `KOLCO24_LOCAL_API_BASE_URL`, дефолт `http://192.168.1.5/` (по образцу `API_BASE_URL`, но с дефолтом — не падать если ключа нет)
+- [ ] `./gradlew help` / sync — проект конфигурируется без ошибок
+- [ ] (тестов нет — конфигурация сборки; проверка = успешный sync)
+
+### Task 2: Обобщить TrustedClock для произвольного elapsedAt
+
+**Files:**
+- Modify: `app/src/main/java/ru/kolco24/kolco24/data/time/TrustedClock.kt`
+- Modify: `app/src/test/java/.../TrustedClockTest.kt`
+
+⚠️ **Важно (из ревью):** существующий `computeTrusted` инвалидирует по **монотонной регрессии** `anchorElapsedMs > elapsedNow` — это валидно только для «сейчас». Для *прошлого* фикса `elapsedAt < anchorElapsedMs` — **нормальный** случай (точка снята до того, как сеть поставила якорь сессии), и регрессия-гард ошибочно вернёт `null`, спутав «до якоря» с «reboot». Поэтому путь `trustedAt` НЕ должен использовать монотонную регрессию как признак reboot.
+
+- [ ] добавить публичный метод `trustedAt(elapsedAt: Long, bootAt: Int?): Long?` — берёт `AtomicReference` состояние один раз (lock-free `.get()`, как `trusted()`)
+- [ ] reboot-детект в `trustedAt` строить **только** на boot-сессии: если `bootAt != null && anchor.bootCount != null && bootAt != anchor.bootCount` → `null` (разные boot-сессии — нельзя сравнивать монотонные шкалы); иначе вернуть `serverEpochMs + (elapsedAt − anchorElapsedMs)` — формула корректно экстраполирует и назад (отрицательная Δ для pre-anchor точки)
+- [ ] не ломать существующий `computeTrusted`/`trusted()` (путь «сейчас» оставляет монотонную регрессию) — `trustedAt` это отдельная ветка
+- [ ] write tests: `trustedAt` для прошлого `elapsedAt` (точка пачки 4 мин назад) даёт время раньше «сейчас»; разница = Δelapsed
+- [ ] write tests: **pre-anchor точка** `elapsedAt < anchorElapsedMs` в **той же** boot-сессии → НЕ `null`, а корректное время раньше якоря (ключевой кейс из ревью)
+- [ ] write tests: `trustedAt` с `bootAt`, не совпадающим с `anchor.bootCount` → `null`; оба `bootCount` null → fallback-поведение задокументировать (нет данных о reboot → доверяем, экстраполируем)
+- [ ] run tests — `./gradlew testDebugUnitTest` должен пройти перед Task 3
+
+### Task 3: Чистые модели трека — RawFix, маппинг, метрики
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/TrackModels.kt`
+- Create: `app/src/test/java/.../track/TrackMetricsTest.kt`
+- Create: `app/src/test/java/.../track/TrackPointMappingTest.kt`
+
+- [ ] `data class RawFix(lat, lon, accuracy, gpsTimeMs, elapsedRealtimeNanos)` — Android-free value type
+- [ ] чистая `trackLengthMeters(points: List<TrackPointEntity или общий тип>): Double` — сумма гаверсинусов между соседними по `elapsedRealtimeAt`
+- [ ] чистая `filterPoints(points, maxAccuracyMeters: Float = 50f): List<...>` — отбрасывает грубые фиксы (для показа/длины; в БД пишем всё)
+- [ ] чистый маппер `RawFix.toTrackPoint(raceId, teamId, wallMs, trustedMs, bootCount, idFactory): TrackPointEntity` (`elapsedRealtimeAt = elapsedRealtimeNanos/1_000_000`) — `idFactory`/`trustedMs` инжектятся, чтобы маппер был детерминирован и тестируем
+- [ ] write tests `TrackMetricsTest`: длина по известным координатам (напр. 0.001° ≈ ожидаемые метры), `filterPoints` отбрасывает `accuracy>50`, пустой/одноточечный список → 0
+- [ ] write tests `TrackPointMappingTest`: `elapsedRealtimeAt` = nanos/1e6, поля проброшены, `trustedMs` берётся из инжектированного значения (имитируя расчёт из `elapsedRealtimeNanos`)
+- [ ] run tests — должны пройти перед Task 4
+
+### Task 4: Room v11 — TrackPointEntity, TrackDao, миграция
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/db/TrackPointEntity.kt`
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/db/TrackDao.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/AppDatabase.kt`
+- Create: `app/schemas/.../11.json` (генерируется KSP при сборке)
+- Modify: `app/src/androidTest/java/.../MigrationTest.kt`
+
+- [ ] добавить `TrackPointEntity` (поля из Technical Details; `@Index` на `teamId` и `raceId`)
+- [ ] `TrackDao`: `observeForTeam(teamId): Flow<List<TrackPointEntity>>` (`ORDER BY elapsedRealtimeAt ASC`), `insertAll(points)`, `unuploadedLocal(limit)` (`WHERE uploadedLocal=0 ORDER BY elapsedRealtimeAt LIMIT`), `unuploadedCloud(limit)`, `markUploadedLocal(ids)`, `markUploadedCloud(ids)`, `countForTeam(teamId): Flow<Int>`, `deleteForTeam(teamId)`
+- [ ] в `AppDatabase`: bump version 10→11, добавить `TrackPointEntity` в `entities`, абстрактный `trackDao()`, `MIGRATION_10_11` (`CREATE TABLE track_points` + `CREATE INDEX index_track_points_teamId` + `CREATE INDEX index_track_points_raceId`), зарегистрировать миграцию
+- [ ] SQL колонок в `CREATE TABLE` дословно: `id TEXT NOT NULL PRIMARY KEY`, `raceId INTEGER NOT NULL`, `teamId INTEGER NOT NULL`, `lat REAL NOT NULL`, `lon REAL NOT NULL`, `accuracy REAL NOT NULL`, `gpsTimeMs INTEGER NOT NULL`, `elapsedRealtimeAt INTEGER NOT NULL`, `bootCount INTEGER` (nullable), `wallMs INTEGER NOT NULL`, `trustedMs INTEGER` (nullable), `uploadedLocal INTEGER NOT NULL DEFAULT 0`, `uploadedCloud INTEGER NOT NULL DEFAULT 0`
+- [ ] собрать (`assembleDebug`) — KSP генерирует `11.json`; сверить SQL миграции дословно с ним (имена индексов camelCase, типы, nullability); **закоммитить `11.json` в git** (не только сгенерировать — `MigrationTestHelper` читает его из schemas)
+- [ ] write instrumented test `MigrationTest.migrate10To11_keepsDataAndAddsTable`: предзаполнить v10-строку (напр. marks), мигрировать, проверить что строка жива и `track_points` существует
+- [ ] run `./gradlew testDebugUnitTest` (компиляция DAO) + по возможности `connectedDebugAndroidTest` — должны пройти перед Task 5
+
+### Task 5: TrackRepository + wiring в AppContainer
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/TrackRepository.kt`
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/TrackState.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
+- Create: `app/src/test/java/.../track/TrackRepositoryTest.kt`
+
+- [ ] `sealed interface TrackState { object Idle; data class Recording(teamId: Int, pointCount: Int) }`
+- [ ] `TrackRepository(trackDao)`: `insertAll(points)`, `observeTrack(teamId)`, `countForTeam(teamId)`, `deleteForTeam(teamId)`, чистые метрики через хелперы Task 3
+- [ ] **Решено (из ревью): маппинг владеет репозиторий.** Сигнатура `suspend fun insertAll(rawFixes: List<RawFix>, raceId: Int, teamId: Int)` — внутри для каждой точки `trustedMs = trustedClock.trustedAt(elapsedRealtimeNanos/1_000_000, bootAt)`, `wallMs = System.currentTimeMillis()` (инжектируемый провайдер для теста), `id = UUID` через `idFactory`, затем `trackDao.insertAll(entities)`. Сервис (Task 7) лишь форвардит `List<RawFix>` — никакой логики времени в сервисе. `TrackRepository` принимает `TrustedClock` + `idFactory` + `wallProvider`
+- [ ] в `AppContainer`: lazy `trackDao`, lazy `trackRepository`, публичный `val trackRecordingState = MutableStateFlow<TrackState>(Idle)` (пишет сервис, читает UI)
+- [ ] write tests `TrackRepositoryTest` (fake `TrackDao`): `insertAll` мапит и пишет, `deleteForTeam` чистит, метрики/счётчик корректны, `trustedMs` досчитывается из `elapsedRealtimeAt` (fake clock)
+- [ ] run tests — должны пройти перед Task 6
+
+### Task 6: LocationEngine seam + Fused + Legacy + Factory
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/LocationEngine.kt`
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/FusedLocationEngine.kt`
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/LegacyLocationEngine.kt`
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/track/LocationEngineFactory.kt`
+- Create: `app/src/test/java/.../track/LocationEngineFactoryTest.kt`
+
+- [ ] `interface LocationEngine { fun start(onPoints: (List<RawFix>) -> Unit); fun stop() }`
+- [ ] `FusedLocationEngine`: `LocationRequest.Builder(PRIORITY_BALANCED_POWER_ACCURACY, 60_000).setMinUpdateIntervalMillis(60_000).setMaxUpdateDelayMillis(300_000)`; в `onLocationResult` отдавать всю пачку `locationResult.locations.map { it.toRawFix() }` (мапит `time`/`elapsedRealtimeNanos`)
+- [ ] `LegacyLocationEngine`: `LocationManager.requestLocationUpdates(GPS_PROVIDER, 60_000L, 0f, listener, Looper)`, fallback `NETWORK_PROVIDER` если GPS-провайдера нет; каждый фикс — список из одного `RawFix`
+- [ ] `LocationEngineFactory.create(context)`: выбор по `GoogleApiAvailability.isGooglePlayServicesAvailable(ctx) == SUCCESS`; для тестируемости — вынести решение в чистую `chooseEngineType(gmsAvailable: Boolean): EngineType`
+- [ ] note (из ревью): legacy-путь без `maxUpdateDelay`-эквивалента → под Doze на не-GMS устройствах апдейты могут троттлиться (device-dependent); это причина предпочтения Fused — отметить в коде комментарием и в Post-Completion device-test
+- [ ] write tests `LocationEngineFactoryTest`: `chooseEngineType(true)→Fused`, `chooseEngineType(false)→Legacy` (реальные движки/адаптеры — не тестируем по конвенции, отметить комментарием)
+- [ ] run tests — должны пройти перед Task 7
+
+### Task 7: TrackRecordingService + permissions + манифест
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/TrackRecordingService.kt`
+- Modify: `app/src/main/AndroidManifest.xml`
+
+- [ ] объявить permissions: `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`
+- [ ] объявить `<uses-feature android:name="android.hardware.location.gps" android:required="false" />` (из ревью: как `nfc required=false` — иначе Play фильтрует устройства без GPS, регрессия installability)
+- [ ] объявить `<service android:name=".TrackRecordingService" android:foregroundServiceType="location" android:exported="false"/>`
+- [ ] `TrackRecordingService`: `onStartCommand` **немедленно** вызывает `startForeground(id, notif, FOREGROUND_SERVICE_TYPE_LOCATION)` (<5с, до любых проверок — иначе на части OEM крэш «did not call startForeground»), читает `raceId`/`teamId` из extras, **затем** перепроверяет location-permission и `stopSelf()` если её нет (permission подтверждается лаунчером в Task 8 *до* `startForegroundService`); создаёт `LocationEngine` через factory, подписывается; `START_NOT_STICKY`
+- [ ] note (из ревью): отказ в `POST_NOTIFICATIONS` — **не фатален**: канал всё равно создаётся, `startForeground` работает, уведомление просто не показывается; запись идёт
+- [ ] уведомление: канал «Запись трека» (low importance, без звука), текст «Идёт запись трека · N точек», `Action` «Стоп» (`PendingIntent` с `STOP` action → `stopSelf`), тап → открыть `MainActivity`
+- [ ] на каждую пачку `RawFix`: `applicationScope.launch { trackRepository.insertAll(...) }`, обновлять `container.trackRecordingState` (`Recording(teamId, count)`); на стоп — снять updates, `stopForeground`+`stopSelf`, `trackRecordingState = Idle`
+- [ ] (тестов нет — Service/адаптер по конвенции; логика выбора движка/маппинг уже покрыты Task 3/6; lint должен пройти — проверить `ForegroundServicePermission`/`NewApi`)
+
+### Task 8: TrackCard UI + поток запуска в MainActivity
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/ui/track/TrackCard.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
+
+- [ ] `TrackCard(state: TrackState, pointCount, lengthMeters, hasTeam, gpsHardware, onStart, onStop, onClear, first/lastPointTime)` — stateless: `Idle` → «Начать запись» (`OrangeCta`, дизейбл без команды/GPS-железа); `Recording` → пульсирующая точка + «N точек · ~Xм» + «Остановить»; метрики (число точек, длина м/км, время первой/последней) + «Очистить трек»
+- [ ] встроить `TrackCard` в `TeamScreen` как `SectionCard` (рядом с «Прочее»), прокинуть колбэки/состояние от хоста
+- [ ] в `MainActivity`: collect `container.trackRecordingState`, `track`-флоу `remember(selectedTeamId){ trackRepo.observeTrack(it) }`, счётчик/длина; `onStart` → проверка permissions через `rememberLauncherForActivityResult` (`ACCESS_FINE_LOCATION`, на 13+ `POST_NOTIFICATIONS`) → проверка включён ли GPS (`LocationManager.isProviderEnabled`; нет → баннер + deep-link `ACTION_LOCATION_SOURCE_SETTINGS`, но `startForegroundService` всё равно) → `ContextCompat.startForegroundService(Intent extras raceId/teamId)`
+- [ ] `onStop` → `Intent` STOP в сервис / `stopService`; `onClear` доступен **только в состоянии `Idle`** (из ревью: чистка во время записи → сервис продолжит вставлять после wipe, счётчик прыгнет) → подтверждающий `AlertDialog` (как unbind) → `applicationScope.launch { trackRepo.deleteForTeam(teamId) }`; отказ навсегда (`!shouldShowRationale`) → диалог с deep-link в настройки приложения
+- [ ] смена команды во время записи → останавливать сервис (в существующем `LaunchedEffect(selectedTeamId)` рядом с другими overlay-ресетами)
+- [ ] (тестов нет — Compose/MainActivity по конвенции; чистые длины/метрики уже покрыты Task 3)
+
+### Task 9: Verify Фаза 1
+
+- [ ] verify: запись стартует/стопится вручную, точки пишутся в Room, карточка показывает счётчик и длину, переживает сворачивание/поворот
+- [ ] verify edge cases: нет команды (кнопка дизейбл), GPS выключен (баннер+deep-link), смена команды (стоп), reboot (`START_NOT_STICKY`, не возобновляется)
+- [ ] run `./gradlew testDebugUnitTest` — все JVM-тесты зелёные
+- [ ] run `./gradlew lintDebug` — без новых ошибок (foreground-service-type, NewApi)
+- [ ] run `./gradlew connectedDebugAndroidTest` (эмулятор/устройство) — `MigrationTest` зелёный
+
+---
+
+# ФАЗА 2 — Двойная батч-выгрузка (когда серверы готовы)
+
+### Task 10: Track upload DTO + ApiClient методы (cloud)
+
+**Files:**
+- Create: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/TrackDtos.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
+- Create: `app/src/test/java/.../TrackUploadTest.kt`
+
+- [ ] `@Serializable` `TrackUploadRequest(team_id, points: List<TrackPointDto>)` + `TrackPointDto(id, lat, lon, accuracy, gps_time_ms, trusted_ms: Long?, elapsed_at, boot_count: Int?)` + `TrackUploadResponse(accepted: List<String>)` (snake_case `@SerialName`)
+- [ ] чистый маппер `TrackPointEntity.toDto(): TrackPointDto`
+- [ ] **Решено (из ревью): один метод `uploadTrack`, два инстанса `ApiClient`.** `ApiClient` сейчас держит один `baseUrl` + один `okHttpClient` — двум таргетам нужны **два инстанса** `ApiClient` (не per-call baseUrl, чтобы не рефакторить существующие методы). В Task 10 добавить **один** метод `ApiClient.uploadTrack(raceId, teamId, points): PostResult<TrackUploadResponse>` (строит `"$baseUrl/app/race/$raceId/track/"` через `post(...)`) — он же используется и для cloud, и для local; выбор таргета = выбор инстанса `ApiClient`. Никаких `uploadTrackCloud`/`uploadTrackLocal` методов
+- [ ] write tests `TrackUploadTest` (MockWebServer как `ApiClientTest`): `200` → `Success(accepted)`, `403/401/400/429/offline` маппинг, батч-маппинг entity→DTO, пустой батч
+- [ ] run tests — должны пройти перед Task 11
+
+### Task 11: Local OkHttpClient + network security config + uploadTrackLocal
+
+**Files:**
+- Create: `app/src/main/res/xml/network_security_config.xml`
+- Modify: `app/src/main/AndroidManifest.xml`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
+- Modify: `app/src/test/java/.../TrackUploadTest.kt`
+
+- [ ] `network_security_config.xml`: `domain-config cleartextTrafficPermitted=true` только для `192.168.1.5`; остальное — дефолт HTTPS-only; подключить `android:networkSecurityConfig` в `<application>`
+- [ ] в `AppContainer`: отдельный `localOkHttpClient` = `defaultOkHttpClient(signatureInterceptor)` **без** `ServerTimeInterceptor` (из ревью: local — второй хост; держим на отдельном клиенте, чтобы не якорить trusted-часы от LAN и не нарушать host-less допущение `ServerTimeInterceptor`; cloud-клиент local-хост НЕ получает); отдельный инстанс `localApiClient = ApiClient(LOCAL_API_BASE_URL, localOkHttpClient, json)`
+- [ ] метод `uploadTrack` уже есть (Task 10) — local просто вызывает `localApiClient.uploadTrack(...)`; недоступность (не в той Wi-Fi) → `Offline`/timeout (короткие таймауты на `localOkHttpClient`, чтобы не висеть)
+- [ ] write tests: `uploadTrack` против local-инстанса — маппинг статусов через MockWebServer; offline (нет сервера) → `Offline`
+- [ ] run tests — должны пройти перед Task 12
+
+### Task 12: uploadPending + оппортунистический дослыл
+
+**Files:**
+- Modify: `app/src/main/java/ru/kolco24/kolco24/data/track/TrackRepository.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/TrackRecordingService.kt`
+- Modify: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
+- Modify: `app/src/test/java/.../track/TrackRepositoryTest.kt`
+
+- [ ] `TrackRepository.uploadPending(teamId)`: для каждого таргета независимо — читать `unuploadedLocal`/`unuploadedCloud` (LIMIT 500) пачками, слать через соответствующий инстанс (`localApiClient.uploadTrack` / `apiClient.uploadTrack`), на `Success` → `markUploadedLocal`/`markUploadedCloud(accepted)`; цикл пока есть неотправленные; ошибки таргета не валят другой (репо принимает оба `ApiClient` инстанса)
+- [ ] на стопе записи в сервисе → `applicationScope.launch { trackRepository.uploadPending(teamId) }`
+- [ ] оппортунистически в `Kolco24App` (Launch B / при выборе команды) → если есть unuploaded, дослать в `applicationScope`
+- [ ] write tests: `uploadPending` ставит правильный флаг по таргету, не дублирует уже выгруженное, частичный `accepted` помечает только принятые, ошибка одного таргета не мешает другому (fake DAO + fake ApiClient)
+- [ ] run tests — должны пройти перед Task 13
+
+### Task 13: Verify acceptance criteria
+- [ ] verify all requirements from Overview реализованы (запись, фон, метрики, двойная выгрузка)
+- [ ] verify edge cases: local недоступен → cloud всё равно уходит и наоборот; ретрай не дублирует (idempotent по id); `trusted_ms=null` сериализуется
+- [ ] run full test suite: `./gradlew testDebugUnitTest`
+- [ ] run `./gradlew lintDebug`
+- [ ] run `./gradlew connectedDebugAndroidTest`
+
+### Task 14: [Final] Документация
+- [ ] обновить `CLAUDE.md`: новый `data/track/` слой, `TrackRecordingService`, Room v11, двойная выгрузка трека, `LOCAL_API_BASE_URL`/network-security-config, расширение `TrustedClock.trustedAt`
+- [ ] обновить `docs/API.md` контрактом `POST /app/race/<id>/track/` (или отметить как «спроектировано, ждёт backend»)
+- [ ] move this plan to `docs/plans/completed/`
+
+## Post-Completion
+*Требуют внешних действий — без чекбоксов, информационно*
+
+**Backend / инфраструктура:**
+- поднять эндпоинт `POST /app/race/<raceId>/track/` с upsert по client `id`, приёмом `trusted_ms=null`, rate-limit, той же HMAC-подписью что у `bindTag` — до этого Фаза 2 пишет в Room с `uploaded*=0` (данные не теряются).
+- **local-сервер на `192.168.1.5` (из ревью):** должен валидировать те же 6 заголовков `X-App-*`/`X-Install-Id` с **тем же key id / secret** и окном ±300 с по trusted-времени (либо отключить проверку времени). Иначе каждый local-upload → `403`, `uploadedLocal` молча остаётся `0`, данные «зависают» без ошибки пользователю. Тот же контракт тела/ответа, что у cloud.
+
+**Ручная проверка на устройстве:**
+- фоновая запись со спящим экраном 1–2 часа: реальный расход батареи, отсутствие пропусков, корректность времени точек при батчинге.
+- поведение на телефоне без GMS (Huawei) — fallback на `LegacyLocationEngine`.
+- двойная выгрузка: в Wi-Fi события (оба таргета), вне Wi-Fi (только cloud, local дошлётся позже).
