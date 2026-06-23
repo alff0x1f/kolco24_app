@@ -3,8 +3,6 @@ package ru.kolco24.kolco24.data.nfc
 import android.nfc.Tag
 import android.nfc.tech.NfcA
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.util.UUID
 
 /** Result of [writeChipCode]. Never thrown — surfaced as a value. */
 sealed interface ChipWriteResult {
@@ -80,17 +78,6 @@ fun parseChipRecord(pages: ByteArray): ByteArray? {
     if (type != CHIP_TYPE_KP) return null
     return pages.copyOfRange(PAGE_SIZE, PAGE_SIZE + CHIP_CODE_BYTES)
 }
-
-/**
- * Generate a fresh 16-byte chip code (a random UUID's big-endian bytes). The `code` is what the
- * legend crypto hashes into a `bid`; here it's just provisioned onto a blank tag.
- */
-fun newChipCode(): ByteArray =
-    ByteBuffer.allocate(CHIP_CODE_BYTES).apply {
-        val uuid = UUID.randomUUID()
-        putLong(uuid.mostSignificantBits)
-        putLong(uuid.leastSignificantBits)
-    }.array()
 
 /** Uppercase hex of [code] (no separators) — for display/recording. */
 fun chipCodeHex(code: ByteArray): String {

@@ -81,13 +81,13 @@ Delete the write-chip code path end to end: the dialog file, the Settings row + 
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriter.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/nfc/MifareUltralightWriterTest.kt`
 
-- [ ] remove `fun newChipCode(): ByteArray` (~line 88); do NOT touch `writeChipCode`/`chipCodeHex`/`chipCodeFromHex`/`buildChipRecord`/`parseChipRecord`
-- [ ] delete the two tests *about* it: `newChipCode_alwaysReturns16Bytes` (~line 12) and `newChipCode_twoCalls_produceDifferentCodes` (~line 17)
-- [ ] in the two tests that merely *use* it as an input, replace `newChipCode()` with a fixed 16-byte `byteArrayOf(...)` literal (reuse the existing 16-byte pattern at lines 47–49 — full-width signed bytes, `0x04` lead):
+- [x] remove `fun newChipCode(): ByteArray` (~line 88); do NOT touch `writeChipCode`/`chipCodeHex`/`chipCodeFromHex`/`buildChipRecord`/`parseChipRecord` (also dropped the now-unused `ByteBuffer`/`UUID` imports)
+- [x] delete the two tests *about* it: `newChipCode_alwaysReturns16Bytes` (~line 12) and `newChipCode_twoCalls_produceDifferentCodes` (~line 17)
+- [x] in the two tests that merely *use* it as an input, replace `newChipCode()` with a fixed 16-byte `byteArrayOf(...)` literal (reuse the existing 16-byte pattern at lines 47–49 — full-width signed bytes, `0x04` lead):
   - `chipCodeHex_thenFromHex_roundTripForFullRandomCode` (~line 55) — hex roundtrip assertion
   - `parseChipRecord_roundTripWithBuildChipRecord` (~line 154) — parse/build roundtrip assertion (NOT a write-path test)
-- [ ] grep the whole test tree (and repo) for `newChipCode` → zero hits remain (else the build fails after the function is removed)
-- [ ] `./gradlew testDebugUnitTest` — `MifareUltralightWriterTest` green
+- [x] grep the whole test tree (and repo) for `newChipCode` → zero hits remain (else the build fails after the function is removed)
+- [x] `./gradlew testDebugUnitTest` — `MifareUltralightWriterTest` green
 
 ### Task 4: Verify acceptance criteria
 - [ ] grep repo for `onTagForWrite`, `WriteChipDialog`, `WriteChipState`, `chipWriterCode`, `newChipCode`, `onWriteChip` → zero hits (all removed)
