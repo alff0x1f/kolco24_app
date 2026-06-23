@@ -253,11 +253,11 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Create: `app/src/test/java/.../TrackUploadTest.kt`
 
-- [ ] `@Serializable` `TrackUploadRequest(team_id, points: List<TrackPointDto>)` + `TrackPointDto(id, lat, lon, accuracy, gps_time_ms, trusted_ms: Long?, elapsed_at, boot_count: Int?)` + `TrackUploadResponse(accepted: List<String>)` (snake_case `@SerialName`)
-- [ ] чистый маппер `TrackPointEntity.toDto(): TrackPointDto`
-- [ ] **Решено (из ревью): один метод `uploadTrack`, два инстанса `ApiClient`.** `ApiClient` сейчас держит один `baseUrl` + один `okHttpClient` — двум таргетам нужны **два инстанса** `ApiClient` (не per-call baseUrl, чтобы не рефакторить существующие методы). В Task 10 добавить **один** метод `ApiClient.uploadTrack(raceId, teamId, points): PostResult<TrackUploadResponse>` (строит `"$baseUrl/app/race/$raceId/track/"` через `post(...)`) — он же используется и для cloud, и для local; выбор таргета = выбор инстанса `ApiClient`. Никаких `uploadTrackCloud`/`uploadTrackLocal` методов
-- [ ] write tests `TrackUploadTest` (MockWebServer как `ApiClientTest`): `200` → `Success(accepted)`, `403/401/400/429/offline` маппинг, батч-маппинг entity→DTO, пустой батч
-- [ ] run tests — должны пройти перед Task 11
+- [x] `@Serializable` `TrackUploadRequest(team_id, points: List<TrackPointDto>)` + `TrackPointDto(id, lat, lon, accuracy, gps_time_ms, trusted_ms: Long?, elapsed_at, boot_count: Int?)` + `TrackUploadResponse(accepted: List<String>)` (snake_case `@SerialName`)
+- [x] чистый маппер `TrackPointEntity.toDto(): TrackPointDto`
+- [x] **Решено (из ревью): один метод `uploadTrack`, два инстанса `ApiClient`.** `ApiClient` сейчас держит один `baseUrl` + один `okHttpClient` — двум таргетам нужны **два инстанса** `ApiClient` (не per-call baseUrl, чтобы не рефакторить существующие методы). В Task 10 добавить **один** метод `ApiClient.uploadTrack(raceId, teamId, points): PostResult<TrackUploadResponse>` (строит `"$baseUrl/app/race/$raceId/track/"` через `post(...)`) — он же используется и для cloud, и для local; выбор таргета = выбор инстанса `ApiClient`. Никаких `uploadTrackCloud`/`uploadTrackLocal` методов
+- [x] write tests `TrackUploadTest` (MockWebServer как `ApiClientTest`): `200` → `Success(accepted)`, `403/401/400/429/offline` маппинг, батч-маппинг entity→DTO, пустой батч (+ `trusted_ms=null`/`boot_count=null` сериализуются как JSON null)
+- [x] run tests — должны пройти перед Task 11 (`testDebugUnitTest` + `lintDebug` зелёные)
 
 ### Task 11: Local OkHttpClient + network security config + uploadTrackLocal
 

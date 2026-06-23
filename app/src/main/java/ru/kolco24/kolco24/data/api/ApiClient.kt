@@ -17,6 +17,9 @@ import ru.kolco24.kolco24.data.api.dto.RacesResponse
 import ru.kolco24.kolco24.data.api.dto.TagBindRequest
 import ru.kolco24.kolco24.data.api.dto.TagBindResponse
 import ru.kolco24.kolco24.data.api.dto.TeamsResponse
+import ru.kolco24.kolco24.data.api.dto.TrackPointDto
+import ru.kolco24.kolco24.data.api.dto.TrackUploadRequest
+import ru.kolco24.kolco24.data.api.dto.TrackUploadResponse
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -169,6 +172,23 @@ class ApiClient(
         val bytes = json.encodeToString(TagBindRequest(checkpointId, nfcUid)).toByteArray()
         return post("$baseUrl/app/race/$raceId/tags/", bytes) {
             json.decodeFromString<TagBindResponse>(it)
+        }
+    }
+
+    /**
+     * `POST /app/race/<raceId>/track/` — upload a batch of GPS track [points] for [teamId]. `200`/`201`
+     * → [PostResult.Success] with the parsed [TrackUploadResponse] (the accepted client `id`s for
+     * idempotent upsert); other statuses map per [post]. The same method serves both upload targets
+     * (cloud / local LAN) — the target is selected by the `ApiClient` instance, not a per-call URL.
+     */
+    suspend fun uploadTrack(
+        raceId: Int,
+        teamId: Int,
+        points: List<TrackPointDto>,
+    ): PostResult<TrackUploadResponse> {
+        val bytes = json.encodeToString(TrackUploadRequest(teamId, points)).toByteArray()
+        return post("$baseUrl/app/race/$raceId/track/", bytes) {
+            json.decodeFromString<TrackUploadResponse>(it)
         }
     }
 
