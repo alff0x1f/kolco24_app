@@ -126,6 +126,13 @@ class TrackRecordingService : Service() {
         if (container.trackRecordingState.value is TrackState.Recording) {
             container.trackRecordingState.value = TrackState.Idle
         }
+        // Best-effort flush in case the system stopped us without going through teardown().
+        // Safe when teardown() already ran — the upload mutex drops the duplicate attempt.
+        val r = raceId
+        val t = teamId
+        if (r >= 0 && t >= 0) {
+            container.applicationScope.launch { container.trackRepository.uploadPending(r, t) }
+        }
         super.onDestroy()
     }
 
