@@ -1,14 +1,21 @@
 package ru.kolco24.kolco24
 
+import android.Manifest
 import android.content.Intent
+import android.location.LocationManager
+import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
@@ -84,6 +91,9 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
+import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.filterPoints
+import ru.kolco24.kolco24.data.track.trackLengthMeters
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
@@ -424,6 +434,7 @@ private fun Kolco24AppRoot(
     val memberTagsRepo = container.memberTagsRepository
     val bindingRepo = container.memberChipBindingRepository
     val markRepo = container.markRepository
+    val trackRepo = container.trackRepository
     val today = todayIso()
 
     // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
@@ -451,6 +462,8 @@ private fun Kolco24AppRoot(
             container.trustedClock.recomputeStatus()
         }
     }
+    // GPS-track recording state (written by TrackRecordingService, read here for the «Команда» card).
+    val trackState by container.trackRecordingState.collectAsState()
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
@@ -520,6 +533,25 @@ private fun Kolco24AppRoot(
     // checkpoint row — otherwise switching teams within a race would show the prior team's progress.
     val takenIds = remember(safeMarks) { takenPoints(safeMarks) }
 
+    // GPS-track points for the selected team. Mirror the safeMarks guard: collectAsState keeps the
+    // prior team's value across a key change until the new flow emits, so filter on selectedTeamId.
+    val track by remember(selectedTeamId) {
+        selectedTeamId?.let { trackRepo.observeTrack(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
+    // Length/time metrics use the accuracy-filtered, capture-ordered points (raw count stays full).
+    val trackUsable = remember(safeTrack) { filterPoints(safeTrack).sortedBy { it.elapsedRealtimeAt } }
+    val trackLength = remember(trackUsable) { trackLengthMeters(trackUsable) }
+    val trackFirstTime = trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) }
+    val trackLastTime = trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) }
+    // Degraded accuracy = a network provider exists but no GPS chip — the track will be coarse but
+    // recording is still allowed (the engine falls back to network). Read once; provider set is static.
+    val locationManager = remember { context.getSystemService(LocationManager::class.java) }
+    val degradedAccuracy = remember(locationManager) {
+        val providers = locationManager?.allProviders ?: emptyList()
+        LocationManager.NETWORK_PROVIDER in providers && LocationManager.GPS_PROVIDER !in providers
+    }
+
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
     // only seeded with `initial` on first composition). During the brief window after a team switch
@@ -563,9 +595,57 @@ private fun Kolco24AppRoot(
     var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
     // Unbind confirmation: which member slot (numberInTeam) is pending unbind, or null when no dialog.
     var unbindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
+    // Track-recording UI state: confirmation dialogs for clearing the track, a disabled-location
+    // notice, and a permanently-denied-permission notice (deep-links to settings).
+    var showClearTrackDialog by rememberSaveable { mutableStateOf(false) }
+    var showLocationDisabledDialog by rememberSaveable { mutableStateOf(false) }
+    var showLocationDeniedDialog by rememberSaveable { mutableStateOf(false) }
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
-    // re-open the sheet/dialog for an unrelated member on the newly selected team.
-    LaunchedEffect(selectedTeamId) { bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false }
+    // re-open the sheet/dialog for an unrelated member on the newly selected team. A team switch while
+    // recording also stops the service — the running track belongs to the team we are leaving.
+    LaunchedEffect(selectedTeamId) {
+        bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false
+        if (container.trackRecordingState.value is TrackState.Recording) {
+            TrackRecordingService.stop(context)
+        }
+    }
+
+    // Start recording once permission is (re)confirmed. The launcher requests fine location (+ POST
+    // notifications on 13+); a grant starts the foreground service — Task 7's service re-checks
+    // permission on entry as a TOCTOU guard. If no location provider is enabled we still start (fixes
+    // flow once the toggle is on) but surface a deep-link; a permanent denial routes to app settings.
+    val trackPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val locationGranted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (locationGranted) {
+            val raceId = selectedRaceId
+            val teamId = selectedTeamId
+            if (raceId != null && teamId != null) {
+                val anyEnabled = locationManager?.let {
+                    it.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                        it.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                } ?: false
+                if (!anyEnabled) showLocationDisabledDialog = true
+                TrackRecordingService.start(context, raceId, teamId)
+            }
+        } else {
+            // Permanent denial (no rationale) → only the app settings screen can re-grant.
+            val permanent = activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
+            if (permanent) showLocationDeniedDialog = true
+        }
+    }
+    val onStartTrack: () -> Unit = {
+        val perms = buildList {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        trackPermissionLauncher.launch(perms.toTypedArray())
+    }
 
     // Mirror the roster-filtered bound uids onto the Activity so the binder-thread idle path can
     // recognize a bound bracelet (open the overlay) without touching Compose state. A coarse open-gate
@@ -758,6 +838,15 @@ private fun Kolco24AppRoot(
                         nfcAvailable = nfcAvailable,
                         isRefreshing = teamRefreshing,
                         onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
+                        trackState = trackState,
+                        trackPointCount = safeTrack.size,
+                        trackLengthMeters = trackLength,
+                        trackDegradedAccuracy = degradedAccuracy,
+                        trackFirstPointTime = trackFirstTime,
+                        trackLastPointTime = trackLastTime,
+                        onStartTrack = onStartTrack,
+                        onStopTrack = { TrackRecordingService.stop(context) },
+                        onClearTrack = { showClearTrackDialog = true },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
@@ -1299,5 +1388,82 @@ private fun Kolco24AppRoot(
                 },
             )
         }
+
+        // Confirm wiping the team's track. Only reachable from Idle (the card hides «Очистить» while
+        // recording); the guard re-checks state so a wipe can never race an in-flight insert.
+        if (showClearTrackDialog) {
+            val clearTeamId = selectedTeamId
+            AlertDialog(
+                onDismissRequest = { showClearTrackDialog = false },
+                title = { Text("Очистить трек?") },
+                text = { Text("Все записанные точки этой команды будут удалены без возможности восстановления.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (clearTeamId != null && container.trackRecordingState.value is TrackState.Idle) {
+                                // applicationScope so the delete outlives the closing dialog (consistent with unbind).
+                                container.applicationScope.launch { trackRepo.deleteForTeam(clearTeamId) }
+                            }
+                            showClearTrackDialog = false
+                        },
+                    ) {
+                        Text("Очистить", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearTrackDialog = false }) { Text("Отмена") }
+                },
+            )
+        }
+
+        // Location services are off (no enabled provider): recording started anyway, fixes will flow
+        // once the user enables the toggle. Offer a deep-link to the location settings.
+        if (showLocationDisabledDialog) {
+            AlertDialog(
+                onDismissRequest = { showLocationDisabledDialog = false },
+                title = { Text("Геолокация выключена") },
+                text = { Text("Запись начата, но точки появятся только после включения геолокации в настройках.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            showLocationDisabledDialog = false
+                        },
+                    ) { Text("Настройки") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLocationDisabledDialog = false }) { Text("Закрыть") }
+                },
+            )
+        }
+
+        // Permission permanently denied: only the app-details settings screen can re-grant it.
+        if (showLocationDeniedDialog) {
+            AlertDialog(
+                onDismissRequest = { showLocationDeniedDialog = false },
+                title = { Text("Нужен доступ к геолокации") },
+                text = { Text("Разрешите доступ к местоположению в настройках приложения, чтобы записывать трек.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null),
+                                ),
+                            )
+                            showLocationDeniedDialog = false
+                        },
+                    ) { Text("Настройки") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLocationDeniedDialog = false }) { Text("Закрыть") }
+                },
+            )
+        }
     }
 }
+
+/** Format a point's epoch-ms (`trustedMs ?: wallMs`) as a local `HH:mm` label for the track metrics. */
+private fun formatPointTime(epochMs: Long): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date(epochMs))
