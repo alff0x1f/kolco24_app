@@ -90,9 +90,9 @@ Delete the write-chip code path end to end: the dialog file, the Settings row + 
 - [x] `./gradlew testDebugUnitTest` — `MifareUltralightWriterTest` green
 
 ### Task 4: Verify acceptance criteria
-- [ ] grep repo for `onTagForWrite`, `WriteChipDialog`, `WriteChipState`, `chipWriterCode`, `newChipCode`, `onWriteChip` → zero hits (all removed)
-- [ ] confirm surviving debug rows (`onReadChipInfo`, `onResetTeam`, `onClearDatabase`) and provisioning `writeChipCode` are untouched
-- [ ] run full suite: `./gradlew lintDebug testDebugUnitTest`
+- [x] grep repo for `onTagForWrite`, `WriteChipDialog`, `WriteChipState`, `chipWriterCode`, `newChipCode`, `onWriteChip` → zero hits (all removed)
+- [x] confirm surviving debug rows (`onReadChipInfo`, `onResetTeam`, `onClearDatabase`) and provisioning `writeChipCode` are untouched
+- [x] run full suite: `./gradlew lintDebug testDebugUnitTest`
 
 ### Task 5: [Final] Update documentation
 - [ ] update `CLAUDE.md`: remove the `ui/settings/WriteChipDialog.kt` bullet; trim the `MainActivity.kt` bullet's `onTagForWrite` / `chipWriterCode` / chip-write-flow descriptions and the `SettingsScreen.kt` `onWriteChip` mention; update the hook priority chain to `chipInfo → provision → verify → mark → scan`; note `newChipCode()` removed from `MifareUltralightWriter.kt` bullet
