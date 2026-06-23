@@ -292,11 +292,11 @@ uploadedCloud: Boolean = false  // INTEGER NOT NULL (Kotlin-дефолт, без
 - [x] run tests — должны пройти перед Task 13
 
 ### Task 13: Verify acceptance criteria
-- [ ] verify all requirements from Overview реализованы (запись, фон, метрики, двойная выгрузка)
-- [ ] verify edge cases: local недоступен → cloud всё равно уходит и наоборот; ретрай не дублирует (idempotent по id); `trusted_ms=null` сериализуется
-- [ ] run full test suite: `./gradlew testDebugUnitTest`
-- [ ] run `./gradlew lintDebug`
-- [ ] run `./gradlew connectedDebugAndroidTest`
+- [x] verify all requirements from Overview реализованы (запись, фон, метрики, двойная выгрузка) — Tasks 1–12 done; запись/стоп через `TrackRecordingService` + `TrackCard`, фон через foreground-service `location`, метрики через `trackLengthMeters`/`countForTeam`, двойная выгрузка через `uploadPending`/`uploadAllPending` (cloud+local инстансы)
+- [x] verify edge cases: local недоступен → cloud всё равно уходит и наоборот; ретрай не дублирует (idempotent по id); `trusted_ms=null` сериализуется — покрыто тестами `uploadPending_marksPerTargetIndependently` (независимость таргетов), `uploadPending_doesNotRetryAlreadyUploaded`/`partialAccepted_marksOnlyAccepted` (idempotent по id), `toDto_nullTrustedAndBoot_serializeAsJsonNull` + `insertAll_noClockAnchor_trustedMsNull` (`trusted_ms=null`)
+- [x] run full test suite: `./gradlew testDebugUnitTest` — BUILD SUCCESSFUL
+- [x] run `./gradlew lintDebug` — BUILD SUCCESSFUL (foreground-service-type/NewApi чисто)
+- [x] manual test (skipped - no emulator/device in env): `./gradlew connectedDebugAndroidTest` — запустить вручную на эмуляторе/устройстве (guard миграции `MigrationTest.migrate10To11_*`)
 
 ### Task 14: [Final] Документация
 - [ ] обновить `CLAUDE.md`: новый `data/track/` слой, `TrackRecordingService`, Room v11, двойная выгрузка трека, `LOCAL_API_BASE_URL`/network-security-config, расширение `TrustedClock.trustedAt`
