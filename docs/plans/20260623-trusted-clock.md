@@ -137,12 +137,12 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/time/ClockAnchorStore.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/time/ClockAnchorStoreTest.kt`
 
-- [ ] **атомарная запись (P1):** хранить якорь **одной сериализованной строкой под одним ключом** (`anchor`), не четырьмя — иначе остановка процесса между `apply()` оставит смесь старых/новых полей, которая распарсится, но будет неконсистентной. Формат — делимитированная строка `"$serverEpochMs|$anchorElapsedMs|$capturedWallMs|${bootCount ?: ""}"` (пустой хвост = `bootCount == null`)
-- [ ] чистые `load: (String) -> String?` + `save: (String, String?) -> Unit` (single-key seam сохраняется), методы `read(): ClockAnchor?` / `write(anchor)` / `clear()`; `write` — один `save("anchor", serialized)` → один `Editor.apply()`
-- [ ] `companion object fun fromSharedPreferences(context)` — файл `"kolco24.clock"`, ключ `anchor`, `apply()`, синхронное чтение
-- [ ] `read()` парсит строку → `null` если ключ отсутствует или формат битый (число полей/парс `Long` не сошлись); пустой 4-й сегмент → `bootCount = null`
-- [ ] написать `ClockAnchorStoreTest`: round-trip (вкл. `bootCount` non-null и `null`), `clear()` убирает ключ `anchor`, `read()` с пред-засеянного стора, отсутствие/битьё строки → null
-- [ ] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 3
+- [x] **атомарная запись (P1):** хранить якорь **одной сериализованной строкой под одним ключом** (`anchor`), не четырьмя — иначе остановка процесса между `apply()` оставит смесь старых/новых полей, которая распарсится, но будет неконсистентной. Формат — делимитированная строка `"$serverEpochMs|$anchorElapsedMs|$capturedWallMs|${bootCount ?: ""}"` (пустой хвост = `bootCount == null`)
+- [x] чистые `load: (String) -> String?` + `save: (String, String?) -> Unit` (single-key seam сохраняется), методы `read(): ClockAnchor?` / `write(anchor)` / `clear()`; `write` — один `save("anchor", serialized)` → один `Editor.apply()`
+- [x] `companion object fun fromSharedPreferences(context)` — файл `"kolco24.clock"`, ключ `anchor`, `apply()`, синхронное чтение
+- [x] `read()` парсит строку → `null` если ключ отсутствует или формат битый (число полей/парс `Long` не сошлись); пустой 4-й сегмент → `bootCount = null`
+- [x] написать `ClockAnchorStoreTest`: round-trip (вкл. `bootCount` non-null и `null`), `clear()` убирает ключ `anchor`, `read()` с пред-засеянного стора, отсутствие/битьё строки → null
+- [x] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 3
 
 ### Task 3: `ServerTimeInterceptor` + проводка в OkHttp
 
