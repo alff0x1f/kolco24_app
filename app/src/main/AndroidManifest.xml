@@ -5,8 +5,23 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.NFC" />
 
+    <!-- GPS track recording: location for the fixes, foreground-service (+ location type on 14+) so
+         recording survives a sleeping screen, POST_NOTIFICATIONS for the ongoing notification on 13+. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <uses-feature
         android:name="android.hardware.nfc"
+        android:required="false" />
+
+    <!-- required="false" (mirrors the NFC feature) keeps the app installable on GPS-less devices —
+         the Legacy engine falls back to NETWORK_PROVIDER, so a missing GPS chip is a degraded, not
+         blocked, recording. -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
         android:required="false" />
 
     <application
@@ -34,6 +49,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Foreground GPS-track recorder. type=location so it can keep receiving fixes with the
+             screen off; not exported (started only from this app via an explicit Intent). -->
+        <service
+            android:name=".TrackRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>
