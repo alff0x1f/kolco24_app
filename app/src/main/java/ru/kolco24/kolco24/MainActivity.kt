@@ -80,6 +80,7 @@ import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
+import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
@@ -813,7 +814,14 @@ private fun Kolco24AppRoot(
                                         cpCode = event.cpCode,
                                         expectedCount = rosterSize,
                                         bufferedMembers = buffered,
-                                        now = now,
+                                        // Task 7 replaces this bridge with a TimeSample captured at the
+                                        // touch moment (monotonic window + trusted/boot fields).
+                                        sample = TimeSample(
+                                            wallMs = now,
+                                            elapsedMs = now,
+                                            trustedMs = null,
+                                            bootCount = null,
+                                        ),
                                     )
                                 }.await()
                                 scanTake.markId = id
@@ -849,7 +857,13 @@ private fun Kolco24AppRoot(
                                         point = point,
                                         numberInTeam = event.numberInTeam,
                                         expectedCount = scanTake.expectedCount,
-                                        now = now,
+                                        // Task 7 replaces this bridge with the touch-moment TimeSample.
+                                        sample = TimeSample(
+                                            wallMs = now,
+                                            elapsedMs = now,
+                                            trustedMs = null,
+                                            bootCount = null,
+                                        ),
                                     )
                                 }.await()
                             }

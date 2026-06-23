@@ -209,11 +209,11 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/MarkDao.kt` (если `addMember`-транзакция пишет `updatedAt`)
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryTest.kt`
 
-- [ ] `startKpTake(...)`: заменить `now: Long` на `sample: TimeSample`; писать `takenAt = sample.wallMs`, `updatedAt = sample.wallMs`, `trustedTakenAt = sample.trustedMs`, `elapsedRealtimeAt = sample.elapsedMs`, `bootCount = sample.bootCount`
-- [ ] `addMember(...)`: заменить `now: Long` на `sample: TimeSample`; `updatedAt = sample.wallMs` (через `MarkDao.addMember`; обновить сигнатуру DAO-транзакции при необходимости)
-- [ ] убедиться, что пути семплирования сохраняют поведение `complete`/буфера (логика не меняется)
-- [ ] обновить `MarkRepositoryTest`: фейковый `MarkDao` — проверить запись всех времён из `TimeSample` (включая `trustedMs == null` → колонка null, `bootCount`); сохранение прежних свойств (UUID-уникальность, дренаж буфера, идемпотентность, repeat = новая строка)
-- [ ] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 7
+- [x] `startKpTake(...)`: заменить `now: Long` на `sample: TimeSample`; писать `takenAt = sample.wallMs`, `updatedAt = sample.wallMs`, `trustedTakenAt = sample.trustedMs`, `elapsedRealtimeAt = sample.elapsedMs`, `bootCount = sample.bootCount`
+- [x] `addMember(...)`: заменить `now: Long` на `sample: TimeSample`; `updatedAt = sample.wallMs` (через `MarkDao.addMember`; DAO-транзакция уже принимает `now: Long` — передаём `sample.wallMs`, сигнатуру менять не пришлось)
+- [x] убедиться, что пути семплирования сохраняют поведение `complete`/буфера (логика не меняется)
+- [x] обновить `MarkRepositoryTest`: фейковый `MarkDao` — проверить запись всех времён из `TimeSample` (включая `trustedMs == null` → колонка null, `bootCount`); сохранение прежних свойств (UUID-уникальность, дренаж буфера, идемпотентность, repeat = новая строка). (Bridge: `MainActivity` пока оборачивает `now` в `TimeSample` — Task 7 заменит на захват семпла в момент касания.)
+- [x] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 7
 
 ### Task 7: `ScanSession`/`CapturedScan` — окно на монотонном таймере
 

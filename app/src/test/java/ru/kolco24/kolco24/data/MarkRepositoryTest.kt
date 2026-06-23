@@ -8,11 +8,13 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.time.TimeSample
 
 class MarkRepositoryTest {
 
@@ -25,12 +27,19 @@ class MarkRepositoryTest {
         repository = MarkRepository(markDao)
     }
 
+    private fun sample(
+        wall: Long = 1_000L,
+        elapsed: Long = 5_000L,
+        trusted: Long? = 2_000L,
+        boot: Int? = 42,
+    ) = TimeSample(wallMs = wall, elapsedMs = elapsed, trustedMs = trusted, bootCount = boot)
+
     private suspend fun startTake(
         point: Int = 10,
         cost: Int = 5,
         expectedCount: Int = 3,
         buffered: Set<Int> = emptySet(),
-        now: Long = 1_000L,
+        sample: TimeSample = sample(),
     ): String = repository.startKpTake(
         raceId = 1,
         teamId = 7,
@@ -41,7 +50,7 @@ class MarkRepositoryTest {
         cpCode = "CODE$point",
         expectedCount = expectedCount,
         bufferedMembers = buffered,
-        now = now,
+        sample = sample,
     )
 
     @Test
@@ -66,6 +75,48 @@ class MarkRepositoryTest {
     }
 
     @Test
+    fun startKpTake_writesAllTimesFromSample() = runTest {
+        val id = startTake(
+            point = 10,
+            sample = sample(wall = 1_000L, elapsed = 5_000L, trusted = 2_000L, boot = 42),
+        )
+        val mark = markDao.getById(id)!!
+        // wall drives both takenAt and updatedAt; trusted/elapsed/boot persist verbatim.
+        assertEquals(1_000L, mark.takenAt)
+        assertEquals(1_000L, mark.updatedAt)
+        assertEquals(2_000L, mark.trustedTakenAt)
+        assertEquals(5_000L, mark.elapsedRealtimeAt)
+        assertEquals(42, mark.bootCount)
+    }
+
+    @Test
+    fun startKpTake_nullTrustedAndBoot_persistAsNull() = runTest {
+        // NoSync (no clock anchor): trustedMs/bootCount are null and the columns stay null.
+        val id = startTake(
+            point = 10,
+            sample = sample(wall = 1_000L, elapsed = 5_000L, trusted = null, boot = null),
+        )
+        val mark = markDao.getById(id)!!
+        assertEquals(1_000L, mark.takenAt)
+        assertNull(mark.trustedTakenAt)
+        assertEquals(5_000L, mark.elapsedRealtimeAt)
+        assertNull(mark.bootCount)
+    }
+
+    @Test
+    fun addMember_bumpsUpdatedAtFromSampleWall() = runTest {
+        val id = startTake(point = 10, expectedCount = 3, sample = sample(wall = 1_000L))
+        repository.addMember(
+            id,
+            point = 10,
+            numberInTeam = 1,
+            expectedCount = 3,
+            sample = sample(wall = 1_100L),
+        )
+        assertEquals(1_100L, markDao.getById(id)!!.updatedAt)
+    }
+
+    @Test
     fun startKpTake_completeWhenBufferCoversRoster_scores() = runTest {
         val id = startTake(point = 10, expectedCount = 2, buffered = setOf(1, 2))
         assertTrue(markDao.getById(id)!!.complete)
@@ -75,13 +126,13 @@ class MarkRepositoryTest {
     @Test
     fun addMember_accumulatesAndScoresOnFullRoster() = runTest {
         val id = startTake(point = 10, expectedCount = 3)
-        repository.addMember(id, point = 10, numberInTeam = 1, expectedCount = 3, now = 1_100L)
+        repository.addMember(id, point = 10, numberInTeam = 1, expectedCount = 3, sample = sample(wall = 1_100L))
         assertFalse(markDao.getById(id)!!.complete)
-        repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, now = 1_200L)
+        repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_200L))
         // Idempotent rescan of an already-present member does not advance the count.
-        repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, now = 1_300L)
+        repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_300L))
         assertFalse(markDao.getById(id)!!.complete)
-        repository.addMember(id, point = 10, numberInTeam = 3, expectedCount = 3, now = 1_400L)
+        repository.addMember(id, point = 10, numberInTeam = 3, expectedCount = 3, sample = sample(wall = 1_400L))
         val finalMark = markDao.getById(id)!!
         assertEquals(listOf(1, 2, 3), finalMark.present)
         assertTrue(finalMark.complete)
@@ -90,14 +141,14 @@ class MarkRepositoryTest {
 
     @Test
     fun addMember_missingRow_isNoOp() = runTest {
-        repository.addMember("nope", point = 10, numberInTeam = 1, expectedCount = 1, now = 1L)
+        repository.addMember("nope", point = 10, numberInTeam = 1, expectedCount = 1, sample = sample(wall = 1L))
         assertTrue(repository.observeMarks(7).first().isEmpty())
     }
 
     @Test
     fun repeatTakeOfSamePoint_createsNewRow() = runTest {
-        val first = startTake(point = 10, expectedCount = 1, buffered = setOf(1), now = 1_000L)
-        val second = startTake(point = 10, expectedCount = 1, buffered = setOf(1), now = 5_000L)
+        val first = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 1_000L))
+        val second = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 5_000L))
         assertNotEquals(first, second)
         assertEquals(2, repository.observeMarks(7).first().count { it.point == 10 })
     }
