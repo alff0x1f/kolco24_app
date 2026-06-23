@@ -21,6 +21,7 @@ class MarksMappingTest {
         method: String = "nfc",
         complete: Boolean = true,
         takenAt: Long = 1_000L,
+        trustedTakenAt: Long? = null,
     ) = MarkEntity(
         id = id,
         raceId = 1,
@@ -36,6 +37,7 @@ class MarksMappingTest {
         complete = complete,
         takenAt = takenAt,
         updatedAt = takenAt,
+        trustedTakenAt = trustedTakenAt,
     )
 
     private fun hhmm(epoch: Long) = SimpleDateFormat("HH:mm", Locale.US).format(Date(epoch))
@@ -77,6 +79,27 @@ class MarksMappingTest {
         val epoch = 5_000_000L
         val tiles = marksToTiles(listOf(mark("a", point = 1, number = 1, cost = 1, takenAt = epoch)))
         assertEquals(hhmm(epoch), tiles.single().time)
+    }
+
+    @Test
+    fun `time prefers trustedTakenAt when present`() {
+        // Trusted and wall differ by minutes (a phone clock reset): the tile must show trusted.
+        val wall = 5_000_000L
+        val trusted = wall + 7 * 60_000L // 7 minutes apart so HH:mm differs
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 1, takenAt = wall, trustedTakenAt = trusted)),
+        )
+        assertEquals(hhmm(trusted), tiles.single().time)
+        assertTrue(hhmm(trusted) != hhmm(wall))
+    }
+
+    @Test
+    fun `time falls back to takenAt when trustedTakenAt is null`() {
+        val wall = 5_000_000L
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 1, takenAt = wall, trustedTakenAt = null)),
+        )
+        assertEquals(hhmm(wall), tiles.single().time)
     }
 
     @Test

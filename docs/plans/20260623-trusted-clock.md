@@ -238,11 +238,11 @@ ALTER TABLE marks ADD COLUMN bootCount INTEGER;
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt` (`marksToTiles`)
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/marks/MarksMappingTest.kt`
 
-- [ ] `ScanScreen` тикер (250 мс): `remaining = SCAN_WINDOW_MS − (SystemClock.elapsedRealtime() − lastScanAt)` — `elapsedRealtime()` вместо `currentTimeMillis()`; дренаж `pendingScan` использует `sample.elapsedMs` для окна и `sample` для персиста
-- [ ] `marksToTiles`: форматить время из `trustedTakenAt ?: takenAt` (`SimpleDateFormat("HH:mm", Locale.US)`)
-- [ ] обновить `MarksMappingTest`: плитка берёт `trustedTakenAt` когда не-null (кейс, где `trustedTakenAt` и `takenAt` различаются на минуты — рендерится доверенное); fallback на `takenAt` когда null
-- [ ] (UI-проводка `ScanScreen` не тестируется по конвенции — пометка)
-- [ ] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 9
+- [x] `ScanScreen` тикер (250 мс): `remaining = SCAN_WINDOW_MS − (SystemClock.elapsedRealtime() − lastScanAt)` — `elapsedRealtime()` вместо `currentTimeMillis()`; дренаж `pendingScan` использует `sample.elapsedMs` для окна и `sample` для персиста (уже реализовано в Task 7)
+- [x] `marksToTiles`: форматить время из `trustedTakenAt ?: takenAt` (`SimpleDateFormat("HH:mm", Locale.US)`)
+- [x] обновить `MarksMappingTest`: плитка берёт `trustedTakenAt` когда не-null (кейс, где `trustedTakenAt` и `takenAt` различаются на минуты — рендерится доверенное); fallback на `takenAt` когда null
+- [x] (UI-проводка `ScanScreen` не тестируется по конвенции — пометка)
+- [x] запустить `./gradlew testDebugUnitTest` — зелёно перед Task 9
 
 ### Task 9: UI-баннер расхождения часов (глобально + в скане)
 
