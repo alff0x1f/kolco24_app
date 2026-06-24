@@ -224,10 +224,10 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 
-- [ ] add params `economyMode: Boolean, onEconomyModeChange: (Boolean) -> Unit` to `SettingsScreen` (place near `themeMode`/`onThemeModeChange`)
-- [ ] add a «Запись трека» (or reuse «Внешний вид»-style) `Surface` card with a private `EconomyModeRow(checked, onCheckedChange)` — styled like `ThemeRow`/`ChangeTeamRow` (icon avatar, title «Экономия батареи», subtitle by state: «Координата раз в 3 мин» when on / «Точная запись, 15 с» when off) with a trailing `androidx.compose.material3.Switch` instead of `ChevronRight`
-- [ ] (no test — Compose UI, untested per convention)
-- [ ] run `./gradlew compileDebugKotlin` — compiles before Task 9
+- [x] add params `economyMode: Boolean, onEconomyModeChange: (Boolean) -> Unit` to `SettingsScreen` (place near `themeMode`/`onThemeModeChange`) — given defaults (`false`/`{}`) to keep the build green before Task 9 wires `MainActivity`
+- [x] add a «Запись трека» (or reuse «Внешний вид»-style) `Surface` card with a private `EconomyModeRow(checked, onCheckedChange)` — styled like `ThemeRow`/`ChangeTeamRow` (icon avatar, title «Экономия батареи», subtitle by state: «Координата раз в 3 мин» when on / «Точная запись, 15 с» when off) with a trailing `androidx.compose.material3.Switch` instead of `ChevronRight`
+- [x] (no test — Compose UI, untested per convention)
+- [x] run `./gradlew compileDebugKotlin` — compiles before Task 9
 
 ### Task 9: Thread the profile through `MainActivity`
 
