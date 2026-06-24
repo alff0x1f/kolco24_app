@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -150,7 +151,7 @@ class TrackRecordingService : Service() {
             container.applicationScope.launch { container.trackRepository.uploadPending(r, t) }
         }
         serviceScope.cancel()
-        stopForeground(STOP_FOREGROUND_REMOVE) // Service.stopForeground(int) exists since API 24.
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 

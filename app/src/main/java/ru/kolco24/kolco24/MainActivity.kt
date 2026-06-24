@@ -706,6 +706,7 @@ private fun Kolco24AppRoot(
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
                 bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
+                showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
                 act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
@@ -829,7 +830,9 @@ private fun Kolco24AppRoot(
                             if (teamForTab != null) {
                                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                                 showAdmin = false; showProvisioning = false; showCheckChip = false
-                                bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null; showScan = true
+                                bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
+                                showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+                                showScan = true
                             } else {
                                 pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
                             }
