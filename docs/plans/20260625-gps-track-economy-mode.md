@@ -169,10 +169,10 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/TrackProfilePreference.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/TrackProfilePreferenceTest.kt`
 
-- [ ] create `TrackProfilePreference(load: () -> String?, save: (String) -> Unit)` — copy `data/ThemePreference.kt`: `private val _profile = MutableStateFlow(parseTrackProfile(load()))`, `val profile: StateFlow<TrackProfile>`, `fun setProfile(p)` → `_profile.value = p; save(p.name)`
-- [ ] add `companion object fun fromSharedPreferences(context): TrackProfilePreference` — prefs file `"kolco24.settings"`, key `"track_profile"`, `getString(..., null)` / `edit().putString(...).apply()`
-- [ ] write tests `TrackProfilePreferenceTest` (mirror `ThemePreferenceTest`, `FakeStore`): default `Precise` when store empty; pre-seeded `"Economy"` read on init; pre-seeded unknown → `Precise`; `setProfile` persists enum name AND emits new value; persisted value reloaded by a fresh instance
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 4
+- [x] create `TrackProfilePreference(load: () -> String?, save: (String) -> Unit)` — copy `data/ThemePreference.kt`: `private val _profile = MutableStateFlow(parseTrackProfile(load()))`, `val profile: StateFlow<TrackProfile>`, `fun setProfile(p)` → `_profile.value = p; save(p.name)`
+- [x] add `companion object fun fromSharedPreferences(context): TrackProfilePreference` — prefs file `"kolco24.settings"`, key `"track_profile"`, `getString(..., null)` / `edit().putString(...).apply()`
+- [x] write tests `TrackProfilePreferenceTest` (mirror `ThemePreferenceTest`, `FakeStore`): default `Precise` when store empty; pre-seeded `"Economy"` read on init; pre-seeded unknown → `Precise`; `setProfile` persists enum name AND emits new value; persisted value reloaded by a fresh instance
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 4
 
 ### Task 4: Parameterize both engines by `TrackProfile`
 
