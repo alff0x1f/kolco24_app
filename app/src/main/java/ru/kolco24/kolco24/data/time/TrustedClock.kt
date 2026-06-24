@@ -141,6 +141,28 @@ class TrustedClock(
     }
 
     /**
+     * Trusted epoch ms for an **arbitrary** monotonic moment [elapsedAt] (not necessarily "now"),
+     * taken in boot-session [bootAt]; `null` when not verified or the moment belongs to a different
+     * boot session. Lock-free read (one `ref.get()`).
+     *
+     * Unlike [trusted]/[computeTrusted], this path does **not** use monotonic regression as a reboot
+     * signal: a past fix legitimately has `elapsedAt < anchorElapsedMs` (the point was captured
+     * *before* the network set the session's anchor), which regression would wrongly read as a
+     * reboot. Reboot detection here is therefore **only** by boot-session identity:
+     * `bootAt != null && anchor.bootCount != null && bootAt != anchor.bootCount` → `null`. The
+     * formula `serverEpochMs + (elapsedAt − anchorElapsedMs)` extrapolates correctly in both
+     * directions (negative Δ for a pre-anchor point). When either boot id is `null` there is no
+     * reboot evidence, so we trust and extrapolate (documented fallback).
+     */
+    fun trustedAt(elapsedAt: Long, bootAt: Int?): Long? {
+        val state = ref.get()
+        if (!state.verified) return null
+        val anchor = state.anchor ?: return null
+        if (anchor.bootCount != null && bootAt != null && anchor.bootCount != bootAt) return null
+        return anchor.serverEpochMs + (elapsedAt - anchor.anchorElapsedMs)
+    }
+
+    /**
      * A single consistent snapshot (P1): one `ref.get()`, one [elapsedProvider], one [wallProvider],
      * one [bootCountProvider]; trusted time computed from those same captured values.
      */

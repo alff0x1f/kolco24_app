@@ -228,6 +228,70 @@ class TrustedClockTest {
     }
 
     @Test
+    fun trustedAt_pastFix_givesTimeEarlierThanNow_byDeltaElapsed() {
+        val f = Fakes(elapsed = 600_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        // anchor: server 10_000_000 at monotonic 600_000 (== "now").
+        c.onServerTime(serverMs = 10_000_000L, anchorElapsed = 600_000L, wallNow = 0L, bootNow = 1)
+        // a fix from a batch ~4 min before now: elapsedAt 360_000 (240 s earlier).
+        val at = c.trustedAt(elapsedAt = 360_000L, bootAt = 1)
+        assertEquals(10_000_000L - 240_000L, at)
+        // and it is earlier than "now".
+        assertTrue(at!! < c.trusted()!!)
+    }
+
+    @Test
+    fun trustedAt_preAnchorPoint_sameBootSession_isNotNull() {
+        // Key review case: a point captured BEFORE the network set the anchor (elapsedAt < anchor)
+        // in the SAME boot session must extrapolate (NOT be invalidated as a reboot).
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 7)
+        val c = clock(f)
+        c.onServerTime(serverMs = 10_000_000L, anchorElapsed = 5_000L, wallNow = 0L, bootNow = 7)
+        // point captured at elapsed 2_000, 3 s before the anchor's reading.
+        val at = c.trustedAt(elapsedAt = 2_000L, bootAt = 7)
+        assertNotNull(at)
+        assertEquals(10_000_000L - 3_000L, at)
+    }
+
+    @Test
+    fun trustedAt_differentBootSession_isNull() {
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 7)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 5_000L, wallNow = 0L, bootNow = 7)
+        // the fix's boot id differs from the anchor's → cannot compare monotonic scales.
+        assertNull(c.trustedAt(elapsedAt = 2_000L, bootAt = 8))
+    }
+
+    @Test
+    fun trustedAt_bothBootNull_fallsBackToTrustExtrapolate() {
+        // No reboot evidence when either boot id is null → documented fallback: trust & extrapolate.
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = null)
+        val anchor = ClockAnchor(10_000_000L, anchorElapsedMs = 5_000L, capturedWallMs = 0L, bootCount = null)
+        // warm-start verify requires non-null matching boot, so sync via onServerTime to verify.
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 5_000L, wallNow = 0L, bootNow = null)
+        assertEquals(10_000_000L - 3_000L, c.trustedAt(elapsedAt = 2_000L, bootAt = null))
+    }
+
+    @Test
+    fun trustedAt_knownAnchorBoot_nullCallSiteBoot_fallsBackToTrustExtrapolate() {
+        // Anchor has a known boot id; call-site passes null (e.g. bootCountProvider returned null for
+        // that fix). A lone null does NOT prove a reboot — documented fallback: trust & extrapolate.
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 7)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 5_000L, wallNow = 0L, bootNow = 7)
+        assertEquals(10_000_000L - 3_000L, c.trustedAt(elapsedAt = 2_000L, bootAt = null))
+    }
+
+    @Test
+    fun trustedAt_noSync_isNull() {
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        // never synced → not verified.
+        assertNull(c.trustedAt(elapsedAt = 2_000L, bootAt = 1))
+    }
+
+    @Test
     fun sample_isConsistentSnapshot() {
         val f = Fakes(elapsed = 2_000L, wall = 5_000L, boot = 4)
         val c = clock(f)

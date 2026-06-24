@@ -17,6 +17,9 @@ import ru.kolco24.kolco24.data.api.dto.RacesResponse
 import ru.kolco24.kolco24.data.api.dto.TagBindRequest
 import ru.kolco24.kolco24.data.api.dto.TagBindResponse
 import ru.kolco24.kolco24.data.api.dto.TeamsResponse
+import ru.kolco24.kolco24.data.api.dto.TrackPointDto
+import ru.kolco24.kolco24.data.api.dto.TrackUploadRequest
+import ru.kolco24.kolco24.data.api.dto.TrackUploadResponse
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -173,6 +176,23 @@ class ApiClient(
     }
 
     /**
+     * `POST /app/race/<raceId>/track/` — upload a batch of GPS track [points] for [teamId]. `200`/`201`
+     * → [PostResult.Success] with the parsed [TrackUploadResponse] (the accepted client `id`s for
+     * idempotent upsert); other statuses map per [post]. The same method serves both upload targets
+     * (cloud / local LAN) — the target is selected by the `ApiClient` instance, not a per-call URL.
+     */
+    suspend fun uploadTrack(
+        raceId: Int,
+        teamId: Int,
+        points: List<TrackPointDto>,
+    ): PostResult<TrackUploadResponse> {
+        val bytes = json.encodeToString(TrackUploadRequest(teamId, points)).toByteArray()
+        return post("$baseUrl/app/race/$raceId/track/", bytes) {
+            json.decodeFromString<TrackUploadResponse>(it)
+        }
+    }
+
+    /**
      * Shared `POST` of an exact `application/json` [bodyBytes] to [url]. Signing is handled by
      * [okHttpClient]'s interceptor (which hashes the exact bytes). [parse] turns the body into the
      * payload [T] and is invoked **only** on the `200`/`201` branch — error bodies are never parsed,
@@ -217,19 +237,25 @@ class ApiClient(
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
         /**
-         * OkHttp client with 10 s connect/read timeouts and the signing interceptor. The optional
-         * [serverTimeInterceptor] (the trusted-clock re-anchor) is added **after** signing so it is
-         * the inner interceptor — by the time `proceed()` returns to the signing interceptor the
-         * anchor is already updated (enables anchor-on-`403` self-heal in Task 4b). No response
-         * `Cache` is configured, so every `Date` header (incl. on `304`) is a live network value.
+         * OkHttp client with the signing interceptor and configurable connect/read timeouts (default
+         * 10 s — the cloud client's prior fixed behaviour, unchanged). The local LAN client passes
+         * shorter timeouts (3 s) so an upload doesn't hang ~10 s when the phone is off the event's
+         * Wi-Fi. The optional [serverTimeInterceptor] (the trusted-clock re-anchor) is added **after**
+         * signing so it is the inner interceptor — by the time `proceed()` returns to the signing
+         * interceptor the anchor is already updated (enables anchor-on-`403` self-heal in Task 4b).
+         * The local client deliberately omits it (a LAN host must not anchor trusted time). No
+         * response `Cache` is configured, so every `Date` header (incl. on `304`) is a live network
+         * value.
          */
         fun defaultOkHttpClient(
             signatureInterceptor: AppSignatureInterceptor,
             serverTimeInterceptor: ServerTimeInterceptor? = null,
+            connectTimeoutMs: Long = 10_000,
+            readTimeoutMs: Long = 10_000,
         ): OkHttpClient =
             OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
+                .connectTimeout(connectTimeoutMs, TimeUnit.MILLISECONDS)
+                .readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS)
                 .addInterceptor(signatureInterceptor)
                 .apply { serverTimeInterceptor?.let { addInterceptor(it) } }
                 .build()

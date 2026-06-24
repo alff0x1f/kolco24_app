@@ -3,6 +3,7 @@ package ru.kolco24.kolco24
 import android.content.Context
 import android.os.SystemClock
 import android.provider.Settings
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,8 @@ import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
+import ru.kolco24.kolco24.data.track.TrackRepository
+import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.admin.ProvisionState
 
 /**
@@ -72,12 +75,13 @@ class AppContainer(private val context: Context) {
     }
 
     /**
-     * Shared signed `/app/` client. Exposed (not private) so the admin provisioning flow can issue
-     * `bindTag` POSTs directly — there is no provisioning repository (the bind response isn't
-     * persisted; the next legend refresh delivers the new tag via the existing `tags[]` array).
+     * HMAC signing interceptor shared by both the cloud [apiClient] and the LAN [localApiClient]:
+     * the local race server validates the same 6 `X-App-*`/`X-Install-Id` headers with the same key
+     * id / secret, so it must be signed identically (only the trusted-time re-anchor differs — see
+     * [localApiClient]).
      */
-    val apiClient: ApiClient by lazy {
-        val interceptor = AppSignatureInterceptor(
+    private val signatureInterceptor: AppSignatureInterceptor by lazy {
+        AppSignatureInterceptor(
             keyId = BuildConfig.APP_KEY_ID,
             secret = BuildConfig.APP_SECRET,
             installIdProvider = { installId },
@@ -92,6 +96,14 @@ class AppContainer(private val context: Context) {
             // blocking on the interceptor thread. Bearer is never part of the canonical string.
             tokenProvider = { adminAuthRepository.token() },
         )
+    }
+
+    /**
+     * Shared signed `/app/` client. Exposed (not private) so the admin provisioning flow can issue
+     * `bindTag` POSTs directly — there is no provisioning repository (the bind response isn't
+     * persisted; the next legend refresh delivers the new tag via the existing `tags[]` array).
+     */
+    val apiClient: ApiClient by lazy {
         // onServerTime as a lambda breaks the construction cycle (like `tokenProvider`): it touches
         // `trustedClock` only at request time, after both `by lazy` blocks have initialized.
         val serverTimeInterceptor = ServerTimeInterceptor(
@@ -102,7 +114,27 @@ class AppContainer(private val context: Context) {
         )
         ApiClient(
             baseUrl = baseUrl,
-            okHttpClient = ApiClient.defaultOkHttpClient(interceptor, serverTimeInterceptor),
+            okHttpClient = ApiClient.defaultOkHttpClient(signatureInterceptor, serverTimeInterceptor),
+            json = json,
+        )
+    }
+
+    /**
+     * LAN upload client for the local race server (`BuildConfig.LOCAL_API_BASE_URL`, cleartext to
+     * `192.168.1.5` only — see `res/xml/network_security_config.xml`). It is a **second host**, so:
+     * (a) no [ServerTimeInterceptor] — we never anchor trusted time off a LAN server, and this keeps
+     * `ServerTimeInterceptor`'s single-host assumption intact; (b) short 3 s connect/read timeouts so
+     * an upload fails fast (→ `Offline`) when the phone is off the event's Wi-Fi, instead of hanging
+     * ~10 s. It shares the [signatureInterceptor] (same key id / secret / 6 headers as cloud).
+     */
+    val localApiClient: ApiClient by lazy {
+        ApiClient(
+            baseUrl = BuildConfig.LOCAL_API_BASE_URL,
+            okHttpClient = ApiClient.defaultOkHttpClient(
+                signatureInterceptor,
+                connectTimeoutMs = 3_000,
+                readTimeoutMs = 3_000,
+            ),
             json = json,
         )
     }
@@ -160,6 +192,29 @@ class AppContainer(private val context: Context) {
             markDao = database.markDao(),
         )
     }
+
+    /**
+     * Local-only GPS track store. Owns the [RawFix]→entity mapping; the recording service forwards
+     * raw fixes. `bootCountProvider` is the per-process [cachedBootCount] (a fix is captured in the
+     * running boot session), `idFactory` mints the client UUID, and `wallProvider`/`elapsedProvider`
+     * read the wall/monotonic clocks once per batch for the wall back-projection.
+     */
+    val trackRepository: TrackRepository by lazy {
+        TrackRepository(
+            trackDao = database.trackDao(),
+            trustedClock = trustedClock,
+            bootCountProvider = { cachedBootCount },
+            idFactory = { UUID.randomUUID().toString() },
+            wallProvider = { System.currentTimeMillis() },
+            elapsedProvider = { SystemClock.elapsedRealtime() },
+            // Each target is one ApiClient instance: cloud HTTPS vs the LAN cleartext localApiClient.
+            cloudUploader = { raceId, teamId, points -> apiClient.uploadTrack(raceId, teamId, points) },
+            localUploader = { raceId, teamId, points -> localApiClient.uploadTrack(raceId, teamId, points) },
+        )
+    }
+
+    /** GPS-track recording state: written by `TrackRecordingService`, read by the UI. */
+    val trackRecordingState: MutableStateFlow<TrackState> = MutableStateFlow(TrackState.Idle)
 
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }

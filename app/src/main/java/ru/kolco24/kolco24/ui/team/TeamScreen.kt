@@ -48,7 +48,9 @@ import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.MemberChipBindingEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.db.TeamMemberItem
+import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.common.RefreshableList
+import ru.kolco24.kolco24.ui.track.TrackCard
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
@@ -84,6 +86,15 @@ fun TeamScreen(
     nfcAvailable: Boolean = false,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
+    trackState: TrackState = TrackState.Idle,
+    trackPointCount: Int = 0,
+    trackLengthMeters: Double = 0.0,
+    trackDegradedAccuracy: Boolean = false,
+    trackFirstPointTime: String? = null,
+    trackLastPointTime: String? = null,
+    onStartTrack: () -> Unit = {},
+    onStopTrack: () -> Unit = {},
+    onClearTrack: () -> Unit = {},
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -133,6 +144,20 @@ fun TeamScreen(
                         )
                     }
                 }
+            }
+            item("track") {
+                TrackCard(
+                    state = trackState,
+                    pointCount = trackPointCount,
+                    lengthMeters = trackLengthMeters,
+                    hasTeam = true,
+                    degradedAccuracy = trackDegradedAccuracy,
+                    firstPointTime = trackFirstPointTime,
+                    lastPointTime = trackLastPointTime,
+                    onStart = onStartTrack,
+                    onStop = onStopTrack,
+                    onClear = onClearTrack,
+                )
             }
             item("misc") {
                 MiscSection(onOpenSettings = onOpenSettings)

@@ -65,6 +65,12 @@ class Kolco24App : Application() {
                         val memberTags = container.memberTagsRepository.refreshMemberTags(raceId)
                         Log.i(TAG, "Member tags refresh for selected race $raceId: $memberTags")
                     }
+                    launch {
+                        // Opportunistic re-send across ALL pending scopes (not just this race/team) so
+                        // points stranded under an old race/team still flush. Guarded by a tryLock —
+                        // a concurrent service-stop flush just skips this one.
+                        container.trackRepository.uploadAllPending()
+                    }
                 }
             }
         }

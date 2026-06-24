@@ -21,8 +21,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MemberChipBindingEntity::class,
         MarkEntity::class,
         LegendMetaEntity::class,
+        TrackPointEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(TeamMembersConverter::class, IntListConverter::class)
@@ -37,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memberChipBindingDao(): MemberChipBindingDao
     abstract fun markDao(): MarkDao
     abstract fun legendMetaDao(): LegendMetaDao
+    abstract fun trackDao(): TrackDao
 
     companion object {
         /**
@@ -283,6 +285,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the `track_points` table — the local-only GPS track log ([TrackPointEntity]) for the
+         * dual upload (local wifi + cloud). Purely additive (a plain `CREATE TABLE`, like
+         * [MIGRATION_4_5]/[MIGRATION_8_9]); no existing table is touched, so all prior data survives.
+         * The boolean upload flags are emitted as bare `INTEGER NOT NULL` (no `DEFAULT 0`) to mirror
+         * `marks` — a Kotlin `= false` default does not produce a DB-level default, and adding one in
+         * the SQL would diverge from the generated `11.json` and crash schema validation. Safe for a
+         * new table: every insert goes through Room and always supplies the flag value. SQL must match
+         * Room's generated schema (see schemas/.../11.json) exactly, or the validation check fails at
+         * runtime.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `track_points` (`id` TEXT NOT NULL, " +
+                        "`raceId` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, " +
+                        "`lat` REAL NOT NULL, `lon` REAL NOT NULL, `accuracy` REAL NOT NULL, " +
+                        "`gpsTimeMs` INTEGER NOT NULL, `elapsedRealtimeAt` INTEGER NOT NULL, " +
+                        "`bootCount` INTEGER, `wallMs` INTEGER NOT NULL, `trustedMs` INTEGER, " +
+                        "`uploadedLocal` INTEGER NOT NULL, `uploadedCloud` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_track_points_teamId` ON `track_points` (`teamId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_track_points_raceId` ON `track_points` (`raceId`)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -299,6 +332,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
+                    MIGRATION_10_11,
                 )
                 .build()
     }

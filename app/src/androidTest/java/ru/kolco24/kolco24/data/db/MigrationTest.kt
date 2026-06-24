@@ -742,6 +742,128 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate10To11_keepsDataAndAddsTrackTable() {
+        val dbName = "migration-10to11-test.db"
+
+        // Reach v10, then seed a marks row so we can assert existing data survives.
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(
+            dbName,
+            10,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+            AppDatabase.MIGRATION_8_9,
+            AppDatabase.MIGRATION_9_10,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO marks (id, raceId, teamId, point, checkpointNumber, cost, method, " +
+                    "cpUid, cpCode, present, expectedCount, complete, photoPath, takenAt, updatedAt, " +
+                    "uploadedLocal, uploadedCloud) " +
+                    "VALUES ('uuid-1', 7, 3, 1, 5, 10, 'nfc', '04A2B3C4', 'DEADBEEF', '[1,2]', 2, 1, " +
+                    "NULL, 1000, 1000, 0, 0)"
+            )
+        }
+
+        // Run 10→11; MigrationTestHelper validates the resulting schema against 11.json.
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            11,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+            AppDatabase.MIGRATION_8_9,
+            AppDatabase.MIGRATION_9_10,
+            AppDatabase.MIGRATION_10_11,
+        )
+
+        // The legacy marks row survives the additive migration.
+        db.query("SELECT point FROM marks WHERE id = 'uuid-1'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        // New table exists, is empty, and accepts the entity column set — a camelCase/snake_case
+        // mismatch only surfaces here.
+        db.query("SELECT count(*) FROM track_points").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.execSQL(
+            "INSERT INTO track_points (id, raceId, teamId, lat, lon, accuracy, gpsTimeMs, " +
+                "elapsedRealtimeAt, bootCount, wallMs, trustedMs, uploadedLocal, uploadedCloud) " +
+                "VALUES ('tp-1', 7, 3, 55.75, 37.61, 12.4, 1718900000000, 9876543, 11, " +
+                "1718900000123, 1718900000200, 0, 0)"
+        )
+        db.query(
+            "SELECT lat, lon, accuracy, elapsedRealtimeAt, bootCount, trustedMs " +
+                "FROM track_points WHERE id = 'tp-1'"
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(55.75, cursor.getDouble(0), 0.0001)
+            assertEquals(37.61, cursor.getDouble(1), 0.0001)
+            assertEquals(12.4f, cursor.getFloat(2), 0.01f)
+            assertEquals(9876543, cursor.getLong(3))
+            assertEquals(11, cursor.getInt(4))
+            assertEquals(1718900000200, cursor.getLong(5))
+        }
+        // A NULL bootCount / trustedMs is accepted (no clock sync yet).
+        db.execSQL(
+            "INSERT INTO track_points (id, raceId, teamId, lat, lon, accuracy, gpsTimeMs, " +
+                "elapsedRealtimeAt, bootCount, wallMs, trustedMs, uploadedLocal, uploadedCloud) " +
+                "VALUES ('tp-2', 7, 3, 55.76, 37.62, 8.0, 1718900060000, 9936543, NULL, " +
+                "1718900060000, NULL, 0, 0)"
+        )
+        db.query("SELECT bootCount, trustedMs FROM track_points WHERE id = 'tp-2'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue(cursor.isNull(0))
+            assertTrue(cursor.isNull(1))
+        }
+        db.close()
+    }
+
+    @Test
+    fun migrate10To11_trackIndicesExist() {
+        val dbName = "migration-10to11-index-test.db"
+        helper.createDatabase(dbName, 1).close()
+
+        val db = helper.runMigrationsAndValidate(
+            dbName,
+            11,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_6_7,
+            AppDatabase.MIGRATION_7_8,
+            AppDatabase.MIGRATION_8_9,
+            AppDatabase.MIGRATION_9_10,
+            AppDatabase.MIGRATION_10_11,
+        )
+
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' " +
+                "AND name IN ('index_track_points_teamId', 'index_track_points_raceId') " +
+                "AND tbl_name = 'track_points'"
+        ).use { cursor ->
+            assertEquals(2, cursor.count)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate2To3_indexExists() {
         val dbName = "migration-2to3-index-test.db"
         helper.createDatabase(dbName, 1).close()
