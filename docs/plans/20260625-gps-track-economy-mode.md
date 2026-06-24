@@ -201,9 +201,9 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] add lazy `val trackProfilePreference: TrackProfilePreference by lazy { TrackProfilePreference.fromSharedPreferences(context) }` (mirror `themePreference`)
-- [ ] (no test — DI wiring, trivial, per convention)
-- [ ] run `./gradlew compileDebugKotlin` — compiles before Task 7
+- [x] add lazy `val trackProfilePreference: TrackProfilePreference by lazy { TrackProfilePreference.fromSharedPreferences(context) }` (mirror `themePreference`)
+- [x] (no test — DI wiring, trivial, per convention)
+- [x] run `./gradlew compileDebugKotlin` — compiles before Task 7
 
 ### Task 7: Read profile at start + live-apply in `TrackRecordingService`
 

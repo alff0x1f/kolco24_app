@@ -20,6 +20,7 @@ import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.TeamRepository
 import ru.kolco24.kolco24.data.ThemePreference
+import ru.kolco24.kolco24.data.TrackProfilePreference
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
@@ -218,6 +219,11 @@ class AppContainer(private val context: Context) {
 
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }
+
+    /** User-controlled GPS-track recording profile (Precise/Economy), persisted in SharedPreferences. */
+    val trackProfilePreference: TrackProfilePreference by lazy {
+        TrackProfilePreference.fromSharedPreferences(context)
+    }
 
     /** Persisted race-admin session store (token/email/expiry) backing [adminAuthRepository]. */
     private val adminTokenStore: AdminTokenStore by lazy {
