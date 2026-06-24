@@ -157,11 +157,11 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/track/TrackProfile.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackProfileTest.kt`
 
-- [ ] create `TrackProfile.kt` with the enum (`Precise`/`Economy`, fields `highAccuracy`/`intervalMs`/`maxDelayMs`) — pure, Android-free, no Compose/Android imports (mirrors `ui/theme/ThemeMode.kt`/`CheckpointColor.kt`); include the KDoc header noting "pure, Android-free, JVM-unit-tested" per the existing pure-model convention
-- [ ] add top-level `parseTrackProfile(raw: String?): TrackProfile` — `entries.firstOrNull { it.name == raw } ?: Precise` (null/unknown → default, forward-compatible)
-- [ ] write tests `TrackProfileTest`: `parseTrackProfile(null) == Precise`, `parseTrackProfile("Economy") == Economy`, `parseTrackProfile("Precise") == Precise`, `parseTrackProfile("garbage") == Precise`
-- [ ] write tests: assert the param values per profile (`Economy.intervalMs == 180_000L`, `Economy.maxDelayMs == 180_000L`, `Precise.intervalMs == 15_000L`, `Precise.maxDelayMs == 60_000L`, both `highAccuracy`)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 3
+- [x] create `TrackProfile.kt` with the enum (`Precise`/`Economy`, fields `highAccuracy`/`intervalMs`/`maxDelayMs`) — pure, Android-free, no Compose/Android imports (mirrors `ui/theme/ThemeMode.kt`/`CheckpointColor.kt`); include the KDoc header noting "pure, Android-free, JVM-unit-tested" per the existing pure-model convention
+- [x] add top-level `parseTrackProfile(raw: String?): TrackProfile` — `entries.firstOrNull { it.name == raw } ?: Precise` (null/unknown → default, forward-compatible)
+- [x] write tests `TrackProfileTest`: `parseTrackProfile(null) == Precise`, `parseTrackProfile("Economy") == Economy`, `parseTrackProfile("Precise") == Precise`, `parseTrackProfile("garbage") == Precise`
+- [x] write tests: assert the param values per profile (`Economy.intervalMs == 180_000L`, `Economy.maxDelayMs == 180_000L`, `Precise.intervalMs == 15_000L`, `Precise.maxDelayMs == 60_000L`, both `highAccuracy`)
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 3
 
 ### Task 3: `TrackProfilePreference` (persisted, reactive)
 
