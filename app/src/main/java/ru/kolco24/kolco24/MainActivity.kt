@@ -628,6 +628,7 @@ private fun Kolco24AppRoot(
     ) { result ->
         val locationGranted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        hasRequestedLocation = true
         if (locationGranted) {
             val raceId = selectedRaceId
             val teamId = selectedTeamId
@@ -646,7 +647,6 @@ private fun Kolco24AppRoot(
             val permanent = hasRequestedLocation && activity != null &&
                 !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
                 !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
-            hasRequestedLocation = true
             if (permanent) showLocationDeniedDialog = true
         }
     }

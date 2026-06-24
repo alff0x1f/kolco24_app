@@ -206,6 +206,7 @@ class TrackRepositoryTest {
         assertTrue(rows.all { it.uploadedLocal })
         assertFalse(rows.any { it.uploadedCloud })
         assertEquals(1, local.calls) // one batch drained then empty
+        assertEquals(1, cloud.calls) // cloud was attempted once, returned Offline
     }
 
     @Test

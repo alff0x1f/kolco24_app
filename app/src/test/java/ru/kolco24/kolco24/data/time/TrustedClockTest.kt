@@ -274,6 +274,16 @@ class TrustedClockTest {
     }
 
     @Test
+    fun trustedAt_knownAnchorBoot_nullCallSiteBoot_fallsBackToTrustExtrapolate() {
+        // Anchor has a known boot id; call-site passes null (e.g. bootCountProvider returned null for
+        // that fix). A lone null does NOT prove a reboot — documented fallback: trust & extrapolate.
+        val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 7)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 5_000L, wallNow = 0L, bootNow = 7)
+        assertEquals(10_000_000L - 3_000L, c.trustedAt(elapsedAt = 2_000L, bootAt = null))
+    }
+
+    @Test
     fun trustedAt_noSync_isNull() {
         val f = Fakes(elapsed = 5_000L, wall = 0L, boot = 1)
         val c = clock(f)
