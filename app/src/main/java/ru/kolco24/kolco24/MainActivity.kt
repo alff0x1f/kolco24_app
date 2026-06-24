@@ -614,7 +614,11 @@ private fun Kolco24AppRoot(
     LaunchedEffect(selectedTeamId) {
         bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false
         showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
-        if (container.trackRecordingState.value is TrackState.Recording) {
+        // Only stop recording when a different team is selected. Guard against selectedTeamId == null,
+        // which occurs transiently during activity recreation (collectAsState initial = null) before Room
+        // emits the persisted value — stopping on null would kill an active recording on every rotation.
+        val recording = container.trackRecordingState.value as? TrackState.Recording
+        if (recording != null && selectedTeamId != null && recording.teamId != selectedTeamId) {
             TrackRecordingService.stop(context)
         }
     }
@@ -655,7 +659,10 @@ private fun Kolco24AppRoot(
     }
     val onStartTrack: () -> Unit = {
         val perms = buildList {
+            // Request both fine and coarse together so Android 12+ shows the "Approximate location"
+            // option in the system dialog; fine-only requests may be silently ignored on some OEMs.
             add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(Manifest.permission.POST_NOTIFICATIONS)
             }
