@@ -544,8 +544,8 @@ private fun Kolco24AppRoot(
     // Length/time metrics use the accuracy-filtered, capture-ordered points (raw count stays full).
     val trackUsable = remember(safeTrack) { filterPoints(safeTrack).sortedBy { it.elapsedRealtimeAt } }
     val trackLength = remember(trackUsable) { trackLengthMeters(trackUsable) }
-    val trackFirstTime = trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) }
-    val trackLastTime = trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) }
+    val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
+    val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Degraded accuracy = a network provider exists but no GPS chip — the track will be coarse but
     // recording is still allowed (the engine falls back to network). Read once; provider set is static.
     val locationManager = remember { context.getSystemService(LocationManager::class.java) }

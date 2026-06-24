@@ -10,6 +10,9 @@
   app/build.gradle.kts.
 -->
 <network-security-config>
+    <!-- Explicit: block cleartext on all hosts (overrides the API 24-27 platform default that would
+         otherwise permit it). The domain-config below punches a single exception for the LAN target. -->
+    <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">192.168.1.5</domain>
     </domain-config>
