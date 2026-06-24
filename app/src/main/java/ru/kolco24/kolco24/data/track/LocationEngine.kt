@@ -20,6 +20,16 @@ interface LocationEngine {
      */
     fun start(onPoints: (List<RawFix>) -> Unit, onError: (Throwable) -> Unit)
 
+    /**
+     * Force delivery of any buffered batch of fixes, then invoke [onComplete]. The default body
+     * completes immediately — correct for engines that never batch (Legacy delivers singletons). The
+     * Fused engine overrides it: GMS holds up to `maxUpdateDelay` of fixes in its buffer, and a bare
+     * [stop] (`removeLocationUpdates`) discards them, so the buffer must be flushed and **delivered to
+     * `onPoints`** (enqueued for insert) before stopping. [onComplete] runs after delivery; it may fire
+     * on an arbitrary thread (Fused fires on the main thread).
+     */
+    fun flush(onComplete: () -> Unit = {}) { onComplete() }
+
     /** Stop requesting updates and release listeners. Idempotent. */
     fun stop()
 }

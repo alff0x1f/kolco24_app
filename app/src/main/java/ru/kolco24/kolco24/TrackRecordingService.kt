@@ -11,7 +11,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -27,6 +29,7 @@ import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
 import ru.kolco24.kolco24.data.track.TrackState
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Foreground service that records the team's GPS track with the screen off. Started from the UI
@@ -49,6 +52,9 @@ class TrackRecordingService : Service() {
 
     /** Service-local scope for the count collector; cancelled on teardown and recreated on restart. */
     private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Posts the flush-timeout fallback; engine-field mutations + flush callbacks serialize on main. */
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var engine: LocationEngine? = null
     private var countJob: Job? = null
@@ -124,28 +130,63 @@ class TrackRecordingService : Service() {
     }
 
     override fun onDestroy() {
-        // Defensive: if the system tears us down without an ACTION_STOP, release everything.
-        engine?.stop()
-        engine = null
-        countJob?.cancel()
-        serviceScope.cancel()
-        if (container.trackRecordingState.value is TrackState.Recording) {
-            container.trackRecordingState.value = TrackState.Idle
-        }
-        // Best-effort flush in case the system stopped us without going through teardown().
-        // Safe when teardown() already ran — the upload mutex drops the duplicate attempt.
-        val r = raceId
-        val t = teamId
-        if (r >= 0 && t >= 0) {
-            container.applicationScope.launch { container.trackRepository.uploadPending(r, t) }
+        // A system-initiated onDestroy() (task removed / reclaim) without an ACTION_STOP would drop the
+        // Fused buffer via a bare stop(). Route it through a best-effort flush too — but onDestroy may
+        // precede process death before the async flush lands, so this is best-effort only (a bare
+        // onDestroy / hard kill may still lose up to maxDelay; «Стоп» and live-switch are lossless).
+        val e = engine
+        if (e != null && container.trackRecordingState.value is TrackState.Recording) {
+            flushThen(e) {
+                if (engine === e) e.stop()
+                finishTeardown()
+            }
+        } else {
+            finishTeardown()
         }
         super.onDestroy()
     }
 
     /** Stop updates, flip state back to Idle, drop the foreground notification, and stop the service. */
     private fun teardown() {
+        val e = engine ?: return finishTeardown()
+        // Flush the buffered batch (delivered/enqueued to applicationScope) before stopping — else the
+        // last ≤maxDelay of fixes are lost (field-tested bug). Identity-guarded so a rapid stop→start
+        // can't stop a newer engine.
+        flushThen(e) {
+            if (engine === e) {
+                e.stop()
+                engine = null
+            }
+            finishTeardown()
+        }
+    }
+
+    /**
+     * Flush [e]'s buffer, then run [after] **exactly once** — fired by the flush callback **or** a
+     * [FLUSH_TIMEOUT_MS] fallback so a never-completing `flushLocations()` (rare GMS hiccup) can't leave
+     * the «Стоп» service stuck foreground. Both paths run on the main thread.
+     */
+    private fun flushThen(e: LocationEngine, after: () -> Unit) {
+        val done = AtomicBoolean(false)
+        val complete = Runnable { if (done.compareAndSet(false, true)) after() }
+        mainHandler.postDelayed(complete, FLUSH_TIMEOUT_MS) // stuck-flush fallback
+        e.flush {
+            mainHandler.removeCallbacks(complete)
+            complete.run()
+        }
+    }
+
+    /**
+     * Final teardown: release the engine, drop pending flush timeouts, cancel jobs, flip to Idle, flush
+     * uploads, and stop. Nulls [engine] defensively (so a later stale timeout's `engine !== e` is
+     * guaranteed true) and `removeCallbacksAndMessages(null)` drops any *other* `flushThen` instance's
+     * pending timeout `Runnable` — both **before** `serviceScope.cancel()`/`stopSelf()`. Runs on the
+     * main thread (flush/timeout callback), not inside a serviceScope coroutine, so cancel is safe.
+     */
+    private fun finishTeardown() {
         engine?.stop()
         engine = null
+        mainHandler.removeCallbacksAndMessages(null)
         countJob?.cancel()
         container.trackRecordingState.value = TrackState.Idle
         // Opportunistic flush of this scope on stop; outlives the service via applicationScope.
@@ -206,6 +247,7 @@ class TrackRecordingService : Service() {
         private const val TAG = "TrackRecordingService"
         private const val CHANNEL_ID = "track_recording"
         private const val NOTIF_ID = 1001
+        private const val FLUSH_TIMEOUT_MS = 4_000L
         private const val ACTION_STOP = "ru.kolco24.kolco24.action.STOP_TRACK"
         private const val EXTRA_RACE_ID = "race_id"
         private const val EXTRA_TEAM_ID = "team_id"

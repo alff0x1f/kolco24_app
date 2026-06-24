@@ -62,6 +62,12 @@ class FusedLocationEngine(context: Context) : LocationEngine {
         }
     }
 
+    override fun flush(onComplete: () -> Unit) {
+        // The GMS Task completes after the buffered locations are delivered to onLocationResult, so the
+        // points are enqueued for insert (applicationScope.launch) by the time onComplete runs.
+        client.flushLocations().addOnCompleteListener { onComplete() }
+    }
+
     override fun stop() {
         callback?.let { client.removeLocationUpdates(it) }
         callback = null
