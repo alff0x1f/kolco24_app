@@ -15,11 +15,18 @@ import com.google.android.gms.location.Priority
  * GMS-backed [LocationEngine] (real adapter, untested per repo convention — the engine **choice** is
  * tested via `LocationEngineFactoryTest`).
  *
- * Battery is the priority: `PRIORITY_BALANCED_POWER_ACCURACY` with a 60 s interval and a 300 s
- * `maxUpdateDelay` lets the GPS radio sleep and deliver fixes in a batch ~every 5 min. The whole batch
- * is forwarded so each point keeps its own `elapsedRealtimeNanos` (real capture moment), not the
- * delivery time. `requestLocationUpdates` is wrapped so a permission-revoke race (`SecurityException`)
- * or a GMS task failure routes to `onError` instead of crashing.
+ * Field-test profile: `PRIORITY_HIGH_ACCURACY` (real GPS chip — `BALANCED` only gives WiFi/cell
+ * ~city-block accuracy, useless for a race track) with a 15 s interval. **No** min-displacement filter
+ * (`setMinUpdateDistanceMeters` is deliberately omitted): the framework-level distance gate is
+ * irreversibly lossy — suppressed fixes never reach storage — and it saves no power (battery is driven
+ * by interval+priority, the radio runs regardless). Keeping every delivered fix raw lets a far smarter
+ * post-hoc filter run on the stored track (kinematic speed-gate using the on-foot model + accuracy +
+ * dense neighbours), which a blind 10 m hardware gate would only hinder. The 300 s `maxUpdateDelay`
+ * only defers *delivery* (batched ~every 5 min, saving CPU/app wakeups) — at a 15 s HIGH-accuracy
+ * interval the GPS radio is effectively continuous, so battery cost is driven by the interval, not the
+ * batch delay. The whole batch is forwarded so each point keeps its own `elapsedRealtimeNanos` (real
+ * capture moment), not the delivery time. `requestLocationUpdates` is wrapped so a permission-revoke
+ * race (`SecurityException`) or a GMS task failure routes to `onError` instead of crashing.
  */
 class FusedLocationEngine(context: Context) : LocationEngine {
 
@@ -30,8 +37,8 @@ class FusedLocationEngine(context: Context) : LocationEngine {
 
     @SuppressLint("MissingPermission") // permission is a hard precondition guaranteed by the launcher/service precheck.
     override fun start(onPoints: (List<RawFix>) -> Unit, onError: (Throwable) -> Unit) {
-        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 60_000L)
-            .setMinUpdateIntervalMillis(60_000L)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 15_000L)
+            .setMinUpdateIntervalMillis(15_000L)
             .setMaxUpdateDelayMillis(300_000L)
             .build()
         val cb = object : LocationCallback() {

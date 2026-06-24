@@ -11,9 +11,12 @@ import android.os.Looper
  * Non-GMS [LocationEngine] fallback (real adapter, untested per repo convention — the engine
  * **choice** is tested via `LocationEngineFactoryTest`).
  *
- * Uses `GPS_PROVIDER` at a 60 s interval, falling back to `NETWORK_PROVIDER` when GPS is unavailable;
- * if neither provider exists it routes an error to `onError` instead of silently recording nothing.
- * Each fix is delivered as a singleton list (no batching API here).
+ * Uses `GPS_PROVIDER` at a 15 s interval with **no** min-distance filter (`minDistance = 0f`, matching
+ * the Fused field-test profile; `GPS_PROVIDER` is the legacy equivalent of `HIGH_ACCURACY`) — every
+ * delivered fix is kept raw so a smarter post-hoc filter can run on the stored track (a hardware
+ * distance gate is irreversibly lossy and saves no power); falling back to `NETWORK_PROVIDER` when GPS
+ * is unavailable; if neither provider exists it routes an error to `onError` instead of silently
+ * recording nothing. Each fix is delivered as a singleton list (no batching API here).
  *
  * Note: unlike Fused there is no `maxUpdateDelay` equivalent, so under Doze on non-GMS devices the
  * updates may be throttled (device-dependent) — this is the reason Fused is preferred when GMS is
@@ -40,7 +43,7 @@ class LegacyLocationEngine(context: Context) : LocationEngine {
         val l = LocationListener { location: Location -> onPoints(listOf(location.toRawFix())) }
         listener = l
         try {
-            locationManager.requestLocationUpdates(provider, 60_000L, 0f, l, Looper.getMainLooper())
+            locationManager.requestLocationUpdates(provider, 15_000L, 0f, l, Looper.getMainLooper())
         } catch (e: SecurityException) {
             onError(e)
         } catch (e: IllegalArgumentException) {
