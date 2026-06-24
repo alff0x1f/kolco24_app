@@ -252,8 +252,8 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 - [x] (no `connectedDebugAndroidTest` — no Room migration in this feature)
 
 ### Task 11: [Final] Update documentation
-- [ ] update `CLAUDE.md`: awaitable `flush(onComplete)` on the `LocationEngine` seam + the `flushThen` helper (exactly-once + `FLUSH_TIMEOUT_MS` fallback + captured-engine identity guard) used by `teardown()`/`onDestroy()`/live-restart (Stop no longer drops the buffered batch; buffer enqueued to `applicationScope` before stop; bare `onDestroy`/hard-kill still bounded by `maxDelay`); new `data/track/TrackProfile.kt` + `data/TrackProfilePreference.kt`; engines parameterized by `TrackProfile`; `LocationEngineFactory.create(ctx, profile)`; live-apply `collectLatest` in `TrackRecordingService`; Switch in `SettingsScreen`; profile wiring in `MainActivity`; lazy `trackProfilePreference` in `AppContainer`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md`: awaitable `flush(onComplete)` on the `LocationEngine` seam + the `flushThen` helper (exactly-once + `FLUSH_TIMEOUT_MS` fallback + captured-engine identity guard) used by `teardown()`/`onDestroy()`/live-restart (Stop no longer drops the buffered batch; buffer enqueued to `applicationScope` before stop; bare `onDestroy`/hard-kill still bounded by `maxDelay`); new `data/track/TrackProfile.kt` + `data/TrackProfilePreference.kt`; engines parameterized by `TrackProfile`; `LocationEngineFactory.create(ctx, profile)`; live-apply `collectLatest` in `TrackRecordingService`; Switch in `SettingsScreen`; profile wiring in `MainActivity`; lazy `trackProfilePreference` in `AppContainer`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Require external action — no checkboxes, informational only*
