@@ -65,6 +65,12 @@ class TrackRecordingService : Service() {
     private var activeProfile: TrackProfile = TrackProfile.Precise
     private var raceId: Int = -1
     private var teamId: Int = -1
+    /**
+     * Set to true when teardown() is in progress so the in-flight profile-switch flush callback
+     * doesn't restart the engine after Stop wins the race — without this guard the profile callback
+     * can restart the engine and teardown's identity check (engine !== e) then skips finishTeardown.
+     */
+    private var isTearingDown = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -90,6 +96,8 @@ class TrackRecordingService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        val wasTearingDown = isTearingDown
+        isTearingDown = false // reset for new recording session
 
         // A prior teardown() may have cancelled serviceScope (rapid stop→start on the same instance).
         // Recreate it so the count-collector launch below works on a fresh scope.
@@ -107,8 +115,9 @@ class TrackRecordingService : Service() {
         container.trackRecordingState.value = TrackState.Recording(teamId, 0)
 
         // Reflect the DB truth in the state + notification as points land.
-        // Defensive: stop any engine from a prior start before creating a new one.
-        engine?.stop()
+        // Defensive: stop any engine from a prior start before creating a new one — but only if
+        // teardown's flush isn't already in flight; the flush callback owns the stop in that case.
+        if (!wasTearingDown) engine?.stop()
         engine = null
         countJob?.cancel()
         countJob = serviceScope.launch {
@@ -138,6 +147,9 @@ class TrackRecordingService : Service() {
                 }
                 flushThen(e) {
                     if (engine !== e) return@flushThen // a newer engine took over
+                    // teardown() may have won the race: stop was requested while this flush was
+                    // in flight. Don't restart the engine; teardown's own flushThen handles cleanup.
+                    if (isTearingDown) return@flushThen
                     e.stop()
                     val latest = container.trackProfilePreference.profile.value // restart to LATEST
                     activeProfile = latest
@@ -157,16 +169,21 @@ class TrackRecordingService : Service() {
      */
     private fun startEngine(profile: TrackProfile) {
         val e = LocationEngineFactory.create(this, profile)
+        // Snapshot raceId/teamId as locals so the onPoints lambda isn't affected by a later
+        // onStartCommand (team switch + immediate new start) overwriting the instance fields before
+        // the old engine finishes delivering its buffered batch.
+        val r = raceId
+        val t = teamId
         engine = e
         e.start(
             onPoints = { fixes ->
                 container.applicationScope.launch {
-                    container.trackRepository.insertAll(fixes, raceId, teamId)
+                    container.trackRepository.insertAll(fixes, r, t)
                 }
             },
             onError = { err ->
                 Log.e(TAG, "Location engine error; stopping recording.", err)
-                teardown()
+                mainHandler.post { teardown() }
             },
         )
     }
@@ -176,6 +193,7 @@ class TrackRecordingService : Service() {
         // Fused buffer via a bare stop(). Route it through a best-effort flush too — but onDestroy may
         // precede process death before the async flush lands, so this is best-effort only (a bare
         // onDestroy / hard kill may still lose up to maxDelay; «Стоп» and live-switch are lossless).
+        isTearingDown = true // prevent an in-flight profile-switch flush from restarting the engine
         val e = engine
         if (e != null && container.trackRecordingState.value is TrackState.Recording) {
             flushThen(e) {
@@ -190,15 +208,15 @@ class TrackRecordingService : Service() {
 
     /** Stop updates, flip state back to Idle, drop the foreground notification, and stop the service. */
     private fun teardown() {
+        isTearingDown = true
         val e = engine ?: return finishTeardown()
         // Flush the buffered batch (delivered/enqueued to applicationScope) before stopping — else the
-        // last ≤maxDelay of fixes are lost (field-tested bug). Identity-guarded so a rapid stop→start
-        // can't stop a newer engine.
+        // last ≤maxDelay of fixes are lost (field-tested bug). Always stop the old engine after flush;
+        // the identity guard only skips finishTeardown so a concurrent new session isn't torn down.
         flushThen(e) {
-            if (engine === e) {
-                e.stop()
-                engine = null
-            }
+            e.stop() // flush done; stop old engine regardless of whether a new session started
+            if (engine !== e) return@flushThen // newer session took over — don't finalize
+            engine = null
             finishTeardown()
         }
     }
