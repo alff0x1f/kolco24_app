@@ -59,6 +59,10 @@ class TrackRecordingService : Service() {
 
     private var engine: LocationEngine? = null
     private var countJob: Job? = null
+    /** Observes the profile preference for live-apply; re-launched per onStartCommand (like countJob). */
+    private var profileJob: Job? = null
+    /** The profile the running engine is currently on; updated only inside a completed flush callback. */
+    private var activeProfile: TrackProfile = TrackProfile.Precise
     private var raceId: Int = -1
     private var teamId: Int = -1
 
@@ -114,21 +118,57 @@ class TrackRecordingService : Service() {
             }
         }
 
-        // Stopgap (Task 7 replaces this with profile-aware startEngine): Precise == today's behavior.
-        val locationEngine = LocationEngineFactory.create(this, TrackProfile.Precise).also { engine = it }
-        locationEngine.start(
+        // Start the engine on the persisted profile (Precise == today's behavior by default).
+        activeProfile = container.trackProfilePreference.profile.value
+        startEngine(activeProfile)
+
+        // Live-apply: a mid-race profile toggle soft-restarts the engine without a track gap. Must be
+        // (re)launched here, not once — teardown() cancels serviceScope and a later start recreates it.
+        // No .drop(1): track activeProfile and skip emissions equal to it, so a change landing between
+        // the initial .value read and the subscription isn't dropped. Runs on Dispatchers.Main.immediate
+        // so engine writes serialize with the main-thread lifecycle + flush callbacks.
+        profileJob?.cancel()
+        profileJob = serviceScope.launch(Dispatchers.Main.immediate) {
+            container.trackProfilePreference.profile.collectLatest { p ->
+                if (p == activeProfile) return@collectLatest
+                val e = engine ?: run {
+                    activeProfile = p
+                    startEngine(p)
+                    return@collectLatest
+                }
+                flushThen(e) {
+                    if (engine !== e) return@flushThen // a newer engine took over
+                    e.stop()
+                    val latest = container.trackProfilePreference.profile.value // restart to LATEST
+                    activeProfile = latest
+                    startEngine(latest)
+                }
+            }
+        }
+
+        return START_NOT_STICKY
+    }
+
+    /**
+     * Build + start a fresh engine on [profile], assigning the captured local to [engine] before
+     * `start()` (NPE-safe: a concurrent `engine = null` can't null the local we start). Fully
+     * synchronous and does **not** pre-stop — callers own the stop (onStartCommand's defensive
+     * `engine?.stop()`, or the live-restart / teardown `flushThen` callbacks).
+     */
+    private fun startEngine(profile: TrackProfile) {
+        val e = LocationEngineFactory.create(this, profile)
+        engine = e
+        e.start(
             onPoints = { fixes ->
                 container.applicationScope.launch {
                     container.trackRepository.insertAll(fixes, raceId, teamId)
                 }
             },
-            onError = { e ->
-                Log.e(TAG, "Location engine error; stopping recording.", e)
+            onError = { err ->
+                Log.e(TAG, "Location engine error; stopping recording.", err)
                 teardown()
             },
         )
-
-        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -190,6 +230,7 @@ class TrackRecordingService : Service() {
         engine = null
         mainHandler.removeCallbacksAndMessages(null)
         countJob?.cancel()
+        profileJob?.cancel()
         container.trackRecordingState.value = TrackState.Idle
         // Opportunistic flush of this scope on stop; outlives the service via applicationScope.
         // No-op (or quietly Offline) until the backend endpoint lands — points stay uploaded*=0.

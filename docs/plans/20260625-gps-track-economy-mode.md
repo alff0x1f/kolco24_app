@@ -210,14 +210,14 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/TrackRecordingService.kt`
 
-- [ ] extract private `fun startEngine(profile: TrackProfile)`: `val e = LocationEngineFactory.create(this, profile); engine = e; e.start(onPoints, onError)` — start the **captured local `e`**, not the `engine` field (review minor #1 — preserves the NPE-safe pattern from `onStartCommand`); move the existing `onPoints`/`onError` lambdas in; fully synchronous; must **not** pre-stop (callers own the stop)
-- [ ] add the `activeProfile` field; in `onStartCommand` keep the defensive `engine?.stop(); engine = null` (lines ~99–100), then `activeProfile = container.trackProfilePreference.profile.value; startEngine(activeProfile)`
-- [ ] **(re)launch `profileJob` inside `onStartCommand`** next to `countJob` (line ~103) — **critical: not a one-time launch** (teardown cancels `serviceScope`; a later start recreates it). Use the exact pattern from Technical Details: `collectLatest` **without `.drop(1)`**, skip when `p == activeProfile`, else `flushThen(e) { if (engine !== e) return@flushThen; e.stop(); val latest = …value; activeProfile = latest; startEngine(latest) }`
+- [x] extract private `fun startEngine(profile: TrackProfile)`: `val e = LocationEngineFactory.create(this, profile); engine = e; e.start(onPoints, onError)` — start the **captured local `e`**, not the `engine` field (review minor #1 — preserves the NPE-safe pattern from `onStartCommand`); move the existing `onPoints`/`onError` lambdas in; fully synchronous; must **not** pre-stop (callers own the stop)
+- [x] add the `activeProfile` field; in `onStartCommand` keep the defensive `engine?.stop(); engine = null` (lines ~99–100), then `activeProfile = container.trackProfilePreference.profile.value; startEngine(activeProfile)`
+- [x] **(re)launch `profileJob` inside `onStartCommand`** next to `countJob` (line ~103) — **critical: not a one-time launch** (teardown cancels `serviceScope`; a later start recreates it). Use the exact pattern from Technical Details: `collectLatest` **without `.drop(1)`**, skip when `p == activeProfile`, else `flushThen(e) { if (engine !== e) return@flushThen; e.stop(); val latest = …value; activeProfile = latest; startEngine(latest) }`
   - **review #2:** no `.drop(1)` — track `activeProfile` instead, so a change landing between the initial `.value` read and the subscription isn't dropped
   - **review #1:** capture `e` + identity-guard (`engine !== e`) and restart to the **latest** `.value` so a stale/rapid double-toggle can't stop a newer engine or settle on an obsolete profile
-- [ ] cancel `profileJob` in `finishTeardown()` and `onDestroy()` alongside `countJob`
-- [ ] (no test — Service adapter, untested per convention; note it. The `profileJob` re-launch + identity/flush ordering is the real logic risk, verified by review in Task 10)
-- [ ] run `./gradlew compileDebugKotlin` + `./gradlew lintDebug` — must pass before Task 8
+- [x] cancel `profileJob` in `finishTeardown()` and `onDestroy()` alongside `countJob` (both routes go through `finishTeardown()`, which now also cancels `profileJob`)
+- [x] (no test — Service adapter, untested per convention; note it. The `profileJob` re-launch + identity/flush ordering is the real logic risk, verified by review in Task 10)
+- [x] run `./gradlew compileDebugKotlin` + `./gradlew lintDebug` — must pass before Task 8
 
 ### Task 8: Switch row in `SettingsScreen`
 
