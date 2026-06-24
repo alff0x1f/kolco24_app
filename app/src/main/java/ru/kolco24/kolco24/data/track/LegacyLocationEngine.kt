@@ -45,6 +45,8 @@ class LegacyLocationEngine(context: Context) : LocationEngine {
             onError(e)
         } catch (e: IllegalArgumentException) {
             onError(e)
+        } catch (e: RuntimeException) {
+            onError(e)
         }
     }
 

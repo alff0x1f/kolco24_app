@@ -149,6 +149,7 @@ class TrackRecordingService : Service() {
         if (r >= 0 && t >= 0) {
             container.applicationScope.launch { container.trackRepository.uploadPending(r, t) }
         }
+        serviceScope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE) // Service.stopForeground(int) exists since API 24.
         stopSelf()
     }
