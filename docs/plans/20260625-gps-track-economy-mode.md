@@ -234,10 +234,10 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] collect `val trackProfile by container.trackProfilePreference.profile.collectAsState()` near the existing theme `collectAsState` (thread through `Kolco24AppRoot` params like `themeMode`/`onThemeModeChange`)
-- [ ] pass to `SettingsScreen`: `economyMode = (trackProfile == TrackProfile.Economy)`, `onEconomyModeChange = { container.trackProfilePreference.setProfile(if (it) TrackProfile.Economy else TrackProfile.Precise) }`
-- [ ] (no test — Compose/MainActivity, untested per convention)
-- [ ] run `./gradlew compileDebugKotlin` + `./gradlew lintDebug` — must pass before Task 10
+- [x] collect `val trackProfile by container.trackProfilePreference.profile.collectAsState()` near the existing theme `collectAsState` (thread through `Kolco24AppRoot` params like `themeMode`/`onThemeModeChange`)
+- [x] pass to `SettingsScreen`: `economyMode = (trackProfile == TrackProfile.Economy)`, `onEconomyModeChange = { container.trackProfilePreference.setProfile(if (it) TrackProfile.Economy else TrackProfile.Precise) }`
+- [x] (no test — Compose/MainActivity, untested per convention)
+- [x] run `./gradlew compileDebugKotlin` + `./gradlew lintDebug` — must pass before Task 10
 
 ### Task 10: Verify acceptance criteria
 - [ ] verify: default install records on `Precise` (15 s) unchanged; toggling Switch to economy persists and survives process death; mid-recording toggle live-restarts the engine without a track gap (logic review — on-device check is Post-Completion)

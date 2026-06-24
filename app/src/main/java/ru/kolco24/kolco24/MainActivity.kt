@@ -91,6 +91,7 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
+import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.trackLengthMeters
@@ -241,10 +242,17 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             // collectAsState deeper in the tree).
             val container = remember { (applicationContext as Kolco24App).container }
             val mode by container.themePreference.mode.collectAsState()
+            val trackProfile by container.trackProfilePreference.profile.collectAsState()
             Kolco24Theme(darkTheme = mode.isDark(isSystemInDarkTheme())) {
                 Kolco24AppRoot(
                     themeMode = mode,
                     onThemeModeChange = { container.themePreference.setMode(it) },
+                    economyMode = trackProfile == TrackProfile.Economy,
+                    onEconomyModeChange = {
+                        container.trackProfilePreference.setProfile(
+                            if (it) TrackProfile.Economy else TrackProfile.Precise,
+                        )
+                    },
                 )
             }
         }
@@ -406,6 +414,8 @@ private data class PickerTeamsState(
 private fun Kolco24AppRoot(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    economyMode: Boolean,
+    onEconomyModeChange: (Boolean) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
@@ -1030,6 +1040,8 @@ private fun Kolco24AppRoot(
                 },
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
+                economyMode = economyMode,
+                onEconomyModeChange = onEconomyModeChange,
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
                 onOpenAdmin = { showSettings = false; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
