@@ -628,6 +628,9 @@ private fun Kolco24AppRoot(
     ) { result ->
         val locationGranted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        // Snapshot before updating so the permanent-denial guard can distinguish
+        // "first ever denial" (alreadyRequested == false) from a subsequent denial.
+        val alreadyRequested = hasRequestedLocation
         hasRequestedLocation = true
         if (locationGranted) {
             val raceId = selectedRaceId
@@ -642,9 +645,9 @@ private fun Kolco24AppRoot(
             }
         } else {
             // Permanent denial: no rationale for either permission AND we have already requested
-            // at least once. Without the hasRequestedLocation guard, shouldShowRequestPermissionRationale
+            // at least once. Without the alreadyRequested guard, shouldShowRequestPermissionRationale
             // returning false on the very first denial would incorrectly route the user to settings.
-            val permanent = hasRequestedLocation && activity != null &&
+            val permanent = alreadyRequested && activity != null &&
                 !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
                 !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
             if (permanent) showLocationDeniedDialog = true
@@ -851,7 +854,7 @@ private fun Kolco24AppRoot(
                         nfcAvailable = nfcAvailable,
                         isRefreshing = teamRefreshing,
                         onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
-                        trackState = trackState,
+                        trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
                         trackLengthMeters = trackLength,
                         trackDegradedAccuracy = degradedAccuracy,
