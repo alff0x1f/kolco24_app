@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
+import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -113,7 +114,8 @@ class TrackRecordingService : Service() {
             }
         }
 
-        val locationEngine = LocationEngineFactory.create(this).also { engine = it }
+        // Stopgap (Task 7 replaces this with profile-aware startEngine): Precise == today's behavior.
+        val locationEngine = LocationEngineFactory.create(this, TrackProfile.Precise).also { engine = it }
         locationEngine.start(
             onPoints = { fixes ->
                 container.applicationScope.launch {

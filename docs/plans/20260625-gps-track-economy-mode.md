@@ -180,10 +180,10 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/track/FusedLocationEngine.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/track/LegacyLocationEngine.kt`
 
-- [ ] `FusedLocationEngine(context, profile: TrackProfile)`: in `start()` derive `priority = if (profile.highAccuracy) PRIORITY_HIGH_ACCURACY else PRIORITY_BALANCED_POWER_ACCURACY`; build `LocationRequest.Builder(priority, profile.intervalMs).setMinUpdateIntervalMillis(profile.intervalMs).setMaxUpdateDelayMillis(profile.maxDelayMs).build()`; keep **no** `setMinUpdateDistanceMeters` (raw); `flush()` already added in Task 1; update KDoc (profiles, interval/maxDelay from `profile`, duty-cycle rationale at 3 min)
-- [ ] `LegacyLocationEngine(context, profile: TrackProfile)`: in `start()` use `requestLocationUpdates(provider, profile.intervalMs, 0f, listener, looper)`; update KDoc (no `maxDelay` equivalent; still raw)
-- [ ] (no tests — real Android adapters, untested per convention; engine *choice* stays covered by `LocationEngineFactoryTest`)
-- [ ] `./gradlew compileDebugKotlin` — compiles before Task 5 (factory still calls old `create`, fixed in Task 5; if it breaks compile, do Task 5 together)
+- [x] `FusedLocationEngine(context, profile: TrackProfile)`: in `start()` derive `priority = if (profile.highAccuracy) PRIORITY_HIGH_ACCURACY else PRIORITY_BALANCED_POWER_ACCURACY`; build `LocationRequest.Builder(priority, profile.intervalMs).setMinUpdateIntervalMillis(profile.intervalMs).setMaxUpdateDelayMillis(profile.maxDelayMs).build()`; keep **no** `setMinUpdateDistanceMeters` (raw); `flush()` already added in Task 1; update KDoc (profiles, interval/maxDelay from `profile`, duty-cycle rationale at 3 min)
+- [x] `LegacyLocationEngine(context, profile: TrackProfile)`: in `start()` use `requestLocationUpdates(provider, profile.intervalMs, 0f, listener, looper)`; update KDoc (no `maxDelay` equivalent; still raw)
+- [x] (no tests — real Android adapters, untested per convention; engine *choice* stays covered by `LocationEngineFactoryTest`)
+- [x] `./gradlew compileDebugKotlin` — compiles (Task 5 done together as the plan note anticipated; service got a behavior-preserving `Precise` stopgap, replaced in Task 7, to keep the build green)
 
 ### Task 5: `LocationEngineFactory.create(context, profile)`
 
@@ -191,10 +191,10 @@ A pure `TrackProfile` enum carries the three numbers per profile (`highAccuracy`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/track/LocationEngineFactory.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/LocationEngineFactoryTest.kt` (verify only — should need no change)
 
-- [ ] change `create(context)` → `create(context, profile: TrackProfile)`; pass `profile` into `FusedLocationEngine(context, profile)` / `LegacyLocationEngine(context, profile)`
-- [ ] keep `chooseEngineType(gmsAvailable)` pure and unchanged
-- [ ] confirm `LocationEngineFactoryTest` still compiles/passes (it tests `chooseEngineType`, not `create`) — adjust only if it referenced `create`
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 6
+- [x] change `create(context)` → `create(context, profile: TrackProfile)`; pass `profile` into `FusedLocationEngine(context, profile)` / `LegacyLocationEngine(context, profile)`
+- [x] keep `chooseEngineType(gmsAvailable)` pure and unchanged
+- [x] confirm `LocationEngineFactoryTest` still compiles/passes (it tests `chooseEngineType`, not `create`) — needed no change; passes in `testDebugUnitTest`
+- [x] run `./gradlew testDebugUnitTest` — passes
 
 ### Task 6: Wire `trackProfilePreference` into `AppContainer`
 
