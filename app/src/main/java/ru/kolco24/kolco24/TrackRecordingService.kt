@@ -22,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
@@ -46,8 +47,8 @@ class TrackRecordingService : Service() {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
-    /** Service-local scope for the count collector; cancelled on teardown. Inserts use applicationScope. */
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** Service-local scope for the count collector; cancelled on teardown and recreated on restart. */
+    private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var engine: LocationEngine? = null
     private var countJob: Job? = null
@@ -78,6 +79,10 @@ class TrackRecordingService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+
+        // A prior teardown() may have cancelled serviceScope (rapid stop→start on the same instance).
+        // Recreate it so the count-collector launch below works on a fresh scope.
+        if (!serviceScope.isActive) serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         createChannel()
         // Must be called within ~5 s of the start; do it first with a 0-count notification. The

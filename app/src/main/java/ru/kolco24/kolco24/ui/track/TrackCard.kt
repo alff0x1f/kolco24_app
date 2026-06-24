@@ -235,9 +235,11 @@ private fun Metric(label: String, value: String) {
 }
 
 /** Length readout: meters below 1 km, else one-decimal kilometers. */
-private fun formatLength(meters: Double): String =
-    if (meters < 1_000) "${Math.round(meters)}м"
+private fun formatLength(meters: Double): String {
+    val rounded = Math.round(meters)
+    return if (rounded < 1_000) "${rounded}м"
     else {
         val tenths = Math.round(meters / 100.0)
         if (tenths % 10 == 0L) "${tenths / 10}км" else "${tenths / 10.0}км"
     }
+}

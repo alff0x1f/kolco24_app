@@ -546,12 +546,14 @@ private fun Kolco24AppRoot(
     val trackLength = remember(trackUsable) { trackLengthMeters(trackUsable) }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
-    // Degraded accuracy = a network provider exists but no GPS chip — the track will be coarse but
-    // recording is still allowed (the engine falls back to network). Read once; provider set is static.
+    // Degraded accuracy = network is available but GPS is not enabled (no chip or toggle off) — the
+    // track will be coarse but recording is still allowed (the engine falls back to network).
+    // Read once at composition; runtime GPS toggling is not tracked (no recomposition trigger needed).
     val locationManager = remember { context.getSystemService(LocationManager::class.java) }
     val degradedAccuracy = remember(locationManager) {
-        val providers = locationManager?.allProviders ?: emptyList()
-        LocationManager.NETWORK_PROVIDER in providers && LocationManager.GPS_PROVIDER !in providers
+        locationManager != null &&
+            !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
