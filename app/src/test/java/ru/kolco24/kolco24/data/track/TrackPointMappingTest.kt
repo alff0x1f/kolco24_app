@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.data.track
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TrackPointMappingTest {
@@ -114,6 +115,30 @@ class TrackPointMappingTest {
             idFactory = { "id" },
         )
         assertNull(p.trustedMs)
+    }
+
+    @Test
+    fun filterPoints_keepsFixesMeetingThreshold_dropsCoarser() {
+        val fine = fix.copy(accuracy = 10f).toTrackPoint(1, 1, 0L, null, null, "seg") { "id" }
+        val atLimit = fix.copy(accuracy = 50f).toTrackPoint(1, 1, 0L, null, null, "seg") { "id" }
+        val coarse = fix.copy(accuracy = 51f).toTrackPoint(1, 1, 0L, null, null, "seg") { "id" }
+        val result = filterPoints(listOf(fine, atLimit, coarse))
+        assertEquals(listOf(10f, 50f), result.map { it.accuracy })
+    }
+
+    @Test
+    fun filterPoints_customThreshold_dropsAboveThreshold() {
+        val fine = fix.copy(accuracy = 10f).toTrackPoint(1, 1, 0L, null, null, "seg") { "id" }
+        val medium = fix.copy(accuracy = 30f).toTrackPoint(1, 1, 0L, null, null, "seg") { "id" }
+        val coarse = fix.copy(accuracy = 50f).toTrackPoint(1, 1, 0L, null, null, "seg") { "id" }
+        val result = filterPoints(listOf(fine, medium, coarse), maxAccuracyMeters = 20f)
+        assertEquals(1, result.size)
+        assertEquals(10f, result.single().accuracy, 0f)
+    }
+
+    @Test
+    fun filterPoints_emptyList_returnsEmpty() {
+        assertTrue(filterPoints(emptyList<ru.kolco24.kolco24.data.db.TrackPointEntity>()).isEmpty())
     }
 
     @Test

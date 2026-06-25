@@ -88,10 +88,10 @@ class TrackUploadTest {
         val recorded = server.takeRequest()
         assertEquals("POST", recorded.method)
         assertEquals("/app/race/8/track/", recorded.path)
-        val body = json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(
-            recorded.body.readUtf8(),
-        )
+        val bodyText = recorded.body.readUtf8()
+        val body = json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(bodyText)
         assertEquals("42", body["team_id"].toString())
+        assertTrue(bodyText.contains("\"segment_id\":\"seg-1\""))
     }
 
     @Test

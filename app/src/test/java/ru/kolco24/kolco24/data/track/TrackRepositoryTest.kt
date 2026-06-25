@@ -130,6 +130,20 @@ class TrackRepositoryTest {
     }
 
     @Test
+    fun insertAll_twoSessions_rowsRetainDistinctSegmentIds() = runTest {
+        // The core stop→start guarantee: two insertAll calls with different segmentIds for the same
+        // (raceId, teamId) scope must keep their own segmentId — no cross-contamination.
+        val dao = FakeTrackDao()
+        val r = repo(dao)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg-A")
+        r.insertAll(listOf(rawFix(61_000L)), raceId = 1, teamId = 7, segmentId = "seg-B")
+        val rows = dao.observeForTeam(7, 1).first()
+        assertEquals(2, rows.size)
+        assertEquals(1, rows.count { it.segmentId == "seg-A" })
+        assertEquals(1, rows.count { it.segmentId == "seg-B" })
+    }
+
+    @Test
     fun insertAll_emptyBatch_isNoOp() = runTest {
         val dao = FakeTrackDao()
         repo(dao).insertAll(emptyList(), raceId = 1, teamId = 7, segmentId = "seg")

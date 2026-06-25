@@ -217,9 +217,11 @@ class TrackRecordingService : Service() {
                 if (engine === e) e.stop()
                 finishTeardown()
             }
-        } else {
+        } else if (container.trackRecordingState.value is TrackState.Recording) {
+            // engine is null but state not yet cleaned up (e.g. stopped mid-start before engine set)
             finishTeardown()
         }
+        // else: teardown() already ran — engine is null, state is Idle; nothing to do.
         super.onDestroy()
     }
 
