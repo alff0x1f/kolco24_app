@@ -3,7 +3,11 @@ package ru.kolco24.kolco24.ui.scan
 import android.nfc.Tag
 import android.os.SystemClock
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -13,13 +17,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,13 +58,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -74,10 +80,11 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.ui.common.ScanClockBanner
 import ru.kolco24.kolco24.ui.theme.BrandRed
+import ru.kolco24.kolco24.ui.theme.RobotoMono
 import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val TIMER_TICK_MS = 250L
-private const val SUCCESS_HOLD_MS = 1_000L
+private const val SUCCESS_HOLD_MS = 1_800L
 
 data class ScanChip(
     val chipNumber: Int?,
@@ -281,20 +288,22 @@ fun ScanScreen(
                     )
                 }
             }
-            item("hero_timer") {
+            item("kp_hero") {
                 if (completed) {
-                    HeroSuccessCard()
+                    HeroSuccessCard(session = session)
                 } else {
-                    HeroTimerCard(
+                    CheckpointSheetCard(session = session)
+                }
+            }
+            if (!completed && session != null) {
+                item("timer_strip") {
+                    ScanTimerStrip(
                         seconds = remainingMillis / 1_000f,
                         total = SCAN_WINDOW_MS / 1_000f,
                         remainingScans = remaining,
                         waitingForCheckpoint = session?.point == null,
                     )
                 }
-            }
-            item("cp_waiting") {
-                CpWaitingCard(session = session)
             }
             item("chip_section") {
                 ChipSectionHeader(scanned = scanned, total = total)
@@ -363,104 +372,161 @@ private fun ScanTopBar(canFinish: Boolean, onClose: () -> Unit, onFinish: () -> 
     }
 }
 
+/**
+ * The hero of the screen — a digital mirror of the laminated paper checkpoint the racer is holding.
+ *
+ * Once the КП chip is read it shows the same giant black two-digit numeral and contactless-wave mark
+ * printed on the physical sheet (`00`, `14`, …), so confirming "I'm marking the right КП" is a glance,
+ * not a read. Before the chip is read the same frame becomes the call to action: a pulsing wave and
+ * "приложите телефон к метке КП". Fixed min-height so the card doesn't jump between the two states.
+ */
 @Composable
-private fun CpWaitingCard(session: ScanSession?) {
-    val hasCheckpoint = session?.point != null
+private fun CheckpointSheetCard(session: ScanSession?) {
+    val number = session?.checkpointNumber
+    val hasCheckpoint = number != null
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, end = 8.dp, bottom = 14.dp),
+            .padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        // A hairline edge reads as the laminate pouch around the printed sheet.
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 236.dp)
+                .padding(20.dp),
         ) {
-            if (hasCheckpoint) {
-                CpBadge(number = session?.checkpointNumber, size = 64.dp)
-            } else {
-                CpBadgeEmpty(size = 64.dp)
-            }
-            Column {
+            // Top row mirrors the sheet furniture: eyebrow on the left, contactless mark on the right.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
                 Text(
-                    text = "Метка КП",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "КП",
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
-                Text(
-                    text = if (hasCheckpoint) "КП ${session?.checkpointNumber}" else "КП не отсканирован",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
-                Text(
-                    text = if (hasCheckpoint) {
-                        "Стоимость: ${session?.cost} баллов"
+                ContactlessMark(
+                    color = if (hasCheckpoint) {
+                        MaterialTheme.colorScheme.onSurface
                     } else {
-                        "Поднесите телефон к чипу на КП"
+                        MaterialTheme.colorScheme.outline
                     },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    pulsing = !hasCheckpoint,
+                    modifier = Modifier.size(28.dp),
                 )
+            }
+
+            // The numeral (or the tap prompt) owns the centre; weight(1f) keeps it clear of the rows.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (hasCheckpoint) {
+                    // The numeral that matches the paper: two digits, the whole reason this card exists.
+                    Text(
+                        text = number.toString().padStart(2, '0'),
+                        fontFamily = RobotoMono,
+                        fontSize = 104.sp,
+                        lineHeight = 104.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    Text(
+                        text = "Приложите телефон\nк метке КП",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            if (hasCheckpoint) {
+                CostStat(cost = session.cost)
             }
         }
     }
 }
 
+/** «18 баллов» — the КП value, secondary to the numeral. The number itself wears the brand red. */
 @Composable
-private fun CpBadge(number: Int?, size: Dp) {
-    val height = size * 0.86f
-    Surface(
-        modifier = Modifier.size(width = size, height = height),
-        shape = MaterialTheme.shapes.small,
-        color = BrandRed,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = number?.toString() ?: "—",
-                style = MaterialTheme.typography.headlineSmall,
-                fontFamily = FontFamily.Monospace,
-                color = Color.White,
-            )
-        }
-    }
-}
-
-@Composable
-private fun CpBadgeEmpty(size: Dp) {
-    val height = size * 0.86f
-    val stripeHeight = height * 0.11f
-    Box(
-        modifier = Modifier
-            .size(width = size, height = height)
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest, MaterialTheme.shapes.small)
-            .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.small),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(stripeHeight)
-                .align(Alignment.TopStart)
-                .background(BrandRed.copy(alpha = 0.78f))
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(stripeHeight)
-                .align(Alignment.BottomStart)
-                .background(BrandRed.copy(alpha = 0.78f))
+private fun CostStat(cost: Int?, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = cost?.toString() ?: "—",
+            fontFamily = RobotoMono,
+            fontSize = 22.sp,
+            color = BrandRed,
         )
         Text(
-            text = "?",
-            style = MaterialTheme.typography.headlineMedium,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.align(Alignment.Center),
+            text = " ${pointsWord(cost)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 2.dp),
         )
+    }
+}
+
+/** Russian plural for «балл»: 1 балл · 2–4 балла · 5–20/0 баллов (declension by last digit pair). */
+private fun pointsWord(cost: Int?): String {
+    val n = cost ?: return "баллов"
+    val mod100 = n % 100
+    val mod10 = n % 10
+    return when {
+        mod100 in 11..14 -> "баллов"
+        mod10 == 1 -> "балл"
+        mod10 in 2..4 -> "балла"
+        else -> "баллов"
+    }
+}
+
+/**
+ * The contactless ))) glyph printed on every checkpoint sheet, drawn as three concentric arcs off a
+ * dot so it reads identical to the paper. [pulsing] runs a gentle waxing of the arcs while waiting for
+ * a tap (a quiet "tap here" signal); a resolved КП draws it solid.
+ */
+@Composable
+private fun ContactlessMark(color: Color, pulsing: Boolean, modifier: Modifier = Modifier) {
+    val pulse by rememberInfiniteTransition(label = "wave").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_100, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "waveAlpha",
+    )
+    Canvas(modifier = modifier) {
+        val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+        // Origin near the lower-left, arcs sweeping up-right — the contactless convention.
+        val origin = Offset(size.width * 0.18f, size.height * 0.82f)
+        drawCircle(color = color, radius = 1.8.dp.toPx(), center = origin)
+        val arcs = 3
+        for (i in 1..arcs) {
+            val r = size.minDimension * (0.22f * i)
+            val a = if (pulsing) {
+                // Outer arcs fade first, so the wave appears to ripple outward.
+                (pulse - (i - 1) * 0.22f).coerceIn(0.18f, 1f)
+            } else {
+                1f
+            }
+            drawArc(
+                color = color.copy(alpha = a),
+                startAngle = -65f,
+                sweepAngle = 60f,
+                useCenter = false,
+                topLeft = Offset(origin.x - r, origin.y - r),
+                size = androidx.compose.ui.geometry.Size(r * 2, r * 2),
+                style = stroke,
+            )
+        }
     }
 }
 
@@ -633,52 +699,85 @@ private fun WaitingChipIcon() {
     }
 }
 
+/**
+ * The completion beat — the very same sheet frame as [CheckpointSheetCard], turned green and stamped.
+ * Keeping the footprint identical means the card confirms in place instead of shrinking to a small row
+ * at the most satisfying moment; the big checkmark lands exactly where the numeral was (number → tick),
+ * and the КП is still named at the bottom so you see which one you just closed.
+ */
 @Composable
-private fun HeroSuccessCard() {
+private fun HeroSuccessCard(session: ScanSession?) {
+    val number = session?.checkpointNumber
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 14.dp),
+            .padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.tertiary,
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 236.dp)
+                .padding(20.dp),
         ) {
+            Text(
+                text = "ГОТОВО",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.9f),
+            )
             Box(
                 modifier = Modifier
-                    .size(96.dp)
-                    .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                    .fillMaxWidth()
+                    .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(56.dp),
-                )
+                CheckStamp(color = Color.White, modifier = Modifier.size(104.dp))
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Готово!",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "КП и вся команда отсканированы",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                )
-            }
+            Text(
+                text = if (number != null) {
+                    "КП ${number.toString().padStart(2, '0')} · вся команда отмечена"
+                } else {
+                    "Вся команда отмечена"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.9f),
+            )
         }
     }
 }
 
+/** A bold hand-stamped checkmark — drawn (not an icon) so its weight matches the heavy КП numeral. */
 @Composable
-private fun HeroTimerCard(
+private fun CheckStamp(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(w * 0.16f, h * 0.54f)
+            lineTo(w * 0.42f, h * 0.78f)
+            lineTo(w * 0.86f, h * 0.24f)
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(
+                width = w * 0.12f,
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            ),
+        )
+    }
+}
+
+/**
+ * Compact countdown for the 20 s sliding window — demoted from a full dark hero so it serves the КП
+ * sheet rather than competing with it. It only renders once a scan has started (a window is running),
+ * so it never shows a misleading full bar before the first tap. The draining bar runs the bottom edge;
+ * it (and the seconds) flush red under 5 s left.
+ */
+@Composable
+private fun ScanTimerStrip(
     seconds: Float,
     total: Float,
     remainingScans: Int,
@@ -686,103 +785,77 @@ private fun HeroTimerCard(
 ) {
     val pct = if (total > 0f) (seconds / total).coerceIn(0f, 1f) else 0f
     // The timer ticks every TIMER_TICK_MS, so pct arrives in steps. Tween between steps (linear, one
-    // tick long) so the ring sweeps smoothly instead of jumping every 250 ms.
+    // tick long) so the bar drains smoothly instead of jumping every 250 ms.
     val animatedPct by animateFloatAsState(
         targetValue = pct,
         animationSpec = tween(durationMillis = TIMER_TICK_MS.toInt(), easing = LinearEasing),
-        label = "timerRing",
+        label = "timerBar",
     )
-    val ringColor = if (seconds < 5f) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
-    val trackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.12f)
+    val urgent = seconds < 5f
+    val accent = if (urgent) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
+    val onDark = MaterialTheme.colorScheme.inverseOnSurface
+    val trackColor = onDark.copy(alpha = 0.12f)
+    val one = remainingScans % 10 == 1 && remainingScans % 100 != 11
     val chipWord = when {
         remainingScans % 100 in 11..14 -> "чипов"
-        remainingScans % 10 == 1 -> "чип"
+        one -> "чип"
         remainingScans % 10 in 2..4 -> "чипа"
         else -> "чипов"
+    }
+    // Verb agrees with the count too: «Остался 1 чип» but «Осталось 2/5 чипа/чипов».
+    val verb = if (one) "Остался" else "Осталось"
+    val message = when {
+        waitingForCheckpoint -> "Приложите метку КП"
+        remainingScans == 0 -> "Все чипы отсканированы"
+        else -> "$verb $remainingScans $chipWord"
     }
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 14.dp),
+            .padding(start = 8.dp, end = 8.dp, bottom = 14.dp),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.inverseSurface,
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(96.dp),
-                contentAlignment = Alignment.Center,
+        Column {
+            Row(
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val strokeWidth = 4.dp.toPx()
-                    val radius = size.width / 2 - strokeWidth / 2
-                    drawCircle(
-                        color = trackColor,
-                        radius = radius,
-                        style = Stroke(width = strokeWidth),
-                    )
-                    drawArc(
-                        color = ringColor,
-                        startAngle = -90f,
-                        sweepAngle = 360f * animatedPct,
-                        useCenter = false,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-                    )
-                }
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+                Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = seconds.toInt().toString(),
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 28.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        fontFamily = RobotoMono,
+                        fontSize = 34.sp,
+                        color = if (urgent) accent else onDark,
                     )
                     Text(
-                        text = "сек",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
+                        text = " с",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = onDark.copy(alpha = 0.65f),
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(MaterialTheme.colorScheme.tertiary, CircleShape),
-                    )
-                    Text(
-                        text = "Сканируйте",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
                 Text(
-                    text = if (waitingForCheckpoint) {
-                        "КП и ещё $remainingScans $chipWord"
-                    } else {
-                        "Осталось $remainingScans $chipWord"
-                    },
+                    text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                    color = onDark,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Таймер сбрасывается на ${total.toInt()} с при каждом скане",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
+            }
+            // Draining track pinned to the bottom edge — the at-a-glance "how much time is left".
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(trackColor),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedPct)
+                        .height(4.dp)
+                        .background(accent),
                 )
             }
         }
