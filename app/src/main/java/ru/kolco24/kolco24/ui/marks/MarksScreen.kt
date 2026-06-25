@@ -21,8 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Nfc
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -135,7 +133,6 @@ fun MarksScreen(
     totalKp: Int = 0,
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
-    onScanClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
@@ -185,6 +182,8 @@ fun MarksScreen(
                 }
             }
 
+            // No «Отметить КП» button — the scan overlay opens automatically when a КП chip is tapped.
+            // The «Фото» fallback stays for marking a КП by photo when its chip won't read.
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -207,20 +206,6 @@ fun MarksScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Фото", style = MaterialTheme.typography.labelLarge)
                 }
-                Button(
-                    onClick = onScanClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = OrangeCta,
-                        contentColor = Color.White,
-                    ),
-                    modifier = Modifier.height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(start = 16.dp, end = 20.dp),
-                ) {
-                    Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Отметить КП", style = MaterialTheme.typography.labelLarge)
-                }
             }
         }
     }
@@ -239,7 +224,7 @@ private fun MarksEmpty(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Отметьте КП кнопкой «Отметить КП»",
+            text = "Поднесите телефон к метке КП — отметка появится здесь",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

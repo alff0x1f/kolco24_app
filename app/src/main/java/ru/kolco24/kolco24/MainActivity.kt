@@ -834,21 +834,6 @@ private fun Kolco24AppRoot(
                         totalKp = safeCheckpoints.size,
                         totalCost = legendTotalCost,
                         nfcAvailable = nfcActiveForScan,
-                        onScanClick = {
-                            // Scanning needs a resolved team with a roster. With no team (or a
-                            // selection whose team row has gone missing) there is nothing to score
-                            // against — route to team selection instead of opening an empty scan that
-                            // would only error on the first tap and could log an orphan take.
-                            if (teamForTab != null) {
-                                teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
-                                showAdmin = false; showProvisioning = false; showCheckChip = false
-                                bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
-                                showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
-                                showScan = true
-                            } else {
-                                pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker
-                            }
-                        },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
