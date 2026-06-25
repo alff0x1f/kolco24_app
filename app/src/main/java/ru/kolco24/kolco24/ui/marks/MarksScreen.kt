@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.ui.marks
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -143,11 +146,15 @@ fun MarksScreen(
     totalKp: Int = 0,
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
+    nfcDisabled: Boolean = false,
     hasTeam: Boolean = false,
     memberCount: Int = 0,
     boundCount: Int = 0,
+    trackRecording: Boolean = false,
     onChooseTeam: () -> Unit = {},
     onBindChips: () -> Unit = {},
+    onOpenNfcSettings: () -> Unit = {},
+    onStartTrack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
@@ -186,10 +193,14 @@ fun MarksScreen(
                         MarksEmpty(
                             hasTeam = hasTeam,
                             nfcAvailable = nfcAvailable,
+                            nfcDisabled = nfcDisabled,
                             memberCount = memberCount,
                             boundCount = boundCount,
+                            trackRecording = trackRecording,
                             onChooseTeam = onChooseTeam,
                             onBindChips = onBindChips,
+                            onOpenNfcSettings = onOpenNfcSettings,
+                            onStartTrack = onStartTrack,
                             modifier = Modifier.padding(top = 40.dp),
                         )
                     }
@@ -201,7 +212,11 @@ fun MarksScreen(
                     // standalone banner once there are tiles to sit above.
                     if (!nfcAvailable) {
                         item("nfc_banner") {
-                            NfcUnavailableBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                            NfcUnavailableBanner(
+                                disabled = nfcDisabled,
+                                onOpenNfcSettings = onOpenNfcSettings,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                            )
                         }
                     }
                 }
@@ -241,24 +256,34 @@ fun MarksScreen(
  * here". The signature is a [ScorecardGhostRow] — a preview of the tile grid that will fill in — and the
  * headline/body/CTA are chosen for where the team actually is in the flow, in workflow order:
  *  1. no team selected → choose one;
- *  2. NFC unavailable → the photo fallback (folds in what used to be a separate floating banner);
- *  3. chips not all bound → bind them (a take only scores once **every** member is present, so an
+ *  2. NFC switched off → a CTA into system NFC settings (the toggle is the one thing in the user's way);
+ *  3. NFC absent (no hardware) → the photo fallback (folds in what used to be a separate floating banner);
+ *  4. chips not all bound → bind them (a take only scores once **every** member is present, so an
  *     unbound roster can never produce a tile — this is the prerequisite the user most needs surfaced);
- *  4. ready → tap a КП.
+ *  5. ready → tap a КП, plus a [TrackNudge] pre-start reminder to start the GPS track (the one thing a
+ *     team can actually do at the start line, and the easiest to forget).
+ *
+ * [nfcDisabled] (NFC present but switched off) is checked before [nfcAvailable] so the disabled branch
+ * with its «Включить NFC» CTA wins; `!nfcAvailable && !nfcDisabled` is then unambiguously no-hardware.
  */
 @Composable
 private fun MarksEmpty(
     hasTeam: Boolean,
     nfcAvailable: Boolean,
+    nfcDisabled: Boolean,
     memberCount: Int,
     boundCount: Int,
+    trackRecording: Boolean,
     onChooseTeam: () -> Unit,
     onBindChips: () -> Unit,
+    onOpenNfcSettings: () -> Unit,
+    onStartTrack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val needsBinding = memberCount > 0 && boundCount < memberCount
 
-    // (lead glyph, headline, body, optional CTA)
+    // (lead glyph, headline, body, optional CTA). `trackNudge` appends the pre-start track reminder —
+    // only the ready state sets it, so the nudge never competes with a branch that has its own CTA.
     data class EmptyContent(
         val glyph: ImageVector,
         val headline: String,
@@ -266,6 +291,7 @@ private fun MarksEmpty(
         val ctaLabel: String? = null,
         val ctaIcon: ImageVector? = null,
         val onCta: (() -> Unit)? = null,
+        val trackNudge: Boolean = false,
     )
 
     val content = when {
@@ -276,6 +302,14 @@ private fun MarksEmpty(
             ctaLabel = "Выбрать команду",
             ctaIcon = Icons.Filled.Groups,
             onCta = onChooseTeam,
+        )
+        nfcDisabled -> EmptyContent(
+            glyph = Icons.Filled.Nfc,
+            headline = "NFC выключен",
+            body = "Включите NFC, чтобы отмечать КП прикосновением.",
+            ctaLabel = "Включить NFC",
+            ctaIcon = Icons.Filled.Nfc,
+            onCta = onOpenNfcSettings,
         )
         !nfcAvailable -> EmptyContent(
             glyph = Icons.Filled.CameraAlt,
@@ -295,6 +329,7 @@ private fun MarksEmpty(
             glyph = Icons.Filled.Nfc,
             headline = "Здесь появятся отметки",
             body = "Приложите телефон к метке КП — отметка добавится сюда.",
+            trackNudge = true,
         )
     }
 
@@ -337,6 +372,86 @@ private fun MarksEmpty(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(content.ctaLabel, style = MaterialTheme.typography.titleSmall)
+            }
+        }
+
+        if (content.trackNudge) {
+            Spacer(Modifier.height(28.dp))
+            TrackNudge(recording = trackRecording, onStart = onStartTrack)
+        }
+    }
+}
+
+/**
+ * Pre-start GPS-track reminder shown under the ready empty state. Before the gun the one thing a team can
+ * actually do on this screen is start their track — and it is the easiest step to forget — so the reminder
+ * sits here as a single tappable card. The orange play badge is the same «start track» vocabulary as the
+ * Команда-tab `TrackCard`, so it reads as the same feature rather than a new control. Once recording, the
+ * card gives way to a quiet success line so a team that already started is acknowledged, not nagged.
+ */
+@Composable
+private fun TrackNudge(recording: Boolean, onStart: () -> Unit, modifier: Modifier = Modifier) {
+    if (recording) {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(20.dp).background(Tertiary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+            Text(
+                text = "Трек записывается",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        return
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onStart)
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(OrangeCta, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Не забудьте трек",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Включите GPS-запись пути перед стартом",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -683,9 +798,20 @@ private fun MiniCpBadge(label: String, modifier: Modifier = Modifier) {
  * not a status light.
  */
 @Composable
-private fun NfcUnavailableBanner(modifier: Modifier = Modifier) {
+private fun NfcUnavailableBanner(
+    disabled: Boolean,
+    onOpenNfcSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // When NFC is merely switched off the whole banner is a shortcut into system settings; with no NFC
+    // hardware there is nothing to act on, so it stays a static notice.
+    val rowModifier = if (disabled) {
+        modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onOpenNfcSettings)
+    } else {
+        modifier.fillMaxWidth()
+    }
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -703,12 +829,13 @@ private fun NfcUnavailableBanner(modifier: Modifier = Modifier) {
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "NFC недоступен",
+                text = if (disabled) "NFC выключен" else "NFC недоступен",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Сканирование NFC на этом устройстве недоступно",
+                text = if (disabled) "Нажмите, чтобы включить"
+                    else "Сканирование NFC на этом устройстве недоступно",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
