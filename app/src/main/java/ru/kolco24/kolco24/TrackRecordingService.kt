@@ -11,7 +11,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -26,7 +28,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
+import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Foreground service that records the team's GPS track with the screen off. Started from the UI
@@ -50,10 +54,23 @@ class TrackRecordingService : Service() {
     /** Service-local scope for the count collector; cancelled on teardown and recreated on restart. */
     private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Posts the flush-timeout fallback; engine-field mutations + flush callbacks serialize on main. */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     private var engine: LocationEngine? = null
     private var countJob: Job? = null
+    /** Observes the profile preference for live-apply; re-launched per onStartCommand (like countJob). */
+    private var profileJob: Job? = null
+    /** The profile the running engine is currently on; updated only inside a completed flush callback. */
+    private var activeProfile: TrackProfile = TrackProfile.Precise
     private var raceId: Int = -1
     private var teamId: Int = -1
+    /**
+     * Set to true when teardown() is in progress so the in-flight profile-switch flush callback
+     * doesn't restart the engine after Stop wins the race — without this guard the profile callback
+     * can restart the engine and teardown's identity check (engine !== e) then skips finishTeardown.
+     */
+    private var isTearingDown = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -79,6 +96,8 @@ class TrackRecordingService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        val wasTearingDown = isTearingDown
+        isTearingDown = false // reset for new recording session
 
         // A prior teardown() may have cancelled serviceScope (rapid stop→start on the same instance).
         // Recreate it so the count-collector launch below works on a fresh scope.
@@ -96,8 +115,9 @@ class TrackRecordingService : Service() {
         container.trackRecordingState.value = TrackState.Recording(teamId, 0)
 
         // Reflect the DB truth in the state + notification as points land.
-        // Defensive: stop any engine from a prior start before creating a new one.
-        engine?.stop()
+        // Defensive: stop any engine from a prior start before creating a new one — but only if
+        // teardown's flush isn't already in flight; the flush callback owns the stop in that case.
+        if (!wasTearingDown) engine?.stop()
         engine = null
         countJob?.cancel()
         countJob = serviceScope.launch {
@@ -107,46 +127,128 @@ class TrackRecordingService : Service() {
             }
         }
 
-        val locationEngine = LocationEngineFactory.create(this).also { engine = it }
-        locationEngine.start(
-            onPoints = { fixes ->
-                container.applicationScope.launch {
-                    container.trackRepository.insertAll(fixes, raceId, teamId)
+        // Start the engine on the persisted profile (Precise == today's behavior by default).
+        activeProfile = container.trackProfilePreference.profile.value
+        startEngine(activeProfile)
+
+        // Live-apply: a mid-race profile toggle soft-restarts the engine without a track gap. Must be
+        // (re)launched here, not once — teardown() cancels serviceScope and a later start recreates it.
+        // No .drop(1): track activeProfile and skip emissions equal to it, so a change landing between
+        // the initial .value read and the subscription isn't dropped. Runs on Dispatchers.Main.immediate
+        // so engine writes serialize with the main-thread lifecycle + flush callbacks.
+        profileJob?.cancel()
+        profileJob = serviceScope.launch(Dispatchers.Main.immediate) {
+            container.trackProfilePreference.profile.collectLatest { p ->
+                if (p == activeProfile) return@collectLatest
+                val e = engine ?: run {
+                    activeProfile = p
+                    startEngine(p)
+                    return@collectLatest
                 }
-            },
-            onError = { e ->
-                Log.e(TAG, "Location engine error; stopping recording.", e)
-                teardown()
-            },
-        )
+                flushThen(e) {
+                    if (engine !== e) return@flushThen // a newer engine took over
+                    // teardown() may have won the race: stop was requested while this flush was
+                    // in flight. Don't restart the engine; teardown's own flushThen handles cleanup.
+                    if (isTearingDown) return@flushThen
+                    e.stop()
+                    val latest = container.trackProfilePreference.profile.value // restart to LATEST
+                    activeProfile = latest
+                    startEngine(latest)
+                }
+            }
+        }
 
         return START_NOT_STICKY
     }
 
-    override fun onDestroy() {
-        // Defensive: if the system tears us down without an ACTION_STOP, release everything.
-        engine?.stop()
-        engine = null
-        countJob?.cancel()
-        serviceScope.cancel()
-        if (container.trackRecordingState.value is TrackState.Recording) {
-            container.trackRecordingState.value = TrackState.Idle
-        }
-        // Best-effort flush in case the system stopped us without going through teardown().
-        // Safe when teardown() already ran — the upload mutex drops the duplicate attempt.
+    /**
+     * Build + start a fresh engine on [profile], assigning the captured local to [engine] before
+     * `start()` (NPE-safe: a concurrent `engine = null` can't null the local we start). Fully
+     * synchronous and does **not** pre-stop — callers own the stop (onStartCommand's defensive
+     * `engine?.stop()`, or the live-restart / teardown `flushThen` callbacks).
+     */
+    private fun startEngine(profile: TrackProfile) {
+        val e = LocationEngineFactory.create(this, profile)
+        // Snapshot raceId/teamId as locals so the onPoints lambda isn't affected by a later
+        // onStartCommand (team switch + immediate new start) overwriting the instance fields before
+        // the old engine finishes delivering its buffered batch.
         val r = raceId
         val t = teamId
-        if (r >= 0 && t >= 0) {
-            container.applicationScope.launch { container.trackRepository.uploadPending(r, t) }
+        engine = e
+        e.start(
+            onPoints = { fixes ->
+                container.applicationScope.launch {
+                    container.trackRepository.insertAll(fixes, r, t)
+                }
+            },
+            onError = { err ->
+                Log.e(TAG, "Location engine error; stopping recording.", err)
+                mainHandler.post { teardown() }
+            },
+        )
+    }
+
+    override fun onDestroy() {
+        // A system-initiated onDestroy() (task removed / reclaim) without an ACTION_STOP would drop the
+        // Fused buffer via a bare stop(). Route it through a best-effort flush too — but onDestroy may
+        // precede process death before the async flush lands, so this is best-effort only (a bare
+        // onDestroy / hard kill may still lose up to maxDelay; «Стоп» and live-switch are lossless).
+        isTearingDown = true // prevent an in-flight profile-switch flush from restarting the engine
+        val e = engine
+        if (e != null && container.trackRecordingState.value is TrackState.Recording) {
+            flushThen(e) {
+                if (engine === e) e.stop()
+                finishTeardown()
+            }
+        } else {
+            finishTeardown()
         }
         super.onDestroy()
     }
 
     /** Stop updates, flip state back to Idle, drop the foreground notification, and stop the service. */
     private fun teardown() {
+        isTearingDown = true
+        val e = engine ?: return finishTeardown()
+        // Flush the buffered batch (delivered/enqueued to applicationScope) before stopping — else the
+        // last ≤maxDelay of fixes are lost (field-tested bug). Always stop the old engine after flush;
+        // the identity guard only skips finishTeardown so a concurrent new session isn't torn down.
+        flushThen(e) {
+            e.stop() // flush done; stop old engine regardless of whether a new session started
+            if (engine !== e) return@flushThen // newer session took over — don't finalize
+            engine = null
+            finishTeardown()
+        }
+    }
+
+    /**
+     * Flush [e]'s buffer, then run [after] **exactly once** — fired by the flush callback **or** a
+     * [FLUSH_TIMEOUT_MS] fallback so a never-completing `flushLocations()` (rare GMS hiccup) can't leave
+     * the «Стоп» service stuck foreground. Both paths run on the main thread.
+     */
+    private fun flushThen(e: LocationEngine, after: () -> Unit) {
+        val done = AtomicBoolean(false)
+        val complete = Runnable { if (done.compareAndSet(false, true)) after() }
+        mainHandler.postDelayed(complete, FLUSH_TIMEOUT_MS) // stuck-flush fallback
+        e.flush {
+            mainHandler.removeCallbacks(complete)
+            complete.run()
+        }
+    }
+
+    /**
+     * Final teardown: release the engine, drop pending flush timeouts, cancel jobs, flip to Idle, flush
+     * uploads, and stop. Nulls [engine] defensively (so a later stale timeout's `engine !== e` is
+     * guaranteed true) and `removeCallbacksAndMessages(null)` drops any *other* `flushThen` instance's
+     * pending timeout `Runnable` — both **before** `serviceScope.cancel()`/`stopSelf()`. Runs on the
+     * main thread (flush/timeout callback), not inside a serviceScope coroutine, so cancel is safe.
+     */
+    private fun finishTeardown() {
         engine?.stop()
         engine = null
+        mainHandler.removeCallbacksAndMessages(null)
         countJob?.cancel()
+        profileJob?.cancel()
         container.trackRecordingState.value = TrackState.Idle
         // Opportunistic flush of this scope on stop; outlives the service via applicationScope.
         // No-op (or quietly Offline) until the backend endpoint lands — points stay uploaded*=0.
@@ -206,6 +308,7 @@ class TrackRecordingService : Service() {
         private const val TAG = "TrackRecordingService"
         private const val CHANNEL_ID = "track_recording"
         private const val NOTIF_ID = 1001
+        private const val FLUSH_TIMEOUT_MS = 4_000L
         private const val ACTION_STOP = "ru.kolco24.kolco24.action.STOP_TRACK"
         private const val EXTRA_RACE_ID = "race_id"
         private const val EXTRA_TEAM_ID = "team_id"

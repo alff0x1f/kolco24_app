@@ -15,13 +15,13 @@ object LocationEngineFactory {
     fun chooseEngineType(gmsAvailable: Boolean): EngineType =
         if (gmsAvailable) EngineType.Fused else EngineType.Legacy
 
-    /** Build the engine for [context], choosing by `GoogleApiAvailability` (== `SUCCESS`). */
-    fun create(context: Context): LocationEngine {
+    /** Build the engine for [context] with [profile], choosing by `GoogleApiAvailability` (== `SUCCESS`). */
+    fun create(context: Context, profile: TrackProfile): LocationEngine {
         val gmsAvailable = GoogleApiAvailability.getInstance()
             .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
         return when (chooseEngineType(gmsAvailable)) {
-            EngineType.Fused -> FusedLocationEngine(context)
-            EngineType.Legacy -> LegacyLocationEngine(context)
+            EngineType.Fused -> FusedLocationEngine(context, profile)
+            EngineType.Legacy -> LegacyLocationEngine(context, profile)
         }
     }
 }
