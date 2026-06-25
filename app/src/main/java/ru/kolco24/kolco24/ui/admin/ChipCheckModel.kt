@@ -22,7 +22,7 @@ import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
  * - [Ok] — the chip's `bid` matched a tag whose checkpoint exists in the legend.
  * - [UnknownChip] — a code was read, but no tag with that `bid` exists in this race (foreign-race
  *   chip, or the legend list is stale).
- * - [Inconsistent] — a tag matched the `bid`, but its [ChipCheckResult.Inconsistent.pointId] has no checkpoint row (legend drift).
+ * - [Inconsistent] — a tag matched the `bid`, but its [ChipCheckResult.Inconsistent.checkpointId] has no checkpoint row (legend drift).
  * - [NoCode] — `readChipCode` returned null: a blank chip, a member bracelet, or a read error
  *   (collapsed into one case — the raw read can't distinguish them).
  */
@@ -47,12 +47,12 @@ sealed interface ChipCheckResult {
         val bid: String,
     ) : ChipCheckResult
 
-    /** A tag matched [bid] but its [pointId] has no checkpoint row in the legend. */
+    /** A tag matched [bid] but its [checkpointId] has no checkpoint row in the legend. */
     data class Inconsistent(
         override val uid: String,
         val bid: String,
         /** The checkpoint DB id (server surrogate key) — NOT the human-visible КП number. */
-        val pointId: Int,
+        val checkpointId: Int,
     ) : ChipCheckResult
 
     /** No КП code could be read from the chip (blank, bracelet, or read error). */
@@ -68,9 +68,9 @@ sealed interface ChipCheckResult {
  * @param uid the scanned chip's normalized UID.
  * @param bid the chip's derived bid, or null when the code couldn't be read.
  * @param tag `tags.firstOrNull { it.bid == bid }` — null when no tag matches.
- * @param checkpoint `checkpointsById[tag.point]` — null when the tag's КП is missing from the legend.
+ * @param checkpoint `checkpointsById[tag.checkpointId]` — null when the tag's КП is missing from the legend.
  * @param chipsOnKp how many tags this race's legend has for the matched tag's checkpoint
- *   (`countsByPoint[tag.point]`); only meaningful on the [ChipCheckResult.Ok] path.
+ *   (`countsByCheckpointId[tag.checkpointId]`); only meaningful on the [ChipCheckResult.Ok] path.
  *
  * Branch order: `bid == null` → [ChipCheckResult.NoCode]; `tag == null` → [ChipCheckResult.UnknownChip];
  * `checkpoint == null` → [ChipCheckResult.Inconsistent]; else [ChipCheckResult.Ok].
@@ -101,7 +101,7 @@ fun classifyChipCheck(
 ): ChipCheckResult = when {
     bid == null -> ChipCheckResult.NoCode(uid)
     tag == null -> ChipCheckResult.UnknownChip(uid, bid)
-    checkpoint == null -> ChipCheckResult.Inconsistent(uid = uid, bid = bid, pointId = tag.point)
+    checkpoint == null -> ChipCheckResult.Inconsistent(uid = uid, bid = bid, checkpointId = tag.checkpointId)
     else -> ChipCheckResult.Ok(
         uid = uid,
         number = checkpoint.number,

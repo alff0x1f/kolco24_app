@@ -43,7 +43,7 @@ class MarkRepositoryTest {
     ): String = repository.startKpTake(
         raceId = 1,
         teamId = 7,
-        point = point,
+        checkpointId = point,
         number = point,
         cost = cost,
         cpUid = "CPUID$point",
@@ -65,7 +65,7 @@ class MarkRepositoryTest {
     fun startKpTake_storesSnapshotAndCpLog() = runTest {
         val id = startTake(point = 10, cost = 5, buffered = setOf(1))
         val mark = markDao.getById(id)!!
-        assertEquals(10, mark.point)
+        assertEquals(10, mark.checkpointId)
         assertEquals(5, mark.cost)
         assertEquals("nfc", mark.method)
         assertEquals("CPUID10", mark.cpUid)
@@ -108,7 +108,7 @@ class MarkRepositoryTest {
         val id = startTake(point = 10, expectedCount = 3, sample = sample(wall = 1_000L))
         repository.addMember(
             id,
-            point = 10,
+            checkpointId = 10,
             numberInTeam = 1,
             expectedCount = 3,
             sample = sample(wall = 1_100L),
@@ -126,13 +126,13 @@ class MarkRepositoryTest {
     @Test
     fun addMember_accumulatesAndScoresOnFullRoster() = runTest {
         val id = startTake(point = 10, expectedCount = 3)
-        repository.addMember(id, point = 10, numberInTeam = 1, expectedCount = 3, sample = sample(wall = 1_100L))
+        repository.addMember(id, checkpointId = 10, numberInTeam = 1, expectedCount = 3, sample = sample(wall = 1_100L))
         assertFalse(markDao.getById(id)!!.complete)
-        repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_200L))
+        repository.addMember(id, checkpointId = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_200L))
         // Idempotent rescan of an already-present member does not advance the count.
-        repository.addMember(id, point = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_300L))
+        repository.addMember(id, checkpointId = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_300L))
         assertFalse(markDao.getById(id)!!.complete)
-        repository.addMember(id, point = 10, numberInTeam = 3, expectedCount = 3, sample = sample(wall = 1_400L))
+        repository.addMember(id, checkpointId = 10, numberInTeam = 3, expectedCount = 3, sample = sample(wall = 1_400L))
         val finalMark = markDao.getById(id)!!
         assertEquals(listOf(1, 2, 3), finalMark.present)
         assertTrue(finalMark.complete)
@@ -141,7 +141,7 @@ class MarkRepositoryTest {
 
     @Test
     fun addMember_missingRow_isNoOp() = runTest {
-        repository.addMember("nope", point = 10, numberInTeam = 1, expectedCount = 1, sample = sample(wall = 1L))
+        repository.addMember("nope", checkpointId = 10, numberInTeam = 1, expectedCount = 1, sample = sample(wall = 1L))
         assertTrue(repository.observeMarks(7).first().isEmpty())
     }
 
@@ -150,7 +150,7 @@ class MarkRepositoryTest {
         val first = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 1_000L))
         val second = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 5_000L))
         assertNotEquals(first, second)
-        assertEquals(2, repository.observeMarks(7).first().count { it.point == 10 })
+        assertEquals(2, repository.observeMarks(7).first().count { it.checkpointId == 10 })
     }
 
     @Test

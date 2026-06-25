@@ -26,7 +26,7 @@ class MarksMappingTest {
         id = id,
         raceId = 1,
         teamId = 7,
-        point = point,
+        checkpointId = point,
         checkpointNumber = number,
         cost = cost,
         method = method,
@@ -137,7 +137,7 @@ class MarksMappingTest {
                 mark("a", point = 1, number = 1, cost = 1, takenAt = 2_000L),
                 mark("b", point = 2, number = 2, cost = 1, takenAt = 1_000L),
             ),
-        ) { if (it.point == 1) CheckpointColor.BLUE else null }
+        ) { if (it.checkpointId == 1) CheckpointColor.BLUE else null }
         // Oldest-first: point 2 (null) first, point 1 (BLUE) last.
         assertEquals(null, tiles[0].color)
         assertEquals(CheckpointColor.BLUE, tiles[1].color)
@@ -171,21 +171,21 @@ class MarksMappingTest {
         val liveCost = mapOf(1 to 5, 2 to 3)
         // Snapshot path under-counts (0 + 3); the live resolver matches the legend (5 + 3).
         assertEquals(3, totalScore(marks))
-        assertEquals(8, totalScore(marks) { liveCost[it.point] ?: it.cost })
+        assertEquals(8, totalScore(marks) { liveCost[it.checkpointId] ?: it.cost })
     }
 
     @Test
     fun `totalScore live resolver falls back to the snapshot for a point absent from the legend`() {
         val marks = listOf(mark("a", point = 9, number = 1, cost = 4, complete = true))
         // Point 9 dropped from the legend → resolver misses → snapshot (4) is used.
-        assertEquals(4, totalScore(marks) { emptyMap<Int, Int>()[it.point] ?: it.cost })
+        assertEquals(4, totalScore(marks) { emptyMap<Int, Int>()[it.checkpointId] ?: it.cost })
     }
 
     @Test
     fun `marksToTiles costOf resolves the live tile cost`() {
         val tiles = marksToTiles(
             listOf(mark("a", point = 1, number = 1, cost = 0, complete = true)),
-            costOf = { mapOf(1 to 5)[it.point] ?: it.cost },
+            costOf = { mapOf(1 to 5)[it.checkpointId] ?: it.cost },
         )
         assertEquals(5, tiles.single().cost)
     }

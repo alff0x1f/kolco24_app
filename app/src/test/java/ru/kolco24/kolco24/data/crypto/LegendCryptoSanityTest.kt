@@ -72,12 +72,12 @@ class LegendCryptoSanityTest {
         val bundleJson = """{"$cpId":"${contentKey.toByteString().base64()}"}"""
         val bundle = seal(wrapKey, bundleJson.toByteArray(), bidBytes)
 
-        val tag = UnlockTag(point = cpId, iv = bundle.iv, ct = bundle.ct)
+        val tag = UnlockTag(checkpointId = cpId, iv = bundle.iv, ct = bundle.ct)
         val result = LegendCrypto.unlock(code, tag, mapOf(cpId to enc), json)
 
         assertTrue(result is UnlockResult.Revealed)
         val revealed = (result as UnlockResult.Revealed)
-        assertEquals(cpId, revealed.point)
+        assertEquals(cpId, revealed.checkpointId)
         assertEquals(1, revealed.checkpoints.size)
         assertEquals(RevealedCheckpoint(cpId, 5, "Вершина"), revealed.checkpoints.single())
     }
@@ -86,7 +86,7 @@ class LegendCryptoSanityTest {
     fun unlockIdentityOnlyForOpenCpTag() {
         val result = LegendCrypto.unlock(
             code = ByteArray(16),
-            tag = UnlockTag(point = 101, iv = null, ct = null),
+            tag = UnlockTag(checkpointId = 101, iv = null, ct = null),
             encById = emptyMap(),
             json = json,
         )
@@ -95,7 +95,7 @@ class LegendCryptoSanityTest {
 
     @Test
     fun unlockFailsOnPartialEnvelope() {
-        val tag = UnlockTag(point = 101, iv = "someIv", ct = null)
+        val tag = UnlockTag(checkpointId = 101, iv = "someIv", ct = null)
         val result = LegendCrypto.unlock(ByteArray(16), tag, emptyMap(), json)
         assertTrue(result is UnlockResult.Failed)
     }
@@ -109,7 +109,7 @@ class LegendCryptoSanityTest {
 
         // Flip the first Base64 char of the ciphertext (stays valid Base64) → GCM tag check fails.
         val tamperedCt = (if (bundle.ct[0] == 'A') 'B' else 'A') + bundle.ct.substring(1)
-        val tag = UnlockTag(point = 103, iv = bundle.iv, ct = tamperedCt)
+        val tag = UnlockTag(checkpointId = 103, iv = bundle.iv, ct = tamperedCt)
 
         val result = LegendCrypto.unlock(code, tag, emptyMap(), json)
         assertTrue(result is UnlockResult.Failed)

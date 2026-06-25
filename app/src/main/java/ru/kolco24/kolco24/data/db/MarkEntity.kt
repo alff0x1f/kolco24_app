@@ -19,13 +19,13 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "marks",
-    indices = [Index("teamId"), Index("point")],
+    indices = [Index("teamId"), Index("checkpointId")],
 )
 data class MarkEntity(
     @PrimaryKey val id: String,
     val raceId: Int,
     val teamId: Int,
-    val point: Int,
+    val checkpointId: Int,
     val checkpointNumber: Int,
     val cost: Int,
     val method: String,

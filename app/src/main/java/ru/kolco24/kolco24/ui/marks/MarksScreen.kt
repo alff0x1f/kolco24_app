@@ -90,9 +90,9 @@ enum class MarkKind { NFC, PHOTO }
  * row that is kept in the DB for the future server log but never tiled here, matching the
  * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
  * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
- * front. [costOf] resolves a take's **live** checkpoint cost (point id → current cost) so a tile reflects
- * an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
- * [colorOf] resolves a take's checkpoint color token (point id → server token) for the tile's
+ * front. [costOf] resolves a take's **live** checkpoint cost (checkpoint id → current cost) so a tile
+ * reflects an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
+ * [colorOf] resolves a take's checkpoint color token (checkpoint id → server token) for the tile's
  * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
  * map. The tile time is the **trusted** take time (`trustedTakenAt`) when present, falling back to the
  * raw wall `takenAt` for untrusted/legacy rows — so a phone clock reset doesn't shift displayed times.
@@ -158,12 +158,12 @@ fun MarksScreen(
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
-    // Score off the live checkpoint cost (joined by point id), falling back to the mark's snapshot for
-    // a point dropped from the legend — so СУММА tracks the «Легенда» score after an organizer cost edit
-    // rather than the stale value baked into the mark row.
-    val costOf: (MarkEntity) -> Int = { checkpointCosts[it.point] ?: it.cost }
+    // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
+    // for a checkpoint dropped from the legend — so СУММА tracks the «Легенда» score after an organizer
+    // cost edit rather than the stale value baked into the mark row.
+    val costOf: (MarkEntity) -> Int = { checkpointCosts[it.checkpointId] ?: it.cost }
     val takenScore = totalScore(marks, costOf)
-    val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.point] ?: "") }
+    val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(

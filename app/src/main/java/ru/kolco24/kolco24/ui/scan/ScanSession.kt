@@ -25,13 +25,13 @@ fun isWindowExpired(lastScanAt: Long?, now: Long): Boolean =
  * scanned so far.
  *
  * The KP chip and the member bracelets can be scanned in any order. Until the KP chip is read
- * ([point] == null), member scans are held in [bufferedBeforeKp]; once the KP arrives, the buffer is
+ * ([checkpointId] == null), member scans are held in [bufferedBeforeKp]; once the KP arrives, the buffer is
  * drained into [present] (see [reduce]). [lastScanAt] is the **monotonic** `elapsedRealtime` ms of the
  * most recent **accepted** scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and
  * does **not** advance it. (Monotonic, not wall-clock, so translating the phone clock can't skew it.)
  */
 data class ScanSession(
-    val point: Int?,
+    val checkpointId: Int?,
     val checkpointNumber: Int?,
     val cost: Int?,
     val cpUid: String?,
@@ -43,7 +43,7 @@ data class ScanSession(
     companion object {
         /** A fresh session with no KP and no members yet, stamped with the first scan's [now]. */
         fun empty(now: Long): ScanSession = ScanSession(
-            point = null,
+            checkpointId = null,
             checkpointNumber = null,
             cost = null,
             cpUid = null,
@@ -61,9 +61,9 @@ data class ScanSession(
  * window.
  */
 sealed interface ScanEvent {
-    /** The checkpoint chip: identifies [point] with its resolved [number]/[cost] and anti-cheat log. */
+    /** The checkpoint chip: identifies [checkpointId] with its resolved [number]/[cost] and anti-cheat log. */
     data class Kp(
-        val point: Int,
+        val checkpointId: Int,
         val number: Int,
         val cost: Int,
         val cpUid: String,
@@ -87,7 +87,7 @@ sealed interface ScanEvent {
  * - [ScanEvent.Kp] sets the KP fields and **drains** [ScanSession.bufferedBeforeKp] into
  *   [ScanSession.present] (members scanned before the chip count once the chip lands). A repeat KP
  *   scan just re-stamps the window.
- * - [ScanEvent.Member] goes to the buffer while [ScanSession.point] is null, otherwise straight into
+ * - [ScanEvent.Member] goes to the buffer while [ScanSession.checkpointId] is null, otherwise straight into
  *   `present`; set-semantics make a repeated member idempotent. A member scanned with no session yet
  *   starts one (so pre-KP bracelets are not lost). Re-scanning a member who is **already** counted
  *   does **not** refresh the window — otherwise one person could keep the 20 s timer alive
@@ -103,9 +103,9 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
         val base = session ?: ScanSession.empty(now)
         // When switching to a different КП, discard the prior KP's members — they were present at a
         // different checkpoint. A repeat scan of the same КП preserves accumulated members.
-        val priorPresent = if (session?.point == event.point) base.present else emptySet()
+        val priorPresent = if (session?.checkpointId == event.checkpointId) base.present else emptySet()
         base.copy(
-            point = event.point,
+            checkpointId = event.checkpointId,
             checkpointNumber = event.number,
             cost = event.cost,
             cpUid = event.cpUid,
@@ -118,7 +118,7 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
 
     is ScanEvent.Member -> {
         val base = session ?: ScanSession.empty(now)
-        if (base.point == null) {
+        if (base.checkpointId == null) {
             // Already buffered → idempotent, leave the window alone.
             if (event.numberInTeam in base.bufferedBeforeKp) base
             else base.copy(bufferedBeforeKp = base.bufferedBeforeKp + event.numberInTeam, lastScanAt = now)
@@ -136,8 +136,8 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
  * Classifies one NFC tap into a [ScanEvent], purely (no Android `Tag` I/O, no crypto — the caller
  * reads the chip [code]/[uid] and runs [UnlockOutcome] beforehand).
  *
- * A non-null [code] is a checkpoint chip: the [unlock] outcome's `point` is resolved against
- * [checkpointsById] for the [number]/[cost] snapshot ([UnlockOutcome.unlock] only returns the point).
+ * A non-null [code] is a checkpoint chip: the [unlock] outcome's `checkpointId` is resolved against
+ * [checkpointsById] for the [number]/[cost] snapshot ([UnlockOutcome.unlock] only returns the id).
  * A still-`null` cost (legend not synced) downgrades to [ScanEvent.BadKp]. A null [code] is a
  * bracelet: looked up in [bindings] (uid → numberInTeam) for [ScanEvent.Member] or
  * [ScanEvent.UnboundChip].
@@ -150,17 +150,17 @@ fun classifyTag(
     checkpointsById: Map<Int, CheckpointEntity>,
 ): ScanEvent {
     if (code != null) {
-        val point = when (unlock) {
-            is UnlockOutcome.Revealed -> unlock.point
-            is UnlockOutcome.IdentityOnly -> unlock.point
+        val checkpointId = when (unlock) {
+            is UnlockOutcome.Revealed -> unlock.checkpointId
+            is UnlockOutcome.IdentityOnly -> unlock.checkpointId
             is UnlockOutcome.Failed -> return ScanEvent.BadKp(unlock.reason)
             UnlockOutcome.Unknown -> return ScanEvent.BadKp("неизвестный чип")
             null -> return ScanEvent.BadKp("не удалось расшифровать")
         }
-        val cp = checkpointsById[point]
+        val cp = checkpointsById[checkpointId]
         val cost = cp?.cost ?: return ScanEvent.BadKp("легенда не загружена")
         return ScanEvent.Kp(
-            point = point,
+            checkpointId = checkpointId,
             number = cp.number,
             cost = cost,
             cpUid = uid,
@@ -176,8 +176,8 @@ fun classifyTag(
  *
  * Mirrors the **shape** of `MarkRepository`'s `complete = present.size >= expectedCount`, but for a
  * purely cosmetic overlay-close decision: scoring is persisted incrementally and is independent of
- * this. Requires [ScanSession.point] != null (pre-КП members live in [ScanSession.bufferedBeforeKp]
+ * this. Requires [ScanSession.checkpointId] != null (pre-КП members live in [ScanSession.bufferedBeforeKp]
  * and are drained into [ScanSession.present] only once the КП lands) and a non-empty roster.
  */
 fun isComplete(session: ScanSession?, rosterSize: Int): Boolean =
-    session?.point != null && rosterSize > 0 && session.present.size >= rosterSize
+    session?.checkpointId != null && rosterSize > 0 && session.present.size >= rosterSize

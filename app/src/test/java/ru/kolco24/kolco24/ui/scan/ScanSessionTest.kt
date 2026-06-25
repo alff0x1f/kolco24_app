@@ -9,12 +9,12 @@ import org.junit.Test
 class ScanSessionTest {
 
     private fun kp(point: Int = 42, number: Int = 7, cost: Int = 50) =
-        ScanEvent.Kp(point = point, number = number, cost = cost, cpUid = "04AABBCC", cpCode = "DEADBEEF")
+        ScanEvent.Kp(checkpointId = point, number = number, cost = cost, cpUid = "04AABBCC", cpCode = "DEADBEEF")
 
     @Test
     fun kp_onNullSession_fillsCheckpointFields() {
         val s = reduce(null, kp(), now = 1_000L)!!
-        assertEquals(42, s.point)
+        assertEquals(42, s.checkpointId)
         assertEquals(7, s.checkpointNumber)
         assertEquals(50, s.cost)
         assertEquals("04AABBCC", s.cpUid)
@@ -55,12 +55,12 @@ class ScanSessionTest {
     fun membersBeforeKp_areBuffered_thenDrainedOnKp() {
         var s = reduce(null, ScanEvent.Member(1), now = 0L)
         s = reduce(s, ScanEvent.Member(2), now = 50L)
-        assertNull(s!!.point)
+        assertNull(s!!.checkpointId)
         assertEquals(setOf(1, 2), s.bufferedBeforeKp)
         assertTrue(s.present.isEmpty())
 
         s = reduce(s, kp(), now = 100L)
-        assertEquals(42, s!!.point)
+        assertEquals(42, s!!.checkpointId)
         assertEquals(setOf(1, 2), s.present)
         assertTrue(s.bufferedBeforeKp.isEmpty())
         assertEquals(100L, s.lastScanAt)
@@ -102,7 +102,7 @@ class ScanSessionTest {
     @Test
     fun member_beforeKp_onNullSession_startsBufferingSession() {
         val s = reduce(null, ScanEvent.Member(5), now = 42L)
-        assertNull(s!!.point)
+        assertNull(s!!.checkpointId)
         assertEquals(setOf(5), s.bufferedBeforeKp)
         assertEquals(42L, s.lastScanAt)
     }
@@ -114,7 +114,7 @@ class ScanSessionTest {
         s = reduce(s, ScanEvent.Member(2), now = 200L)
         // Re-scan the same КП — members must be kept, window re-stamped.
         s = reduce(s, kp(), now = 300L)
-        assertEquals(42, s!!.point)
+        assertEquals(42, s!!.checkpointId)
         assertEquals(setOf(1, 2), s.present)
         assertEquals(300L, s.lastScanAt)
     }
@@ -182,7 +182,7 @@ class ScanSessionTest {
         var s = reduce(null, kp(), now = 0L)
         s = reduce(s, ScanEvent.Member(1), now = 10L)
         s = reduce(s, ScanEvent.Member(2), now = 20L)
-        val kpB = ScanEvent.Kp(point = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")
+        val kpB = ScanEvent.Kp(checkpointId = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")
         s = reduce(s, kpB, now = 30L)
         assertFalse(isComplete(s, rosterSize = 2))
     }
@@ -224,13 +224,13 @@ class ScanSessionTest {
 
     @Test
     fun kp_switchCP_resetsPresentAndBufferDrains() {
-        val kpB = ScanEvent.Kp(point = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")
+        val kpB = ScanEvent.Kp(checkpointId = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")
         var s = reduce(null, kp(), now = 0L)
         s = reduce(s, ScanEvent.Member(1), now = 100L)
         s = reduce(s, ScanEvent.Member(2), now = 200L)
         // Switch to a different checkpoint — prior KP's members must NOT carry over.
         s = reduce(s, kpB, now = 300L)
-        assertEquals(99, s!!.point)
+        assertEquals(99, s!!.checkpointId)
         assertTrue(s.present.isEmpty())
         assertTrue(s.bufferedBeforeKp.isEmpty())
         assertEquals(300L, s.lastScanAt)

@@ -269,7 +269,7 @@ fun ScanScreen(
         ) {
             item("top_bar") {
                 ScanTopBar(
-                    canFinish = session?.point != null,
+                    canFinish = session?.checkpointId != null,
                     onClose = {
                         finalizeSession()
                         onClose()
@@ -301,7 +301,7 @@ fun ScanScreen(
                         seconds = remainingMillis / 1_000f,
                         total = SCAN_WINDOW_MS / 1_000f,
                         remainingScans = remaining,
-                        waitingForCheckpoint = session?.point == null,
+                        waitingForCheckpoint = session?.checkpointId == null,
                     )
                 }
             }
