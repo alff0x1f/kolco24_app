@@ -12,9 +12,9 @@
 #   ./scripts/dump-track.sh                 # all points -> track.gpx
 #   ./scripts/dump-track.sh team7.gpx 7     # only teamId=7 -> team7.gpx
 #
-# Raw timestamp check (to compare trustedMs vs gpsTimeMs vs wallMs):
+# Raw timestamp check (to compare trustedMs vs gpsTimeMs vs wallMs, plus elevation):
 #   sqlite3 /tmp/kolco24-track.db \
-#     'SELECT lat,lon,accuracy,gpsTimeMs,trustedMs,wallMs,bootCount FROM track_points ORDER BY elapsedRealtimeAt'
+#     'SELECT lat,lon,accuracy,altitude,verticalAccuracyMeters,gpsTimeMs,trustedMs,wallMs,bootCount FROM track_points ORDER BY elapsedRealtimeAt'
 set -euo pipefail
 
 PKG=ru.kolco24.kolco24
@@ -59,12 +59,16 @@ WHERE=""
 [ -n "$TEAM" ] && WHERE="WHERE teamId = $TEAM"
 
 # Emit GPX. time = trustedMs ?? gpsTimeMs ?? wallMs (epoch ms -> ISO8601 UTC).
+# <ele> (meters) is emitted only when altitude is non-NULL — a NULL in the SQL
+# concat would null the whole row and drop the point, so it's gated by CASE.
 # accuracy (meters) is stuffed into <hdop> as a loose visual hint; viewers tolerate it.
+# GPX schema order inside <trkpt> is <ele> then <time>, so ele comes first.
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<gpx version="1.1" creator="kolco24" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
   sqlite3 "$DB" \
     "SELECT '<trkpt lat=\"'||lat||'\" lon=\"'||lon||'\">'||
+            CASE WHEN altitude IS NOT NULL THEN '<ele>'||altitude||'</ele>' ELSE '' END||
             '<time>'||strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(trustedMs,gpsTimeMs,wallMs)/1000, 'unixepoch')||'</time>'||
             '<hdop>'||accuracy||'</hdop></trkpt>'
      FROM track_points $WHERE ORDER BY elapsedRealtimeAt ASC;"

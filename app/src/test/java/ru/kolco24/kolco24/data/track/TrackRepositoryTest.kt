@@ -89,6 +89,8 @@ class TrackRepositoryTest {
         lat = lat,
         lon = lon,
         accuracy = accuracy,
+        altitude = null,
+        verticalAccuracyMeters = null,
         gpsTimeMs = gpsTimeMs,
         elapsedRealtimeNanos = elapsedMs * 1_000_000L,
     )

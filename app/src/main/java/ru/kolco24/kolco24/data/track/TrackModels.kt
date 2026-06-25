@@ -20,11 +20,17 @@ import ru.kolco24.kolco24.data.db.TrackPointEntity
  * `TrackRepository` at insert time rather than carried here. [elapsedRealtimeNanos] is the monotonic
  * moment of the fix (`Location.elapsedRealtimeNanos`) — the source of the trusted time per point, so
  * batched points keep their real capture order/time instead of the delivery time.
+ *
+ * [altitude] is meters above the WGS84 ellipsoid (`Location.altitude`) and [verticalAccuracyMeters]
+ * its 1-sigma estimate (`Location.verticalAccuracyMeters`, API 26+); both are nullable because
+ * `hasAltitude()`/`hasVerticalAccuracy()` can be false and a network-provider fix often has neither.
  */
 data class RawFix(
     val lat: Double,
     val lon: Double,
     val accuracy: Float,
+    val altitude: Double?,
+    val verticalAccuracyMeters: Float?,
     val gpsTimeMs: Long,
     val elapsedRealtimeNanos: Long,
 )
@@ -109,6 +115,8 @@ fun RawFix.toTrackPoint(
     lat = lat,
     lon = lon,
     accuracy = accuracy,
+    altitude = altitude,
+    verticalAccuracyMeters = verticalAccuracyMeters,
     gpsTimeMs = gpsTimeMs,
     elapsedRealtimeAt = elapsedRealtimeNanos / 1_000_000,
     bootCount = bootCount,

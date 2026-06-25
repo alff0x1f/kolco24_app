@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.data.track
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
+import android.os.Build
 import android.os.Looper
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -84,6 +85,13 @@ internal fun Location.toRawFix(): RawFix = RawFix(
     lat = latitude,
     lon = longitude,
     accuracy = if (hasAccuracy()) accuracy else Float.MAX_VALUE,
+    altitude = if (hasAltitude()) altitude else null,
+    verticalAccuracyMeters =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasVerticalAccuracy()) {
+            verticalAccuracyMeters
+        } else {
+            null
+        },
     gpsTimeMs = time,
     elapsedRealtimeNanos = elapsedRealtimeNanos,
 )
