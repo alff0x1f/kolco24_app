@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
@@ -63,6 +64,9 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     economyMode: Boolean = false,
     onEconomyModeChange: (Boolean) -> Unit = {},
+    trackPointCount: Int = 0,
+    trackClearEnabled: Boolean = false,
+    onClearTrack: () -> Unit = {},
     session: AdminSession,
     onOpenAdmin: () -> Unit,
     onResetTeam: (() -> Unit)? = null,
@@ -132,7 +136,14 @@ fun SettingsScreen(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
-            EconomyModeRow(checked = economyMode, onCheckedChange = onEconomyModeChange)
+            Column {
+                EconomyModeRow(checked = economyMode, onCheckedChange = onEconomyModeChange)
+                ClearTrackRow(
+                    pointCount = trackPointCount,
+                    enabled = trackClearEnabled,
+                    onClick = onClearTrack,
+                )
+            }
         }
 
         Text(
@@ -301,6 +312,57 @@ private fun EconomyModeRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit)
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * «Очистить трек» row — red delete avatar, «N точек» subtitle, no trailing chevron (a terminal
+ * destructive action, not navigation). Relocated here from `TrackCard` so a wipe is two taps deeper
+ * than the frequently-visited «Команда» tab. [enabled] is false when there is nothing to clear
+ * (`pointCount == 0`) or a track is recording for this team — the host owns that policy; tapping the
+ * enabled row forwards to [onClick] (the host confirms via an `AlertDialog`).
+ */
+@Composable
+private fun ClearTrackRow(pointCount: Int, enabled: Boolean, onClick: () -> Unit) {
+    val contentColor =
+        if (enabled) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val avatarColor =
+        if (enabled) MaterialTheme.colorScheme.errorContainer
+        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.38f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(avatarColor, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DeleteOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = if (enabled) 1f else 0.38f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Очистить трек",
+                style = MaterialTheme.typography.bodyMedium,
+                color = contentColor,
+            )
+            Text(
+                text = "$pointCount точек",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
+            )
+        }
     }
 }
 

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -27,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -45,11 +43,13 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  *
  * - [Idle][TrackState.Idle] → a «Начать запись» button (disabled only when [hasTeam] is false). When
  *   [degradedAccuracy] (no GPS provider, only network) the start is **not** disabled — instead a quiet
- *   hint warns the track will be coarse. If a track already exists ([pointCount] > 0) the metrics and
- *   a «Очистить трек» action show below.
+ *   hint warns the track will be coarse. If a track already exists ([pointCount] > 0) the metrics show
+ *   below.
  * - [Recording][TrackState.Recording] → a pulsing dot + «N точек · ~Xм» live readout and a «Остановить»
- *   button. «Очистить трек» is intentionally absent while recording (a wipe mid-record would let the
- *   service keep inserting after the clear and make the counter jump).
+ *   button.
+ *
+ * Clearing the track lives in the Settings overlay («Запись трека» card), not here — it is a
+ * destructive action and was moved out of this frequently-visited tab to avoid accidental taps.
  *
  * Not unit-tested (Compose, per repo convention); the pure length/metrics are covered by
  * `TrackMetricsTest`.
@@ -65,7 +65,6 @@ fun TrackCard(
     lastPointTime: String?,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val recording = state is TrackState.Recording
@@ -137,19 +136,6 @@ fun TrackCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                    if (pointCount > 0) {
-                        Spacer(Modifier.height(6.dp))
-                        TextButton(
-                            onClick = onClear,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                        ) {
-                            Icon(Icons.Filled.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Очистить трек")
-                        }
                     }
                 }
             }
