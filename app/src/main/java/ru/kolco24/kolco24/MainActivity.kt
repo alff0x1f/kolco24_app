@@ -834,11 +834,13 @@ private fun Kolco24AppRoot(
                         totalKp = safeCheckpoints.size,
                         totalCost = legendTotalCost,
                         nfcAvailable = nfcActiveForScan,
+                        nfcDisabled = nfcState == NfcState.Disabled,
                         hasTeam = teamState !is SelectedTeamState.None,
                         memberCount = teamForTab?.members?.size ?: 0,
                         boundCount = teamForTab?.members?.count { bindings.containsKey(it.numberInTeam) } ?: 0,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
                         onBindChips = { scope.launch { pagerState.animateScrollToPage(2) } },
+                        onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(

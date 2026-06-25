@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.ui.marks
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -143,11 +144,13 @@ fun MarksScreen(
     totalKp: Int = 0,
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
+    nfcDisabled: Boolean = false,
     hasTeam: Boolean = false,
     memberCount: Int = 0,
     boundCount: Int = 0,
     onChooseTeam: () -> Unit = {},
     onBindChips: () -> Unit = {},
+    onOpenNfcSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
@@ -186,10 +189,12 @@ fun MarksScreen(
                         MarksEmpty(
                             hasTeam = hasTeam,
                             nfcAvailable = nfcAvailable,
+                            nfcDisabled = nfcDisabled,
                             memberCount = memberCount,
                             boundCount = boundCount,
                             onChooseTeam = onChooseTeam,
                             onBindChips = onBindChips,
+                            onOpenNfcSettings = onOpenNfcSettings,
                             modifier = Modifier.padding(top = 40.dp),
                         )
                     }
@@ -201,7 +206,11 @@ fun MarksScreen(
                     // standalone banner once there are tiles to sit above.
                     if (!nfcAvailable) {
                         item("nfc_banner") {
-                            NfcUnavailableBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                            NfcUnavailableBanner(
+                                disabled = nfcDisabled,
+                                onOpenNfcSettings = onOpenNfcSettings,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                            )
                         }
                     }
                 }
@@ -241,19 +250,25 @@ fun MarksScreen(
  * here". The signature is a [ScorecardGhostRow] — a preview of the tile grid that will fill in — and the
  * headline/body/CTA are chosen for where the team actually is in the flow, in workflow order:
  *  1. no team selected → choose one;
- *  2. NFC unavailable → the photo fallback (folds in what used to be a separate floating banner);
- *  3. chips not all bound → bind them (a take only scores once **every** member is present, so an
+ *  2. NFC switched off → a CTA into system NFC settings (the toggle is the one thing in the user's way);
+ *  3. NFC absent (no hardware) → the photo fallback (folds in what used to be a separate floating banner);
+ *  4. chips not all bound → bind them (a take only scores once **every** member is present, so an
  *     unbound roster can never produce a tile — this is the prerequisite the user most needs surfaced);
- *  4. ready → tap a КП.
+ *  5. ready → tap a КП.
+ *
+ * [nfcDisabled] (NFC present but switched off) is checked before [nfcAvailable] so the disabled branch
+ * with its «Включить NFC» CTA wins; `!nfcAvailable && !nfcDisabled` is then unambiguously no-hardware.
  */
 @Composable
 private fun MarksEmpty(
     hasTeam: Boolean,
     nfcAvailable: Boolean,
+    nfcDisabled: Boolean,
     memberCount: Int,
     boundCount: Int,
     onChooseTeam: () -> Unit,
     onBindChips: () -> Unit,
+    onOpenNfcSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val needsBinding = memberCount > 0 && boundCount < memberCount
@@ -276,6 +291,14 @@ private fun MarksEmpty(
             ctaLabel = "Выбрать команду",
             ctaIcon = Icons.Filled.Groups,
             onCta = onChooseTeam,
+        )
+        nfcDisabled -> EmptyContent(
+            glyph = Icons.Filled.Nfc,
+            headline = "NFC выключен",
+            body = "Включите NFC, чтобы отмечать КП прикосновением.",
+            ctaLabel = "Включить NFC",
+            ctaIcon = Icons.Filled.Nfc,
+            onCta = onOpenNfcSettings,
         )
         !nfcAvailable -> EmptyContent(
             glyph = Icons.Filled.CameraAlt,
@@ -683,9 +706,20 @@ private fun MiniCpBadge(label: String, modifier: Modifier = Modifier) {
  * not a status light.
  */
 @Composable
-private fun NfcUnavailableBanner(modifier: Modifier = Modifier) {
+private fun NfcUnavailableBanner(
+    disabled: Boolean,
+    onOpenNfcSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // When NFC is merely switched off the whole banner is a shortcut into system settings; with no NFC
+    // hardware there is nothing to act on, so it stays a static notice.
+    val rowModifier = if (disabled) {
+        modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onOpenNfcSettings)
+    } else {
+        modifier.fillMaxWidth()
+    }
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -703,12 +737,13 @@ private fun NfcUnavailableBanner(modifier: Modifier = Modifier) {
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "NFC недоступен",
+                text = if (disabled) "NFC выключен" else "NFC недоступен",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Сканирование NFC на этом устройстве недоступно",
+                text = if (disabled) "Нажмите, чтобы включить"
+                    else "Сканирование NFC на этом устройстве недоступно",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
