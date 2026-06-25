@@ -33,6 +33,16 @@ import ru.kolco24.kolco24.data.track.TrackState
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
+ * Decide the recording-session [segmentId] on a fresh-start path: mint a new one when there is no
+ * current segment (first start or after a teardown reset it to null) or when a teardown was in flight
+ * ([wasTearingDown] — the start is replacing a session being torn down, so it's logically a new one);
+ * otherwise keep [current] so a duplicate/idempotent start intent stays one segment. Pure so the
+ * stop→start / idempotent-re-entry matrix is JVM-tested (repo convention).
+ */
+fun nextSegmentId(current: String?, wasTearingDown: Boolean, mint: () -> String): String =
+    if (wasTearingDown || current == null) mint() else current
+
+/**
  * Foreground service that records the team's GPS track with the screen off. Started from the UI
  * (Task 8) only after `ACCESS_FINE_LOCATION` is confirmed, so the `type=location` `startForeground`
  * is legal; it re-checks the permission on entry (TOCTOU guard) and bails cleanly if it was revoked.
@@ -100,6 +110,10 @@ class TrackRecordingService : Service() {
         }
         val wasTearingDown = isTearingDown
         isTearingDown = false // reset for new recording session
+        // Mint a fresh segment id only on a genuinely new session (first start, post-teardown, or one
+        // replacing an in-flight teardown). An idempotent re-entry keeps the existing segment so a
+        // duplicate start intent doesn't split one recording into two segments.
+        segmentId = nextSegmentId(segmentId, wasTearingDown) { java.util.UUID.randomUUID().toString() }
 
         // A prior teardown() may have cancelled serviceScope (rapid stop→start on the same instance).
         // Recreate it so the count-collector launch below works on a fresh scope.
@@ -249,6 +263,7 @@ class TrackRecordingService : Service() {
     private fun finishTeardown() {
         engine?.stop()
         engine = null
+        segmentId = null // next session mints a fresh segment — a stop→start gap is a new segment
         mainHandler.removeCallbacksAndMessages(null)
         countJob?.cancel()
         profileJob?.cancel()

@@ -151,23 +151,23 @@ val s = segmentId ?: UUID.randomUUID().toString().also { segmentId = it } // def
 - Modify: `app/src/main/java/ru/kolco24/kolco24/TrackRecordingService.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/SegmentIdTest.kt`
 
-- [ ] add a pure top-level `nextSegmentId(current, wasTearingDown, mint)` helper
+- [x] add a pure top-level `nextSegmentId(current, wasTearingDown, mint)` helper
       (see Technical Details) — the testable mint decision
-- [ ] add `private var segmentId: String? = null` field
-- [ ] in `onStartCommand` fresh-start path: set
+- [x] add `private var segmentId: String? = null` field
+- [x] in `onStartCommand` fresh-start path: set
       `segmentId = nextSegmentId(segmentId, wasTearingDown) { UUID.randomUUID().toString() }`
-- [ ] in `startEngine`: snapshot `segmentId` into a local (alongside `r`/`t`,
+- [x] in `startEngine`: snapshot `segmentId` into a local (alongside `r`/`t`,
       defensively minting if null) and pass it into the `insertAll` call inside
       the `onPoints` lambda
-- [ ] in `finishTeardown()`: reset `segmentId = null` so the next session mints a
+- [x] in `finishTeardown()`: reset `segmentId = null` so the next session mints a
       fresh one
-- [ ] verify the profile-switch path (`profileJob`/`flushThen`) does **not** touch
+- [x] verify the profile-switch path (`profileJob`/`flushThen`) does **not** touch
       `segmentId` — a mid-race Precise↔Economy toggle must stay one segment
-- [ ] write `SegmentIdTest` for `nextSegmentId`: fresh start (`null` → new id);
+- [x] write `SegmentIdTest` for `nextSegmentId`: fresh start (`null` → new id);
       idempotent re-entry (non-null, not tearing down → same id); teardown-in-flight
       replace (`wasTearingDown=true` → new id even when non-null)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 3
-- [ ] (the service field/engine plumbing stays untested — Android adapter, per
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 3
+- [x] (the service field/engine plumbing stays untested — Android adapter, per
       convention; on-device smoke is in Post-Completion)
 
 ### Task 3: Carry `segment_id` on the upload wire
