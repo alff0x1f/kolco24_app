@@ -195,47 +195,50 @@ val s = segmentId ?: UUID.randomUUID().toString().also { segmentId = it } // def
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackRepositoryTest.kt`
 - Delete: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackMetricsTest.kt`
 
-- [ ] `TrackCard`: drop the `lengthMeters` param; recording header becomes just
+- [x] `TrackCard`: drop the `lengthMeters` param; recording header becomes just
       «N точек» (remove `· ~Xм`); remove the «Длина» `Metric` from `TrackMetrics`;
       delete the private `formatLength`. Keep точек + время (span)
-- [ ] `TeamScreen`: drop the `trackLengthMeters` param and the `lengthMeters` arg
+- [x] `TeamScreen`: drop the `trackLengthMeters` param and the `lengthMeters` arg
       passed to `TrackCard`
-- [ ] `MainActivity`: delete `val trackLength = trackLengthMeters(trackUsable)`,
+- [x] `MainActivity`: delete `val trackLength = trackLengthMeters(trackUsable)`,
       the `import ...trackLengthMeters`, and the `trackLengthMeters = trackLength`
       arg. **Keep** `trackUsable`/`filterPoints` (still feeds first/last time)
-- [ ] `TrackModels.kt`: delete `trackLengthMeters`, `haversineMeters`, and
+- [x] `TrackModels.kt`: delete `trackLengthMeters`, `haversineMeters`, and
       `EARTH_RADIUS_M`; keep `filterPoints`, `TrackPointLike`, `RawFix`, and the
       mapper (do **not** add `segmentId` to `TrackPointLike` — the segment-aware
       length fix was intentionally dropped). Also fix the `TrackPointLike` KDoc
       (`TrackModels.kt:40`) — drop its dangling `[trackLengthMeters]` reference
-- [ ] `TrackRepositoryTest`: delete `length_overObservedPoints_isCorrect()`
+- [x] `TrackRepositoryTest`: delete `length_overObservedPoints_isCorrect()`
       (`:167-181`) — it calls the now-deleted `trackLengthMeters` and would break
       compilation (the `insertAll`-signature edits from Task 1 are unaffected)
-- [ ] delete `TrackMetricsTest.kt` (it only covers the removed helpers)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 5
+- [x] delete `TrackMetricsTest.kt` (it only covers the removed helpers)
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 5
 
 ### Task 5: Regenerate the v1 schema
 
 **Files:**
 - Modify: `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/1.json`
 
-- [ ] build so KSP regenerates the schema (`./gradlew assembleDebug` or
+- [x] build so KSP regenerates the schema (`./gradlew assembleDebug` or
       `:app:kspDebugKotlin`), confirming `1.json`'s `track_points` now includes
       the `segmentId` column with no version bump and no new migrations
-- [ ] commit the regenerated `1.json`
-- [ ] confirm no `MIGRATION_*` object or `.addMigrations(...)` was added
+- [x] commit the regenerated `1.json` (committed in 4e55c7a alongside the entity change)
+- [x] confirm no `MIGRATION_*` object or `.addMigrations(...)` was added
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] stop→start mints two distinct `segmentId`s; profile toggle mid-record keeps
-      one (verified by service code review)
-- [ ] every persisted/uploaded point carries a non-null `segmentId`
-- [ ] `TrackCard` shows точек + время, no «Длина»; no dead length code remains in
+- [x] stop→start mints two distinct `segmentId`s; profile toggle mid-record keeps
+      one (verified by service code review — `nextSegmentId` mints on fresh-start
+      in `onStartCommand`, reset to null in `finishTeardown`; `profileJob`/`flushThen`
+      never touch `segmentId`, so a soft engine restart reuses it)
+- [x] every persisted/uploaded point carries a non-null `segmentId` (`startEngine`
+      snapshots `s = segmentId ?: mint`, threaded into every `insertAll`)
+- [x] `TrackCard` shows точек + время, no «Длина»; no dead length code remains in
       main **or** test trees
       (`grep -rn "trackLengthMeters\|haversineMeters\|formatLength\|lengthMeters"
       app/src` returns nothing)
-- [ ] run full suite: `./gradlew testDebugUnitTest`
-- [ ] run `./gradlew lintDebug`
+- [x] run full suite: `./gradlew testDebugUnitTest` (BUILD SUCCESSFUL)
+- [x] run `./gradlew lintDebug` (BUILD SUCCESSFUL)
 
 ### Task 7: [Final] Update documentation
 

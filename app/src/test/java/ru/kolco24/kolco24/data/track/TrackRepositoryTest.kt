@@ -180,24 +180,6 @@ class TrackRepositoryTest {
     }
 
     @Test
-    fun length_overObservedPoints_isCorrect() = runTest {
-        val dao = FakeTrackDao()
-        val r = repo(dao)
-        // ~0.001° latitude apart ≈ 111.2 m per step.
-        r.insertAll(
-            listOf(
-                rawFix(elapsedMs = 60_000L, lat = 55.000, lon = 37.0),
-                rawFix(elapsedMs = 61_000L, lat = 55.001, lon = 37.0),
-            ),
-            raceId = 1,
-            teamId = 7,
-            segmentId = "seg",
-        )
-        val length = trackLengthMeters(r.observeTrack(7, 1).first())
-        assertEquals(111.2, length, 1.0)
-    }
-
-    @Test
     fun deleteForTeam_clearsOnlyThatTeam() = runTest {
         val dao = FakeTrackDao()
         val r = repo(dao)

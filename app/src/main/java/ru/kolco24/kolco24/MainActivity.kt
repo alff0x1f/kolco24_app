@@ -94,7 +94,6 @@ import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.filterPoints
-import ru.kolco24.kolco24.data.track.trackLengthMeters
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
@@ -564,9 +563,8 @@ private fun Kolco24AppRoot(
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
-    // Length/time metrics use the accuracy-filtered, capture-ordered points (raw count stays full).
+    // Time span uses the accuracy-filtered, capture-ordered points (raw count stays full).
     val trackUsable = remember(safeTrack) { filterPoints(safeTrack).sortedBy { it.elapsedRealtimeAt } }
-    val trackLength = remember(trackUsable) { trackLengthMeters(trackUsable) }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Degraded accuracy = network is available but GPS is not enabled (no chip or toggle off) — the
@@ -885,7 +883,6 @@ private fun Kolco24AppRoot(
                         onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
-                        trackLengthMeters = trackLength,
                         trackDegradedAccuracy = degradedAccuracy,
                         trackFirstPointTime = trackFirstTime,
                         trackLastPointTime = trackLastTime,
