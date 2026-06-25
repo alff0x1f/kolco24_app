@@ -178,8 +178,10 @@ fun MarksScreen(
                         TileGrid(marks = tiles)
                     }
                 }
-                item("nfc_banner") {
-                    NfcBanner(nfcAvailable = nfcAvailable, modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                if (!nfcAvailable) {
+                    item("nfc_banner") {
+                        NfcUnavailableBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                    }
                 }
             }
 
@@ -499,8 +501,12 @@ private fun MiniCpBadge(label: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Surfaced only when NFC is unavailable — a healthy reader needs no badge. This is an alert,
+ * not a status light.
+ */
 @Composable
-private fun NfcBanner(nfcAvailable: Boolean, modifier: Modifier = Modifier) {
+private fun NfcUnavailableBanner(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -509,35 +515,23 @@ private fun NfcBanner(nfcAvailable: Boolean, modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(22.dp)
-                .background(
-                    if (nfcAvailable) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)
-                    else MaterialTheme.colorScheme.errorContainer,
-                    CircleShape,
-                ),
+                .background(MaterialTheme.colorScheme.errorContainer, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(
-                        if (nfcAvailable) MaterialTheme.colorScheme.tertiary
-                        else MaterialTheme.colorScheme.error,
-                        CircleShape,
-                    )
+                    .background(MaterialTheme.colorScheme.error, CircleShape)
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (nfcAvailable) "NFC активен" else "NFC недоступен",
+                text = "NFC недоступен",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = if (nfcAvailable) {
-                    "Приложите телефон к КП или чипу команды"
-                } else {
-                    "Сканирование NFC на этом устройстве недоступно"
-                },
+                text = "Сканирование NFC на этом устройстве недоступно",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
