@@ -838,9 +838,11 @@ private fun Kolco24AppRoot(
                         hasTeam = teamState !is SelectedTeamState.None,
                         memberCount = teamForTab?.members?.size ?: 0,
                         boundCount = teamForTab?.members?.count { bindings.containsKey(it.numberInTeam) } ?: 0,
+                        trackRecording = (trackState as? TrackState.Recording)?.teamId == selectedTeamId,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
                         onBindChips = { scope.launch { pagerState.animateScrollToPage(2) } },
                         onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
+                        onStartTrack = onStartTrack,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(

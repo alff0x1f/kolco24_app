@@ -23,8 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -148,9 +150,11 @@ fun MarksScreen(
     hasTeam: Boolean = false,
     memberCount: Int = 0,
     boundCount: Int = 0,
+    trackRecording: Boolean = false,
     onChooseTeam: () -> Unit = {},
     onBindChips: () -> Unit = {},
     onOpenNfcSettings: () -> Unit = {},
+    onStartTrack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
@@ -192,9 +196,11 @@ fun MarksScreen(
                             nfcDisabled = nfcDisabled,
                             memberCount = memberCount,
                             boundCount = boundCount,
+                            trackRecording = trackRecording,
                             onChooseTeam = onChooseTeam,
                             onBindChips = onBindChips,
                             onOpenNfcSettings = onOpenNfcSettings,
+                            onStartTrack = onStartTrack,
                             modifier = Modifier.padding(top = 40.dp),
                         )
                     }
@@ -254,7 +260,8 @@ fun MarksScreen(
  *  3. NFC absent (no hardware) → the photo fallback (folds in what used to be a separate floating banner);
  *  4. chips not all bound → bind them (a take only scores once **every** member is present, so an
  *     unbound roster can never produce a tile — this is the prerequisite the user most needs surfaced);
- *  5. ready → tap a КП.
+ *  5. ready → tap a КП, plus a [TrackNudge] pre-start reminder to start the GPS track (the one thing a
+ *     team can actually do at the start line, and the easiest to forget).
  *
  * [nfcDisabled] (NFC present but switched off) is checked before [nfcAvailable] so the disabled branch
  * with its «Включить NFC» CTA wins; `!nfcAvailable && !nfcDisabled` is then unambiguously no-hardware.
@@ -266,14 +273,17 @@ private fun MarksEmpty(
     nfcDisabled: Boolean,
     memberCount: Int,
     boundCount: Int,
+    trackRecording: Boolean,
     onChooseTeam: () -> Unit,
     onBindChips: () -> Unit,
     onOpenNfcSettings: () -> Unit,
+    onStartTrack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val needsBinding = memberCount > 0 && boundCount < memberCount
 
-    // (lead glyph, headline, body, optional CTA)
+    // (lead glyph, headline, body, optional CTA). `trackNudge` appends the pre-start track reminder —
+    // only the ready state sets it, so the nudge never competes with a branch that has its own CTA.
     data class EmptyContent(
         val glyph: ImageVector,
         val headline: String,
@@ -281,6 +291,7 @@ private fun MarksEmpty(
         val ctaLabel: String? = null,
         val ctaIcon: ImageVector? = null,
         val onCta: (() -> Unit)? = null,
+        val trackNudge: Boolean = false,
     )
 
     val content = when {
@@ -318,6 +329,7 @@ private fun MarksEmpty(
             glyph = Icons.Filled.Nfc,
             headline = "Здесь появятся отметки",
             body = "Приложите телефон к метке КП — отметка добавится сюда.",
+            trackNudge = true,
         )
     }
 
@@ -360,6 +372,86 @@ private fun MarksEmpty(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(content.ctaLabel, style = MaterialTheme.typography.titleSmall)
+            }
+        }
+
+        if (content.trackNudge) {
+            Spacer(Modifier.height(28.dp))
+            TrackNudge(recording = trackRecording, onStart = onStartTrack)
+        }
+    }
+}
+
+/**
+ * Pre-start GPS-track reminder shown under the ready empty state. Before the gun the one thing a team can
+ * actually do on this screen is start their track — and it is the easiest step to forget — so the reminder
+ * sits here as a single tappable card. The orange play badge is the same «start track» vocabulary as the
+ * Команда-tab `TrackCard`, so it reads as the same feature rather than a new control. Once recording, the
+ * card gives way to a quiet success line so a team that already started is acknowledged, not nagged.
+ */
+@Composable
+private fun TrackNudge(recording: Boolean, onStart: () -> Unit, modifier: Modifier = Modifier) {
+    if (recording) {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(20.dp).background(Tertiary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+            Text(
+                text = "Трек записывается",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        return
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onStart)
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(OrangeCta, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Не забудьте трек",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Включите GPS-запись пути перед стартом",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
