@@ -491,6 +491,19 @@ private fun Kolco24AppRoot(
         }
     }
 
+    // Races refresh for the comp picker (auto-on-open + pull-to-refresh). Standalone rather than the
+    // raceId-bound `pullRefresh` above: refreshRaces() takes no raceId and must work with no team
+    // selected — the exact offline-no-team state where the bug surfaced (empty list, no way to retry).
+    var racesRefreshing by remember { mutableStateOf(false) }
+    fun refreshRacesPull() {
+        racesRefreshing = true
+        scope.launch {
+            val result = raceRepo.refreshRaces()
+            racesRefreshing = false
+            refreshErrorMessage(result)?.let { snackbarHostState.showSnackbar(it) }
+        }
+    }
+
     val teamState by produceState<SelectedTeamState>(SelectedTeamState.Loading) {
         teamRepo.selectedTeam.collectLatest { selection ->
             val teamId = selection?.teamId
@@ -1177,6 +1190,8 @@ private fun Kolco24AppRoot(
                 races = races,
                 today = today,
                 selectedRaceId = selectedRaceId,
+                isRefreshing = racesRefreshing,
+                onRefresh = { refreshRacesPull() },
                 onBack = { showSettings = false; teamFlowStep = TeamFlowStep.None },
                 onRaceSelected = { raceId ->
                     // Warm Room ahead of the screen transition so the team list is ready when the

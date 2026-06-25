@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.data.db.RaceEntity
+import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 
 /** Amber month label inside the charcoal calendar token (matches the mock's `AMBER`). */
@@ -56,6 +58,11 @@ private val MONTH_ABBR = listOf(
  * Screen 04b — race picker (step 1 of choosing a team). Shows the races from Room split into
  * current / archive tabs; tapping a row opens its team list via [onRaceSelected]. Pure UI —
  * the split and status rules live in [TeamPickerLogic] and are unit-tested there.
+ *
+ * Races are refreshed on open ([onRefresh] in a one-shot [LaunchedEffect]) and via pull-to-refresh,
+ * so a picker opened with an empty/stale cache (e.g. the app cold-started offline) self-heals once
+ * connectivity returns — without restarting the app. [refreshRaces] is no-arg and works with no team
+ * selected, so this is wired in the host directly rather than through the raceId-bound `pullRefresh`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,11 +70,17 @@ fun CompPickerScreen(
     races: List<RaceEntity>,
     today: String,
     selectedRaceId: Int?,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onBack: () -> Unit,
     onRaceSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showArchive by rememberSaveable { mutableStateOf(false) }
+
+    // Auto-refresh once when the picker opens (the screen is composed fresh each open, behind an `if`
+    // in the host). refreshRaces() is ETag-guarded — a no-op 304 when nothing changed — so this is cheap.
+    LaunchedEffect(Unit) { onRefresh() }
 
     val split = splitRaces(races, today)
     val list = if (showArchive) split.archive else split.current
@@ -92,38 +105,40 @@ fun CompPickerScreen(
             ),
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp),
-        ) {
-            item("chips") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .padding(top = 6.dp, bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CompFilterChip(
-                        selected = !showArchive,
-                        onClick = { showArchive = false },
-                        label = "Актуальные · ${split.current.size}",
-                    )
-                    CompFilterChip(
-                        selected = showArchive,
-                        onClick = { showArchive = true },
-                        label = "Архив · ${split.archive.size}",
+        RefreshableList(isRefreshing = isRefreshing, onRefresh = onRefresh) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 16.dp),
+            ) {
+                item("chips") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                            .padding(top = 6.dp, bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CompFilterChip(
+                            selected = !showArchive,
+                            onClick = { showArchive = false },
+                            label = "Актуальные · ${split.current.size}",
+                        )
+                        CompFilterChip(
+                            selected = showArchive,
+                            onClick = { showArchive = true },
+                            label = "Архив · ${split.archive.size}",
+                        )
+                    }
+                }
+
+                item("list") {
+                    CompListCard(
+                        races = list,
+                        today = today,
+                        selectedRaceId = selectedRaceId,
+                        onRaceSelected = onRaceSelected,
                     )
                 }
-            }
-
-            item("list") {
-                CompListCard(
-                    races = list,
-                    today = today,
-                    selectedRaceId = selectedRaceId,
-                    onRaceSelected = onRaceSelected,
-                )
             }
         }
     }
