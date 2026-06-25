@@ -25,6 +25,7 @@ class TrackPointMappingTest {
             wallMs = 1_718_900_000_100L,
             trustedMs = 1_718_900_000_123L,
             bootCount = 3,
+            segmentId = "seg-1",
             idFactory = { "id-1" },
         )
         assertEquals(9_876_543L, p.elapsedRealtimeAt)
@@ -38,6 +39,7 @@ class TrackPointMappingTest {
             wallMs = 1_718_900_000_100L,
             trustedMs = 1_718_900_000_123L,
             bootCount = 3,
+            segmentId = "seg-1",
             idFactory = { "id-1" },
         )
         assertEquals("id-1", p.id)
@@ -51,8 +53,23 @@ class TrackPointMappingTest {
         assertEquals(1_718_900_000_000L, p.gpsTimeMs)
         assertEquals(1_718_900_000_100L, p.wallMs)
         assertEquals(3, p.bootCount)
+        assertEquals("seg-1", p.segmentId)
         assertFalse(p.uploadedLocal)
         assertFalse(p.uploadedCloud)
+    }
+
+    @Test
+    fun segmentId_comesFromInjectedValue() {
+        val p = fix.toTrackPoint(
+            raceId = 1,
+            teamId = 1,
+            wallMs = 1_000L,
+            trustedMs = null,
+            bootCount = null,
+            segmentId = "session-abc",
+            idFactory = { "id" },
+        )
+        assertEquals("session-abc", p.segmentId)
     }
 
     @Test
@@ -64,6 +81,7 @@ class TrackPointMappingTest {
             wallMs = 1_000L,
             trustedMs = null,
             bootCount = null,
+            segmentId = "seg",
             idFactory = { "id" },
         )
         assertNull(p.altitude)
@@ -78,6 +96,7 @@ class TrackPointMappingTest {
             wallMs = 1_000L,
             trustedMs = 1_718_900_000_123L,
             bootCount = null,
+            segmentId = "seg",
             idFactory = { "id" },
         )
         assertEquals(1_718_900_000_123L, p.trustedMs)
@@ -91,6 +110,7 @@ class TrackPointMappingTest {
             wallMs = 1_000L,
             trustedMs = null,
             bootCount = null,
+            segmentId = "seg",
             idFactory = { "id" },
         )
         assertNull(p.trustedMs)
@@ -100,8 +120,8 @@ class TrackPointMappingTest {
     fun idFactoryIsInvokedPerMapping() {
         var counter = 0
         val factory = { "id-${counter++}" }
-        val a = fix.toTrackPoint(1, 1, 0L, null, null, factory)
-        val b = fix.toTrackPoint(1, 1, 0L, null, null, factory)
+        val a = fix.toTrackPoint(1, 1, 0L, null, null, "seg", factory)
+        val b = fix.toTrackPoint(1, 1, 0L, null, null, "seg", factory)
         assertEquals("id-0", a.id)
         assertEquals("id-1", b.id)
     }

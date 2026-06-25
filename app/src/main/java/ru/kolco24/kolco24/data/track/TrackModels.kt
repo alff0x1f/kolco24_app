@@ -97,9 +97,10 @@ fun <T : TrackPointLike> filterPoints(
  * Map a [RawFix] to a [TrackPointEntity]. The time fields are injected so the mapper stays
  * deterministic and unit-testable: [trustedMs] is computed by the caller from this fix's
  * [RawFix.elapsedRealtimeNanos] via `TrustedClock.trustedAt`, [wallMs] is the back-projected
- * wall-clock of the fix moment, [bootCount] is the current boot session, and [idFactory] supplies the
- * client UUID. [TrackPointEntity.elapsedRealtimeAt] is `elapsedRealtimeNanos / 1_000_000` (the same
- * millisecond monotonic scale as `TimeSample.elapsedMs`).
+ * wall-clock of the fix moment, [bootCount] is the current boot session, [segmentId] is the
+ * recording-session id (one per «Начать запись»), and [idFactory] supplies the client UUID.
+ * [TrackPointEntity.elapsedRealtimeAt] is `elapsedRealtimeNanos / 1_000_000` (the same millisecond
+ * monotonic scale as `TimeSample.elapsedMs`).
  */
 fun RawFix.toTrackPoint(
     raceId: Int,
@@ -107,6 +108,7 @@ fun RawFix.toTrackPoint(
     wallMs: Long,
     trustedMs: Long?,
     bootCount: Int?,
+    segmentId: String,
     idFactory: () -> String,
 ): TrackPointEntity = TrackPointEntity(
     id = idFactory(),
@@ -122,4 +124,5 @@ fun RawFix.toTrackPoint(
     bootCount = bootCount,
     wallMs = wallMs,
     trustedMs = trustedMs,
+    segmentId = segmentId,
 )

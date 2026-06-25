@@ -65,6 +65,7 @@ class TrackUploadTest {
         bootCount = bootCount,
         wallMs = 1_718_900_000_000L,
         trustedMs = trustedMs,
+        segmentId = "seg-1",
         uploadedLocal = false,
         uploadedCloud = false,
     )

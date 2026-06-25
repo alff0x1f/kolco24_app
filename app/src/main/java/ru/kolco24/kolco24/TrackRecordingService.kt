@@ -65,6 +65,8 @@ class TrackRecordingService : Service() {
     private var activeProfile: TrackProfile = TrackProfile.Precise
     private var raceId: Int = -1
     private var teamId: Int = -1
+    /** UUID minted once per recording session; snapshotted into each engine's onPoints batch. */
+    private var segmentId: String? = null
     /**
      * Set to true when teardown() is in progress so the in-flight profile-switch flush callback
      * doesn't restart the engine after Stop wins the race — without this guard the profile callback
@@ -174,11 +176,12 @@ class TrackRecordingService : Service() {
         // the old engine finishes delivering its buffered batch.
         val r = raceId
         val t = teamId
+        val s = segmentId ?: java.util.UUID.randomUUID().toString().also { segmentId = it }
         engine = e
         e.start(
             onPoints = { fixes ->
                 container.applicationScope.launch {
-                    container.trackRepository.insertAll(fixes, r, t)
+                    container.trackRepository.insertAll(fixes, r, t, s)
                 }
             },
             onError = { err ->

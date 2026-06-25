@@ -132,18 +132,18 @@ val s = segmentId ?: UUID.randomUUID().toString().also { segmentId = it } // def
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackPointMappingTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackRepositoryTest.kt`
 
-- [ ] add non-null `val segmentId: String` to `TrackPointEntity` (no index; keep
+- [x] add non-null `val segmentId: String` to `TrackPointEntity` (no index; keep
       it grouped near `id`/provenance fields; update the KDoc to mention the
       recording-session id)
-- [ ] `RawFix.toTrackPoint(...)`: add a `segmentId: String` param and set it on
+- [x] `RawFix.toTrackPoint(...)`: add a `segmentId: String` param and set it on
       the returned entity (keep `RawFix` itself unchanged — pure geo value)
-- [ ] `TrackRepository.insertAll(...)`: add a `segmentId: String` param and thread
+- [x] `TrackRepository.insertAll(...)`: add a `segmentId: String` param and thread
       it into every `toTrackPoint` call
-- [ ] `TrackPointMappingTest`: assert the passed `segmentId` lands on the mapped
+- [x] `TrackPointMappingTest`: assert the passed `segmentId` lands on the mapped
       entity
-- [ ] `TrackRepositoryTest`: update the `insertAll` calls for the new param; add a
+- [x] `TrackRepositoryTest`: update the `insertAll` calls for the new param; add a
       case asserting every inserted row carries the passed `segmentId`
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 2
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 2
 
 ### Task 2: Mint the segment id in the recording service
 
