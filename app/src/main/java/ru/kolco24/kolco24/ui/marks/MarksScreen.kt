@@ -20,7 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,15 +38,20 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
@@ -133,6 +143,11 @@ fun MarksScreen(
     totalKp: Int = 0,
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
+    hasTeam: Boolean = false,
+    memberCount: Int = 0,
+    boundCount: Int = 0,
+    onChooseTeam: () -> Unit = {},
+    onBindChips: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
@@ -168,16 +183,26 @@ fun MarksScreen(
                 }
                 if (tiles.isEmpty()) {
                     item("empty") {
-                        MarksEmpty(modifier = Modifier.padding(top = 64.dp))
+                        MarksEmpty(
+                            hasTeam = hasTeam,
+                            nfcAvailable = nfcAvailable,
+                            memberCount = memberCount,
+                            boundCount = boundCount,
+                            onChooseTeam = onChooseTeam,
+                            onBindChips = onBindChips,
+                            modifier = Modifier.padding(top = 40.dp),
+                        )
                     }
                 } else {
                     item("tile_grid") {
                         TileGrid(marks = tiles)
                     }
-                }
-                if (!nfcAvailable) {
-                    item("nfc_banner") {
-                        NfcUnavailableBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                    // The empty state folds the NFC notice into its own message, so only surface the
+                    // standalone banner once there are tiles to sit above.
+                    if (!nfcAvailable) {
+                        item("nfc_banner") {
+                            NfcUnavailableBanner(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                        }
                     }
                 }
             }
@@ -211,23 +236,190 @@ fun MarksScreen(
     }
 }
 
+/**
+ * The empty Отметки state, framed as the next step toward the first take rather than a flat "nothing
+ * here". The signature is a [ScorecardGhostRow] — a preview of the tile grid that will fill in — and the
+ * headline/body/CTA are chosen for where the team actually is in the flow, in workflow order:
+ *  1. no team selected → choose one;
+ *  2. NFC unavailable → the photo fallback (folds in what used to be a separate floating banner);
+ *  3. chips not all bound → bind them (a take only scores once **every** member is present, so an
+ *     unbound roster can never produce a tile — this is the prerequisite the user most needs surfaced);
+ *  4. ready → tap a КП.
+ */
 @Composable
-private fun MarksEmpty(modifier: Modifier = Modifier) {
+private fun MarksEmpty(
+    hasTeam: Boolean,
+    nfcAvailable: Boolean,
+    memberCount: Int,
+    boundCount: Int,
+    onChooseTeam: () -> Unit,
+    onBindChips: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val needsBinding = memberCount > 0 && boundCount < memberCount
+
+    // (lead glyph, headline, body, optional CTA)
+    data class EmptyContent(
+        val glyph: ImageVector,
+        val headline: String,
+        val body: String,
+        val ctaLabel: String? = null,
+        val ctaIcon: ImageVector? = null,
+        val onCta: (() -> Unit)? = null,
+    )
+
+    val content = when {
+        !hasTeam -> EmptyContent(
+            glyph = Icons.Filled.Groups,
+            headline = "Отметок пока нет",
+            body = "Выберите соревнование и команду — отметки появятся здесь.",
+            ctaLabel = "Выбрать команду",
+            ctaIcon = Icons.Filled.Groups,
+            onCta = onChooseTeam,
+        )
+        !nfcAvailable -> EmptyContent(
+            glyph = Icons.Filled.CameraAlt,
+            headline = "NFC недоступен",
+            body = "Отметить КП по NFC на этом устройстве не получится. Отмечайте КП через «Фото».",
+        )
+        needsBinding -> EmptyContent(
+            glyph = Icons.Filled.AddLink,
+            headline = "Привяжите чипы участникам",
+            body = "Отметка засчитывается, только когда отмечены все участники команды. " +
+                "Сейчас с чипом $boundCount из $memberCount.",
+            ctaLabel = "Привязать чипы",
+            ctaIcon = Icons.Filled.AddLink,
+            onCta = onBindChips,
+        )
+        else -> EmptyContent(
+            glyph = Icons.Filled.Nfc,
+            headline = "Здесь появятся отметки",
+            body = "Приложите телефон к метке КП — отметка добавится сюда.",
+        )
+    }
+
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        ScorecardGhostRow(leadGlyph = content.glyph)
+
+        Spacer(Modifier.height(22.dp))
         Text(
-            text = "Пока нет отметок",
+            text = content.headline,
             style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = "Поднесите телефон к метке КП — отметка появится здесь",
+            text = content.body,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
+
+        if (content.ctaLabel != null && content.onCta != null) {
+            Spacer(Modifier.height(22.dp))
+            Button(
+                onClick = content.onCta,
+                modifier = Modifier.height(48.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OrangeCta,
+                    contentColor = Color.White,
+                ),
+                contentPadding = PaddingValues(horizontal = 22.dp),
+            ) {
+                if (content.ctaIcon != null) {
+                    Icon(content.ctaIcon, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(content.ctaLabel, style = MaterialTheme.typography.titleSmall)
+            }
+        }
+    }
+}
+
+/**
+ * The empty-state signature: a preview of the scorecard grid this screen fills in. The first slot is a
+ * solid card carrying the state's lead glyph (echoing a real [ScorecardTile]'s top stripe + frame); the
+ * trailing slots are hairline-dashed placeholders that fade out, reading as "marks land here, one КП at a
+ * time". Purely decorative — no state, no motion.
+ */
+@Composable
+private fun ScorecardGhostRow(leadGlyph: ImageVector, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GhostTile(active = true, glyph = leadGlyph)
+        GhostTile(active = false, alpha = 0.55f)
+        GhostTile(active = false, alpha = 0.32f)
+        GhostTile(active = false, alpha = 0.18f)
+    }
+}
+
+@Composable
+private fun GhostTile(
+    active: Boolean,
+    glyph: ImageVector? = null,
+    alpha: Float = 1f,
+) {
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    Surface(
+        shape = TileShape,
+        color = if (active) MaterialTheme.colorScheme.surfaceContainerLowest else Color.Transparent,
+        modifier = Modifier
+            .size(54.dp)
+            .then(
+                if (active) {
+                    Modifier.drawBehind {
+                        // Solid hairline frame, matching ScorecardTile's border.
+                        drawRoundRect(
+                            color = outline,
+                            cornerRadius = CornerRadius(10.dp.toPx()),
+                            style = Stroke(width = 1.dp.toPx()),
+                        )
+                    }
+                } else {
+                    Modifier.drawBehind {
+                        drawRoundRect(
+                            color = outline.copy(alpha = alpha),
+                            cornerRadius = CornerRadius(10.dp.toPx()),
+                            style = Stroke(
+                                width = 1.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(
+                                    floatArrayOf(4.dp.toPx(), 4.dp.toPx()),
+                                ),
+                            ),
+                        )
+                    }
+                },
+            ),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (active) {
+                // Neutral top stripe stand-in for the КП color bar (no КП yet → no color).
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .background(outline),
+                )
+            }
+            if (glyph != null) {
+                Icon(
+                    imageVector = glyph,
+                    contentDescription = null,
+                    tint = OrangeCta,
+                    modifier = Modifier.align(Alignment.Center).size(24.dp),
+                )
+            }
+        }
     }
 }
 
