@@ -17,7 +17,8 @@ data class TrackUploadRequest(
 /**
  * One GPS track point on the wire. Times are pinned to the **moment of the fix** (see
  * [TrackPointEntity]): [trustedMs] is the trusted server time derived from [elapsedAt] (null when no
- * clock sync), [gpsTimeMs] is the satellite-time hint, [elapsedAt] is the monotonic capture moment
+ * clock sync), [altitude]/[verticalAccuracyMeters] are the WGS84-ellipsoid elevation + estimate
+ * (null when the fix has no vertical component), [gpsTimeMs] is the satellite-time hint, [elapsedAt] is the monotonic capture moment
  * (millis), and [bootCount] is the boot session of [elapsedAt]. The raw `wallMs` fallback is local
  * only and not uploaded — the server uses [trustedMs]/[gpsTimeMs].
  */
@@ -27,6 +28,8 @@ data class TrackPointDto(
     val lat: Double,
     val lon: Double,
     val accuracy: Float,
+    val altitude: Double?,
+    @SerialName("vertical_accuracy") val verticalAccuracyMeters: Float?,
     @SerialName("gps_time_ms") val gpsTimeMs: Long,
     @SerialName("trusted_ms") val trustedMs: Long?,
     @SerialName("elapsed_at") val elapsedAt: Long,
@@ -49,6 +52,8 @@ fun TrackPointEntity.toDto(): TrackPointDto =
         lat = lat,
         lon = lon,
         accuracy = accuracy,
+        altitude = altitude,
+        verticalAccuracyMeters = verticalAccuracyMeters,
         gpsTimeMs = gpsTimeMs,
         trustedMs = trustedMs,
         elapsedAt = elapsedRealtimeAt,

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "11b67177b83fc399551310248f42ff25",
+    "identityHash": "5820270f04b8d46cc937dc677ba285f8",
     "entities": [
       {
         "tableName": "races",
@@ -657,7 +657,7 @@
       },
       {
         "tableName": "track_points",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `raceId` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `accuracy` REAL NOT NULL, `gpsTimeMs` INTEGER NOT NULL, `elapsedRealtimeAt` INTEGER NOT NULL, `bootCount` INTEGER, `wallMs` INTEGER NOT NULL, `trustedMs` INTEGER, `uploadedLocal` INTEGER NOT NULL, `uploadedCloud` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `raceId` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `accuracy` REAL NOT NULL, `altitude` REAL, `verticalAccuracyMeters` REAL, `gpsTimeMs` INTEGER NOT NULL, `elapsedRealtimeAt` INTEGER NOT NULL, `bootCount` INTEGER, `wallMs` INTEGER NOT NULL, `trustedMs` INTEGER, `uploadedLocal` INTEGER NOT NULL, `uploadedCloud` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -694,6 +694,16 @@
             "columnName": "accuracy",
             "affinity": "REAL",
             "notNull": true
+          },
+          {
+            "fieldPath": "altitude",
+            "columnName": "altitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "verticalAccuracyMeters",
+            "columnName": "verticalAccuracyMeters",
+            "affinity": "REAL"
           },
           {
             "fieldPath": "gpsTimeMs",
@@ -766,7 +776,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '11b67177b83fc399551310248f42ff25')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5820270f04b8d46cc937dc677ba285f8')"
     ]
   }
 }

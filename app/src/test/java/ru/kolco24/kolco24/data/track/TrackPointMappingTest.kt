@@ -11,6 +11,8 @@ class TrackPointMappingTest {
         lat = 55.751244,
         lon = 37.618423,
         accuracy = 12.4f,
+        altitude = 187.5,
+        verticalAccuracyMeters = 3.2f,
         gpsTimeMs = 1_718_900_000_000L,
         elapsedRealtimeNanos = 9_876_543_210_000L,
     )
@@ -44,11 +46,28 @@ class TrackPointMappingTest {
         assertEquals(55.751244, p.lat, 0.0)
         assertEquals(37.618423, p.lon, 0.0)
         assertEquals(12.4f, p.accuracy, 0f)
+        assertEquals(187.5, p.altitude!!, 0.0)
+        assertEquals(3.2f, p.verticalAccuracyMeters!!, 0f)
         assertEquals(1_718_900_000_000L, p.gpsTimeMs)
         assertEquals(1_718_900_000_100L, p.wallMs)
         assertEquals(3, p.bootCount)
         assertFalse(p.uploadedLocal)
         assertFalse(p.uploadedCloud)
+    }
+
+    @Test
+    fun altitudeFields_nullWhenFixHasNoVerticalComponent() {
+        val flat = fix.copy(altitude = null, verticalAccuracyMeters = null)
+        val p = flat.toTrackPoint(
+            raceId = 1,
+            teamId = 1,
+            wallMs = 1_000L,
+            trustedMs = null,
+            bootCount = null,
+            idFactory = { "id" },
+        )
+        assertNull(p.altitude)
+        assertNull(p.verticalAccuracyMeters)
     }
 
     @Test

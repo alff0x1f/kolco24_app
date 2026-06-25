@@ -49,6 +49,8 @@ class TrackUploadTest {
         id: String,
         trustedMs: Long? = 1_718_900_000_123L,
         bootCount: Int? = 7,
+        altitude: Double? = 187.5,
+        verticalAccuracyMeters: Float? = 3.2f,
     ) = TrackPointEntity(
         id = id,
         raceId = 8,
@@ -56,6 +58,8 @@ class TrackUploadTest {
         lat = 55.75,
         lon = 37.61,
         accuracy = 12.4f,
+        altitude = altitude,
+        verticalAccuracyMeters = verticalAccuracyMeters,
         gpsTimeMs = 1_718_900_000_000L,
         elapsedRealtimeAt = 9_876_543L,
         bootCount = bootCount,
@@ -97,6 +101,8 @@ class TrackUploadTest {
         assertEquals(55.75, dto.lat, 0.0)
         assertEquals(37.61, dto.lon, 0.0)
         assertEquals(12.4f, dto.accuracy)
+        assertEquals(187.5, dto.altitude!!, 0.0)
+        assertEquals(3.2f, dto.verticalAccuracyMeters!!, 0f)
         assertEquals(1_718_900_000_000L, dto.gpsTimeMs)
         assertEquals(1_718_900_000_123L, dto.trustedMs)
         assertEquals(9_876_543L, dto.elapsedAt)
@@ -110,6 +116,15 @@ class TrackUploadTest {
 
         assertTrue(encoded.contains("\"trusted_ms\":null"))
         assertTrue(encoded.contains("\"boot_count\":null"))
+    }
+
+    @Test
+    fun toDto_nullAltitude_serializeAsJsonNull() {
+        val dto = entity("uuid-3", altitude = null, verticalAccuracyMeters = null).toDto()
+        val encoded = json.encodeToString(TrackPointDto.serializer(), dto)
+
+        assertTrue(encoded.contains("\"altitude\":null"))
+        assertTrue(encoded.contains("\"vertical_accuracy\":null"))
     }
 
     @Test
