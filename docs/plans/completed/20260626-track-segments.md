@@ -242,9 +242,9 @@ val s = segmentId ?: UUID.randomUUID().toString().also { segmentId = it } // def
 
 ### Task 7: [Final] Update documentation
 
-- [ ] update `CLAUDE.md` for the `segmentId` column + service minting + the
+- [x] update `CLAUDE.md` for the `segmentId` column + service minting + the
       removed length metric (the track bullets describe these in detail)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
