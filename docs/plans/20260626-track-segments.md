@@ -176,14 +176,14 @@ val s = segmentId ?: UUID.randomUUID().toString().also { segmentId = it } // def
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/TrackDtos.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackUploadTest.kt`
 
-- [ ] add `@SerialName("segment_id") val segmentId: String` to `TrackPointDto`
+- [x] add `@SerialName("segment_id") val segmentId: String` to `TrackPointDto`
       (place to match the `docs/design/UPLOAD.md` field order; update its KDoc)
-- [ ] `TrackPointEntity.toDto()`: pass `segmentId = segmentId` through
-- [ ] update the `TrackPointEntity(...)` fixtures in `TrackUploadTest` for the new
+- [x] `TrackPointEntity.toDto()`: pass `segmentId = segmentId` through
+- [x] update the `TrackPointEntity(...)` fixtures in `TrackUploadTest` for the new
       constructor arg
-- [ ] add an assertion that `segment_id` serializes in the request JSON and
+- [x] add an assertion that `segment_id` serializes in the request JSON and
       round-trips through entity→DTO
-- [ ] run `./gradlew testDebugUnitTest` — must pass before Task 4
+- [x] run `./gradlew testDebugUnitTest` — must pass before Task 4
 
 ### Task 4: Remove the «Длина» metric and dead length plumbing
 

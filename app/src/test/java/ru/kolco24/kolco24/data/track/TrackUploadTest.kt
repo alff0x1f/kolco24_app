@@ -99,6 +99,7 @@ class TrackUploadTest {
         val dto = entity("uuid-1").toDto()
 
         assertEquals("uuid-1", dto.id)
+        assertEquals("seg-1", dto.segmentId)
         assertEquals(55.75, dto.lat, 0.0)
         assertEquals(37.61, dto.lon, 0.0)
         assertEquals(12.4f, dto.accuracy)
@@ -108,6 +109,18 @@ class TrackUploadTest {
         assertEquals(1_718_900_000_123L, dto.trustedMs)
         assertEquals(9_876_543L, dto.elapsedAt)
         assertEquals(7, dto.bootCount)
+    }
+
+    @Test
+    fun toDto_carriesSegmentId_andSerializesAsSegmentIdJson() {
+        val dto = entity("uuid-seg").toDto()
+        assertEquals("seg-1", dto.segmentId)
+
+        val encoded = json.encodeToString(TrackPointDto.serializer(), dto)
+        assertTrue(encoded.contains("\"segment_id\":\"seg-1\""))
+
+        val roundTripped = json.decodeFromString(TrackPointDto.serializer(), encoded)
+        assertEquals("seg-1", roundTripped.segmentId)
     }
 
     @Test
