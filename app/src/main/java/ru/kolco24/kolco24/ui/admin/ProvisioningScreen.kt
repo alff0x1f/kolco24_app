@@ -153,7 +153,7 @@ fun ProvisioningScreen(
             container.legendRepository.tagsForRace(raceId)
         }.collectAsState(initial = emptyList())
         // Cached per-КП «уже привязано» counts, pre-seeded from the legend's tag rows.
-        val cachedCounts = remember(tags, raceId) { tags.filter { it.raceId == raceId }.groupingBy { it.point }.eachCount() }
+        val cachedCounts = remember(tags, raceId) { tags.filter { it.raceId == raceId }.groupingBy { it.checkpointId }.eachCount() }
 
         // App-scoped so the map survives activity rotation: the bind+write job holds a reference to
         // the AppContainer flow, not the composition, so a rotation mid-write still updates the rack.

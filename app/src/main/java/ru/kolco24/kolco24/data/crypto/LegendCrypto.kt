@@ -89,7 +89,7 @@ object LegendCrypto {
         encById: Map<Int, EncBlob>,
         json: Json,
     ): UnlockResult {
-        if (tag.iv == null && tag.ct == null) return UnlockResult.IdentityOnly(tag.point)
+        if (tag.iv == null && tag.ct == null) return UnlockResult.IdentityOnly(tag.checkpointId)
         if (tag.iv == null || tag.ct == null) return UnlockResult.Failed("malformed tag envelope: exactly one of iv/ct is null")
         return try {
             val bidStr = bid(code)
@@ -113,7 +113,7 @@ object LegendCrypto {
             if (revealed.isEmpty() && bundle.isNotEmpty()) {
                 return UnlockResult.Failed("no matching checkpoints in local cache — legend may be stale")
             }
-            UnlockResult.Revealed(tag.point, revealed)
+            UnlockResult.Revealed(tag.checkpointId, revealed)
         } catch (e: GeneralSecurityException) {
             UnlockResult.Failed(e.message ?: e.javaClass.simpleName)
         } catch (e: SerializationException) {
@@ -132,10 +132,10 @@ object LegendCrypto {
 data class EncBlob(val iv: String, val ct: String)
 
 /**
- * The minimal slice of a `tags[]` entry the engine needs: the CP it identifies (`point`) and the
- * `bundle_blob` envelope (`iv`/`ct`, both `null` for open-CP tags).
+ * The minimal slice of a `tags[]` entry the engine needs: the CP it identifies (`checkpointId`) and
+ * the `bundle_blob` envelope (`iv`/`ct`, both `null` for open-CP tags).
  */
-data class UnlockTag(val point: Int, val iv: String?, val ct: String?)
+data class UnlockTag(val checkpointId: Int, val iv: String?, val ct: String?)
 
 /** A checkpoint whose `{cost, description}` was just decrypted. */
 data class RevealedCheckpoint(val id: Int, val cost: Int, val description: String?)
@@ -143,10 +143,10 @@ data class RevealedCheckpoint(val id: Int, val cost: Int, val description: Strin
 /** Outcome of [LegendCrypto.unlock]. */
 sealed interface UnlockResult {
     /** The tag opened one or more locked CPs (possibly empty if it only unlocks unknown ids). */
-    data class Revealed(val point: Int, val checkpoints: List<RevealedCheckpoint>) : UnlockResult
+    data class Revealed(val checkpointId: Int, val checkpoints: List<RevealedCheckpoint>) : UnlockResult
 
-    /** Open-CP tag (`iv == null`): only identifies its `point`, nothing to decrypt. */
-    data class IdentityOnly(val point: Int) : UnlockResult
+    /** Open-CP tag (`iv == null`): only identifies its `checkpointId`, nothing to decrypt. */
+    data class IdentityOnly(val checkpointId: Int) : UnlockResult
 
     /** A crypto or parse failure (wrong key, tamper, malformed bundle). */
     data class Failed(val reason: String) : UnlockResult

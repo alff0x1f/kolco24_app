@@ -28,7 +28,7 @@ class MarkRepository(
     fun observeMarks(teamId: Int): Flow<List<MarkEntity>> = markDao.observeForTeam(teamId)
 
     /**
-     * Open a new take for [point] (КП chip just scanned). Generates a fresh UUID, snapshots the
+     * Open a new take for [checkpointId] (КП chip just scanned). Generates a fresh UUID, snapshots the
      * checkpoint metadata ([number]/[cost]) and roster size ([expectedCount]), seeds `present` with any
      * members already buffered before the chip ([bufferedMembers], deduplicated), recomputes `complete`,
      * and upserts the row. Returns the new id.
@@ -41,7 +41,7 @@ class MarkRepository(
     suspend fun startKpTake(
         raceId: Int,
         teamId: Int,
-        point: Int,
+        checkpointId: Int,
         number: Int,
         cost: Int,
         cpUid: String,
@@ -58,7 +58,7 @@ class MarkRepository(
                 id = id,
                 raceId = raceId,
                 teamId = teamId,
-                point = point,
+                checkpointId = checkpointId,
                 checkpointNumber = number,
                 cost = cost,
                 method = "nfc",
@@ -79,12 +79,12 @@ class MarkRepository(
 
     /**
      * Add one member ([numberInTeam]) to the take [markId] with set semantics (idempotent rescan).
-     * A missing row is a no-op. [point] is unused now that scoring is derived (kept for the call-site's
-     * readability and a future per-point recompute), so it is accepted but not consulted.
+     * A missing row is a no-op. [checkpointId] is unused now that scoring is derived (kept for the
+     * call-site's readability and a future per-checkpoint recompute), so it is accepted but not consulted.
      */
     suspend fun addMember(
         markId: String,
-        point: Int,
+        checkpointId: Int,
         numberInTeam: Int,
         expectedCount: Int,
         sample: TimeSample,
@@ -95,7 +95,7 @@ class MarkRepository(
 
 /** Distinct checkpoints scored (complete) across the given take events. */
 fun takenPointCount(marks: List<MarkEntity>): Int =
-    marks.filter { it.complete }.map { it.point }.distinct().size
+    marks.filter { it.complete }.map { it.checkpointId }.distinct().size
 
 /**
  * The set of checkpoint ids (points) scored by these marks — i.e. the team's "взято" checkpoints,
@@ -103,7 +103,7 @@ fun takenPointCount(marks: List<MarkEntity>): Int =
  * so that switching teams within a race shows each team's own progress.
  */
 fun takenPoints(marks: List<MarkEntity>): Set<Int> =
-    marks.filter { it.complete }.mapTo(HashSet()) { it.point }
+    marks.filter { it.complete }.mapTo(HashSet()) { it.checkpointId }
 
 /**
  * Sum of cost over distinct scored checkpoints — a repeat take of the same point does not double-count.
@@ -120,4 +120,4 @@ fun totalScore(marks: List<MarkEntity>): Int = totalScore(marks) { it.cost }
  * legend. This keeps the «Отметки» СУММА in step with the «Легенда» score after a server cost edit.
  */
 fun totalScore(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int =
-    marks.filter { it.complete }.distinctBy { it.point }.sumOf { costOf(it) }
+    marks.filter { it.complete }.distinctBy { it.checkpointId }.sumOf { costOf(it) }

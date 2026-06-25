@@ -64,7 +64,7 @@ class LegendRepository(
 
     /**
      * Offline-readable NFC tags of one race (one row per bound chip). The admin provisioning flow
-     * groups these by `point` to pre-seed each КП's «уже привязано» count.
+     * groups these by `checkpointId` to pre-seed each КП's «уже привязано» count.
      */
     fun tagsForRace(raceId: Int): Flow<List<TagEntity>> =
         tagDao.observeTagsForRace(raceId)
@@ -118,7 +118,7 @@ class LegendRepository(
     suspend fun unlock(raceId: Int, code: ByteArray): UnlockOutcome {
         val bid = LegendCrypto.bid(code)
         val tagEntity = tagDao.getByBid(bid, raceId) ?: return UnlockOutcome.Unknown
-        if (tagEntity.iv == null && tagEntity.ct == null) return UnlockOutcome.IdentityOnly(tagEntity.point)
+        if (tagEntity.iv == null && tagEntity.ct == null) return UnlockOutcome.IdentityOnly(tagEntity.checkpointId)
         if (tagEntity.iv == null || tagEntity.ct == null) return UnlockOutcome.Failed("malformed tag envelope")
         val encById = checkpointDao.getCheckpointsForRace(raceId)
             .mapNotNull { cp ->
@@ -130,7 +130,7 @@ class LegendRepository(
         val result = withContext(Dispatchers.Default) {
             LegendCrypto.unlock(
                 code = code,
-                tag = UnlockTag(tagEntity.point, tagEntity.iv, tagEntity.ct),
+                tag = UnlockTag(tagEntity.checkpointId, tagEntity.iv, tagEntity.ct),
                 encById = encById,
                 json = json,
             )
@@ -140,9 +140,9 @@ class LegendRepository(
                 for (cp in result.checkpoints) {
                     checkpointDao.reveal(cp.id, cp.cost, cp.description)
                 }
-                UnlockOutcome.Revealed(result.point, result.checkpoints.map { it.id })
+                UnlockOutcome.Revealed(result.checkpointId, result.checkpoints.map { it.id })
             }
-            is UnlockResult.IdentityOnly -> UnlockOutcome.IdentityOnly(result.point)
+            is UnlockResult.IdentityOnly -> UnlockOutcome.IdentityOnly(result.checkpointId)
             is UnlockResult.Failed -> UnlockOutcome.Failed(result.reason)
         }
     }
@@ -153,11 +153,11 @@ class LegendRepository(
  * [UnlockResult]). [Unknown] has no engine counterpart — it means the scanned `bid` matched no tag.
  */
 sealed interface UnlockOutcome {
-    /** Revealed [checkpointIds] were decrypted and persisted; the tag belongs to [point]. */
-    data class Revealed(val point: Int, val checkpointIds: List<Int>) : UnlockOutcome
+    /** Revealed [checkpointIds] were decrypted and persisted; the tag belongs to [checkpointId]. */
+    data class Revealed(val checkpointId: Int, val checkpointIds: List<Int>) : UnlockOutcome
 
-    /** Open-CP tag: only identifies its [point], nothing to decrypt. */
-    data class IdentityOnly(val point: Int) : UnlockOutcome
+    /** Open-CP tag: only identifies its [checkpointId], nothing to decrypt. */
+    data class IdentityOnly(val checkpointId: Int) : UnlockOutcome
 
     /** No tag matched the scanned `bid` (unknown tag for this race set). */
     data object Unknown : UnlockOutcome
@@ -189,7 +189,7 @@ private fun CheckpointDto.toEntity(raceId: Int): CheckpointEntity = CheckpointEn
 private fun TagDto.toEntity(raceId: Int): TagEntity = TagEntity(
     bid = bid,
     raceId = raceId,
-    point = point,
+    checkpointId = checkpointId,
     checkMethod = checkMethod,
     iv = iv,
     ct = ct,

@@ -58,7 +58,7 @@ data class EncDto(
 @Serializable
 data class TagDto(
     val bid: String,
-    @SerialName("checkpoint_id") val point: Int,
+    @SerialName("checkpoint_id") val checkpointId: Int,
     @SerialName("check_method") val checkMethod: String,
     val iv: String? = null,
     val ct: String? = null,

@@ -288,7 +288,7 @@ class LegendRepositoryTest {
                 TagEntity(
                     bid = LegendCrypto.bid(code),
                     raceId = 8,
-                    point = cpId,
+                    checkpointId = cpId,
                     checkMethod = "nfc",
                     iv = bundle.iv,
                     ct = bundle.ct,
@@ -319,7 +319,7 @@ class LegendRepositoryTest {
                 TagEntity(
                     bid = LegendCrypto.bid(code),
                     raceId = 8,
-                    point = 101,
+                    checkpointId = 101,
                     checkMethod = "nfc",
                     iv = null,
                     ct = null,
@@ -338,7 +338,7 @@ class LegendRepositoryTest {
                 TagEntity(
                     bid = LegendCrypto.bid(code),
                     raceId = 8,
-                    point = 101,
+                    checkpointId = 101,
                     checkMethod = "nfc",
                     iv = "someIv",
                     ct = null,
@@ -359,7 +359,7 @@ class LegendRepositoryTest {
                 TagEntity(
                     bid = LegendCrypto.bid(code),
                     raceId = 8,
-                    point = 102,
+                    checkpointId = 102,
                     checkMethod = "nfc",
                     iv = bundle.iv,
                     ct = tamperedCt,

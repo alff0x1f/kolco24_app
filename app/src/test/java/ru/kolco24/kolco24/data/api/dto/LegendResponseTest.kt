@@ -96,13 +96,13 @@ class LegendResponseTest {
         assertEquals(2, response.tags.size)
         val openTag = response.tags[0]
         assertEquals("a1b2c3d4e5f60718", openTag.bid)
-        assertEquals(101, openTag.point)
+        assertEquals(101, openTag.checkpointId)
         assertEquals("nfc", openTag.checkMethod)
         assertNull(openTag.iv)
         assertNull(openTag.ct)
 
         val lockedTag = response.tags[1]
-        assertEquals(103, lockedTag.point)
+        assertEquals(103, lockedTag.checkpointId)
         assertEquals("1d2e", lockedTag.iv)
         assertEquals("ff00", lockedTag.ct)
     }

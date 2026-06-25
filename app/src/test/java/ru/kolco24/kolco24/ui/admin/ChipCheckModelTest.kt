@@ -9,7 +9,7 @@ import ru.kolco24.kolco24.ui.legend.CheckpointColor
 class ChipCheckModelTest {
 
     private fun tag(bid: String, point: Int, checkMethod: String = "nfc"): TagEntity =
-        TagEntity(raceId = 1, bid = bid, point = point, checkMethod = checkMethod, iv = null, ct = null)
+        TagEntity(raceId = 1, bid = bid, checkpointId = point, checkMethod = checkMethod, iv = null, ct = null)
 
     private fun cp(id: Int, number: Int, cost: Int? = 5, color: String = ""): CheckpointEntity =
         CheckpointEntity(
@@ -78,7 +78,7 @@ class ChipCheckModelTest {
             checkpoint = null,
             chipsOnKp = 1,
         )
-        assertEquals(ChipCheckResult.Inconsistent(uid = "0411223344AABB", bid = "abc123", pointId = 99), result)
+        assertEquals(ChipCheckResult.Inconsistent(uid = "0411223344AABB", bid = "abc123", checkpointId = 99), result)
     }
 
     @Test

@@ -23,7 +23,7 @@ class ScanTagDecisionTest {
 
     private val checkpoints = mapOf(
         42 to cp(42, number = 7, cost = 50),
-        99 to cp(99, number = 12, cost = null), // legend not synced for this point
+        99 to cp(99, number = 12, cost = null), // legend not synced for this checkpoint
     )
 
     @Test
@@ -31,11 +31,11 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.Revealed(point = 42, checkpointIds = listOf(42)),
+            unlock = UnlockOutcome.Revealed(checkpointId = 42, checkpointIds = listOf(42)),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
-        assertEquals(ScanEvent.Kp(point = 42, number = 7, cost = 50, cpUid = uid, cpCode = "DEADBEEF"), event)
+        assertEquals(ScanEvent.Kp(checkpointId = 42, number = 7, cost = 50, cpUid = uid, cpCode = "DEADBEEF"), event)
     }
 
     @Test
@@ -43,11 +43,11 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.IdentityOnly(point = 42),
+            unlock = UnlockOutcome.IdentityOnly(checkpointId = 42),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
-        assertEquals(ScanEvent.Kp(point = 42, number = 7, cost = 50, cpUid = uid, cpCode = "DEADBEEF"), event)
+        assertEquals(ScanEvent.Kp(checkpointId = 42, number = 7, cost = 50, cpUid = uid, cpCode = "DEADBEEF"), event)
     }
 
     @Test
@@ -67,7 +67,7 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.Revealed(point = 99, checkpointIds = listOf(99)),
+            unlock = UnlockOutcome.Revealed(checkpointId = 99, checkpointIds = listOf(99)),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
@@ -75,11 +75,11 @@ class ScanTagDecisionTest {
     }
 
     @Test
-    fun code_pointMissingFromLegend_badKp() {
+    fun code_checkpointMissingFromLegend_badKp() {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.Revealed(point = 777, checkpointIds = listOf(777)),
+            unlock = UnlockOutcome.Revealed(checkpointId = 777, checkpointIds = listOf(777)),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )

@@ -146,7 +146,7 @@ fun CheckChipScreen(
         val tags = tagsState ?: emptyList()
         val checkpoints = checkpointsState ?: emptyList()
         val checkpointsById = remember(checkpoints) { checkpoints.associateBy { it.id } }
-        val countsByPoint = remember(tags) { tags.groupingBy { it.point }.eachCount() }
+        val countsByCheckpointId = remember(tags) { tags.groupingBy { it.checkpointId }.eachCount() }
 
         var lastResult by remember(raceId) { mutableStateOf<ChipCheckResult?>(null) }
         val recent = remember(raceId) { mutableStateListOf<ChipCheckResult>() }
@@ -157,7 +157,7 @@ fun CheckChipScreen(
         val dataReadyLatest = rememberUpdatedState(dataReady)
         val tagsLatest = rememberUpdatedState(tags)
         val cpByIdLatest = rememberUpdatedState(checkpointsById)
-        val countsLatest = rememberUpdatedState(countsByPoint)
+        val countsLatest = rememberUpdatedState(countsByCheckpointId)
 
         DisposableEffect(raceId) {
             val host = activity
@@ -173,8 +173,8 @@ fun CheckChipScreen(
                         val code = withContext(Dispatchers.IO) { readChipCode(tag) }
                         val bid = code?.let { LegendCrypto.bid(it) }
                         val tagRow = bid?.let { b -> tagsLatest.value.firstOrNull { it.bid == b } }
-                        val cp = tagRow?.let { cpByIdLatest.value[it.point] }
-                        val chipsOnKp = tagRow?.let { countsLatest.value[it.point] ?: 0 } ?: 0
+                        val cp = tagRow?.let { cpByIdLatest.value[it.checkpointId] }
+                        val chipsOnKp = tagRow?.let { countsLatest.value[it.checkpointId] ?: 0 } ?: 0
                         val result = classifyChipCheck(uid, bid, tagRow, cp, chipsOnKp)
                         lastResult = result
                         recent.add(0, result)
@@ -266,7 +266,7 @@ private fun CheckChipHero(
             is ChipCheckResult.Inconsistent -> MessageHero(
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Filled.Error,
-                title = "КП id=${result.pointId} нет в легенде — обновите данные",
+                title = "КП id=${result.checkpointId} нет в легенде — обновите данные",
                 uid = result.uid,
                 previousUid = previousUid,
                 diagnostic = "bid ${result.bid}",

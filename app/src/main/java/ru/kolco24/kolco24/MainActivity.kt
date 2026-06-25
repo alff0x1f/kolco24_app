@@ -375,7 +375,7 @@ sealed interface ScanInput {
  * Bookkeeping for the DB side of one «Отметить КП» session, mirroring [ScanScreen]'s UI session so
  * `onScanTag` can persist takes. A fresh instance is `remember`-ed each time the scan overlay opens.
  *
- * - [markId]/[point]/[expectedCount] describe the open take row (set on the КП scan).
+ * - [markId]/[checkpointId]/[expectedCount] describe the open take row (set on the КП scan).
  * - [buffer] holds member slots scanned **before** the КП chip; it is drained into [MarkRepository.startKpTake].
  * - [present] mirrors the slots already credited to the open take so a re-scan of an already-counted
  *   member is idempotent and does **not** refresh [lastScanAt] (mirrors [reduce]).
@@ -386,7 +386,7 @@ sealed interface ScanInput {
  */
 private class ScanTakeState {
     var markId: String? = null
-    var point: Int? = null
+    var checkpointId: Int? = null
     var expectedCount: Int = 0
     val buffer = mutableSetOf<Int>()
     val present = mutableSetOf<Int>()
@@ -602,13 +602,13 @@ private fun Kolco24AppRoot(
             .associate { it.numberInTeam to it.participantNumber }
     }
     val checkpointsById = remember(safeCheckpoints) { safeCheckpoints.associateBy { it.id } }
-    // Per-checkpoint color token (point id → server color), so «Отметки» tiles can paint the same
-    // leading color bar the Легенда rows use. Race-scoped public data, joined off the mark's point.
+    // Per-checkpoint color token (checkpoint id → server color), so «Отметки» tiles can paint the same
+    // leading color bar the Легенда rows use. Race-scoped public data, joined off the mark's checkpointId.
     val checkpointColors = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.color } }
-    // Live per-checkpoint cost (point id → current cost), so «Отметки» СУММА/tiles score off the latest
+    // Live per-checkpoint cost (checkpoint id → current cost), so «Отметки» СУММА/tiles score off the latest
     // legend value rather than the cost snapshotted onto the mark row at take time (which goes stale if
     // the organizer edits a КП cost afterwards). Locked CPs (null cost) are omitted; the mark snapshot
-    // fills in for any point missing from the map.
+    // fills in for any checkpoint missing from the map.
     val checkpointCosts = remember(safeCheckpoints) {
         safeCheckpoints.mapNotNull { cp -> cp.cost?.let { cp.id to it } }.toMap()
     }
@@ -953,7 +953,7 @@ private fun Kolco24AppRoot(
                         is ScanEvent.Kp -> {
                             // A new KP, an expired window, or a switch of CP starts a fresh take row;
                             // re-scanning the same KP within the window only re-stamps the window.
-                            if (expired || scanTake.markId == null || scanTake.point != event.point) {
+                            if (expired || scanTake.markId == null || scanTake.checkpointId != event.checkpointId) {
                                 // An expired window means the pre-KP buffer belongs to a dead session;
                                 // discard it so stale members are not credited to the new take.
                                 if (expired) scanTake.buffer.clear()
@@ -965,7 +965,7 @@ private fun Kolco24AppRoot(
                                     markRepo.startKpTake(
                                         raceId = raceId,
                                         teamId = teamId,
-                                        point = event.point,
+                                        checkpointId = event.checkpointId,
                                         number = event.number,
                                         cost = event.cost,
                                         cpUid = event.cpUid,
@@ -979,7 +979,7 @@ private fun Kolco24AppRoot(
                                     )
                                 }.await()
                                 scanTake.markId = id
-                                scanTake.point = event.point
+                                scanTake.checkpointId = event.checkpointId
                                 scanTake.expectedCount = rosterSize
                                 // The buffered members were drained into the take's present-set.
                                 scanTake.present.clear()
@@ -991,13 +991,13 @@ private fun Kolco24AppRoot(
                         is ScanEvent.Member -> {
                             if (expired) {
                                 scanTake.markId = null
-                                scanTake.point = null
+                                scanTake.checkpointId = null
                                 scanTake.buffer.clear()
                                 scanTake.present.clear()
                             }
                             val markId = scanTake.markId
-                            val point = scanTake.point
-                            if (markId == null || point == null) {
+                            val checkpointId = scanTake.checkpointId
+                            if (markId == null || checkpointId == null) {
                                 // No KP yet: hold the member until the КП chip lands. A re-tap of an
                                 // already-buffered member is idempotent and must not refresh the window.
                                 if (!scanTake.buffer.add(event.numberInTeam)) return@onScanTag event
@@ -1008,7 +1008,7 @@ private fun Kolco24AppRoot(
                                 container.applicationScope.async {
                                     markRepo.addMember(
                                         markId = markId,
-                                        point = point,
+                                        checkpointId = checkpointId,
                                         numberInTeam = event.numberInTeam,
                                         expectedCount = scanTake.expectedCount,
                                         // The touch-moment sample (monotonic window + trusted/wall/boot).

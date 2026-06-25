@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TagDao {
-    @Query("SELECT * FROM tags WHERE raceId = :raceId ORDER BY point, bid")
+    @Query("SELECT * FROM tags WHERE raceId = :raceId ORDER BY checkpointId, bid")
     fun observeTagsForRace(raceId: Int): Flow<List<TagEntity>>
 
     /** Looks up a scanned tag by its derived [bid] within [raceId]; `null` when the tag is unknown. */

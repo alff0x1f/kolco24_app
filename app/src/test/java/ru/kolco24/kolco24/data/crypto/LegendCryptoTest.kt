@@ -92,7 +92,7 @@ class LegendCryptoTest {
     @Ignore("GATED on the server crypto vector — see Prerequisite / TODO(server-vector).")
     @Test
     fun unlockRevealsCheckpointPlaintextFromVector() {
-        val tag = UnlockTag(point = CP_ID, iv = TAG_IV_B64, ct = TAG_CT_B64)
+        val tag = UnlockTag(checkpointId = CP_ID, iv = TAG_IV_B64, ct = TAG_CT_B64)
         val result = LegendCrypto.unlock(
             code = code,
             tag = tag,
@@ -110,7 +110,7 @@ class LegendCryptoTest {
     @Test
     fun unlockFailsOnTamperedCiphertext() {
         // No server vector required: any malformed envelope fails the GCM tag check → Failed.
-        val tag = UnlockTag(point = CP_ID, iv = TAG_IV_B64, ct = TAG_CT_B64)
+        val tag = UnlockTag(checkpointId = CP_ID, iv = TAG_IV_B64, ct = TAG_CT_B64)
         val result = LegendCrypto.unlock(
             code = code,
             tag = tag,
