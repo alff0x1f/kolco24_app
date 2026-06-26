@@ -15,6 +15,7 @@ import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.data.track.RawFix
 
 class MarkRepositoryTest {
 
@@ -153,6 +154,114 @@ class MarkRepositoryTest {
         assertEquals(2, repository.observeMarks(7).first().count { it.checkpointId == 10 })
     }
 
+    private fun fix(
+        lat: Double = 55.75,
+        lon: Double = 37.61,
+        accuracy: Float = 4.2f,
+        altitude: Double? = 150.0,
+        verticalAccuracy: Float? = 3.0f,
+        gpsTimeMs: Long = 1_700_000_000_000L,
+        elapsedNanos: Long = 5_000_000_000L,
+    ) = RawFix(
+        lat = lat,
+        lon = lon,
+        accuracy = accuracy,
+        altitude = altitude,
+        verticalAccuracyMeters = verticalAccuracy,
+        gpsTimeMs = gpsTimeMs,
+        elapsedRealtimeNanos = elapsedNanos,
+    )
+
+    @Test
+    fun attachLocation_writesAllLocColumns_withoutTouchingTakeState() = runTest {
+        val id = startTake(point = 10, expectedCount = 2, buffered = setOf(1, 2))
+        val before = markDao.getById(id)!!
+        assertTrue(before.complete)
+
+        repository.attachLocation(id, fix(elapsedNanos = 5_000_000_000L))
+
+        val mark = markDao.getById(id)!!
+        assertEquals(55.75, mark.locLat!!, 0.0)
+        assertEquals(37.61, mark.locLon!!, 0.0)
+        assertEquals(4.2f, mark.locAccuracy!!, 0.0f)
+        assertEquals(150.0, mark.locAltitude!!, 0.0)
+        assertEquals(3.0f, mark.locVerticalAccuracy!!, 0.0f)
+        assertEquals(1_700_000_000_000L, mark.locGpsTimeMs)
+        // elapsedRealtimeNanos / 1_000_000
+        assertEquals(5_000L, mark.locElapsedRealtimeAt)
+        // Take state is untouched.
+        assertEquals(before.present, mark.present)
+        assertEquals(before.complete, mark.complete)
+        assertEquals(before.takenAt, mark.takenAt)
+        assertEquals(before.trustedTakenAt, mark.trustedTakenAt)
+        assertEquals(before.elapsedRealtimeAt, mark.elapsedRealtimeAt)
+    }
+
+    @Test
+    fun attachLocation_nullFix_isNoOp() = runTest {
+        val id = startTake(point = 10)
+        repository.attachLocation(id, null)
+        val mark = markDao.getById(id)!!
+        assertNull(mark.locLat)
+        assertNull(mark.locLon)
+        assertNull(mark.locAccuracy)
+        assertNull(mark.locAltitude)
+        assertNull(mark.locVerticalAccuracy)
+        assertNull(mark.locGpsTimeMs)
+        assertNull(mark.locElapsedRealtimeAt)
+    }
+
+    @Test
+    fun attachLocation_nullableFixFields_persistAsNull() = runTest {
+        val id = startTake(point = 10)
+        repository.attachLocation(id, fix(altitude = null, verticalAccuracy = null))
+        val mark = markDao.getById(id)!!
+        assertNull(mark.locAltitude)
+        assertNull(mark.locVerticalAccuracy)
+        // The mandatory coordinate is still written.
+        assertEquals(55.75, mark.locLat!!, 0.0)
+    }
+
+    @Test
+    fun attachLocation_repeatTakeOfSamePoint_eachRowGetsOwnFix() = runTest {
+        val first = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 1_000L))
+        val second = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 5_000L))
+        repository.attachLocation(first, fix(lat = 55.10, elapsedNanos = 1_000_000_000L))
+        repository.attachLocation(second, fix(lat = 55.20, elapsedNanos = 9_000_000_000L))
+        assertEquals(55.10, markDao.getById(first)!!.locLat!!, 0.0)
+        assertEquals(1_000L, markDao.getById(first)!!.locElapsedRealtimeAt)
+        assertEquals(55.20, markDao.getById(second)!!.locLat!!, 0.0)
+        assertEquals(9_000L, markDao.getById(second)!!.locElapsedRealtimeAt)
+    }
+
+    @Test
+    fun attachLocation_noAccuracySentinel_writesNullAccuracy() = runTest {
+        val id = startTake(point = 10)
+        repository.attachLocation(id, fix(accuracy = Float.MAX_VALUE))
+        val mark = markDao.getById(id)!!
+        assertNull(mark.locAccuracy)
+        // Coordinate is still written; only accuracy is null.
+        assertEquals(55.75, mark.locLat!!, 0.0)
+    }
+
+    @Test
+    fun attachLocation_zeroGpsTimeMs_persistsAsNull() = runTest {
+        // Location.time is 0L when the provider has not set a valid satellite time (e.g. network fixes).
+        // A zero gpsTimeMs is indistinguishable from "epoch zero" at the server; store null instead.
+        val id = startTake(point = 10)
+        repository.attachLocation(id, fix(gpsTimeMs = 0L))
+        assertNull(markDao.getById(id)!!.locGpsTimeMs)
+        // The coordinate itself is still written.
+        assertEquals(55.75, markDao.getById(id)!!.locLat!!, 0.0)
+    }
+
+    @Test
+    fun attachLocation_missingRow_doesNotCorruptExistingRow() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        repository.attachLocation("nope", fix(lat = 55.0))
+        assertNull(markDao.getById(id)!!.locLat)
+    }
+
     @Test
     fun derivation_distinctScoredPointsAndScore() = runTest {
         startTake(point = 10, cost = 5, expectedCount = 1, buffered = setOf(1))
@@ -178,5 +287,33 @@ private class FakeMarkDao : MarkDao {
 
     override suspend fun upsert(mark: MarkEntity) {
         rows.value = rows.value.filterNot { it.id == mark.id } + mark
+    }
+
+    override suspend fun attachLocation(
+        id: String,
+        lat: Double,
+        lon: Double,
+        accuracy: Float?,
+        altitude: Double?,
+        verticalAccuracy: Float?,
+        gpsTimeMs: Long?,
+        elapsedRealtimeAt: Long,
+    ) {
+        // Column-scoped: only the loc* columns change; a missing row is a no-op.
+        rows.value = rows.value.map { row ->
+            if (row.id == id) {
+                row.copy(
+                    locLat = lat,
+                    locLon = lon,
+                    locAccuracy = accuracy,
+                    locAltitude = altitude,
+                    locVerticalAccuracy = verticalAccuracy,
+                    locGpsTimeMs = gpsTimeMs,
+                    locElapsedRealtimeAt = elapsedRealtimeAt,
+                )
+            } else {
+                row
+            }
+        }
     }
 }

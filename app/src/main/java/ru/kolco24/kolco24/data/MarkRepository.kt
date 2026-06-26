@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.data.track.RawFix
 
 /**
  * Single source of truth for the **local-only** checkpoint-taking events (взятия КП). Wraps [MarkDao]
@@ -90,6 +91,27 @@ class MarkRepository(
         sample: TimeSample,
     ) {
         markDao.addMember(markId, numberInTeam, sample.wallMs, expectedCount)
+    }
+
+    /**
+     * Attach the take-place GPS fix to take [markId] (second phase, fire-and-forget like a late
+     * [addMember]). A null [fix] (no permission / GPS off / no provider / timeout / stale-cache reject)
+     * is a no-op — the take row simply keeps `locLat == null`, its "no coordinate" sentinel. Otherwise
+     * the 7 `loc*` columns are written column-scoped (see [MarkDao.attachLocation]); the monotonic
+     * [RawFix.elapsedRealtimeNanos] is converted to millis for `locElapsedRealtimeAt`.
+     */
+    suspend fun attachLocation(markId: String, fix: RawFix?) {
+        if (fix == null) return
+        markDao.attachLocation(
+            id = markId,
+            lat = fix.lat,
+            lon = fix.lon,
+            accuracy = fix.accuracy.takeIf { it != Float.MAX_VALUE },
+            altitude = fix.altitude,
+            verticalAccuracy = fix.verticalAccuracyMeters,
+            gpsTimeMs = fix.gpsTimeMs.takeIf { it > 0L },
+            elapsedRealtimeAt = fix.elapsedRealtimeNanos / 1_000_000,
+        )
     }
 }
 
