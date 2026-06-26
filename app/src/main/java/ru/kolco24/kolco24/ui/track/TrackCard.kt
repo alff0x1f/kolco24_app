@@ -53,12 +53,14 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  * destructive action and was moved out of this frequently-visited tab to avoid accidental taps.
  *
  * Not unit-tested (Compose, per repo convention). Track length is computed server-side from the
- * per-point `segment_id`, so there is no on-device length metric.
+ * per-point `segment_id`, so there is no on-device length metric — instead the metrics show the
+ * number of recording sessions ([segmentCount], distinct `segment_id`s) the host derives.
  */
 @Composable
 fun TrackCard(
     state: TrackState,
     pointCount: Int,
+    segmentCount: Int,
     hasTeam: Boolean,
     degradedAccuracy: Boolean,
     firstPointTime: String?,
@@ -103,6 +105,7 @@ fun TrackCard(
                     if (pointCount > 0) {
                         TrackMetrics(
                             pointCount = pointCount,
+                            segmentCount = segmentCount,
                             firstPointTime = firstPointTime,
                             lastPointTime = lastPointTime,
                         )
@@ -186,11 +189,13 @@ private fun PulsingDot() {
 @Composable
 private fun TrackMetrics(
     pointCount: Int,
+    segmentCount: Int,
     firstPointTime: String?,
     lastPointTime: String?,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Metric(label = "Точек", value = pointCount.toString())
+        Metric(label = "Сегментов", value = segmentCount.toString())
         val span = when {
             firstPointTime != null && lastPointTime != null -> "$firstPointTime–$lastPointTime"
             firstPointTime != null -> firstPointTime

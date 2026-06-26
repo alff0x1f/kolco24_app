@@ -567,6 +567,10 @@ private fun Kolco24AppRoot(
     val trackUsable = remember(safeTrack) { filterPoints(safeTrack).sortedBy { it.elapsedRealtimeAt } }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
+    // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
+    // points so a session of only coarse fixes — dropped by filterPoints — still counts, matching the
+    // raw «Точек» count rather than the accuracy-filtered span.
+    val trackSegmentCount = remember(safeTrack) { safeTrack.mapTo(HashSet()) { it.segmentId }.size }
     // Degraded accuracy = network is available but GPS is not enabled (no chip or toggle off) — the
     // track will be coarse but recording is still allowed (the engine falls back to network).
     // Read once at composition; runtime GPS toggling is not tracked (no recomposition trigger needed).
@@ -883,6 +887,7 @@ private fun Kolco24AppRoot(
                         onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
+                        trackSegmentCount = trackSegmentCount,
                         trackDegradedAccuracy = degradedAccuracy,
                         trackFirstPointTime = trackFirstTime,
                         trackLastPointTime = trackLastTime,
