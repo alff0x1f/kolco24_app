@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -151,10 +152,12 @@ fun MarksScreen(
     memberCount: Int = 0,
     boundCount: Int = 0,
     trackRecording: Boolean = false,
+    locationGranted: Boolean = true,
     onChooseTeam: () -> Unit = {},
     onBindChips: () -> Unit = {},
     onOpenNfcSettings: () -> Unit = {},
     onStartTrack: () -> Unit = {},
+    onRequestLocation: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val takenKp = takenPointCount(marks)
@@ -197,10 +200,12 @@ fun MarksScreen(
                             memberCount = memberCount,
                             boundCount = boundCount,
                             trackRecording = trackRecording,
+                            locationGranted = locationGranted,
                             onChooseTeam = onChooseTeam,
                             onBindChips = onBindChips,
                             onOpenNfcSettings = onOpenNfcSettings,
                             onStartTrack = onStartTrack,
+                            onRequestLocation = onRequestLocation,
                             modifier = Modifier.padding(top = 40.dp),
                         )
                     }
@@ -265,6 +270,10 @@ fun MarksScreen(
  *
  * [nfcDisabled] (NFC present but switched off) is checked before [nfcAvailable] so the disabled branch
  * with its «Включить NFC» CTA wins; `!nfcAvailable && !nfcDisabled` is then unambiguously no-hardware.
+ *
+ * In the ready state, when [locationGranted] is false a [LocationNudge] is shown above the track reminder:
+ * a КП take stamps a one-shot GPS coordinate (anti-cheat proof the team was physically there), so the
+ * pre-start checklist asks for location permission while the team can still grant it calmly.
  */
 @Composable
 private fun MarksEmpty(
@@ -274,10 +283,12 @@ private fun MarksEmpty(
     memberCount: Int,
     boundCount: Int,
     trackRecording: Boolean,
+    locationGranted: Boolean,
     onChooseTeam: () -> Unit,
     onBindChips: () -> Unit,
     onOpenNfcSettings: () -> Unit,
     onStartTrack: () -> Unit,
+    onRequestLocation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val needsBinding = memberCount > 0 && boundCount < memberCount
@@ -375,9 +386,66 @@ private fun MarksEmpty(
             }
         }
 
+        // Anti-cheat coordinate nudge: only in the ready state (alongside the track reminder), and only
+        // while permission is missing — once granted there is nothing to ask for. Shown above the track
+        // nudge so the «can we even stamp the take?» prerequisite leads the optional «start track» step.
+        if (content.trackNudge && !locationGranted) {
+            Spacer(Modifier.height(28.dp))
+            LocationNudge(onRequest = onRequestLocation)
+        }
+
         if (content.trackNudge) {
             Spacer(Modifier.height(28.dp))
             TrackNudge(recording = trackRecording, onStart = onStartTrack)
+        }
+    }
+}
+
+/**
+ * Pre-start location-permission reminder shown under the ready empty state when foreground location is
+ * not yet granted. A КП take stamps a one-shot GPS coordinate as anti-cheat proof the team was at the
+ * checkpoint; without permission the take still lands, just without that proof. Tapping the card asks for
+ * the permission (or routes to app settings on a permanent denial — the host decides). Mirrors the
+ * [TrackNudge] card vocabulary so it reads as part of the same pre-start checklist.
+ */
+@Composable
+private fun LocationNudge(onRequest: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onRequest)
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(OrangeCta, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.LocationOn,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Разрешите геолокацию",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Координата на КП подтверждает, что вы были на точке",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

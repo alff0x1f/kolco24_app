@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "9f62b3690a56153563fefe99f3225897",
+    "identityHash": "6970b91a6f2dd8f735fef15c8d2db80f",
     "entities": [
       {
         "tableName": "races",
@@ -485,7 +485,7 @@
       },
       {
         "tableName": "marks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `raceId` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, `checkpointId` INTEGER NOT NULL, `checkpointNumber` INTEGER NOT NULL, `cost` INTEGER NOT NULL, `method` TEXT NOT NULL, `cpUid` TEXT NOT NULL, `cpCode` TEXT NOT NULL, `present` TEXT NOT NULL, `expectedCount` INTEGER NOT NULL, `complete` INTEGER NOT NULL, `photoPath` TEXT, `takenAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `uploadedLocal` INTEGER NOT NULL, `uploadedCloud` INTEGER NOT NULL, `trustedTakenAt` INTEGER, `elapsedRealtimeAt` INTEGER, `bootCount` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `raceId` INTEGER NOT NULL, `teamId` INTEGER NOT NULL, `checkpointId` INTEGER NOT NULL, `checkpointNumber` INTEGER NOT NULL, `cost` INTEGER NOT NULL, `method` TEXT NOT NULL, `cpUid` TEXT NOT NULL, `cpCode` TEXT NOT NULL, `present` TEXT NOT NULL, `expectedCount` INTEGER NOT NULL, `complete` INTEGER NOT NULL, `photoPath` TEXT, `takenAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `uploadedLocal` INTEGER NOT NULL, `uploadedCloud` INTEGER NOT NULL, `trustedTakenAt` INTEGER, `elapsedRealtimeAt` INTEGER, `bootCount` INTEGER, `locLat` REAL, `locLon` REAL, `locAccuracy` REAL, `locAltitude` REAL, `locVerticalAccuracy` REAL, `locGpsTimeMs` INTEGER, `locElapsedRealtimeAt` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -601,6 +601,41 @@
           {
             "fieldPath": "bootCount",
             "columnName": "bootCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "locLat",
+            "columnName": "locLat",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "locLon",
+            "columnName": "locLon",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "locAccuracy",
+            "columnName": "locAccuracy",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "locAltitude",
+            "columnName": "locAltitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "locVerticalAccuracy",
+            "columnName": "locVerticalAccuracy",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "locGpsTimeMs",
+            "columnName": "locGpsTimeMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "locElapsedRealtimeAt",
+            "columnName": "locElapsedRealtimeAt",
             "affinity": "INTEGER"
           }
         ],
@@ -782,7 +817,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9f62b3690a56153563fefe99f3225897')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6970b91a6f2dd8f735fef15c8d2db80f')"
     ]
   }
 }

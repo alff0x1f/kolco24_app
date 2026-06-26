@@ -27,6 +27,8 @@ import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
+import ru.kolco24.kolco24.data.track.CurrentLocationProvider
+import ru.kolco24.kolco24.data.track.LocationEngineFactory
 import ru.kolco24.kolco24.data.track.TrackRepository
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.admin.ProvisionState
@@ -212,6 +214,14 @@ class AppContainer(private val context: Context) {
             cloudUploader = { raceId, teamId, points -> apiClient.uploadTrack(raceId, teamId, points) },
             localUploader = { raceId, teamId, points -> localApiClient.uploadTrack(raceId, teamId, points) },
         )
+    }
+
+    /**
+     * One-shot GPS provider for the anti-fraud checkpoint-take coordinate: fires a fresh fix the
+     * moment a КП is scanned (Fused/Legacy chosen by GMS availability), independent of track recording.
+     */
+    val currentLocationProvider: CurrentLocationProvider by lazy {
+        LocationEngineFactory.createCurrentLocationProvider(context)
     }
 
     /** GPS-track recording state: written by `TrackRecordingService`, read by the UI. */

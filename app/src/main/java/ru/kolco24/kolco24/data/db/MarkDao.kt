@@ -40,4 +40,29 @@ interface MarkDao {
             ),
         )
     }
+
+    /**
+     * Attach the take-place GPS fix to an existing take. **Column-scoped** on purpose: it writes only
+     * the 7 `loc*` columns and never touches `present`/`complete`/the take times. This runs
+     * fire-and-forget on the application scope **in parallel** with the window's [addMember] calls, so a
+     * full-row read-modify-write (like [addMember]) would lose-update — a late location write would roll
+     * back `present`/`complete`, or an [addMember] would clobber the coordinate. A column-scoped `UPDATE`
+     * serializes atomically around [addMember]'s `@Transaction` (SQLite won't interleave it) and touches
+     * only the `loc*` columns, so there is no race. A missing row is a silent no-op.
+     */
+    @Query(
+        "UPDATE marks SET locLat = :lat, locLon = :lon, locAccuracy = :accuracy, " +
+            "locAltitude = :altitude, locVerticalAccuracy = :verticalAccuracy, " +
+            "locGpsTimeMs = :gpsTimeMs, locElapsedRealtimeAt = :elapsedRealtimeAt WHERE id = :id",
+    )
+    suspend fun attachLocation(
+        id: String,
+        lat: Double,
+        lon: Double,
+        accuracy: Float?,
+        altitude: Double?,
+        verticalAccuracy: Float?,
+        gpsTimeMs: Long?,
+        elapsedRealtimeAt: Long,
+    )
 }

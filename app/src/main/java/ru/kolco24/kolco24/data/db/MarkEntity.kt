@@ -57,4 +57,35 @@ data class MarkEntity(
      * when the boot count could not be read.
      */
     val bootCount: Int? = null,
+    /**
+     * GPS latitude of the **place** where the КП was taken (anti-cheat / physical-presence proof). A
+     * one-shot fresh fix is requested the moment the КП chip is scanned and written here asynchronously
+     * (two-phase like [present]), so it works even when track recording is off. NULL = no fix obtained
+     * (no permission / GPS off / no provider / timeout); `locLat == null` is the "no coordinate"
+     * sentinel. Paired with [locLon].
+     */
+    val locLat: Double? = null,
+    /** GPS longitude of the take place (see [locLat]). NULL together with [locLat] when no fix. */
+    val locLon: Double? = null,
+    /**
+     * Horizontal accuracy in meters (`Location.accuracy`) of the take fix — the **key anti-cheat
+     * signal**: it lets the server judge how trustworthy [locLat]/[locLon] are. NULL when no fix.
+     */
+    val locAccuracy: Float? = null,
+    /** Altitude in meters above the WGS84 ellipsoid (`Location.altitude`), or NULL when unavailable. */
+    val locAltitude: Double? = null,
+    /**
+     * Vertical accuracy in meters (`Location.verticalAccuracyMeters`, API 26+) of [locAltitude]. Stored
+     * alongside the altitude because without it the altitude is a weak anti-cheat signal. NULL when
+     * unavailable.
+     */
+    val locVerticalAccuracy: Float? = null,
+    /** Satellite time of the take fix (`Location.time`, ms since epoch). NULL when no fix. */
+    val locGpsTimeMs: Long? = null,
+    /**
+     * Monotonic moment of the take fix (`Location.elapsedRealtimeNanos / 1_000_000`). Compared against
+     * the take's own [elapsedRealtimeAt] it gives the **age of the fix** (Δ) at take time — a key
+     * anti-cheat signal (a stale fix is suspect). NULL when no fix.
+     */
+    val locElapsedRealtimeAt: Long? = null,
 )
