@@ -70,6 +70,7 @@ import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
 import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
+import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
 import ru.kolco24.kolco24.ui.theme.CpColorBlue
@@ -503,7 +504,7 @@ fun HeroCheckpointCard(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = cost?.let { "$it баллов" } ?: "—",
+                    text = cost?.let { "$it ${pluralRu(it, "балл", "балла", "баллов")}" } ?: "—",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

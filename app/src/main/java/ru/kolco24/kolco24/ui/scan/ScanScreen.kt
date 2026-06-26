@@ -76,6 +76,7 @@ import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.ScanInput
 import ru.kolco24.kolco24.data.db.TeamMemberItem
+import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.ui.common.ScanClockBanner
@@ -474,18 +475,9 @@ private fun CostStat(cost: Int?, modifier: Modifier = Modifier) {
     }
 }
 
-/** Russian plural for «балл»: 1 балл · 2–4 балла · 5–20/0 баллов (declension by last digit pair). */
-private fun pointsWord(cost: Int?): String {
-    val n = cost ?: return "баллов"
-    val mod100 = n % 100
-    val mod10 = n % 10
-    return when {
-        mod100 in 11..14 -> "баллов"
-        mod10 == 1 -> "балл"
-        mod10 in 2..4 -> "балла"
-        else -> "баллов"
-    }
-}
+/** Russian plural for «балл»: 1 балл · 2–4 балла · 5–20/0 баллов. */
+private fun pointsWord(cost: Int?): String =
+    cost?.let { pluralRu(it, "балл", "балла", "баллов") } ?: "баллов"
 
 /**
  * The contactless ))) glyph printed on every checkpoint sheet, drawn as three concentric arcs off a
