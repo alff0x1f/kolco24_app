@@ -2,6 +2,7 @@ package ru.kolco24.kolco24
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
 import android.nfc.NfcAdapter
@@ -17,6 +18,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -206,6 +208,14 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     var nfcState by mutableStateOf(NfcState.NoHardware)
         private set
 
+    /**
+     * Foreground location-permission state, recomputed on every resume so a grant made from system
+     * settings (returning to the app) updates the mark-coordinate nudge. Composables observe it to
+     * decide whether to show the «разрешите геолокацию» nudge in the Отметки empty state.
+     */
+    var locationGranted by mutableStateOf(false)
+        private set
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Set the real window background to match the persisted theme before the first Compose
@@ -273,6 +283,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         if (nfcState == NfcState.Available) {
             adapter!!.enableReaderMode(this, this, READER_FLAGS, null)
         }
+        locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onPause() {
@@ -741,6 +753,64 @@ private fun Kolco24AppRoot(
         }
     }
 
+    // A separate location-permission launcher for the checkpoint-mark coordinate capture. Unlike
+    // trackPermissionLauncher (whose grant starts the foreground track service), this one only updates
+    // the permission state — requesting location to stamp a mark must never start track recording. The
+    // one-shot CurrentLocationProvider silently returns null on denial, so the mark just lands without a
+    // coordinate and scanning is never blocked. Shares hasRequestedLocation (one OS-wide location
+    // permission) so we ask at most once across both paths, and routes a permanent denial to the same
+    // app-settings dialog as the track path.
+    val scanPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        // Snapshot before updating so the permanent-denial guard distinguishes a first-ever denial
+        // (alreadyRequested == false) from a subsequent one — same logic as trackPermissionLauncher.
+        val alreadyRequested = hasRequestedLocation
+        hasRequestedLocation = true
+        if (!granted) {
+            val permanent = alreadyRequested && activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (permanent) showLocationDeniedDialog = true
+        }
+    }
+    // On the first scan-overlay open this session, proactively request foreground location so the
+    // mark-coordinate capture has permission. Only ask once (hasRequestedLocation, shared with the track
+    // path) and only when not already granted. Denial never blocks the scan — the provider returns null.
+    LaunchedEffect(showScan) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (showScan && !hasRequestedLocation && !granted) {
+            scanPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
+            )
+        }
+    }
+    // The mark-coordinate nudge button: ask for foreground location, or route to app settings when the
+    // permission was permanently denied (a fresh request would be silently ignored). Reuses the same
+    // scanPermissionLauncher as the first-scan fallback (never starts track recording) and the existing
+    // showLocationDeniedDialog → ACTION_APPLICATION_DETAILS_SETTINGS deep-link for the permanent case.
+    val onRequestMarkLocation: () -> Unit = {
+        val permanent = hasRequestedLocation && activity != null &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (permanent) {
+            showLocationDeniedDialog = true
+        } else {
+            scanPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
+            )
+        }
+    }
+
     // Mirror the roster-filtered bound uids onto the Activity so the binder-thread idle path can
     // recognize a bound bracelet (open the overlay) without touching Compose state. A coarse open-gate
     // only: it may briefly lag a team switch, so a stale bracelet could open an overlay that then reads
@@ -898,10 +968,12 @@ private fun Kolco24AppRoot(
                         memberCount = teamForTab?.members?.size ?: 0,
                         boundCount = teamForTab?.members?.count { bindings.containsKey(it.numberInTeam) } ?: 0,
                         trackRecording = (trackState as? TrackState.Recording)?.teamId == selectedTeamId,
+                        locationGranted = activity?.locationGranted ?: false,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
                         onBindChips = { scope.launch { pagerState.animateScrollToPage(2) } },
                         onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                         onStartTrack = onStartTrack,
+                        onRequestLocation = onRequestMarkLocation,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -1026,6 +1098,13 @@ private fun Kolco24AppRoot(
                                     )
                                 }.await()
                                 scanTake.markId = id
+                                // Anti-fraud: capture a fresh one-shot GPS fix for THIS new take row
+                                // only (not a re-stamp, not addMember). Fire-and-forget on
+                                // applicationScope so the slow GPS wait can't block the scan window;
+                                // attachLocation is a no-op when the fix is null (no permission/GPS).
+                                container.applicationScope.launch {
+                                    markRepo.attachLocation(id, container.currentLocationProvider.current())
+                                }
                                 scanTake.checkpointId = event.checkpointId
                                 scanTake.expectedCount = rosterSize
                                 // The buffered members were drained into the take's present-set.
