@@ -24,4 +24,18 @@ object LocationEngineFactory {
             EngineType.Legacy -> LegacyLocationEngine(context, profile)
         }
     }
+
+    /**
+     * Build the one-shot [CurrentLocationProvider] for [context] (anti-fraud take coordinate), choosing
+     * by the same pure [chooseEngineType] as [create] — Fused when GMS is present, else Legacy. Thin
+     * adapter, untested per repo convention.
+     */
+    fun createCurrentLocationProvider(context: Context): CurrentLocationProvider {
+        val gmsAvailable = GoogleApiAvailability.getInstance()
+            .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
+        return when (chooseEngineType(gmsAvailable)) {
+            EngineType.Fused -> FusedCurrentLocationProvider(context)
+            EngineType.Legacy -> LegacyCurrentLocationProvider(context)
+        }
+    }
 }

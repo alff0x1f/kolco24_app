@@ -4,9 +4,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Covers the pure engine-selection decision. The real engines ([FusedLocationEngine]/
- * [LegacyLocationEngine]) and the Android [LocationEngineFactory.create] adapter are not unit-tested
- * by repo convention — they only wrap platform/GMS APIs.
+ * Covers the pure engine-selection decision shared by both [LocationEngineFactory.create] and
+ * [LocationEngineFactory.createCurrentLocationProvider]. The real engines ([FusedLocationEngine]/
+ * [LegacyLocationEngine]), the one-shot providers ([FusedCurrentLocationProvider]/
+ * [LegacyCurrentLocationProvider]), and the Android `create*` adapters are not unit-tested by repo
+ * convention — they only wrap platform/GMS APIs.
  */
 class LocationEngineFactoryTest {
 
