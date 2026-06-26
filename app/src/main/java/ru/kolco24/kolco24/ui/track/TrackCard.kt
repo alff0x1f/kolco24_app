@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 /**
@@ -152,7 +153,7 @@ private fun RecordingHeader(pointCount: Int) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "$pointCount точек",
+                text = pointsLabel(pointCount),
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
 import ru.kolco24.kolco24.data.track.TrackProfile
+import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.data.track.TrackState
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -316,7 +317,7 @@ class TrackRecordingService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle("Идёт запись трека")
-            .setContentText("$pointCount точек")
+            .setContentText(pointsLabel(pointCount))
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(contentIntent)
