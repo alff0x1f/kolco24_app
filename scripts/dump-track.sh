@@ -12,9 +12,12 @@
 #   ./scripts/dump-track.sh                 # all points -> track.gpx
 #   ./scripts/dump-track.sh team7.gpx 7     # only teamId=7 -> team7.gpx
 #
+# Each recording session (one «Начать запись» tap) has its own segmentId; the GPX is split into one
+# <trkseg> per segment so a stop->start gap is two polylines, never a teleport line across the map.
+#
 # Raw timestamp check (to compare trustedMs vs gpsTimeMs vs wallMs, plus elevation):
 #   sqlite3 /tmp/kolco24-track.db \
-#     'SELECT lat,lon,accuracy,altitude,verticalAccuracyMeters,gpsTimeMs,trustedMs,wallMs,bootCount FROM track_points ORDER BY elapsedRealtimeAt'
+#     'SELECT segmentId,lat,lon,accuracy,altitude,verticalAccuracyMeters,gpsTimeMs,trustedMs,wallMs,bootCount FROM track_points ORDER BY segmentId,elapsedRealtimeAt'
 set -euo pipefail
 
 PKG=ru.kolco24.kolco24
@@ -63,17 +66,31 @@ WHERE=""
 # concat would null the whole row and drop the point, so it's gated by CASE.
 # accuracy (meters) is stuffed into <hdop> as a loose visual hint; viewers tolerate it.
 # GPX schema order inside <trkpt> is <ele> then <time>, so ele comes first.
+#
+# Each row is prefixed with its segmentId + a TAB; awk opens a fresh <trkseg> whenever the
+# segmentId changes, so each recording session is an independent polyline (no teleport line
+# bridging a stop->start gap). Rows are grouped by segment and the segments are emitted in
+# chronological order (by each segment's earliest point), points within a segment by capture time.
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
-  echo '<gpx version="1.1" creator="kolco24" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+  echo '<gpx version="1.1" creator="kolco24" xmlns="http://www.topografix.com/GPX/1/1"><trk>'
   sqlite3 "$DB" \
-    "SELECT '<trkpt lat=\"'||lat||'\" lon=\"'||lon||'\">'||
+    "SELECT IFNULL(segmentId,'')||char(9)||
+            '<trkpt lat=\"'||lat||'\" lon=\"'||lon||'\">'||
             CASE WHEN altitude IS NOT NULL THEN '<ele>'||altitude||'</ele>' ELSE '' END||
             '<time>'||strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(trustedMs,gpsTimeMs,wallMs)/1000, 'unixepoch')||'</time>'||
             '<hdop>'||accuracy||'</hdop></trkpt>'
-     FROM track_points $WHERE ORDER BY elapsedRealtimeAt ASC;"
-  echo '</trkseg></trk></gpx>'
+     FROM track_points $WHERE
+     ORDER BY min(elapsedRealtimeAt) OVER (PARTITION BY segmentId), segmentId, elapsedRealtimeAt ASC;" |
+  awk -F'\t' '
+    NR==1            { seg=$1; print "<trkseg>" }
+    NR>1 && $1!=seg  { print "</trkseg>"; print "<trkseg>"; seg=$1 }
+                     { print $2 }
+    END              { if (NR>0) print "</trkseg>" }
+  '
+  echo '</trk></gpx>'
 } > "$OUT"
 
 COUNT=$(sqlite3 "$DB" "SELECT count(*) FROM track_points $WHERE;")
-echo "wrote $OUT ($COUNT points); raw db at $DB"
+SEGMENTS=$(sqlite3 "$DB" "SELECT count(DISTINCT segmentId) FROM track_points $WHERE;")
+echo "wrote $OUT ($COUNT points, $SEGMENTS segments); raw db at $DB"

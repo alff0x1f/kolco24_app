@@ -60,9 +60,10 @@ class TrackRepository(
      *   per-point wall fallback (mirror of `MarkEntity` `trusted ?: wall`) is honest under Fused
      *   batching where the whole batch is inserted at one wall instant.
      *
-     * An empty batch is a no-op (avoids snapshotting clocks for nothing).
+     * An empty batch is a no-op (avoids snapshotting clocks for nothing). [segmentId] is the
+     * recording-session id (one per «Начать запись» tap), stamped onto every row in the batch.
      */
-    suspend fun insertAll(rawFixes: List<RawFix>, raceId: Int, teamId: Int) {
+    suspend fun insertAll(rawFixes: List<RawFix>, raceId: Int, teamId: Int, segmentId: String) {
         if (rawFixes.isEmpty()) return
         val wallNow = wallProvider()
         val elapsedNow = elapsedProvider()
@@ -75,6 +76,7 @@ class TrackRepository(
                 wallMs = wallNow + (elapsedAt - elapsedNow),
                 trustedMs = trustedClock.trustedAt(elapsedAt, bootAt),
                 bootCount = bootAt,
+                segmentId = segmentId,
                 idFactory = idFactory,
             )
         }

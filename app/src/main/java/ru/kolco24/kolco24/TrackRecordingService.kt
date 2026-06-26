@@ -29,8 +29,19 @@ import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
 import ru.kolco24.kolco24.data.track.TrackProfile
+import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.data.track.TrackState
 import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Decide the recording-session [segmentId] on a fresh-start path: mint a new one when there is no
+ * current segment (first start or after a teardown reset it to null) or when a teardown was in flight
+ * ([wasTearingDown] — the start is replacing a session being torn down, so it's logically a new one);
+ * otherwise keep [current] so a duplicate/idempotent start intent stays one segment. Pure so the
+ * stop→start / idempotent-re-entry matrix is JVM-tested (repo convention).
+ */
+fun nextSegmentId(current: String?, wasTearingDown: Boolean, mint: () -> String): String =
+    if (wasTearingDown || current == null) mint() else current
 
 /**
  * Foreground service that records the team's GPS track with the screen off. Started from the UI
@@ -65,6 +76,8 @@ class TrackRecordingService : Service() {
     private var activeProfile: TrackProfile = TrackProfile.Precise
     private var raceId: Int = -1
     private var teamId: Int = -1
+    /** UUID minted once per recording session; snapshotted into each engine's onPoints batch. */
+    private var segmentId: String? = null
     /**
      * Set to true when teardown() is in progress so the in-flight profile-switch flush callback
      * doesn't restart the engine after Stop wins the race — without this guard the profile callback
@@ -98,6 +111,10 @@ class TrackRecordingService : Service() {
         }
         val wasTearingDown = isTearingDown
         isTearingDown = false // reset for new recording session
+        // Mint a fresh segment id only on a genuinely new session (first start, post-teardown, or one
+        // replacing an in-flight teardown). An idempotent re-entry keeps the existing segment so a
+        // duplicate start intent doesn't split one recording into two segments.
+        segmentId = nextSegmentId(segmentId, wasTearingDown) { java.util.UUID.randomUUID().toString() }
 
         // A prior teardown() may have cancelled serviceScope (rapid stop→start on the same instance).
         // Recreate it so the count-collector launch below works on a fresh scope.
@@ -174,11 +191,12 @@ class TrackRecordingService : Service() {
         // the old engine finishes delivering its buffered batch.
         val r = raceId
         val t = teamId
+        val s = segmentId ?: java.util.UUID.randomUUID().toString().also { segmentId = it }
         engine = e
         e.start(
             onPoints = { fixes ->
                 container.applicationScope.launch {
-                    container.trackRepository.insertAll(fixes, r, t)
+                    container.trackRepository.insertAll(fixes, r, t, s)
                 }
             },
             onError = { err ->
@@ -200,9 +218,11 @@ class TrackRecordingService : Service() {
                 if (engine === e) e.stop()
                 finishTeardown()
             }
-        } else {
+        } else if (container.trackRecordingState.value is TrackState.Recording) {
+            // engine is null but state not yet cleaned up (e.g. stopped mid-start before engine set)
             finishTeardown()
         }
+        // else: teardown() already ran — engine is null, state is Idle; nothing to do.
         super.onDestroy()
     }
 
@@ -246,6 +266,7 @@ class TrackRecordingService : Service() {
     private fun finishTeardown() {
         engine?.stop()
         engine = null
+        segmentId = null // next session mints a fresh segment — a stop→start gap is a new segment
         mainHandler.removeCallbacksAndMessages(null)
         countJob?.cancel()
         profileJob?.cancel()
@@ -296,7 +317,7 @@ class TrackRecordingService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle("Идёт запись трека")
-            .setContentText("$pointCount точек")
+            .setContentText(pointsLabel(pointCount))
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(contentIntent)

@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.theme.CpColorBlue
 import ru.kolco24.kolco24.ui.theme.CpColorPurple
@@ -204,7 +205,7 @@ private fun ScoreCard(
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text = "/ $totalScore баллов",
+                    text = "/ $totalScore ${pluralRu(totalScore, "балл", "балла", "баллов")}",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,

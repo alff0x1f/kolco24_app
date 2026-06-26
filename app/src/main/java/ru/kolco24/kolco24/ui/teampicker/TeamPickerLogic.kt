@@ -4,6 +4,7 @@ import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.effectiveEnd
+import ru.kolco24.kolco24.data.pluralRu
 
 /**
  * Pure, testable logic shared by the comp/team picker screens. No Android or Compose imports —
@@ -74,11 +75,7 @@ fun peopleLine(category: CategoryEntity?, ucount: Int): String {
 }
 
 /** Russian declension for "человек": "человека" for 2-4 (not 12-14), "человек" otherwise. */
-internal fun peopleWord(n: Int): String {
-    val rem100 = n % 100
-    val rem10 = n % 10
-    return if (rem100 !in 11..19 && rem10 in 2..4) "человека" else "человек"
-}
+internal fun peopleWord(n: Int): String = pluralRu(n, "человек", "человека", "человек")
 
 /**
  * Short text for a team token: the start number when present, otherwise a monogram from the name.

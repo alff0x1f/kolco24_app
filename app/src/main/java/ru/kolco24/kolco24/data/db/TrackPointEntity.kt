@@ -19,6 +19,10 @@ import ru.kolco24.kolco24.data.track.TrackPointLike
  * [wallMs] is the back-projected wall-clock of the fix moment (per
  * the batching design — not the wall time of the batch insert). [bootCount] is the boot session of
  * [elapsedRealtimeAt] so a future Δelapsed reconciliation never mixes monotonic marks across reboots.
+ *
+ * [segmentId] is a UUID minted once per recording session (per «Начать запись» tap) by the recording
+ * service: a stop→start produces two distinct ids so the server can group `(race, team, install,
+ * segment)` and draw a separate polyline per segment instead of teleporting across the gap.
  */
 @Entity(
     tableName = "track_points",
@@ -38,6 +42,7 @@ data class TrackPointEntity(
     val bootCount: Int?,
     val wallMs: Long,
     val trustedMs: Long?,
+    val segmentId: String,
     val uploadedLocal: Boolean = false,
     val uploadedCloud: Boolean = false,
 ) : TrackPointLike

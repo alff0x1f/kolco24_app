@@ -88,7 +88,7 @@ fun TeamScreen(
     onRefresh: () -> Unit = {},
     trackState: TrackState = TrackState.Idle,
     trackPointCount: Int = 0,
-    trackLengthMeters: Double = 0.0,
+    trackSegmentCount: Int = 0,
     trackDegradedAccuracy: Boolean = false,
     trackFirstPointTime: String? = null,
     trackLastPointTime: String? = null,
@@ -148,7 +148,7 @@ fun TeamScreen(
                 TrackCard(
                     state = trackState,
                     pointCount = trackPointCount,
-                    lengthMeters = trackLengthMeters,
+                    segmentCount = trackSegmentCount,
                     hasTeam = true,
                     degradedAccuracy = trackDegradedAccuracy,
                     firstPointTime = trackFirstPointTime,

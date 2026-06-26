@@ -98,7 +98,7 @@ class TrackRepositoryTest {
     @Test
     fun insertAll_mapsAndStores_withInjectedProviders() = runTest {
         val dao = FakeTrackDao()
-        repo(dao).insertAll(listOf(rawFix(elapsedMs = 60_000L)), raceId = 1, teamId = 7)
+        repo(dao).insertAll(listOf(rawFix(elapsedMs = 60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
 
         val points = dao.observeForTeam(7, 1).first()
         assertEquals(1, points.size)
@@ -112,12 +112,41 @@ class TrackRepositoryTest {
         assertEquals(anchorServerMs + 10_000L, p.trustedMs)
         // wallMs = wallNow + (elapsedAt − elapsedNow) = 2_000_000 + (60_000 − 100_000)
         assertEquals(1_960_000L, p.wallMs)
+        assertEquals("seg", p.segmentId)
+    }
+
+    @Test
+    fun insertAll_stampsSegmentIdOnEveryRow() = runTest {
+        val dao = FakeTrackDao()
+        repo(dao).insertAll(
+            listOf(rawFix(60_000L), rawFix(61_000L), rawFix(62_000L)),
+            raceId = 1,
+            teamId = 7,
+            segmentId = "session-xyz",
+        )
+        val rows = dao.observeForTeam(7, 1).first()
+        assertEquals(3, rows.size)
+        assertTrue(rows.all { it.segmentId == "session-xyz" })
+    }
+
+    @Test
+    fun insertAll_twoSessions_rowsRetainDistinctSegmentIds() = runTest {
+        // The core stop→start guarantee: two insertAll calls with different segmentIds for the same
+        // (raceId, teamId) scope must keep their own segmentId — no cross-contamination.
+        val dao = FakeTrackDao()
+        val r = repo(dao)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg-A")
+        r.insertAll(listOf(rawFix(61_000L)), raceId = 1, teamId = 7, segmentId = "seg-B")
+        val rows = dao.observeForTeam(7, 1).first()
+        assertEquals(2, rows.size)
+        assertEquals(1, rows.count { it.segmentId == "seg-A" })
+        assertEquals(1, rows.count { it.segmentId == "seg-B" })
     }
 
     @Test
     fun insertAll_emptyBatch_isNoOp() = runTest {
         val dao = FakeTrackDao()
-        repo(dao).insertAll(emptyList(), raceId = 1, teamId = 7)
+        repo(dao).insertAll(emptyList(), raceId = 1, teamId = 7, segmentId = "seg")
         assertTrue(dao.observeForTeam(7, 1).first().isEmpty())
     }
 
@@ -130,6 +159,7 @@ class TrackRepositoryTest {
             listOf(rawFix(elapsedMs = 60_000L), rawFix(elapsedMs = 64_000L)),
             raceId = 1,
             teamId = 7,
+            segmentId = "seg",
         )
         val points = dao.observeForTeam(7, 1).first() // ordered by elapsedRealtimeAt ASC
         assertEquals(listOf(60_000L, 64_000L), points.map { it.elapsedRealtimeAt })
@@ -147,7 +177,7 @@ class TrackRepositoryTest {
         // bootCountProvider null on the clock side → not verified → trustedAt returns null.
         val dao = FakeTrackDao()
         repo(dao, clock = trustedClock(boot = null), boot = null)
-            .insertAll(listOf(rawFix(elapsedMs = 60_000L)), raceId = 1, teamId = 7)
+            .insertAll(listOf(rawFix(elapsedMs = 60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
         val p = dao.observeForTeam(7, 1).first().single()
         assertNull(p.trustedMs)
         assertNull(p.bootCount)
@@ -158,34 +188,17 @@ class TrackRepositoryTest {
     fun count_observe_reflectInserts() = runTest {
         val dao = FakeTrackDao()
         val r = repo(dao)
-        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7, segmentId = "seg")
         assertEquals(2, r.countForTeam(7, 1).first())
         assertEquals(2, r.observeTrack(7, 1).first().size)
-    }
-
-    @Test
-    fun length_overObservedPoints_isCorrect() = runTest {
-        val dao = FakeTrackDao()
-        val r = repo(dao)
-        // ~0.001° latitude apart ≈ 111.2 m per step.
-        r.insertAll(
-            listOf(
-                rawFix(elapsedMs = 60_000L, lat = 55.000, lon = 37.0),
-                rawFix(elapsedMs = 61_000L, lat = 55.001, lon = 37.0),
-            ),
-            raceId = 1,
-            teamId = 7,
-        )
-        val length = trackLengthMeters(r.observeTrack(7, 1).first())
-        assertEquals(111.2, length, 1.0)
     }
 
     @Test
     fun deleteForTeam_clearsOnlyThatTeam() = runTest {
         val dao = FakeTrackDao()
         val r = repo(dao)
-        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
-        r.insertAll(listOf(rawFix(61_000L)), raceId = 1, teamId = 8)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+        r.insertAll(listOf(rawFix(61_000L)), raceId = 1, teamId = 8, segmentId = "seg")
         r.deleteForTeam(7, 1)
         assertTrue(r.observeTrack(7, 1).first().isEmpty())
         assertEquals(1, r.observeTrack(8, 1).first().size)
@@ -200,7 +213,7 @@ class TrackRepositoryTest {
         val local = FakeUploader()
         val cloud = FakeUploader { PostResult.Offline }
         val r = repo(dao, cloud = cloud, local = local)
-        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7, segmentId = "seg")
 
         r.uploadPending(raceId = 1, teamId = 7)
 
@@ -217,7 +230,7 @@ class TrackRepositoryTest {
         val cloud = FakeUploader()
         val local = FakeUploader()
         val r = repo(dao, cloud = cloud, local = local)
-        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
 
         r.uploadPending(raceId = 1, teamId = 7)
         r.uploadPending(raceId = 1, teamId = 7) // second pass: nothing pending
@@ -239,7 +252,7 @@ class TrackRepositoryTest {
             PostResult.Success(TrackUploadResponse(listOf(firstId!!)))
         }
         val r = repo(dao, cloud = cloud)
-        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(60_000L), rawFix(61_000L)), raceId = 1, teamId = 7, segmentId = "seg")
 
         r.uploadPending(raceId = 1, teamId = 7)
 
@@ -254,7 +267,7 @@ class TrackRepositoryTest {
         val dao = FakeTrackDao()
         val cloud = FakeUploader { PostResult.Success(TrackUploadResponse(emptyList())) }
         val r = repo(dao, cloud = cloud)
-        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
 
         r.uploadPending(raceId = 1, teamId = 7)
 
@@ -268,8 +281,8 @@ class TrackRepositoryTest {
         val cloud = FakeUploader()
         val local = FakeUploader()
         val r = repo(dao, cloud = cloud, local = local)
-        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
-        r.insertAll(listOf(rawFix(61_000L)), raceId = 2, teamId = 8)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+        r.insertAll(listOf(rawFix(61_000L)), raceId = 2, teamId = 8, segmentId = "seg")
 
         r.uploadAllPending()
 
@@ -292,7 +305,7 @@ class TrackRepositoryTest {
             PostResult.Success(TrackUploadResponse(pts.map { it.id }))
         }
         r = repo(dao, cloud = cloud)
-        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
 
         r.uploadPending(raceId = 1, teamId = 7)
 

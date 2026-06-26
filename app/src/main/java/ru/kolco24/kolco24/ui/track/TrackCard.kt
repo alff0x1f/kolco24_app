@@ -35,6 +35,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.pointsLabel
+import ru.kolco24.kolco24.data.track.pointsWord
+import ru.kolco24.kolco24.data.track.segmentsWord
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 /**
@@ -45,20 +48,21 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  *   [degradedAccuracy] (no GPS provider, only network) the start is **not** disabled — instead a quiet
  *   hint warns the track will be coarse. If a track already exists ([pointCount] > 0) the metrics show
  *   below.
- * - [Recording][TrackState.Recording] → a pulsing dot + «N точек · ~Xм» live readout and a «Остановить»
+ * - [Recording][TrackState.Recording] → a pulsing dot + «N точек» live readout and a «Остановить»
  *   button.
  *
  * Clearing the track lives in the Settings overlay («Запись трека» card), not here — it is a
  * destructive action and was moved out of this frequently-visited tab to avoid accidental taps.
  *
- * Not unit-tested (Compose, per repo convention); the pure length/metrics are covered by
- * `TrackMetricsTest`.
+ * Not unit-tested (Compose, per repo convention). Track length is computed server-side from the
+ * per-point `segment_id`, so there is no on-device length metric — instead the metrics show the
+ * number of recording sessions ([segmentCount], distinct `segment_id`s) the host derives.
  */
 @Composable
 fun TrackCard(
     state: TrackState,
     pointCount: Int,
-    lengthMeters: Double,
+    segmentCount: Int,
     hasTeam: Boolean,
     degradedAccuracy: Boolean,
     firstPointTime: String?,
@@ -85,7 +89,7 @@ fun TrackCard(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 if (recording) {
-                    RecordingHeader(pointCount = pointCount, lengthMeters = lengthMeters)
+                    RecordingHeader(pointCount = pointCount)
                     Spacer(Modifier.height(14.dp))
                     Button(
                         onClick = onStop,
@@ -103,7 +107,7 @@ fun TrackCard(
                     if (pointCount > 0) {
                         TrackMetrics(
                             pointCount = pointCount,
-                            lengthMeters = lengthMeters,
+                            segmentCount = segmentCount,
                             firstPointTime = firstPointTime,
                             lastPointTime = lastPointTime,
                         )
@@ -144,7 +148,7 @@ fun TrackCard(
 }
 
 @Composable
-private fun RecordingHeader(pointCount: Int, lengthMeters: Double) {
+private fun RecordingHeader(pointCount: Int) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         PulsingDot()
         Column {
@@ -154,7 +158,7 @@ private fun RecordingHeader(pointCount: Int, lengthMeters: Double) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "$pointCount точек · ${formatLength(lengthMeters)}",
+                text = pointsLabel(pointCount),
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -187,13 +191,14 @@ private fun PulsingDot() {
 @Composable
 private fun TrackMetrics(
     pointCount: Int,
-    lengthMeters: Double,
+    segmentCount: Int,
     firstPointTime: String?,
     lastPointTime: String?,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Metric(label = "Точек", value = pointCount.toString())
-        Metric(label = "Длина", value = formatLength(lengthMeters))
+        // Labels decline by their count so the value+label reads grammatically (82 точки, 3 сегмента).
+        Metric(label = pointsWord(pointCount).replaceFirstChar { it.uppercase() }, value = pointCount.toString())
+        Metric(label = segmentsWord(segmentCount).replaceFirstChar { it.uppercase() }, value = segmentCount.toString())
         val span = when {
             firstPointTime != null && lastPointTime != null -> "$firstPointTime–$lastPointTime"
             firstPointTime != null -> firstPointTime
@@ -217,15 +222,5 @@ private fun Metric(label: String, value: String) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-/** Length readout: meters below 1 km, else one-decimal kilometers. */
-private fun formatLength(meters: Double): String {
-    val rounded = Math.round(meters)
-    return if (rounded < 1_000) "${rounded}м"
-    else {
-        val tenths = Math.round(meters / 100.0)
-        if (tenths % 10 == 0L) "${tenths / 10}км" else "${tenths / 10.0}км"
     }
 }

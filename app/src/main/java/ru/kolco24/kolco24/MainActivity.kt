@@ -94,7 +94,6 @@ import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.filterPoints
-import ru.kolco24.kolco24.data.track.trackLengthMeters
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
@@ -564,11 +563,14 @@ private fun Kolco24AppRoot(
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
-    // Length/time metrics use the accuracy-filtered, capture-ordered points (raw count stays full).
+    // Time span uses the accuracy-filtered, capture-ordered points (raw count stays full).
     val trackUsable = remember(safeTrack) { filterPoints(safeTrack).sortedBy { it.elapsedRealtimeAt } }
-    val trackLength = remember(trackUsable) { trackLengthMeters(trackUsable) }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
+    // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
+    // points so a session of only coarse fixes — dropped by filterPoints — still counts, matching the
+    // raw «Точек» count rather than the accuracy-filtered span.
+    val trackSegmentCount = remember(safeTrack) { safeTrack.mapTo(HashSet()) { it.segmentId }.size }
     // Degraded accuracy = network is available but GPS is not enabled (no chip or toggle off) — the
     // track will be coarse but recording is still allowed (the engine falls back to network).
     // Read once at composition; runtime GPS toggling is not tracked (no recomposition trigger needed).
@@ -885,7 +887,7 @@ private fun Kolco24AppRoot(
                         onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
-                        trackLengthMeters = trackLength,
+                        trackSegmentCount = trackSegmentCount,
                         trackDegradedAccuracy = degradedAccuracy,
                         trackFirstPointTime = trackFirstTime,
                         trackLastPointTime = trackLastTime,

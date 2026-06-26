@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.data.AdminSession
+import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.ui.theme.ThemeMode
 
 /**
@@ -358,7 +359,7 @@ private fun ClearTrackRow(pointCount: Int, enabled: Boolean, onClick: () -> Unit
                 color = contentColor,
             )
             Text(
-                text = "$pointCount точек",
+                text = pointsLabel(pointCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
             )

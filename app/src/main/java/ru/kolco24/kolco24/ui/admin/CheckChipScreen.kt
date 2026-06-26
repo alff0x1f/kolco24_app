@@ -75,6 +75,7 @@ import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.data.crypto.LegendCrypto
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
+import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
@@ -351,7 +352,7 @@ private fun OkHero(result: ChipCheckResult.Ok, previousUid: String?) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = result.cost?.let { "$it баллов" } ?: "—",
+                text = result.cost?.let { "$it ${pluralRu(it, "балл", "балла", "баллов")}" } ?: "—",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
