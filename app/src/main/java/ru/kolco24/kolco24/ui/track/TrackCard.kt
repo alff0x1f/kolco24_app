@@ -19,10 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,7 +49,8 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  * - [Idle][TrackState.Idle] → a «Начать запись» button (disabled only when [hasTeam] is false). When
  *   [degradedAccuracy] (no GPS provider, only network) the start is **not** disabled — instead a quiet
  *   hint warns the track will be coarse. If a track already exists ([pointCount] > 0) the metrics show
- *   below.
+ *   below, plus a secondary «Поделиться GPX» [OutlinedButton] ([onShare]) that exports the track via the
+ *   system share-sheet.
  * - [Recording][TrackState.Recording] → a pulsing dot + «N точек» live readout and a «Остановить»
  *   button.
  *
@@ -69,6 +72,7 @@ fun TrackCard(
     lastPointTime: String?,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val recording = state is TrackState.Recording
@@ -132,6 +136,17 @@ fun TrackCard(
                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Начать запись")
+                    }
+                    if (pointCount > 0) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onShare,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Поделиться GPX")
+                        }
                     }
                     if (degradedAccuracy) {
                         Spacer(Modifier.height(8.dp))

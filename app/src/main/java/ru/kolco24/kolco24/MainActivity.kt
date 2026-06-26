@@ -11,11 +11,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.content.FileProvider
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
@@ -93,7 +95,10 @@ import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.filterPoints
+import ru.kolco24.kolco24.data.track.gpxFileName
+import java.io.File
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
@@ -696,6 +701,45 @@ private fun Kolco24AppRoot(
         }
         trackPermissionLauncher.launch(perms.toTypedArray())
     }
+    // Export the selected team's track as GPX and hand it to the system share-sheet. Reads the points
+    // off the IO dispatcher, writes the file into cacheDir/tracks/ (exposed via FileProvider), then
+    // launches the chooser on the main thread. applicationScope so the write survives a recomposition.
+    val onShareTrack: () -> Unit = {
+        val tid = selectedTeamId
+        val rid = selectedRaceId
+        if (tid != null && rid != null) {
+            val label = teamForTab?.startNumber?.takeIf { it.isNotBlank() } ?: tid.toString()
+            val fileName = gpxFileName(label, today)
+            container.applicationScope.launch {
+                val points = filterPoints(
+                    trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid },
+                ).sortedBy { it.elapsedRealtimeAt }
+                if (points.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Нет точных точек для экспорта", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+                val gpx = buildGpx(points, teamForTab?.teamname ?: "Команда $label")
+                val dir = File(context.cacheDir, "tracks").apply { mkdirs() }
+                val file = File(dir, fileName)
+                withContext(Dispatchers.IO) { file.writeText(gpx) }
+                val uri = FileProvider.getUriForFile(
+                    context, "${context.packageName}.fileprovider", file,
+                )
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/gpx+xml"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_TITLE, fileName)
+                    putExtra(Intent.EXTRA_SUBJECT, fileName)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                withContext(Dispatchers.Main) {
+                    context.startActivity(Intent.createChooser(send, "Поделиться GPX"))
+                }
+            }
+        }
+    }
 
     // Mirror the roster-filtered bound uids onto the Activity so the binder-thread idle path can
     // recognize a bound bracelet (open the overlay) without touching Compose state. A coarse open-gate
@@ -893,6 +937,7 @@ private fun Kolco24AppRoot(
                         trackLastPointTime = trackLastTime,
                         onStartTrack = onStartTrack,
                         onStopTrack = { TrackRecordingService.stop(context) },
+                        onShareTrack = onShareTrack,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
