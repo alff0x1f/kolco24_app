@@ -94,6 +94,7 @@ fun TeamScreen(
     trackLastPointTime: String? = null,
     onStartTrack: () -> Unit = {},
     onStopTrack: () -> Unit = {},
+    onShareTrack: () -> Unit = {},
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -155,6 +156,7 @@ fun TeamScreen(
                     lastPointTime = trackLastPointTime,
                     onStart = onStartTrack,
                     onStop = onStopTrack,
+                    onShare = onShareTrack,
                 )
             }
             item("misc") {
