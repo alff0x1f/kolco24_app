@@ -1184,37 +1184,31 @@ private fun Kolco24AppRoot(
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
                 onOpenAdmin = { showSettings = false; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
-                onResetTeam = if (BuildConfig.DEBUG) {
-                    {
-                        // applicationScope (not composition scope) so the delete outlives the
-                        // closing overlay — same reasoning as selectTeam below.
-                        container.applicationScope.launch { teamRepo.clearSelectedTeam() }
-                        showSettings = false; chipInfoArmed = false; chipInfoModel = null
-                    }
-                } else {
-                    null
+                // The debug actions are always wired now; the «Отладка» section is hidden in release
+                // builds and revealed by tapping the version row 10× (see debugInitiallyVisible below).
+                onResetTeam = {
+                    // applicationScope (not composition scope) so the delete outlives the
+                    // closing overlay — same reasoning as selectTeam below.
+                    container.applicationScope.launch { teamRepo.clearSelectedTeam() }
+                    showSettings = false; chipInfoArmed = false; chipInfoModel = null
                 },
-                onClearDatabase = if (BuildConfig.DEBUG) {
-                    {
-                        container.applicationScope.launch { container.clearDatabase() }
-                        showSettings = false; chipInfoArmed = false; chipInfoModel = null
-                    }
-                } else {
-                    null
+                onClearDatabase = {
+                    container.applicationScope.launch { container.clearDatabase() }
+                    showSettings = false; chipInfoArmed = false; chipInfoModel = null
                 },
-                onReadChipInfo = if (BuildConfig.DEBUG) {
-                    { chipInfoModel = null; chipInfoArmed = true }
-                } else {
-                    null
-                },
+                onReadChipInfo = { chipInfoModel = null; chipInfoArmed = true },
+                versionName = BuildConfig.VERSION_NAME,
+                versionCode = BuildConfig.VERSION_CODE,
+                // Debug section visible immediately in debug builds; hidden until the 10-tap unlock in release.
+                debugInitiallyVisible = BuildConfig.DEBUG,
                 modifier = Modifier.fillMaxSize(),
             )
         }
 
         // Debug «Инфо о чипе» — reads the chip's GET_VERSION model and shows it in a dialog. Floats
         // above the open Settings overlay (the row that opens it lives there); arms onTagForChipInfo
-        // while waiting for a tap, then displays chipModelFromVersion(...). DEBUG-only (the row that
-        // arms it is gated on a DEBUG-only callback in SettingsScreen).
+        // while waiting for a tap, then displays chipModelFromVersion(...). Reachable in release too,
+        // behind the «Отладка» 10-tap unlock in SettingsScreen.
         if ((chipInfoArmed || chipInfoModel != null) && showSettings) {
             DisposableEffect(chipInfoArmed) {
                 val host = activity
