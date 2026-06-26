@@ -34,7 +34,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -228,30 +227,7 @@ fun MarksScreen(
             }
 
             // No «Отметить КП» button — the scan overlay opens automatically when a КП chip is tapped.
-            // The «Фото» fallback stays for marking a КП by photo when its chip won't read.
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = {},
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(start = 14.dp, end = 18.dp),
-                ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp), tint = OrangeCta)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Фото", style = MaterialTheme.typography.labelLarge)
-                }
-            }
+            // The «Фото» fallback FAB is hidden until photo marking is implemented.
         }
     }
 }

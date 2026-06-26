@@ -2,6 +2,8 @@ package ru.kolco24.kolco24.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -9,7 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -39,13 +43,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.ui.theme.ThemeMode
@@ -73,9 +80,20 @@ fun SettingsScreen(
     onResetTeam: (() -> Unit)? = null,
     onClearDatabase: (() -> Unit)? = null,
     onReadChipInfo: (() -> Unit)? = null,
+    versionName: String = "",
+    versionCode: Int = 0,
+    debugInitiallyVisible: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
+    // The «Отладка» section is shown immediately in debug builds; in release it stays hidden until
+    // the version row is tapped 10× (a hidden field-debug gate). Per-session: resets when the
+    // overlay leaves composition.
+    var debugUnlocked by remember { mutableStateOf(debugInitiallyVisible) }
+    var versionTaps by remember { mutableIntStateOf(0) }
+    // Destructive debug actions go through a confirmation dialog; null = none pending.
+    var debugConfirm by remember { mutableStateOf<DebugConfirmKind?>(null) }
+    val context = LocalContext.current
     Column(modifier = modifier.background(MaterialTheme.colorScheme.surface).pointerInput(Unit) { detectTapGestures {} }) {
         TopAppBar(
             title = { Text("Настройки") },
@@ -92,6 +110,9 @@ fun SettingsScreen(
             ),
         )
 
+        // Content scrolls under the pinned TopAppBar so tall section lists (incl. «О приложении»
+        // and the unlocked «Отладка» card) are reachable on short screens.
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Text(
             text = "Команда",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -163,8 +184,9 @@ fun SettingsScreen(
             AdminRow(session = session, onClick = onOpenAdmin)
         }
 
-        // Debug-only: caller passes non-null callbacks only in debug builds (see MainActivity).
-        if (onResetTeam != null || onClearDatabase != null || onReadChipInfo != null) {
+        // Hidden until unlocked: debug actions are always wired by MainActivity now, but the section
+        // only renders in debug builds or after the 10-tap version unlock (debugUnlocked).
+        if (debugUnlocked && (onResetTeam != null || onClearDatabase != null || onReadChipInfo != null)) {
             Text(
                 text = "Отладка",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -184,7 +206,7 @@ fun SettingsScreen(
                             icon = Icons.Filled.RestartAlt,
                             title = "Сбросить команду",
                             subtitle = "Debug: вернуться к выбору команды",
-                            onClick = onResetTeam,
+                            onClick = { debugConfirm = DebugConfirmKind.ResetTeam },
                         )
                     }
                     if (onClearDatabase != null) {
@@ -192,7 +214,7 @@ fun SettingsScreen(
                             icon = Icons.Filled.DeleteSweep,
                             title = "Очистить базу данных",
                             subtitle = "Debug: удалить гонки, команды, легенду и ETag",
-                            onClick = onClearDatabase,
+                            onClick = { debugConfirm = DebugConfirmKind.ClearDatabase },
                         )
                     }
                     if (onReadChipInfo != null) {
@@ -206,6 +228,37 @@ fun SettingsScreen(
                 }
             }
         }
+
+        Text(
+            text = "О приложении",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            VersionRow(
+                versionName = versionName,
+                versionCode = versionCode,
+                onTap = {
+                    if (!debugUnlocked) {
+                        versionTaps++
+                        if (versionTaps >= 10) {
+                            debugUnlocked = true
+                            Toast.makeText(context, "Меню отладки включено", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 
     if (showThemeDialog) {
@@ -218,7 +271,46 @@ fun SettingsScreen(
             onDismiss = { showThemeDialog = false },
         )
     }
+
+    debugConfirm?.let { kind ->
+        val title = when (kind) {
+            DebugConfirmKind.ResetTeam -> "Сбросить команду?"
+            DebugConfirmKind.ClearDatabase -> "Очистить базу данных?"
+        }
+        val message = when (kind) {
+            DebugConfirmKind.ResetTeam -> "Текущая команда будет сброшена — придётся выбрать её заново."
+            DebugConfirmKind.ClearDatabase ->
+                "Все локальные данные (гонки, команды, легенда, ETag) будут удалены и загружены заново."
+        }
+        val confirmLabel = when (kind) {
+            DebugConfirmKind.ResetTeam -> "Сбросить"
+            DebugConfirmKind.ClearDatabase -> "Очистить"
+        }
+        val onConfirm = when (kind) {
+            DebugConfirmKind.ResetTeam -> onResetTeam
+            DebugConfirmKind.ClearDatabase -> onClearDatabase
+        }
+        AlertDialog(
+            onDismissRequest = { debugConfirm = null },
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = {
+                    debugConfirm = null
+                    onConfirm?.invoke()
+                }) {
+                    Text(confirmLabel, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { debugConfirm = null }) { Text("Отмена") }
+            },
+        )
+    }
 }
+
+/** Which destructive debug action is awaiting confirmation in [SettingsScreen]. */
+private enum class DebugConfirmKind { ResetTeam, ClearDatabase }
 
 /** Human-readable Russian label for a [ThemeMode] (used in the subtitle + dialog rows). */
 private fun themeModeLabel(mode: ThemeMode): String =
@@ -227,6 +319,49 @@ private fun themeModeLabel(mode: ThemeMode): String =
         ThemeMode.LIGHT -> "Светлая"
         ThemeMode.DARK -> "Тёмная"
     }
+
+/**
+ * «Версия» row — info avatar, «versionName (versionCode)» subtitle; mirrors [ThemeRow] styling but
+ * with no trailing chevron (it's informational). Tapping forwards to [onTap], which the host uses as
+ * the 10-tap «Отладка» unlock gate.
+ */
+@Composable
+private fun VersionRow(versionName: String, versionCode: Int, onTap: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onTap)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Версия",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "$versionName ($versionCode)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 /** «Тема» row — palette avatar, current-mode subtitle, chevron; mirrors [ChangeTeamRow] styling. */
 @Composable
