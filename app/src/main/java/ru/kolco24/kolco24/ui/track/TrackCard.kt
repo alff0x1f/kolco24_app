@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.pointsLabel
+import ru.kolco24.kolco24.data.track.pointsWord
+import ru.kolco24.kolco24.data.track.segmentsWord
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 /**
@@ -194,8 +196,9 @@ private fun TrackMetrics(
     lastPointTime: String?,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Metric(label = "Точек", value = pointCount.toString())
-        Metric(label = "Сегментов", value = segmentCount.toString())
+        // Labels decline by their count so the value+label reads grammatically (82 точки, 3 сегмента).
+        Metric(label = pointsWord(pointCount).replaceFirstChar { it.uppercase() }, value = pointCount.toString())
+        Metric(label = segmentsWord(segmentCount).replaceFirstChar { it.uppercase() }, value = segmentCount.toString())
         val span = when {
             firstPointTime != null && lastPointTime != null -> "$firstPointTime–$lastPointTime"
             firstPointTime != null -> firstPointTime

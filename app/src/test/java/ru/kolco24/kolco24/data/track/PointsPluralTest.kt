@@ -51,6 +51,27 @@ class PointsPluralTest {
         assertEquals("1 точка", pointsLabel(1))
         assertEquals("2 точки", pointsLabel(2))
         assertEquals("41 точка", pointsLabel(41))
+        assertEquals("82 точки", pointsLabel(82))
         assertEquals("0 точек", pointsLabel(0))
+    }
+
+    @Test
+    fun segmentsWord_declinesByCount() {
+        assertEquals("сегмент", segmentsWord(1))
+        assertEquals("сегмент", segmentsWord(21))
+        assertEquals("сегмента", segmentsWord(2))
+        assertEquals("сегмента", segmentsWord(3))
+        assertEquals("сегмента", segmentsWord(4))
+        assertEquals("сегментов", segmentsWord(0))
+        assertEquals("сегментов", segmentsWord(5))
+        assertEquals("сегментов", segmentsWord(11))
+        assertEquals("сегментов", segmentsWord(13))
+    }
+
+    @Test
+    fun segmentsLabel_joinsCountAndWord() {
+        assertEquals("1 сегмент", segmentsLabel(1))
+        assertEquals("3 сегмента", segmentsLabel(3))
+        assertEquals("5 сегментов", segmentsLabel(5))
     }
 }

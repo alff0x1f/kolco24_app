@@ -1,24 +1,32 @@
 package ru.kolco24.kolco24.data.track
 
 /**
- * Pure, Android-free Russian declension of «точка» for a GPS-fix count (JVM-unit-testable).
+ * Pure, Android-free Russian plural picker (JVM-unit-testable).
  *
- * Standard Russian plural rules:
- * - teens (11..14) → «точек» (1 точка vs 11 точек);
- * - last digit 1 → «точка» (1, 21, 41…);
- * - last digit 2..4 → «точки» (2, 23, 44…);
- * - otherwise (0, 5..20, 25…) → «точек».
+ * Standard rules over the magnitude of [count]:
+ * - teens (11..14) → [many] (1 точка vs 11 точек);
+ * - last digit 1 → [one] (1, 21, 41…);
+ * - last digit 2..4 → [few] (2, 23, 82…);
+ * - otherwise (0, 5..20, 25…) → [many].
  */
-fun pointsWord(count: Int): String {
+fun pluralRu(count: Int, one: String, few: String, many: String): String {
     val n = if (count < 0) -count else count
-    val mod100 = n % 100
-    if (mod100 in 11..14) return "точек"
+    if (n % 100 in 11..14) return many
     return when (n % 10) {
-        1 -> "точка"
-        2, 3, 4 -> "точки"
-        else -> "точек"
+        1 -> one
+        2, 3, 4 -> few
+        else -> many
     }
 }
 
-/** «N точка/точки/точек» with the count and the correctly-declined word. */
+/** Correctly-declined «точка» for a GPS-fix count. */
+fun pointsWord(count: Int): String = pluralRu(count, "точка", "точки", "точек")
+
+/** «N точка/точки/точек». */
 fun pointsLabel(count: Int): String = "$count ${pointsWord(count)}"
+
+/** Correctly-declined «сегмент» for a recording-session count. */
+fun segmentsWord(count: Int): String = pluralRu(count, "сегмент", "сегмента", "сегментов")
+
+/** «N сегмент/сегмента/сегментов». */
+fun segmentsLabel(count: Int): String = "$count ${segmentsWord(count)}"
