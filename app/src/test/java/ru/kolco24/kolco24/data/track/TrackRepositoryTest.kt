@@ -16,6 +16,7 @@ import ru.kolco24.kolco24.data.api.dto.TrackUploadResponse
 import ru.kolco24.kolco24.data.db.TrackDao
 import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.ClockAnchor
 import ru.kolco24.kolco24.data.time.TrustedClock
 
@@ -46,6 +47,8 @@ class TrackRepositoryTest {
         elapsedNow: Long = 100_000L,
         cloud: TrackUploader = TrackUploader { _, _, _ -> PostResult.Offline },
         local: TrackUploader = TrackUploader { _, _, _ -> PostResult.Offline },
+        onOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
+        onCleared: (TrackScope) -> Unit = { },
     ): TrackRepository {
         var n = 0
         return TrackRepository(
@@ -57,6 +60,8 @@ class TrackRepositoryTest {
             elapsedProvider = { elapsedNow },
             cloudUploader = cloud,
             localUploader = local,
+            onUploadOutcome = onOutcome,
+            onScopeCleared = onCleared,
         )
     }
 
@@ -204,6 +209,71 @@ class TrackRepositoryTest {
         assertEquals(1, r.observeTrack(8, 1).first().size)
     }
 
+    @Test
+    fun deleteForTeam_reportsScopeCleared() = runTest {
+        val dao = FakeTrackDao()
+        val cleared = mutableListOf<TrackScope>()
+        val r = repo(dao, onCleared = { cleared.add(it) })
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.deleteForTeam(7, 1)
+
+        assertEquals(listOf(TrackScope(raceId = 1, teamId = 7)), cleared)
+    }
+
+    @Test
+    fun deleteForTeam_afterInFlightFlush_outcomeRemovedAndNotReaddedBySubsequentFlush() = runTest {
+        // Regression: without the uploadMutex lock in deleteForTeam, a flush's onUploadOutcome could
+        // fire after onScopeCleared, re-adding a stale outcome. This test covers the sequential slice
+        // of that race: flush completes (writes outcome) → deleteForTeam (clears outcome) → new flush
+        // on empty table (must NOT re-add outcome).
+        val dao = FakeTrackDao()
+        val scope = TrackScope(raceId = 1, teamId = 7)
+        val outcomes = mutableMapOf<Pair<TrackScope, UploadTarget>, UploadResultKind>()
+        val r = repo(
+            dao,
+            cloud = FakeUploader(),
+            local = FakeUploader(),
+            onOutcome = { s, target, kind -> outcomes[s to target] = kind },
+            onCleared = { s ->
+                outcomes.remove(s to UploadTarget.Local)
+                outcomes.remove(s to UploadTarget.Cloud)
+            },
+        )
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.uploadPending(raceId = 1, teamId = 7) // flush writes Ok outcomes
+        assertEquals(UploadResultKind.Ok, outcomes[scope to UploadTarget.Cloud])
+        assertEquals(UploadResultKind.Ok, outcomes[scope to UploadTarget.Local])
+
+        r.deleteForTeam(7, 1) // must clear both outcomes
+        assertNull(outcomes[scope to UploadTarget.Cloud])
+        assertNull(outcomes[scope to UploadTarget.Local])
+        assertTrue(r.observeTrack(7, 1).first().isEmpty())
+
+        // A subsequent flush on the now-empty scope must NOT re-add any outcome (null path).
+        r.uploadPending(raceId = 1, teamId = 7)
+        assertNull(outcomes[scope to UploadTarget.Cloud])
+        assertNull(outcomes[scope to UploadTarget.Local])
+    }
+
+    @Test
+    fun deleteForTeam_guardFalse_skipsDeleteAndScopeCleared() = runTest {
+        // Regression for the queued-clear-races-new-recording bug: if a new recording starts while
+        // deleteForTeam is waiting on the mutex, the guard will return false and the delete must be
+        // a no-op — new points from the fresh session must not be wiped.
+        val dao = FakeTrackDao()
+        val cleared = mutableListOf<TrackScope>()
+        val r = repo(dao, onCleared = { cleared.add(it) })
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.deleteForTeam(7, 1, guard = { false }) // simulate: new recording started, guard rejects
+
+        // Rows must survive and onScopeCleared must NOT fire (guard aborted before DB wipe).
+        assertEquals(1, r.observeTrack(7, 1).first().size)
+        assertTrue(cleared.isEmpty())
+    }
+
     // ---- Task 12: dual batch upload ----
 
     @Test
@@ -278,9 +348,10 @@ class TrackRepositoryTest {
     @Test
     fun uploadAllPending_walksEveryScope() = runTest {
         val dao = FakeTrackDao()
+        val rec = OutcomeRecorder()
         val cloud = FakeUploader()
         val local = FakeUploader()
-        val r = repo(dao, cloud = cloud, local = local)
+        val r = repo(dao, cloud = cloud, local = local, onOutcome = rec.sink)
         r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
         r.insertAll(listOf(rawFix(61_000L)), raceId = 2, teamId = 8, segmentId = "seg")
 
@@ -289,6 +360,13 @@ class TrackRepositoryTest {
         // Both distinct (raceId, teamId) scopes fully flushed.
         assertTrue(dao.observeForTeam(7, 1).first().all { it.uploadedLocal && it.uploadedCloud })
         assertTrue(dao.observeForTeam(8, 2).first().all { it.uploadedLocal && it.uploadedCloud })
+        // Outcomes reported against the correct scope for each target.
+        val scope1Reports = rec.reports.filter { it.first == TrackScope(1, 7) }
+        val scope2Reports = rec.reports.filter { it.first == TrackScope(2, 8) }
+        assertTrue(scope1Reports.any { it.second == UploadTarget.Cloud && it.third == UploadResultKind.Ok })
+        assertTrue(scope1Reports.any { it.second == UploadTarget.Local && it.third == UploadResultKind.Ok })
+        assertTrue(scope2Reports.any { it.second == UploadTarget.Cloud && it.third == UploadResultKind.Ok })
+        assertTrue(scope2Reports.any { it.second == UploadTarget.Local && it.third == UploadResultKind.Ok })
     }
 
     @Test
@@ -313,6 +391,113 @@ class TrackRepositoryTest {
         assertEquals(1, cloud.calls) // re-entrant call added nothing
         assertTrue(dao.observeForTeam(7, 1).first().single().uploadedCloud)
     }
+
+    // ---- Task 3: per-target outcome reporting ----
+
+    /** Records every (scope, target, kind) reported via onUploadOutcome. */
+    private class OutcomeRecorder {
+        val reports = mutableListOf<Triple<TrackScope, UploadTarget, UploadResultKind>>()
+        val sink: (TrackScope, UploadTarget, UploadResultKind) -> Unit =
+            { scope, target, kind -> reports.add(Triple(scope, target, kind)) }
+
+        fun kindFor(target: UploadTarget): UploadResultKind? =
+            reports.lastOrNull { it.second == target }?.third
+    }
+
+    @Test
+    fun outcome_offlineBothTargets_reportedOffline() = runTest {
+        val dao = FakeTrackDao()
+        val rec = OutcomeRecorder()
+        val r = repo(
+            dao,
+            cloud = FakeUploader { PostResult.Offline },
+            local = FakeUploader { PostResult.Offline },
+            onOutcome = rec.sink,
+        )
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(UploadResultKind.Offline, rec.kindFor(UploadTarget.Local))
+        assertEquals(UploadResultKind.Offline, rec.kindFor(UploadTarget.Cloud))
+        // Reported against the correct scope.
+        assertTrue(rec.reports.all { it.first == TrackScope(1, 7) })
+    }
+
+    @Test
+    fun outcome_successDrain_reportedOk() = runTest {
+        val dao = FakeTrackDao()
+        val rec = OutcomeRecorder()
+        val r = repo(dao, cloud = FakeUploader(), local = FakeUploader(), onOutcome = rec.sink)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(UploadResultKind.Ok, rec.kindFor(UploadTarget.Local))
+        assertEquals(UploadResultKind.Ok, rec.kindFor(UploadTarget.Cloud))
+    }
+
+    @Test
+    fun outcome_forbidden_reportedError() = runTest {
+        val dao = FakeTrackDao()
+        val rec = OutcomeRecorder()
+        val r = repo(dao, cloud = FakeUploader { PostResult.Forbidden }, onOutcome = rec.sink)
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(UploadResultKind.Error, rec.kindFor(UploadTarget.Cloud))
+    }
+
+    @Test
+    fun outcome_noForwardProgress_reportedError_notOk() = runTest {
+        // Success but empty accepted → no progress → Error (must NOT route through uploadResultKind→Ok).
+        val dao = FakeTrackDao()
+        val rec = OutcomeRecorder()
+        val r = repo(
+            dao,
+            cloud = FakeUploader { PostResult.Success(TrackUploadResponse(emptyList())) },
+            onOutcome = rec.sink,
+        )
+        r.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(UploadResultKind.Error, rec.kindFor(UploadTarget.Cloud))
+    }
+
+    @Test
+    fun outcome_noPending_notReportedForThatTarget() = runTest {
+        // Local has nothing pending (already uploaded), cloud is offline. Only cloud must be reported.
+        val dao = FakeTrackDao()
+        val rec = OutcomeRecorder()
+        // First pass: both succeed and drain.
+        val r1 = repo(dao, cloud = FakeUploader(), local = FakeUploader())
+        r1.insertAll(listOf(rawFix(60_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+        r1.uploadPending(raceId = 1, teamId = 7)
+        // Now flip cloud back to pending by adding a fresh point that only local will accept.
+        // Instead: directly assert the null path — re-flush with local already done, cloud offline.
+        val rows = dao.observeForTeam(7, 1).first()
+        assertTrue(rows.all { it.uploadedLocal && it.uploadedCloud })
+
+        // Add a new point so cloud has pending again; local also pending for the new point.
+        r1.insertAll(listOf(rawFix(61_000L)), raceId = 1, teamId = 7, segmentId = "seg")
+        // Mark the new point's local as done out-of-band so local has nothing pending, cloud does.
+        val newId = dao.observeForTeam(7, 1).first().first { it.elapsedRealtimeAt == 61_000L }.id
+        dao.markUploadedLocal(listOf(newId))
+
+        val r2 = repo(
+            dao,
+            cloud = FakeUploader { PostResult.Offline },
+            local = FakeUploader(),
+            onOutcome = rec.sink,
+        )
+        r2.uploadPending(raceId = 1, teamId = 7)
+
+        // Local had nothing pending → no report; cloud had a pending point and was offline.
+        assertNull(rec.kindFor(UploadTarget.Local))
+        assertEquals(UploadResultKind.Offline, rec.kindFor(UploadTarget.Cloud))
+    }
 }
 
 /** Minimal in-memory [TrackDao]; only the methods exercised by [TrackRepository] are real. */
@@ -324,6 +509,16 @@ private class FakeTrackDao : TrackDao {
 
     override fun countForTeam(teamId: Int, raceId: Int): Flow<Int> =
         rows.map { list -> list.count { it.teamId == teamId && it.raceId == raceId } }
+
+    override fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        rows.map { list ->
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            UploadCounts(
+                total = scoped.size,
+                local = scoped.count { it.uploadedLocal },
+                cloud = scoped.count { it.uploadedCloud },
+            )
+        }
 
     override suspend fun insertAll(points: List<TrackPointEntity>) {
         val existingIds = rows.value.mapTo(HashSet()) { it.id }

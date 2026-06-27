@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -30,17 +37,51 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.delay
+import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.UploadResultKind
 import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.data.track.pointsWord
+import ru.kolco24.kolco24.data.track.relativeTimeRu
 import ru.kolco24.kolco24.data.track.segmentsWord
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+
+/**
+ * One upload target's progress for the status row: how many of [total] points are uploaded to this
+ * target and its last flush [outcome] (`null` until a flush has reported, or after a destructive
+ * clear). UI-composition model, declared next to [TrackCard] so the host depends on this package
+ * (never the reverse).
+ */
+data class TargetLine(val uploaded: Int, val outcome: TargetUploadOutcome?)
+
+/**
+ * The adaptive upload-status view-model the host derives by joining the durable per-target counts
+ * with the transient in-memory outcomes for the selected scope. [fullyUploaded] is the calm-state
+ * gate: everything counted and both targets caught up.
+ */
+data class TrackUploadStatus(val total: Int, val local: TargetLine, val cloud: TargetLine) {
+    val fullyUploaded: Boolean get() = total > 0 && local.uploaded == total && cloud.uploaded == total
+}
 
 /**
  * Stateless GPS-track section for the «Команда» tab (rendered as a [Surface] card next to «Прочее»).
@@ -74,6 +115,7 @@ fun TrackCard(
     onStop: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
+    uploadStatus: TrackUploadStatus? = null,
 ) {
     val recording = state is TrackState.Recording
 
@@ -92,8 +134,14 @@ fun TrackCard(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // The upload-status pill sits with the track info (metrics / recording header), shown
+                // only when there is something to report (a scope with points).
+                val upload = uploadStatus?.takeIf { it.total > 0 }
                 if (recording) {
-                    RecordingHeader(pointCount = pointCount)
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        RecordingHeader(pointCount = pointCount, modifier = Modifier.weight(1f))
+                        if (upload != null) UploadStatusRow(status = upload)
+                    }
                     Spacer(Modifier.height(14.dp))
                     Button(
                         onClick = onStop,
@@ -109,12 +157,16 @@ fun TrackCard(
                     }
                 } else {
                     if (pointCount > 0) {
-                        TrackMetrics(
-                            pointCount = pointCount,
-                            segmentCount = segmentCount,
-                            firstPointTime = firstPointTime,
-                            lastPointTime = lastPointTime,
-                        )
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                            TrackMetrics(
+                                pointCount = pointCount,
+                                segmentCount = segmentCount,
+                                firstPointTime = firstPointTime,
+                                lastPointTime = lastPointTime,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (upload != null) UploadStatusRow(status = upload)
+                        }
                         Spacer(Modifier.height(14.dp))
                     } else {
                         Text(
@@ -162,9 +214,199 @@ fun TrackCard(
     }
 }
 
+/**
+ * Collapsible, deliberately-muted upload-status row at the bottom of [TrackCard]. Collapsed it is a
+ * one-liner — a calm «Загружено» when both targets have caught up, otherwise the worst pending
+ * target's last-attempt summary (counts + «N мин назад» + outcome). Expanded it shows one line per
+ * server («Интернет» = cloud, «Локальный» = LAN). The displayed "now" advances on a 30-second ticker
+ * so the relative time updates while the row is visible. Compose-untested per repo convention; only
+ * the pure [relativeTimeRu] formatter is unit-tested.
+ */
+/**
+ * The upload-status footer, a **chat-style delivery receipt**: a track point really travels to two
+ * destinations («Интернет» / «Локальный»), so the indicator borrows the messenger language of ticks.
+ *
+ * Collapsed, it is a single tappable pill in the card's top-right corner showing **the cloud target
+ * only** — a glyph + mono `n/total`. Tapping opens a small receipt [Popup] below the pill with both
+ * targets in full. The pill is clipped to a capsule so its tap ripple stays a clean pill (no stray
+ * rectangle).
+ */
 @Composable
-private fun RecordingHeader(pointCount: Int) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun UploadStatusRow(status: TrackUploadStatus, modifier: Modifier = Modifier) {
+    val nowMs by produceState(System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(30_000L)
+        }
+    }
+    var expanded by remember { mutableStateOf(false) }
+    val gapPx = with(LocalDensity.current) { 8.dp.roundToPx() }
+
+    Box(modifier = modifier) {
+        CloudReceiptPill(status = status, onClick = { expanded = !expanded })
+        if (expanded) {
+            // Anchor the bubble's top-right under the pill's bottom-right (opens downward); fall back
+            // above the pill if there is no room below. Clamp to the window's left edge.
+            val positionProvider = remember(gapPx) {
+                object : PopupPositionProvider {
+                    override fun calculatePosition(
+                        anchorBounds: IntRect,
+                        windowSize: IntSize,
+                        layoutDirection: LayoutDirection,
+                        popupContentSize: IntSize,
+                    ): IntOffset {
+                        val x = (anchorBounds.right - popupContentSize.width).coerceAtLeast(0)
+                        val below = anchorBounds.bottom + gapPx
+                        val y = if (below + popupContentSize.height <= windowSize.height) {
+                            below
+                        } else {
+                            (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(0)
+                        }
+                        return IntOffset(x, y)
+                    }
+                }
+            }
+            Popup(
+                popupPositionProvider = positionProvider,
+                onDismissRequest = { expanded = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                UploadReceiptCard(status = status, nowMs = nowMs)
+            }
+        }
+    }
+}
+
+/**
+ * The collapsed glance: cloud target only, `[glyph] n/total`. The glyph is the qualitative signal —
+ * a green double-check when caught up, a red cloud-off when offline/errored, a muted cloud-up while
+ * in flight — and the mono digit is the quantitative one.
+ */
+@Composable
+private fun CloudReceiptPill(status: TrackUploadStatus, onClick: () -> Unit) {
+    val cloud = status.cloud
+    val done = cloud.uploaded >= status.total
+    val kind = cloud.outcome?.kind
+    val isError = kind == UploadResultKind.Error || kind == UploadResultKind.Offline
+    val glyph = when {
+        done -> Icons.Filled.DoneAll
+        isError -> Icons.Outlined.CloudOff
+        else -> Icons.Outlined.CloudUpload
+    }
+    val tint = when {
+        done -> MaterialTheme.colorScheme.tertiary
+        isError -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            glyph,
+            contentDescription = "Статус загрузки трека",
+            tint = tint,
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text = "${cloud.uploaded}/${status.total}",
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The tap-to-reveal receipt: both targets in full, each as a [ReceiptLine]. */
+@Composable
+private fun UploadReceiptCard(status: TrackUploadStatus, nowMs: Long) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp,
+        modifier = Modifier.widthIn(min = 224.dp, max = 288.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(
+                text = "Загрузка трека",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            ReceiptLine(label = "Интернет", total = status.total, line = status.cloud, nowMs = nowMs)
+            Spacer(Modifier.height(8.dp))
+            ReceiptLine(label = "Локальный", total = status.total, line = status.local, nowMs = nowMs)
+        }
+    }
+}
+
+/**
+ * One target's receipt row: a leading tick (green double-check = done, red cloud-off = problem,
+ * muted single check = sent-and-pending), the target label, and the mono `n/total`. When still
+ * pending with a reported outcome, a muted second line gives «time · статус».
+ */
+@Composable
+private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long) {
+    val done = line.uploaded >= total
+    val outcome = line.outcome
+    val isError = outcome?.kind == UploadResultKind.Error || outcome?.kind == UploadResultKind.Offline
+    val glyph = when {
+        done -> Icons.Filled.DoneAll
+        isError -> Icons.Outlined.CloudOff
+        else -> Icons.Filled.Check
+    }
+    val glyphTint = when {
+        done -> MaterialTheme.colorScheme.tertiary
+        isError -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(glyph, contentDescription = null, tint = glyphTint, modifier = Modifier.size(16.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${line.uploaded}/$total",
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!done && outcome != null) {
+            Text(
+                text = "${relativeTimeRu(outcome.atWallMs, nowMs)} · ${outcomeLabelRu(outcome.kind)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isError) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(start = 24.dp, top = 2.dp),
+            )
+        }
+    }
+}
+
+/** «ok» / «нет сети» / «ошибка» — the short outcome label shown next to a pending target. */
+private fun outcomeLabelRu(kind: UploadResultKind): String = when (kind) {
+    UploadResultKind.Ok -> "ok"
+    UploadResultKind.Offline -> "нет сети"
+    UploadResultKind.Error -> "ошибка"
+}
+
+@Composable
+private fun RecordingHeader(pointCount: Int, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         PulsingDot()
         Column {
             Text(
@@ -209,8 +451,9 @@ private fun TrackMetrics(
     segmentCount: Int,
     firstPointTime: String?,
     lastPointTime: String?,
+    modifier: Modifier = Modifier,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         // Labels decline by their count so the value+label reads grammatically (82 точки, 3 сегмента).
         Metric(label = pointsWord(pointCount).replaceFirstChar { it.uppercase() }, value = pointCount.toString())
         Metric(label = segmentsWord(segmentCount).replaceFirstChar { it.uppercase() }, value = segmentCount.toString())

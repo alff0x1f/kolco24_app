@@ -95,8 +95,11 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
+import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
@@ -116,6 +119,8 @@ import ru.kolco24.kolco24.ui.team.BindSheetState
 import ru.kolco24.kolco24.ui.team.SlotKey
 import ru.kolco24.kolco24.ui.team.decideBind
 import ru.kolco24.kolco24.ui.team.TeamScreen
+import ru.kolco24.kolco24.ui.track.TargetLine
+import ru.kolco24.kolco24.ui.track.TrackUploadStatus
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
@@ -599,6 +604,35 @@ private fun Kolco24AppRoot(
             locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
+    // Upload-status row for the TrackCard. Counts are durable+reactive (Room flags); outcomes are the
+    // transient in-memory per-target result. The scope is carried alongside the counts so that the
+    // one-frame window where selectedTeamId/selectedRaceId have changed but produceState hasn't yet
+    // restarted (and set value=null) does not pair old counts with the new scope's outcomes.
+    val scopedUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
+        val tid = selectedTeamId
+        val rid = selectedRaceId
+        value = null
+        if (tid != null && rid != null) {
+            val scope = TrackScope(rid, tid)
+            trackRepo.uploadCounts(tid, rid).collect { value = scope to it }
+        }
+    }
+    val uploadOutcomes by container.trackUploadOutcomes.collectAsState()
+    val trackUploadStatus: TrackUploadStatus? = run {
+        val sc = scopedUploadCounts
+        val tid = selectedTeamId
+        val rid = selectedRaceId
+        if (sc == null || tid == null || rid == null) return@run null
+        val (countScope, counts) = sc
+        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
+        val trackScope = TrackScope(rid, tid)
+        TrackUploadStatus(
+            total = counts.total,
+            local = TargetLine(counts.local, uploadOutcomes[trackScope to UploadTarget.Local]),
+            cloud = TargetLine(counts.cloud, uploadOutcomes[trackScope to UploadTarget.Cloud]),
+        )
+    }
+
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
     // only seeded with `initial` on first composition). During the brief window after a team switch
@@ -1011,6 +1045,7 @@ private fun Kolco24AppRoot(
                         onStartTrack = onStartTrack,
                         onStopTrack = { TrackRecordingService.stop(context) },
                         onShareTrack = onShareTrack,
+                        trackUploadStatus = trackUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
@@ -1579,7 +1614,14 @@ private fun Kolco24AppRoot(
                         onClick = {
                             if (clearTeamId != null && clearRaceId != null && container.trackRecordingState.value is TrackState.Idle) {
                                 // applicationScope so the delete outlives the closing dialog (consistent with unbind).
-                                container.applicationScope.launch { trackRepo.deleteForTeam(clearTeamId, clearRaceId) }
+                                // The guard re-checks recording state INSIDE the mutex (after any in-flight upload
+                                // completes) so a new recording that started while the mutex was waiting does not
+                                // lose its freshly-inserted points to the deferred deleteForTeam.
+                                container.applicationScope.launch {
+                                    trackRepo.deleteForTeam(clearTeamId, clearRaceId) {
+                                        container.trackRecordingState.value is TrackState.Idle
+                                    }
+                                }
                             }
                             showClearTrackDialog = false
                         },

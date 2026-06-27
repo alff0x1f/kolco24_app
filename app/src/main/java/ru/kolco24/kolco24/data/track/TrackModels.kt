@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data.track
 
+import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.db.TrackPointEntity
 
 /**
@@ -70,6 +71,31 @@ fun <T : TrackPointLike> trackPointComparator(): Comparator<T> =
 
 fun <T : TrackPointLike> sortedTrackPoints(points: List<T>): List<T> =
     points.sortedWith(trackPointComparator())
+
+/**
+ * The two independent upload targets a track flushes to: the LAN server («Локальный») and the cloud
+ * HTTPS server («Интернет»). Pure so the upload-status model stays JVM-testable.
+ */
+enum class UploadTarget { Local, Cloud }
+
+/** The terminal outcome of one target's flush attempt: clean drain / no network / any other error. */
+enum class UploadResultKind { Ok, Offline, Error }
+
+/** One target's last flush outcome with the wall-clock instant it was recorded (for «N мин назад»). */
+data class TargetUploadOutcome(val kind: UploadResultKind, val atWallMs: Long)
+
+/**
+ * Map a non-`null` [PostResult] to the coarse [UploadResultKind] the status row shows: a clean
+ * [PostResult.Success] → [UploadResultKind.Ok], [PostResult.Offline] → [UploadResultKind.Offline],
+ * any other failure → [UploadResultKind.Error]. Shared by `TrackRepository` and its tests so the
+ * mapping lives in one place. NB: a `Success` with **no forward progress** is the repo's concern
+ * (it must hand-map to `Error`) — this mapper treats any `Success` as `Ok`.
+ */
+fun uploadResultKind(result: PostResult<*>): UploadResultKind = when (result) {
+    is PostResult.Success -> UploadResultKind.Ok
+    PostResult.Offline -> UploadResultKind.Offline
+    else -> UploadResultKind.Error
+}
 
 /**
  * Map a [RawFix] to a [TrackPointEntity]. The time fields are injected so the mapper stays
