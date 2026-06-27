@@ -12,8 +12,8 @@ import ru.kolco24.kolco24.data.track.TrackPointLike
  * per-target delivery seeds.
  *
  * Time fields are pinned to the **moment of the fix**, not its delivery: [elapsedRealtimeAt]
- * (`Location.elapsedRealtimeNanos / 1_000_000`) is the monotonic capture moment and the order/length
- * source, [trustedMs] is the trusted server time derived from it via `TrustedClock.trustedAt`
+ * (`Location.elapsedRealtimeNanos / 1_000_000`) is the monotonic capture moment and a same-boot
+ * tie-breaker, [trustedMs] is the trusted server time derived from it via `TrustedClock.trustedAt`
  * (NULL when no clock sync yet). [altitude]/[verticalAccuracyMeters] are the WGS84-ellipsoid
  * elevation + its 1-sigma estimate, both nullable when the provider gives no vertical fix.
  * [wallMs] is the back-projected wall-clock of the fix moment (per
@@ -29,7 +29,7 @@ import ru.kolco24.kolco24.data.track.TrackPointLike
     indices = [Index("teamId"), Index("raceId")],
 )
 data class TrackPointEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey override val id: String,
     val raceId: Int,
     val teamId: Int,
     override val lat: Double,
@@ -39,9 +39,9 @@ data class TrackPointEntity(
     val verticalAccuracyMeters: Float?,
     val gpsTimeMs: Long,
     override val elapsedRealtimeAt: Long,
-    val bootCount: Int?,
-    val wallMs: Long,
-    val trustedMs: Long?,
+    override val bootCount: Int?,
+    override val wallMs: Long,
+    override val trustedMs: Long?,
     val segmentId: String,
     val uploadedLocal: Boolean = false,
     val uploadedCloud: Boolean = false,

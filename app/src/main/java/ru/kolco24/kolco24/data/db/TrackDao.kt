@@ -15,7 +15,10 @@ data class TrackScope(val raceId: Int, val teamId: Int)
 
 @Dao
 interface TrackDao {
-    @Query("SELECT * FROM track_points WHERE teamId = :teamId AND raceId = :raceId ORDER BY elapsedRealtimeAt ASC")
+    @Query(
+        "SELECT * FROM track_points WHERE teamId = :teamId AND raceId = :raceId " +
+            "ORDER BY COALESCE(trustedMs, wallMs), COALESCE(bootCount, -1), elapsedRealtimeAt, id"
+    )
     fun observeForTeam(teamId: Int, raceId: Int): Flow<List<TrackPointEntity>>
 
     @Query("SELECT count(*) FROM track_points WHERE teamId = :teamId AND raceId = :raceId")
@@ -33,13 +36,17 @@ interface TrackDao {
     // never sweep up another race/team's points and POST them to the wrong endpoint.
     @Query(
         "SELECT * FROM track_points WHERE raceId = :raceId AND teamId = :teamId " +
-            "AND uploadedLocal = 0 ORDER BY elapsedRealtimeAt LIMIT :limit"
+            "AND uploadedLocal = 0 " +
+            "ORDER BY COALESCE(trustedMs, wallMs), COALESCE(bootCount, -1), elapsedRealtimeAt, id " +
+            "LIMIT :limit"
     )
     suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<TrackPointEntity>
 
     @Query(
         "SELECT * FROM track_points WHERE raceId = :raceId AND teamId = :teamId " +
-            "AND uploadedCloud = 0 ORDER BY elapsedRealtimeAt LIMIT :limit"
+            "AND uploadedCloud = 0 " +
+            "ORDER BY COALESCE(trustedMs, wallMs), COALESCE(bootCount, -1), elapsedRealtimeAt, id " +
+            "LIMIT :limit"
     )
     suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<TrackPointEntity>
 

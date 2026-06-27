@@ -100,6 +100,7 @@ import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
+import ru.kolco24.kolco24.data.track.sortedTrackPoints
 import java.io.File
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
@@ -580,8 +581,8 @@ private fun Kolco24AppRoot(
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
-    // Time span uses the accuracy-filtered, capture-ordered points (raw count stays full).
-    val trackUsable = remember(safeTrack) { filterPoints(safeTrack).sortedBy { it.elapsedRealtimeAt } }
+    // Time span uses the accuracy-filtered, reboot-safe ordered points (raw count stays full).
+    val trackUsable = remember(safeTrack) { sortedTrackPoints(filterPoints(safeTrack)) }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
@@ -725,7 +726,7 @@ private fun Kolco24AppRoot(
             container.applicationScope.launch {
                 val points = filterPoints(
                     trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid },
-                ).sortedBy { it.elapsedRealtimeAt }
+                ).let(::sortedTrackPoints)
                 if (points.isEmpty()) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Нет точных точек для экспорта", Toast.LENGTH_SHORT).show()

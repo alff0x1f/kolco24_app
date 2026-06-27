@@ -142,6 +142,30 @@ class TrackPointMappingTest {
     }
 
     @Test
+    fun sortedTrackPoints_ordersByTrustedOrWallBeforeElapsedAcrossReboot() {
+        val beforeReboot = fix.copy(elapsedRealtimeNanos = 100_000_000_000L).toTrackPoint(
+            raceId = 1,
+            teamId = 1,
+            wallMs = 1_000L,
+            trustedMs = null,
+            bootCount = 7,
+            segmentId = "before",
+            idFactory = { "before" },
+        )
+        val afterReboot = fix.copy(elapsedRealtimeNanos = 5_000_000_000L).toTrackPoint(
+            raceId = 1,
+            teamId = 1,
+            wallMs = 2_000L,
+            trustedMs = null,
+            bootCount = 8,
+            segmentId = "after",
+            idFactory = { "after" },
+        )
+
+        assertEquals(listOf("before", "after"), sortedTrackPoints(listOf(afterReboot, beforeReboot)).map { it.id })
+    }
+
+    @Test
     fun idFactoryIsInvokedPerMapping() {
         var counter = 0
         val factory = { "id-${counter++}" }

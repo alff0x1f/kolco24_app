@@ -83,7 +83,7 @@ class TrackRepository(
         trackDao.insertAll(entities)
     }
 
-    /** Live track points for one (raceId, teamId) scope, ordered by `elapsedRealtimeAt`. */
+    /** Live track points for one (raceId, teamId) scope, ordered by reboot-safe fix time. */
     fun observeTrack(teamId: Int, raceId: Int): Flow<List<TrackPointEntity>> = trackDao.observeForTeam(teamId, raceId)
 
     /** Live point count for one (raceId, teamId) scope. */
