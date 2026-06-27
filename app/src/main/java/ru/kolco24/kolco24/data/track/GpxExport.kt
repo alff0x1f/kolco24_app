@@ -7,14 +7,15 @@ import java.util.TimeZone
 
 /**
  * Pure, Android-free GPX serialization (mirrors `ScanSession.kt`/`TrackModels.kt` — JVM-unit-testable,
- * no Android imports). The caller passes already-[filterPoints]-ed, capture-ordered points; this
+ * no Android imports). The caller passes already-[filterPoints]-ed, reboot-safe ordered points; this
  * serializer stays dumb and total.
  *
- * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per distinct
- * [TrackPointEntity.segmentId]** in first-seen order, so a stop→start gap renders as separate segments
- * instead of a teleport line (matching how the server groups by `segment_id`). Each point's `<time>`
- * uses `trustedMs ?: wallMs` formatted as ISO-8601 UTC; `<ele>` is omitted when altitude is null.
- * Numbers use [Locale.US] so the decimal separator is always `.` regardless of device locale.
+ * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per consecutive
+ * run of [TrackPointEntity.segmentId]**. Correctly ordered input keeps each recording session
+ * contiguous, so a stop→start gap renders as separate segments instead of a teleport line (matching
+ * how the server groups by `segment_id`). Each point's `<time>` uses `trustedMs ?: wallMs` formatted
+ * as ISO-8601 UTC; `<ele>` is omitted when altitude is null. Numbers use [Locale.US] so the decimal
+ * separator is always `.` regardless of device locale.
  */
 
 private const val GPX_HEADER =
@@ -31,7 +32,7 @@ fun buildGpx(points: List<TrackPointEntity>, trackName: String): String {
     sb.append("  <trk>\n")
     sb.append("    <name>").append(xmlEscape(trackName)).append("</name>\n")
 
-    // Group consecutive points into <trkseg>s by segmentId, preserving first-seen segment order.
+    // Group consecutive runs into <trkseg>s by segmentId; callers own global ordering.
     var currentSegment: String? = null
     var segmentOpen = false
     for (p in points) {
