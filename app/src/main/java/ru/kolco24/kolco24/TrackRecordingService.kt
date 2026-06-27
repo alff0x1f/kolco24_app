@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -42,6 +43,26 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 fun nextSegmentId(current: String?, wasTearingDown: Boolean, mint: () -> String): String =
     if (wasTearingDown || current == null) mint() else current
+
+/**
+ * Minimum spacing between in-recording live uploads: 10 min. Applies to **both** profiles — Precise
+ * (~60 s batches) fires ~every 10 min; Economy (~180 s batches) fires on the batch crossing 600 s,
+ * ~every 12 min. One constant, no per-profile config (the GPS-delivery wake is reused, no extra
+ * device wakeups).
+ */
+const val LIVE_UPLOAD_MIN_INTERVAL_MS = 600_000L
+
+/**
+ * Decide whether to fire a live upload for the current fix batch: never uploaded this session
+ * ([lastUploadElapsed] == null) → always true (the first batch fires immediately, regardless of how
+ * long the device has been booted), else true once the monotonic delta since the last upload reaches
+ * [minIntervalMs]. The **nullable** sentinel (not `0L`) is reboot-safe: `elapsedRealtime()` is
+ * time-since-boot, so a recording started within 10 min of a reboot would not fire on its first batch
+ * with a `0L` baseline — and it's overflow-safe (no `now - Long.MIN_VALUE`). Pure so the
+ * boundary/first-batch matrix is JVM-tested (repo convention).
+ */
+fun shouldLiveUpload(nowElapsed: Long, lastUploadElapsed: Long?, minIntervalMs: Long): Boolean =
+    lastUploadElapsed == null || nowElapsed - lastUploadElapsed >= minIntervalMs
 
 /**
  * Foreground service that records the team's GPS track with the screen off. Started from the UI
@@ -79,6 +100,14 @@ class TrackRecordingService : Service() {
     /** UUID minted once per recording session; snapshotted into each engine's onPoints batch. */
     private var segmentId: String? = null
     /**
+     * Monotonic timestamp of the last in-recording live upload, or null until the first one. Drives the
+     * [shouldLiveUpload] throttle so a recording flushes to the server ~every 10 min (first batch fires
+     * immediately). **Persists across startEngine restarts** (a Precise↔Economy soft-restart must not
+     * reset the throttle) and is reset to null on each new logical session — the same lifecycle as
+     * [segmentId] (finishTeardown + the onStartCommand fresh-start mint predicate).
+     */
+    private var lastLiveUploadElapsed: Long? = null
+    /**
      * Set to true when teardown() is in progress so the in-flight profile-switch flush callback
      * doesn't restart the engine after Stop wins the race — without this guard the profile callback
      * can restart the engine and teardown's identity check (engine !== e) then skips finishTeardown.
@@ -111,6 +140,12 @@ class TrackRecordingService : Service() {
         }
         val wasTearingDown = isTearingDown
         isTearingDown = false // reset for new recording session
+        // Reset the live-upload throttle on the same predicate nextSegmentId uses to mint — a genuinely
+        // new logical session re-uploads its first batch immediately. Must be here too (not only in
+        // finishTeardown): on a rapid stop→start the old session's teardown flush returns early at
+        // `engine !== e` before finishTeardown runs, so reset there is skipped. Do NOT reset on an
+        // idempotent re-entry (same logical session) — it keeps its 10-min throttle.
+        if (wasTearingDown || segmentId == null) lastLiveUploadElapsed = null
         // Mint a fresh segment id only on a genuinely new session (first start, post-teardown, or one
         // replacing an in-flight teardown). An idempotent re-entry keeps the existing segment so a
         // duplicate start intent doesn't split one recording into two segments.
@@ -195,8 +230,18 @@ class TrackRecordingService : Service() {
         engine = e
         e.start(
             onPoints = { fixes ->
+                // Throttled live upload: decide on the (serialized, main-thread) callback whether enough
+                // time has elapsed since the last live upload, then piggyback on the batch-insert wake.
+                // Guard on engine === e: a stale flush callback from a rapid stop→start must not
+                // consume the new session's null sentinel (first-batch-fires slot).
+                val now = SystemClock.elapsedRealtime()
+                val doUpload = engine === e && shouldLiveUpload(now, lastLiveUploadElapsed, LIVE_UPLOAD_MIN_INTERVAL_MS)
+                if (doUpload) lastLiveUploadElapsed = now
                 container.applicationScope.launch {
                     container.trackRepository.insertAll(fixes, r, t, s)
+                    // uploadPending is mutex-guarded (tryLock), dual-target, offline-tolerant — a stop /
+                    // team-switch upload in flight just makes this a no-op; a failure leaves points pending.
+                    if (doUpload) container.trackRepository.uploadPending(r, t)
                 }
             },
             onError = { err ->
@@ -267,6 +312,7 @@ class TrackRecordingService : Service() {
         engine?.stop()
         engine = null
         segmentId = null // next session mints a fresh segment — a stop→start gap is a new segment
+        lastLiveUploadElapsed = null // next session re-uploads its first batch immediately
         mainHandler.removeCallbacksAndMessages(null)
         countJob?.cancel()
         profileJob?.cancel()
