@@ -16,6 +16,8 @@ class GpxExportTest {
         altitude: Double? = null,
         trustedMs: Long? = null,
         wallMs: Long = 1_718_900_000_000L,
+        elapsedRealtimeAt: Long = 0L,
+        bootCount: Int? = null,
     ) = TrackPointEntity(
         id = id,
         raceId = 7,
@@ -26,8 +28,8 @@ class GpxExportTest {
         altitude = altitude,
         verticalAccuracyMeters = null,
         gpsTimeMs = 0L,
-        elapsedRealtimeAt = 0L,
-        bootCount = null,
+        elapsedRealtimeAt = elapsedRealtimeAt,
+        bootCount = bootCount,
         wallMs = wallMs,
         trustedMs = trustedMs,
         segmentId = segmentId,
@@ -56,6 +58,24 @@ class GpxExportTest {
         assertEquals(2, Regex("<trkseg>").findAll(gpx).count())
         assertEquals(2, Regex("</trkseg>").findAll(gpx).count())
         assertEquals(3, Regex("<trkpt").findAll(gpx).count())
+    }
+
+    @Test
+    fun callerSideRebootSafeSorting_preventsAlternatingOnePointSegments() {
+        val points = sortedTrackPoints(
+            listOf(
+                point("old-1", 55.0, 37.0, segmentId = "old", wallMs = 1_000L, elapsedRealtimeAt = 100_000L, bootCount = 7),
+                point("new-1", 56.0, 38.0, segmentId = "new", wallMs = 10_000L, elapsedRealtimeAt = 101_000L, bootCount = 8),
+                point("old-2", 55.1, 37.1, segmentId = "old", wallMs = 2_000L, elapsedRealtimeAt = 102_000L, bootCount = 7),
+                point("new-2", 56.1, 38.1, segmentId = "new", wallMs = 11_000L, elapsedRealtimeAt = 103_000L, bootCount = 8),
+            ),
+        )
+
+        val gpx = buildGpx(points, "T")
+
+        assertEquals(listOf("old-1", "old-2", "new-1", "new-2"), points.map { it.id })
+        assertEquals(2, Regex("<trkseg>").findAll(gpx).count())
+        assertEquals(4, Regex("<trkpt").findAll(gpx).count())
     }
 
     @Test

@@ -17,7 +17,7 @@
 #
 # Raw timestamp check (to compare trustedMs vs gpsTimeMs vs wallMs, plus elevation):
 #   sqlite3 /tmp/kolco24-track.db \
-#     'SELECT segmentId,lat,lon,accuracy,altitude,verticalAccuracyMeters,gpsTimeMs,trustedMs,wallMs,bootCount FROM track_points ORDER BY segmentId,elapsedRealtimeAt'
+#     'SELECT segmentId,lat,lon,accuracy,altitude,verticalAccuracyMeters,gpsTimeMs,trustedMs,wallMs,bootCount FROM track_points ORDER BY COALESCE(trustedMs,wallMs),COALESCE(bootCount,-1),elapsedRealtimeAt,id'
 set -euo pipefail
 
 PKG=ru.kolco24.kolco24
@@ -61,7 +61,7 @@ done
 WHERE=""
 [ -n "$TEAM" ] && WHERE="WHERE teamId = $TEAM"
 
-# Emit GPX. time = trustedMs ?? gpsTimeMs ?? wallMs (epoch ms -> ISO8601 UTC).
+# Emit GPX. time = trustedMs ?? wallMs (epoch ms -> ISO8601 UTC), matching in-app export.
 # <ele> (meters) is emitted only when altitude is non-NULL — a NULL in the SQL
 # concat would null the whole row and drop the point, so it's gated by CASE.
 # accuracy (meters) is stuffed into <hdop> as a loose visual hint; viewers tolerate it.
@@ -70,7 +70,8 @@ WHERE=""
 # Each row is prefixed with its segmentId + a TAB; awk opens a fresh <trkseg> whenever the
 # segmentId changes, so each recording session is an independent polyline (no teleport line
 # bridging a stop->start gap). Rows are grouped by segment and the segments are emitted in
-# chronological order (by each segment's earliest point), points within a segment by capture time.
+# chronological order (by each segment's earliest trusted/wall point), points within a segment by
+# the same reboot-safe order. `elapsedRealtimeAt` is only a tie-breaker because it resets on reboot.
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<gpx version="1.1" creator="kolco24" xmlns="http://www.topografix.com/GPX/1/1"><trk>'
@@ -78,10 +79,15 @@ WHERE=""
     "SELECT IFNULL(segmentId,'')||char(9)||
             '<trkpt lat=\"'||lat||'\" lon=\"'||lon||'\">'||
             CASE WHEN altitude IS NOT NULL THEN '<ele>'||altitude||'</ele>' ELSE '' END||
-            '<time>'||strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(trustedMs,gpsTimeMs,wallMs)/1000, 'unixepoch')||'</time>'||
+            '<time>'||strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(trustedMs,wallMs)/1000, 'unixepoch')||'</time>'||
             '<hdop>'||accuracy||'</hdop></trkpt>'
      FROM track_points $WHERE
-     ORDER BY min(elapsedRealtimeAt) OVER (PARTITION BY segmentId), segmentId, elapsedRealtimeAt ASC;" |
+     ORDER BY min(COALESCE(trustedMs,wallMs)) OVER (PARTITION BY segmentId),
+              segmentId,
+              COALESCE(trustedMs,wallMs),
+              COALESCE(bootCount,-1),
+              elapsedRealtimeAt,
+              id;" |
   awk -F'\t' '
     NR==1            { seg=$1; print "<trkseg>" }
     NR>1 && $1!=seg  { print "</trkseg>"; print "<trkseg>"; seg=$1 }

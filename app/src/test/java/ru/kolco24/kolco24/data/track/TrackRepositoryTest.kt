@@ -161,7 +161,7 @@ class TrackRepositoryTest {
             teamId = 7,
             segmentId = "seg",
         )
-        val points = dao.observeForTeam(7, 1).first() // ordered by elapsedRealtimeAt ASC
+        val points = dao.observeForTeam(7, 1).first()
         assertEquals(listOf(60_000L, 64_000L), points.map { it.elapsedRealtimeAt })
 
         val (a, b) = points
@@ -320,7 +320,7 @@ private class FakeTrackDao : TrackDao {
     private val rows = MutableStateFlow<List<TrackPointEntity>>(emptyList())
 
     override fun observeForTeam(teamId: Int, raceId: Int): Flow<List<TrackPointEntity>> =
-        rows.map { list -> list.filter { it.teamId == teamId && it.raceId == raceId }.sortedBy { it.elapsedRealtimeAt } }
+        rows.map { list -> sortedTrackPoints(list.filter { it.teamId == teamId && it.raceId == raceId }) }
 
     override fun countForTeam(teamId: Int, raceId: Int): Flow<Int> =
         rows.map { list -> list.count { it.teamId == teamId && it.raceId == raceId } }
@@ -336,11 +336,11 @@ private class FakeTrackDao : TrackDao {
 
     override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<TrackPointEntity> =
         rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal }
-            .sortedBy { it.elapsedRealtimeAt }.take(limit)
+            .let(::sortedTrackPoints).take(limit)
 
     override suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<TrackPointEntity> =
         rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud }
-            .sortedBy { it.elapsedRealtimeAt }.take(limit)
+            .let(::sortedTrackPoints).take(limit)
 
     override suspend fun markUploadedLocal(ids: List<String>) {
         rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedLocal = true) else it }

@@ -35,10 +35,14 @@ data class RawFix(
  * Decouples [filterPoints] from Room so it stays JVM-testable without a DB.
  */
 interface TrackPointLike {
+    val id: String
     val lat: Double
     val lon: Double
     val accuracy: Float
     val elapsedRealtimeAt: Long
+    val bootCount: Int?
+    val wallMs: Long
+    val trustedMs: Long?
 }
 
 /** Default accuracy cutoff (meters) for [filterPoints] — coarse network fixes are dropped on read. */
@@ -53,6 +57,19 @@ fun <T : TrackPointLike> filterPoints(
     points: List<T>,
     maxAccuracyMeters: Float = DEFAULT_MAX_ACCURACY_METERS,
 ): List<T> = points.filter { it.accuracy <= maxAccuracyMeters }
+
+/** The display/export/upload order: absolute fix time first, monotonic time only as a tie-breaker. */
+fun trackPointTimeMs(point: TrackPointLike): Long = point.trustedMs ?: point.wallMs
+
+/** Reboot-safe order for track points. `elapsedRealtimeAt` resets on device reboot, so it is not first. */
+fun <T : TrackPointLike> trackPointComparator(): Comparator<T> =
+    compareBy<T> { trackPointTimeMs(it) }
+        .thenBy { it.bootCount ?: -1 }
+        .thenBy { it.elapsedRealtimeAt }
+        .thenBy { it.id }
+
+fun <T : TrackPointLike> sortedTrackPoints(points: List<T>): List<T> =
+    points.sortedWith(trackPointComparator())
 
 /**
  * Map a [RawFix] to a [TrackPointEntity]. The time fields are injected so the mapper stays
