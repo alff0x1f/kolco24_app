@@ -69,9 +69,37 @@ class PointsPluralTest {
     }
 
     @Test
-    fun segmentsLabel_joinsCountAndWord() {
-        assertEquals("1 сегмент", segmentsLabel(1))
-        assertEquals("3 сегмента", segmentsLabel(3))
-        assertEquals("5 сегментов", segmentsLabel(5))
+    fun relativeTime_underMinute_isJustNow() {
+        assertEquals("только что", relativeTimeRu(0L, 0L))
+        assertEquals("только что", relativeTimeRu(0L, 59_000L))
+        assertEquals("только что", relativeTimeRu(0L, 59_999L))
+    }
+
+    @Test
+    fun relativeTime_minutes() {
+        assertEquals("1 мин назад", relativeTimeRu(0L, 60_000L))
+        assertEquals("2 мин назад", relativeTimeRu(0L, 120_000L))
+        assertEquals("59 мин назад", relativeTimeRu(0L, 59L * 60_000L))
+    }
+
+    @Test
+    fun relativeTime_hours() {
+        assertEquals("1 ч назад", relativeTimeRu(0L, 3_600_000L))
+        assertEquals("2 ч назад", relativeTimeRu(0L, 2L * 3_600_000L))
+    }
+
+    @Test
+    fun relativeTime_negativeDelta_isJustNow() {
+        assertEquals("только что", relativeTimeRu(120_000L, 0L))
+    }
+
+    @Test
+    fun relativeTime_boundariesRollOver() {
+        // 59 999 ms still under a minute, 60 000 ms rolls to «1 мин назад»
+        assertEquals("только что", relativeTimeRu(0L, 59_999L))
+        assertEquals("1 мин назад", relativeTimeRu(0L, 60_000L))
+        // one ms under an hour is still minutes; exactly an hour rolls to «1 ч назад»
+        assertEquals("59 мин назад", relativeTimeRu(0L, 3_599_999L))
+        assertEquals("1 ч назад", relativeTimeRu(0L, 3_600_000L))
     }
 }

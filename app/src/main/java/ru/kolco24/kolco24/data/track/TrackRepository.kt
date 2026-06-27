@@ -8,6 +8,8 @@ import ru.kolco24.kolco24.data.api.dto.TrackUploadResponse
 import ru.kolco24.kolco24.data.api.dto.toDto
 import ru.kolco24.kolco24.data.db.TrackDao
 import ru.kolco24.kolco24.data.db.TrackPointEntity
+import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.TrustedClock
 
 /**
@@ -41,6 +43,8 @@ class TrackRepository(
     private val elapsedProvider: () -> Long,
     private val cloudUploader: TrackUploader = TrackUploader { _, _, _ -> PostResult.Offline },
     private val localUploader: TrackUploader = TrackUploader { _, _, _ -> PostResult.Offline },
+    private val onUploadOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
+    private val onScopeCleared: (TrackScope) -> Unit = {},
 ) {
     /**
      * Guards [uploadPending]/[uploadAllPending] against concurrent entry (a service-stop flush and a
@@ -89,8 +93,37 @@ class TrackRepository(
     /** Live point count for one (raceId, teamId) scope. */
     fun countForTeam(teamId: Int, raceId: Int): Flow<Int> = trackDao.countForTeam(teamId, raceId)
 
-    /** Wipe one (raceId, teamId) scope (the «Очистить трек» action; only while not recording). */
-    suspend fun deleteForTeam(teamId: Int, raceId: Int) = trackDao.deleteForTeam(teamId, raceId)
+    /** Live per-target upload counts (total / uploadedLocal / uploadedCloud) for one scope. */
+    fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> = trackDao.uploadCounts(teamId, raceId)
+
+    /**
+     * Wipe one (raceId, teamId) scope (the «Очистить трек» action; only while not recording). Reports
+     * [onScopeCleared] so the host can drop the transient per-target upload outcome — only a destructive
+     * clear resets it (new points keep the last outcome, see [flushScope]).
+     *
+     * Acquires [uploadMutex] with a blocking [Mutex.lock] (not [Mutex.tryLock]) so an in-flight flush
+     * completes — including its [onUploadOutcome] call — *before* the DB wipe and [onScopeCleared] run.
+     * Without this, the flush's [onUploadOutcome] could fire after [onScopeCleared], re-adding a stale
+     * outcome entry that would surface against new points from a subsequent recording of the same scope.
+     *
+     * [guard] is evaluated **after** the mutex is acquired and must return `true` for the delete to
+     * proceed. Pass a recording-state check from the call site so that a new recording session started
+     * while the mutex was waiting (an in-flight upload blocking clear) does not lose its new points:
+     * if recording has resumed by the time the mutex is released, the guard returns `false` and the
+     * wipe is skipped entirely (the old, already-uploaded points stay, which is safe — they were
+     * not the points the user cared about losing anyway).
+     */
+    suspend fun deleteForTeam(teamId: Int, raceId: Int, guard: () -> Boolean = { true }) {
+        uploadMutex.lock()
+        try {
+            if (guard()) {
+                trackDao.deleteForTeam(teamId, raceId)
+                onScopeCleared(TrackScope(raceId, teamId))
+            }
+        } finally {
+            uploadMutex.unlock()
+        }
+    }
 
     /**
      * Flush all pending points for one `(raceId, teamId)` to **both** targets independently — a target
@@ -122,41 +155,53 @@ class TrackRepository(
         }
     }
 
-    /** Flush one scope to both targets in turn; each target's loop is independent of the other's. */
+    /**
+     * Flush one scope to both targets in turn; each target's loop is independent of the other's. Each
+     * loop's [UploadResultKind] (when non-null — i.e. an attempt was actually made) is reported via
+     * [onUploadOutcome] so the UI can surface the last per-target result; a `null` return means nothing
+     * was pending, so the prior outcome is left untouched (an idle re-flush never overwrites a real
+     * «ошибка» with a misleading «ok»).
+     */
     private suspend fun flushScope(raceId: Int, teamId: Int) {
+        val scope = TrackScope(raceId, teamId)
         uploadLoop(
             fetch = { trackDao.unuploadedLocal(raceId, teamId, UPLOAD_BATCH) },
             upload = { localUploader.upload(raceId, teamId, it) },
             mark = { trackDao.markUploadedLocal(it) },
-        )
+        )?.let { onUploadOutcome(scope, UploadTarget.Local, it) }
         uploadLoop(
             fetch = { trackDao.unuploadedCloud(raceId, teamId, UPLOAD_BATCH) },
             upload = { cloudUploader.upload(raceId, teamId, it) },
             mark = { trackDao.markUploadedCloud(it) },
-        )
+        )?.let { onUploadOutcome(scope, UploadTarget.Cloud, it) }
     }
 
     /**
-     * Drain one target in batches until done or stuck. Terminates on: empty fetch (all sent); a
-     * non-`Success` response (offline/error — retry next trigger); or **no forward progress** (none of
-     * the fetched batch's ids came back accepted, e.g. empty or a foreign subset). Only ids that are
-     * both `accepted` **and** in the fetched batch are marked — so a strange response can never mark a
-     * row out of this scope, and a marked row strictly shrinks the pending set, guaranteeing exit.
+     * Drain one target in batches until done or stuck, returning the terminal [UploadResultKind] or
+     * `null`. Terminates on: empty first fetch (**nothing pending** → `null`, no attempt made); drained
+     * to empty after marking progress (→ [UploadResultKind.Ok]); a non-`Success` response (offline/error
+     * — mapped via [uploadResultKind], retry next trigger); or **no forward progress** (none of the
+     * fetched batch's ids came back accepted, e.g. empty or a foreign subset → [UploadResultKind.Error],
+     * **not** the `Ok` that `uploadResultKind(Success)` would give). Only ids that are both `accepted`
+     * **and** in the fetched batch are marked — so a strange response can never mark a row out of this
+     * scope, and a marked row strictly shrinks the pending set, guaranteeing exit.
      */
     private suspend fun uploadLoop(
         fetch: suspend () -> List<TrackPointEntity>,
         upload: suspend (List<TrackPointDto>) -> PostResult<TrackUploadResponse>,
         mark: suspend (List<String>) -> Unit,
-    ) {
+    ): UploadResultKind? {
+        var progressed = false
         while (true) {
             val batch = fetch()
-            if (batch.isEmpty()) break
+            if (batch.isEmpty()) return if (progressed) UploadResultKind.Ok else null
             val result = upload(batch.map { it.toDto() })
-            if (result !is PostResult.Success) break
+            if (result !is PostResult.Success) return uploadResultKind(result) // Offline / Error
             val batchIds = batch.mapTo(HashSet()) { it.id }
             val toMark = result.data.accepted.filter { it in batchIds }
-            if (toMark.isEmpty()) break // no progress → stop, catch up on the next trigger
+            if (toMark.isEmpty()) return UploadResultKind.Error // no progress → stop, catch up next trigger
             mark(toMark)
+            progressed = true
         }
     }
 

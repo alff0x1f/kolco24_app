@@ -51,6 +51,7 @@ import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.track.TrackCard
+import ru.kolco24.kolco24.ui.track.TrackUploadStatus
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
@@ -95,6 +96,7 @@ fun TeamScreen(
     onStartTrack: () -> Unit = {},
     onStopTrack: () -> Unit = {},
     onShareTrack: () -> Unit = {},
+    trackUploadStatus: TrackUploadStatus? = null,
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -157,6 +159,7 @@ fun TeamScreen(
                     onStart = onStartTrack,
                     onStop = onStopTrack,
                     onShare = onShareTrack,
+                    uploadStatus = trackUploadStatus,
                 )
             }
             item("misc") {

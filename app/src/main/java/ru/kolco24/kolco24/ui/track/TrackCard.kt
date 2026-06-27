@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,29 +19,62 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.UploadResultKind
 import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.data.track.pointsWord
+import ru.kolco24.kolco24.data.track.relativeTimeRu
 import ru.kolco24.kolco24.data.track.segmentsWord
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+
+/**
+ * One upload target's progress for the status row: how many of [total] points are uploaded to this
+ * target and its last flush [outcome] (`null` until a flush has reported, or after a destructive
+ * clear). UI-composition model, declared next to [TrackCard] so the host depends on this package
+ * (never the reverse).
+ */
+data class TargetLine(val uploaded: Int, val outcome: TargetUploadOutcome?)
+
+/**
+ * The adaptive upload-status view-model the host derives by joining the durable per-target counts
+ * with the transient in-memory outcomes for the selected scope. [fullyUploaded] is the calm-state
+ * gate: everything counted and both targets caught up.
+ */
+data class TrackUploadStatus(val total: Int, val local: TargetLine, val cloud: TargetLine) {
+    val fullyUploaded: Boolean get() = total > 0 && local.uploaded == total && cloud.uploaded == total
+}
 
 /**
  * Stateless GPS-track section for the «Команда» tab (rendered as a [Surface] card next to «Прочее»).
@@ -74,6 +108,7 @@ fun TrackCard(
     onStop: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
+    uploadStatus: TrackUploadStatus? = null,
 ) {
     val recording = state is TrackState.Recording
 
@@ -157,7 +192,208 @@ fun TrackCard(
                         )
                     }
                 }
+                // Common footer (idle and recording): the upload-status diagnostics row. Hidden when
+                // there is nothing to report (no scope / empty track).
+                if (uploadStatus != null && uploadStatus.total > 0) {
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    UploadStatusRow(status = uploadStatus)
+                }
             }
+        }
+    }
+}
+
+/**
+ * Collapsible, deliberately-muted upload-status row at the bottom of [TrackCard]. Collapsed it is a
+ * one-liner — a calm «Загружено» when both targets have caught up, otherwise the worst pending
+ * target's last-attempt summary (counts + «N мин назад» + outcome). Expanded it shows one line per
+ * server («Интернет» = cloud, «Локальный» = LAN). The displayed "now" advances on a 30-second ticker
+ * so the relative time updates while the row is visible. Compose-untested per repo convention; only
+ * the pure [relativeTimeRu] formatter is unit-tested.
+ */
+@Composable
+private fun UploadStatusRow(status: TrackUploadStatus) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(status.fullyUploaded) { if (status.fullyUploaded) expanded = false }
+    val nowMs by produceState(System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(30_000L)
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .padding(top = 10.dp),
+    ) {
+        if (expanded) {
+            ExpandedStatus(status = status, nowMs = nowMs)
+        } else if (status.fullyUploaded) {
+            CollapsedDone()
+        } else {
+            CollapsedPending(status = status, nowMs = nowMs)
+        }
+    }
+}
+
+@Composable
+private fun CollapsedDone() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            Icons.Filled.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.tertiary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = "Загружено",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+private fun CollapsedPending(status: TrackUploadStatus, nowMs: Long) {
+    val worst = worstPendingTarget(status)
+    val outcome = worst?.line?.outcome
+    val isError = outcome?.kind == UploadResultKind.Error || outcome?.kind == UploadResultKind.Offline
+    val glyphTint =
+        if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val text = when {
+        worst != null && outcome != null ->
+            "${worst.label}: ${worst.line.uploaded}/${status.total} · " +
+                "${relativeTimeRu(outcome.atWallMs, nowMs)} · ${outcomeLabelRu(outcome.kind)}"
+        else -> {
+            val remaining = maxOf(
+                status.total - status.local.uploaded,
+                status.total - status.cloud.uploaded,
+            )
+            "Загрузка · осталось $remaining"
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            if (isError) Icons.Outlined.CloudOff else Icons.Outlined.CloudUpload,
+            contentDescription = null,
+            tint = glyphTint,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+private fun ExpandedStatus(status: TrackUploadStatus, nowMs: Long) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Загрузка трека",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                Icons.Filled.ExpandLess,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        ServerLine(label = "Интернет", total = status.total, line = status.cloud, nowMs = nowMs)
+        Spacer(Modifier.height(4.dp))
+        ServerLine(label = "Локальный", total = status.total, line = status.local, nowMs = nowMs)
+    }
+}
+
+@Composable
+private fun ServerLine(label: String, total: Int, line: TargetLine, nowMs: Long) {
+    val done = line.uploaded >= total
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(76.dp),
+        )
+        Text(
+            text = "${line.uploaded}/$total",
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (done) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(16.dp),
+            )
+        } else {
+            val outcome = line.outcome
+            if (outcome != null) {
+                Text(
+                    text = "${relativeTimeRu(outcome.atWallMs, nowMs)} · ${outcomeLabelRu(outcome.kind)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (outcome.kind == UploadResultKind.Ok) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** «ok» / «нет сети» / «ошибка» — the short outcome label shown next to a pending target. */
+private fun outcomeLabelRu(kind: UploadResultKind): String = when (kind) {
+    UploadResultKind.Ok -> "ok"
+    UploadResultKind.Offline -> "нет сети"
+    UploadResultKind.Error -> "ошибка"
+}
+
+/** A labelled target line for the collapsed summary. */
+private data class PendingTarget(val label: String, val line: TargetLine)
+
+/**
+ * Pick the target to summarise when collapsed-and-pending: among the targets that are behind
+ * (`uploaded < total`), prefer the one with the most alarming last outcome (Error > Offline > Ok >
+ * none). Returns `null` when no target is behind (caller then shows the calm done state).
+ */
+private fun worstPendingTarget(status: TrackUploadStatus): PendingTarget? {
+    val behind = listOf(
+        PendingTarget("Интернет", status.cloud),
+        PendingTarget("Локальный", status.local),
+    ).filter { it.line.uploaded < status.total }
+    if (behind.isEmpty()) return null
+    return behind.minByOrNull { target ->
+        when (target.line.outcome?.kind) {
+            UploadResultKind.Error -> 0
+            UploadResultKind.Offline -> 1
+            UploadResultKind.Ok -> 2
+            null -> 3
         }
     }
 }

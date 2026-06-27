@@ -13,6 +13,14 @@ import kotlinx.coroutines.flow.Flow
  */
 data class TrackScope(val raceId: Int, val teamId: Int)
 
+/**
+ * Upload progress for one `(raceId, teamId)` scope: [total] points stored, [local] of them already
+ * delivered to the LAN target, [cloud] of them to the cloud target. Source of truth for the
+ * "how much / where" half of the track-upload status row (the "when / what error" half is the
+ * in-memory outcome). Derived from the durable `uploadedLocal`/`uploadedCloud` flags.
+ */
+data class UploadCounts(val total: Int, val local: Int, val cloud: Int)
+
 @Dao
 interface TrackDao {
     @Query(
@@ -23,6 +31,17 @@ interface TrackDao {
 
     @Query("SELECT count(*) FROM track_points WHERE teamId = :teamId AND raceId = :raceId")
     fun countForTeam(teamId: Int, raceId: Int): Flow<Int>
+
+    // Per-target upload progress for one scope. Explicit CASE over the Boolean column (SUM(boolean)
+    // is fragile for codegen/type-mapping); COALESCE(...,0) guards the empty-scope NULL so the
+    // non-null Int columns always map. Aliases match UploadCounts property names (Room maps by name).
+    @Query(
+        "SELECT COUNT(*) AS total, " +
+            "COALESCE(SUM(CASE WHEN uploadedLocal THEN 1 ELSE 0 END), 0) AS local, " +
+            "COALESCE(SUM(CASE WHEN uploadedCloud THEN 1 ELSE 0 END), 0) AS cloud " +
+            "FROM track_points WHERE teamId = :teamId AND raceId = :raceId"
+    )
+    fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts>
 
     // Every insert goes through Room and always supplies a value for the upload flags, so an
     // OnConflictStrategy.IGNORE keeps a re-delivered id (same client UUID) idempotent.

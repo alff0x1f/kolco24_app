@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.AdminAuthRepository
 import ru.kolco24.kolco24.data.AdminTokenStore
@@ -25,12 +26,15 @@ import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
+import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
+import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackRepository
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.ui.admin.ProvisionState
 
 /**
@@ -213,8 +217,27 @@ class AppContainer(private val context: Context) {
             // Each target is one ApiClient instance: cloud HTTPS vs the LAN cleartext localApiClient.
             cloudUploader = { raceId, teamId, points -> apiClient.uploadTrack(raceId, teamId, points) },
             localUploader = { raceId, teamId, points -> localApiClient.uploadTrack(raceId, teamId, points) },
+            onUploadOutcome = { scope, target, kind ->
+                trackUploadOutcomes.update {
+                    it + ((scope to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
+                }
+            },
+            onScopeCleared = { scope ->
+                trackUploadOutcomes.update {
+                    it - (scope to UploadTarget.Local) - (scope to UploadTarget.Cloud)
+                }
+            },
         )
     }
+
+    /**
+     * Transient (in-memory, not persisted) per-target upload outcomes, keyed by `(scope, target)`. The
+     * source of truth for "when / what error" — refreshed within seconds of a restart by Launch B's
+     * opportunistic flush, so it intentionally needs no Room table (avoids a migration on the shipped DB).
+     */
+    val trackUploadOutcomes:
+        MutableStateFlow<Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>> =
+        MutableStateFlow(emptyMap())
 
     /**
      * One-shot GPS provider for the anti-fraud checkpoint-take coordinate: fires a fresh fix the
