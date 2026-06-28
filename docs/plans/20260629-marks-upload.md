@@ -324,12 +324,12 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] проверить, что все требования Overview реализованы: дуальная идемпотентная выгрузка marks, `source_install_id` в теле, снимок `present[]`, **античит-`location`**, 3 триггера, UI-статус
-- [ ] проверить краевые случаи: legacy-строка (`presentDetails=null`) выгружается со **всеми** членами `present` (sentinel `nfc_uid=null`), никто не теряется; `location=null` при отсутствии фикса; пустой `accepted` останавливает цикл; офлайн оставляет флаги 0; повтор `id` идемпотентен; выгружаются и `complete=false` строки; SQL-фильтр scope явный (`= :raceId AND = :teamId`)
-- [ ] `./gradlew testDebugUnitTest` — все юнит-тесты зелёные
-- [ ] `./gradlew lintDebug` — без новых ошибок
-- [ ] `./gradlew connectedDebugAndroidTest` — `MigrationTest` зелёный (на эмуляторе/устройстве)
-- [ ] `./gradlew assembleDebug` — собирается
+- [x] проверить, что все требования Overview реализованы: дуальная идемпотентная выгрузка marks (cloud+local uploader в `AppContainer`), `source_install_id` в теле (`MarkUploadRequest`/`uploadMarks`), снимок `present[]` (merge в `toDto()`), **античит-`location`** (`TakeLocationDto` из `locLat`), 3 триггера (Launch B/scan-onClose/track-piggyback), UI-статус (`UploadStatusRow` в `MarksScreen`)
+- [x] проверить краевые случаи: legacy-строка (`presentDetails=null`) выгружается со **всеми** членами `present` (sentinel `nfc_uid=null`, итерация по `present`), никто не теряется; `location=null` при отсутствии фикса (`locLat?.let`); пустой `accepted` останавливает цикл (`toMark.isEmpty() → Error`); офлайн оставляет флаги 0; повтор `id` идемпотентен; выгружаются и `complete=false` строки (без фильтра в `unuploaded*`); SQL-фильтр scope явный (`raceId = :raceId AND teamId = :teamId`)
+- [x] `./gradlew testDebugUnitTest` — все юнит-тесты зелёные (BUILD SUCCESSFUL)
+- [x] `./gradlew lintDebug` — без новых ошибок (BUILD SUCCESSFUL)
+- [x] `./gradlew connectedDebugAndroidTest` — `MigrationTest` (skipped — нет подключённого устройства/эмулятора в этой среде; androidTest скомпилирован `compileDebugAndroidTestKotlin` BUILD SUCCESSFUL, прогон требует девайса)
+- [x] `./gradlew assembleDebug` — собирается (BUILD SUCCESSFUL)
 
 ### Task 12: [Final] Документация
 
