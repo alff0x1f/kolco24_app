@@ -25,15 +25,32 @@ interface MarkDao {
      * `present`, the row is untouched (idempotent rescan); otherwise it is appended, [complete] is
      * recomputed against [expectedCount], and [updatedAt] is bumped. The caller is responsible for the
      * resulting `taken` flip on the checkpoint (a `complete` row scores). A missing row is a no-op.
+     *
+     * The upload snapshot ([nfcUid]/[number]/[code]) is written into `presentDetails` in lockstep with
+     * `present`, also with set semantics by [numberInTeam]. A NULL `presentDetails` (a legacy/seed row
+     * whose `present` predates this column) starts a fresh single-element list rather than NPE-ing — the
+     * upload mapper merges over `present`, so the two never diverge in what gets uploaded.
      */
     @Transaction
-    suspend fun addMember(id: String, numberInTeam: Int, now: Long, expectedCount: Int) {
+    suspend fun addMember(
+        id: String,
+        numberInTeam: Int,
+        nfcUid: String?,
+        number: Int,
+        code: String?,
+        now: Long,
+        expectedCount: Int,
+    ) {
         val mark = getById(id) ?: return
         if (numberInTeam in mark.present) return
         val present = mark.present + numberInTeam
+        val snapshot = MarkMemberSnapshot(numberInTeam, nfcUid, number, code)
+        val presentDetails =
+            mark.presentDetails.orEmpty().filterNot { it.numberInTeam == numberInTeam } + snapshot
         upsert(
             mark.copy(
                 present = present,
+                presentDetails = presentDetails,
                 expectedCount = expectedCount,
                 complete = expectedCount > 0 && present.size >= expectedCount,
                 updatedAt = now,

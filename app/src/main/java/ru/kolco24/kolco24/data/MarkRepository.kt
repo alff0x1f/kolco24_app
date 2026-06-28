@@ -4,6 +4,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
 
@@ -30,9 +31,14 @@ class MarkRepository(
 
     /**
      * Open a new take for [checkpointId] (КП chip just scanned). Generates a fresh UUID, snapshots the
-     * checkpoint metadata ([number]/[cost]) and roster size ([expectedCount]), seeds `present` with any
-     * members already buffered before the chip ([bufferedMembers], deduplicated), recomputes `complete`,
-     * and upserts the row. Returns the new id.
+     * checkpoint metadata ([number]/[cost]) and roster size ([expectedCount]), seeds the take from any
+     * member snapshots already buffered before the chip ([bufferedMembers]), recomputes `complete`, and
+     * upserts the row. Returns the new id.
+     *
+     * [bufferedMembers] carries one [MarkMemberSnapshot] per buffered member: both `present`
+     * ([MarkMemberSnapshot.numberInTeam], the scoring truth) and `presentDetails` (the upload snapshots)
+     * derive from **one** `distinctBy { numberInTeam }` pass — deduplicating once is essential, since a
+     * doubled slot would inflate `present.size` and flip `complete` early.
      *
      * The take time comes from a [TimeSample] captured at the moment of the touch: `takenAt`/`updatedAt`
      * keep the raw wall ([TimeSample.wallMs]), `trustedTakenAt` gets the monotonic-anchored trusted time
@@ -48,11 +54,13 @@ class MarkRepository(
         cpUid: String,
         cpCode: String,
         expectedCount: Int,
-        bufferedMembers: Set<Int>,
+        bufferedMembers: Collection<MarkMemberSnapshot>,
         sample: TimeSample,
     ): String {
         val id = UUID.randomUUID().toString()
-        val present = bufferedMembers.toList()
+        // Both present (scoring truth) and presentDetails (upload snapshots) come from one distinct pass.
+        val distinct = bufferedMembers.distinctBy { it.numberInTeam }
+        val present = distinct.map { it.numberInTeam }
         val complete = expectedCount > 0 && present.size >= expectedCount
         markDao.upsert(
             MarkEntity(
@@ -66,6 +74,7 @@ class MarkRepository(
                 cpUid = cpUid,
                 cpCode = cpCode,
                 present = present,
+                presentDetails = distinct,
                 expectedCount = expectedCount,
                 complete = complete,
                 takenAt = sample.wallMs,
@@ -79,18 +88,28 @@ class MarkRepository(
     }
 
     /**
-     * Add one member ([numberInTeam]) to the take [markId] with set semantics (idempotent rescan).
-     * A missing row is a no-op. [checkpointId] is unused now that scoring is derived (kept for the
-     * call-site's readability and a future per-checkpoint recompute), so it is accepted but not consulted.
+     * Add one member ([member]) to the take [markId] with set semantics (idempotent rescan). The
+     * snapshot drives both `present` (its [MarkMemberSnapshot.numberInTeam], the scoring truth) and
+     * `presentDetails` (the snapshot itself, the upload source). A missing row is a no-op. [checkpointId]
+     * is unused now that scoring is derived (kept for the call-site's readability and a future
+     * per-checkpoint recompute), so it is accepted but not consulted.
      */
     suspend fun addMember(
         markId: String,
         checkpointId: Int,
-        numberInTeam: Int,
+        member: MarkMemberSnapshot,
         expectedCount: Int,
         sample: TimeSample,
     ) {
-        markDao.addMember(markId, numberInTeam, sample.wallMs, expectedCount)
+        markDao.addMember(
+            id = markId,
+            numberInTeam = member.numberInTeam,
+            nfcUid = member.nfcUid,
+            number = member.number,
+            code = member.code,
+            now = sample.wallMs,
+            expectedCount = expectedCount,
+        )
     }
 
     /**

@@ -88,6 +88,7 @@ import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.chipModelFromVersion
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.nfc.readChipVersion
+import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
@@ -1126,7 +1127,11 @@ private fun Kolco24AppRoot(
                                         cpUid = event.cpUid,
                                         cpCode = event.cpCode,
                                         expectedCount = rosterSize,
-                                        bufferedMembers = buffered,
+                                        // TODO(Task 10): enrich each snapshot with the scanned bracelet
+                                        // uid + participant number; for now the slot is the only field.
+                                        bufferedMembers = buffered.map {
+                                            MarkMemberSnapshot(numberInTeam = it, nfcUid = null, number = 0)
+                                        },
                                         // The touch-moment sample: monotonic window + trusted/wall/boot
                                         // fields, captured before scope.launch so slow NFC/Room work
                                         // can't stale the take time.
@@ -1171,7 +1176,12 @@ private fun Kolco24AppRoot(
                                     markRepo.addMember(
                                         markId = markId,
                                         checkpointId = checkpointId,
-                                        numberInTeam = event.numberInTeam,
+                                        // TODO(Task 10): enrich with the bracelet uid + participant number.
+                                        member = MarkMemberSnapshot(
+                                            numberInTeam = event.numberInTeam,
+                                            nfcUid = null,
+                                            number = 0,
+                                        ),
                                         expectedCount = scanTake.expectedCount,
                                         // The touch-moment sample (monotonic window + trusted/wall/boot).
                                         sample = sample,

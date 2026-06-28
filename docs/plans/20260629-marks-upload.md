@@ -231,12 +231,12 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/MarkRepository.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryTest.kt`
 
-- [ ] `MarkRepository.startKpTake`: сменить `bufferedMembers: Set<Int>` → снимок-несущий тип (`Collection<MarkMemberSnapshot>`), т.к. из него выводятся **оба** поля. **Считать `distinct` ОДИН раз** (P2b — иначе дубли раздуют `present.size` и преждевременно поставят `complete`): `val distinct = snapshots.distinctBy { it.numberInTeam }`; затем `present = distinct.map { it.numberInTeam }` и `presentDetails = distinct` — оба из одного списка
-- [ ] `MarkDao.addMember`: добавить параметр снимка (`numberInTeam, nfcUid, number, code`) и в той же `@Transaction` дописывать `presentDetails` с set-семантикой по `numberInTeam` (если уже есть — no-op, синхронно с `present`); `present` логика без изменений. **Гард на `presentDetails == null`** (legacy/seed-строка с заполненным `present`, но NULL `presentDetails`): начинать список из `listOf(snapshot)` вместо NPE. Дивергенция `present`↔`presentDetails` на legacy-строках **закрыта слиянием в `toDto()`** (Task 4: present[] итерируется по `present`, снимок — обогащение) — `present` остаётся истиной скоринга, в выгрузке никто не теряется
-- [ ] `MarkRepository.addMember`: пробросить снимок в `MarkDao.addMember`
-- [ ] следить, чтобы скоринг (`complete`/`expectedCount`) считался по `present` как раньше — `presentDetails` на него не влияет
-- [ ] расширить `MarkRepositoryTest`: `startKpTake` пишет `presentDetails` из буфера (дедуп по numberInTeam); `addMember` добавляет снимок с set-семантикой (повтор — no-op); `present` и `complete` не регрессируют; снимок с `nfcUid=null` хранится корректно
-- [ ] run tests — must pass before next task
+- [x] `MarkRepository.startKpTake`: сменить `bufferedMembers: Set<Int>` → снимок-несущий тип (`Collection<MarkMemberSnapshot>`), т.к. из него выводятся **оба** поля. **Считать `distinct` ОДИН раз** (P2b — иначе дубли раздуют `present.size` и преждевременно поставят `complete`): `val distinct = snapshots.distinctBy { it.numberInTeam }`; затем `present = distinct.map { it.numberInTeam }` и `presentDetails = distinct` — оба из одного списка
+- [x] `MarkDao.addMember`: добавить параметр снимка (`numberInTeam, nfcUid, number, code`) и в той же `@Transaction` дописывать `presentDetails` с set-семантикой по `numberInTeam` (если уже есть — no-op, синхронно с `present`); `present` логика без изменений. **Гард на `presentDetails == null`** (legacy/seed-строка с заполненным `present`, но NULL `presentDetails`): начинать список из `listOf(snapshot)` вместо NPE (через `orEmpty().filterNot{...} + snapshot`). Дивергенция `present`↔`presentDetails` на legacy-строках **закрыта слиянием в `toDto()`** (Task 4: present[] итерируется по `present`, снимок — обогащение) — `present` остаётся истиной скоринга, в выгрузке никто не теряется
+- [x] `MarkRepository.addMember`: пробросить снимок (`member: MarkMemberSnapshot`) в `MarkDao.addMember`
+- [x] следить, чтобы скоринг (`complete`/`expectedCount`) считался по `present` как раньше — `presentDetails` на него не влияет
+- [x] расширить `MarkRepositoryTest`: `startKpTake` пишет `presentDetails` из буфера (дедуп по numberInTeam); `addMember` добавляет снимок с set-семантикой (повтор — no-op); `present` и `complete` не регрессируют; снимок с `nfcUid=null` хранится корректно; legacy-строка с NULL `presentDetails` → fresh list без NPE. ➕ MainActivity callsite'ы обновлены минимально (placeholder-снимки `nfcUid=null/number=0`) чтобы держать компиляцию — обогащение реальными uid/number в Task 10
+- [x] run tests — must pass before next task
 
 ### Task 4: DTO marks + чистый маппер MarkEntity.toDto()
 
