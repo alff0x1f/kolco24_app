@@ -65,10 +65,6 @@ import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
-import ru.kolco24.kolco24.ui.theme.CpColorBlue
-import ru.kolco24.kolco24.ui.theme.CpColorPurple
-import ru.kolco24.kolco24.ui.theme.CpColorRed
-import ru.kolco24.kolco24.ui.theme.CpColorYellow
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
@@ -127,15 +123,47 @@ private val PhotoTileBottom = Color(0xFF2A323C)
 private val RedBand = Color(0xFFB01528)
 private val PhotoInk = Color(0xFF161A1F)
 
-/** КП color token → fixed bar shade — a third private copy of the mapping in `LegendScreen.kt`. */
-private fun CheckpointColor.barColor(): Color = when (this) {
-    CheckpointColor.RED -> CpColorRed
-    CheckpointColor.BLUE -> CpColorBlue
-    CheckpointColor.GREEN -> Tertiary
-    CheckpointColor.YELLOW -> CpColorYellow
-    CheckpointColor.ORANGE -> OrangeCta
-    CheckpointColor.PURPLE -> CpColorPurple
+// Muted whole-tile fill palette for the color-fill grid (screen-scoped — deliberately distinct from
+// the bright `CpColor*`/`Tertiary`/`OrangeCta` bar shades in `LegendScreen.kt`/`ProvisioningScreen.kt`,
+// which still feed the thin legend/provisioning bars). The six discipline colors are fixed across
+// light & dark so a same-color cluster reads identically; only neutral and the grout seam flip with
+// the resolved theme, so a colorless tile never glows as a bright blob among the colors.
+private val FillRed = Color(0xFFCB4233)
+private val FillOrange = Color(0xFFC15A2E)
+private val FillBlue = Color(0xFF2F6CAE)
+private val FillGreen = Color(0xFF2E9E57)
+private val FillYellow = Color(0xFFC99A1E)
+private val FillPurple = Color(0xFF7C5AC0)
+private val TileInk = Color(0xFF161A1F)          // text on yellow & the light neutral
+private val NeutralFillLight = Color(0xFFD6DCE4)
+private val NeutralFillDark = Color(0xFF2A323C)
+private val NeutralTextDark = Color(0xFFD6DCE4)   // light grey text on the dark neutral
+private val GroutLight = Color(0xFFC2CBD5)
+private val GroutDark = Color(0xFF11161B)
+
+/** A tile's flat fill and the (non-luminance, fixed) text color that reads on it. */
+internal data class TileFill(val fill: Color, val text: Color)
+
+/**
+ * Pure КП-color → (fill, text) mapping for the color-fill grid. White text on red/orange/blue/green/
+ * purple, dark [TileInk] on yellow; a `null` color (no/unknown token) → the theme-aware neutral fill
+ * (light grey + ink in light, charcoal + light grey in dark). [darkTheme] is a plain Boolean (no Compose
+ * lookup inside) so this stays JVM-unit-testable; the caller resolves the *applied* theme via
+ * `isDarkScheme()`, never `isSystemInDarkTheme()`.
+ */
+internal fun tileFill(color: CheckpointColor?, darkTheme: Boolean): TileFill = when (color) {
+    CheckpointColor.RED -> TileFill(FillRed, Color.White)
+    CheckpointColor.ORANGE -> TileFill(FillOrange, Color.White)
+    CheckpointColor.BLUE -> TileFill(FillBlue, Color.White)
+    CheckpointColor.GREEN -> TileFill(FillGreen, Color.White)
+    CheckpointColor.YELLOW -> TileFill(FillYellow, TileInk)
+    CheckpointColor.PURPLE -> TileFill(FillPurple, Color.White)
+    null -> if (darkTheme) TileFill(NeutralFillDark, NeutralTextDark)
+    else TileFill(NeutralFillLight, TileInk)
 }
+
+/** The grout seam color showing through the 2dp tile gaps — resolved the same testable way as [tileFill]. */
+internal fun gridGrout(darkTheme: Boolean): Color = if (darkTheme) GroutDark else GroutLight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -714,7 +742,9 @@ private val TileShape = RoundedCornerShape(10.dp)
  */
 @Composable
 private fun ScorecardTile(mark: Mark) {
-    val gutter = mark.color?.barColor() ?: Color.Transparent
+    // Bridge until Task 2 replaces this composable with the color-fill `ColorTile`: derive the stripe
+    // shade from the new muted palette (theme-independent for actual colors). `null` → transparent.
+    val gutter = mark.color?.let { tileFill(it, false).fill } ?: Color.Transparent
     Surface(
         shape = TileShape,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,

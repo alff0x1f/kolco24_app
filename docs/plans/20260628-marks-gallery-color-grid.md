@@ -65,13 +65,13 @@ The grid is a 4-column `Column`/`Row` layout with **2dp gaps and 0dp radius**, s
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/marks/TileFillTest.kt`
 
-- [ ] add private fill-palette vals (red/orange/blue/green/yellow/purple, ink, neutral light/dark, grout light/dark) near the existing `PhotoTileTop` block
-- [ ] add `internal data class TileFill(val fill: Color, val text: Color)` and a pure `internal fun tileFill(color: CheckpointColor?, darkTheme: Boolean): TileFill` — white text on red/orange/blue/green/purple, ink on yellow; `null` → neutral (light grey/ink in light, charcoal/light-grey in dark). `internal` (not `private`) so the test can call it; takes a plain `darkTheme: Boolean` (no Compose lookup inside)
-- [ ] add a pure `internal fun gridGrout(darkTheme: Boolean): Color` (light `#C2CBD5` / dark `#11161B`) so the grout seam is resolved the same testable way as `tileFill`, not via `isSystemInDarkTheme()`
-- [ ] remove the now-unused private `CheckpointColor.barColor()` (replaced by `tileFill`)
-- [ ] remove the now-orphaned theme imports `CpColorRed/Blue/Yellow/Purple` (only `barColor` referenced them — `OrangeCta`/`Tertiary` stay in use elsewhere) so `lintDebug` stays clean
-- [ ] write `TileFillTest`: each color → expected fill + text; yellow → ink; neutral light vs dark differs; non-neutral fills identical in light vs dark; **`gridGrout` light ≠ dark**
-- [ ] run `./gradlew testDebugUnitTest` — `TileFillTest` + `MarksMappingTest` must pass before Task 2
+- [x] add private fill-palette vals (red/orange/blue/green/yellow/purple, ink, neutral light/dark, grout light/dark) near the existing `PhotoTileTop` block
+- [x] add `internal data class TileFill(val fill: Color, val text: Color)` and a pure `internal fun tileFill(color: CheckpointColor?, darkTheme: Boolean): TileFill` — white text on red/orange/blue/green/purple, ink on yellow; `null` → neutral (light grey/ink in light, charcoal/light-grey in dark). `internal` (not `private`) so the test can call it; takes a plain `darkTheme: Boolean` (no Compose lookup inside)
+- [x] add a pure `internal fun gridGrout(darkTheme: Boolean): Color` (light `#C2CBD5` / dark `#11161B`) so the grout seam is resolved the same testable way as `tileFill`, not via `isSystemInDarkTheme()`
+- [x] remove the now-unused private `CheckpointColor.barColor()` (replaced by `tileFill`) — `ScorecardTile`'s stripe bridged onto `tileFill(...).fill` until Task 2 deletes it, so the module still compiles
+- [x] remove the now-orphaned theme imports `CpColorRed/Blue/Yellow/Purple` (only `barColor` referenced them — `OrangeCta`/`Tertiary` stay in use elsewhere) so `lintDebug` stays clean
+- [x] write `TileFillTest`: each color → expected fill + text; yellow → ink; neutral light vs dark differs; non-neutral fills identical in light vs dark; **`gridGrout` light ≠ dark**
+- [x] run `./gradlew testDebugUnitTest` — `TileFillTest` + `MarksMappingTest` must pass before Task 2
 
 ### Task 2: `ColorTile` composable — NFC (color-fill) body + call-site
 
