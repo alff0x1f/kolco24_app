@@ -33,8 +33,8 @@ data class MarkMemberSnapshot(
  * [present] accumulates the `numberInTeam` of each member scanned within the rolling window. [complete]
  * (= counts for score) is set once `present` covers the whole roster ([expectedCount]); a partial
  * collect is stored for the server log but not scored. A repeat take of the same checkpoint produces a
- * **new** row (history for the server-side order). Upload flags are unindexed seeds — no upload queries
- * exist yet (an additive migration will add indices when they do).
+ * **new** row (history for the server-side order). Dual upload flags ([uploadedLocal]/[uploadedCloud])
+ * are indexed by `raceId` and drained by [ru.kolco24.kolco24.data.MarkRepository]'s batch upload loop.
  */
 @Entity(
     tableName = "marks",

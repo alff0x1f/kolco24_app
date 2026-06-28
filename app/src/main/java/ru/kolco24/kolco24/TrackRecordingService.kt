@@ -322,12 +322,13 @@ class TrackRecordingService : Service() {
         countJob?.cancel()
         profileJob?.cancel()
         container.trackRecordingState.value = TrackState.Idle
-        // Opportunistic flush of this scope on stop; outlives the service via applicationScope.
-        // No-op (or quietly Offline) until the backend endpoint lands — points stay uploaded*=0.
+        // Opportunistic flush of both track points and checkpoint takes on stop; both outlive the
+        // service via applicationScope so a slow upload finishes even after stopSelf().
         val r = raceId
         val t = teamId
         if (r >= 0 && t >= 0) {
             container.applicationScope.launch { container.trackRepository.uploadPending(r, t) }
+            container.applicationScope.launch { container.markRepository.uploadPending(r, t) }
         }
         serviceScope.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)

@@ -36,7 +36,8 @@ fun interface MarkUploader {
 
 /**
  * Single source of truth for the **local-only** checkpoint-taking events (взятия КП). Wraps [MarkDao]
- * for the event rows. This data is never uploaded yet — the table only carries upload-seed flags.
+ * for the event rows. Includes a dual-target (cloud + local LAN) idempotent batch upload loop mirroring
+ * [ru.kolco24.kolco24.data.track.TrackRepository].
  *
  * A take is a two-phase row: [startKpTake] is called the moment the КП chip is scanned (creating a
  * row with a client UUID so the take survives process death and merges cleanly across two servers),

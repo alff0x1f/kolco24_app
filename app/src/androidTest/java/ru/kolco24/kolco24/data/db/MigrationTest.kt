@@ -54,7 +54,16 @@ class MigrationTest {
         // Run the migration; MigrationTestHelper validates the result against schemas/2.json.
         val db = helper.runMigrationsAndValidate(testDb, 2, true, AppDatabase.MIGRATION_1_2)
 
-        // The legacy row's new column is NULL.
+        // The legacy row survived migration with original data intact (not dropped or zeroed).
+        db.query("SELECT COUNT(*), teamId, present, complete FROM marks").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals(42, c.getInt(1))
+            assertEquals("[1,2]", c.getString(2))
+            assertEquals(0, c.getInt(3))
+        }
+
+        // The legacy row's new column is NULL (not corrupted to some default).
         db.query("SELECT presentDetails FROM marks WHERE id = 'm1'").use { c ->
             assertTrue(c.moveToFirst())
             assertNull(c.getString(0))

@@ -51,6 +51,8 @@ class MarkDtoMappingTest {
         ).toDto()
 
         assertEquals(2, dto.present.size)
+        // Order must match MarkEntity.present list order
+        assertEquals(listOf(1, 2), dto.present.map { it.numberInTeam })
         val m1 = dto.present.single { it.numberInTeam == 1 }
         assertEquals("04F1E2", m1.nfcUid)
         assertEquals("c3d4", m1.code)
@@ -59,6 +61,13 @@ class MarkDtoMappingTest {
         assertEquals("041122", m2.nfcUid)
         assertNull(m2.code)
         assertEquals(102, m2.number)
+    }
+
+    @Test
+    fun location_nullWhenLatPresentButLonNull() {
+        // locLat != null but locLon == null: must produce null location, not 0.0 longitude
+        val entity = mark(present = listOf(1), locLat = 55.75).copy(locLon = null)
+        assertNull(entity.toDto().location)
     }
 
     @Test

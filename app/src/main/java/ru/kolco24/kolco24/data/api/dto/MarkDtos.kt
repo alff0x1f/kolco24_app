@@ -99,17 +99,17 @@ fun MarkEntity.toDto(): MarkDto {
             )
         } ?: PresentMemberDto(nfcUid = null, code = null, number = 0, numberInTeam = num)
     }
-    val location = locLat?.let { lat ->
+    val location = if (locLat != null && locLon != null) {
         TakeLocationDto(
-            lat = lat,
-            lon = locLon ?: 0.0,
+            lat = locLat,
+            lon = locLon,
             accuracy = locAccuracy,
             altitude = locAltitude,
             verticalAccuracy = locVerticalAccuracy,
             gpsTimeMs = locGpsTimeMs,
             elapsedAt = locElapsedRealtimeAt,
         )
-    }
+    } else null
     return MarkDto(
         id = id,
         checkpointId = checkpointId,

@@ -112,14 +112,17 @@ class MarkRepositoryUploadTest {
             if (firstId == null) firstId = marks.first().id
             PostResult.Success(MarkUploadResponse(listOf(firstId!!)))
         }
-        val r = repo(dao, cloud = cloud)
+        val rec = OutcomeRecorder()
+        val r = repo(dao, cloud = cloud, onOutcome = rec.sink)
 
         r.uploadPending(raceId = 1, teamId = 7)
 
         val rows = dao.observeForTeam(7).first()
         assertEquals(1, rows.count { it.uploadedCloud })
         assertEquals(1, rows.count { !it.uploadedCloud })
-        assertEquals(2, cloud.calls) // batch1 marks first, batch2 no progress → break
+        assertEquals(2, cloud.calls) // batch1 makes progress; batch2 server accepts same id → no forward progress
+        // No forward progress on the second call means the loop reports Error (not Ok).
+        assertEquals(UploadResultKind.Error, rec.kindFor(UploadTarget.Cloud))
     }
 
     @Test

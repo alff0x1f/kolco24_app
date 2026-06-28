@@ -117,6 +117,27 @@ class ApiClientMarksTest {
     }
 
     @Test
+    fun uploadMarks_201_returnsAcceptedIds() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody("""{"accepted":["mark-1"]}"""),
+        )
+
+        val result = apiClient.uploadMarks(8, 42, "install-abc", listOf(markDto("mark-1")))
+
+        assertTrue(result is PostResult.Success)
+        assertEquals(listOf("mark-1"), (result as PostResult.Success).data.accepted)
+    }
+
+    @Test
+    fun uploadMarks_401_returnsUnauthorized() = runTest {
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        assertEquals(PostResult.Unauthorized, apiClient.uploadMarks(8, 42, "install-abc", emptyList()))
+    }
+
+    @Test
     fun uploadMarks_400_returnsBadRequest() = runTest {
         server.enqueue(MockResponse().setResponseCode(400))
 
