@@ -38,7 +38,7 @@ data class MarkMemberSnapshot(
  */
 @Entity(
     tableName = "marks",
-    indices = [Index("teamId"), Index("checkpointId")],
+    indices = [Index("teamId"), Index("checkpointId"), Index("raceId")],
 )
 data class MarkEntity(
     @PrimaryKey val id: String,

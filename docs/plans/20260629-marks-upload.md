@@ -215,14 +215,14 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 - Create: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
 
 - [x] зарегистрировать `MarkMemberSnapshotListConverter::class` в `@TypeConverters` на `AppDatabase` (сделано в Task 1 — hard-зависимость компиляции)
-- [ ] поднять `version = 2`
-- [ ] добавить `val MIGRATION_1_2 = object : Migration(1, 2) { override fun migrate(db) { db.execSQL("ALTER TABLE marks ADD COLUMN presentDetails TEXT") ; db.execSQL("CREATE INDEX IF NOT EXISTS index_marks_raceId ON marks(raceId)") } }` (колонка nullable без default; индекс под scope-запрос, симметрично `track_points`)
-- [ ] добавить `Index("raceId")` в `@Entity(indices=[...])` на `MarkEntity` (чтобы schema 2.json совпала с миграцией — иначе `MigrationTest` validate упадёт)
-- [ ] подключить `.addMigrations(MIGRATION_1_2)` в `AppDatabase.build(...)` (первое реальное подключение миграций; `fallbackToDestructiveMigrationOnDowngrade` оставить)
-- [ ] обновить baseline-комментарий в `AppDatabase.companion` (миграции снова живые; сослаться на memory «приложение выпущено»)
-- [ ] собрать, чтобы Room сгенерировал `schemas/2.json`; закоммитить его
-- [ ] написать `MigrationTest` (инструментальный, `MigrationTestHelper`): создать v1-БД со строкой `marks`, выполнить `MIGRATION_1_2`, проверить что `presentDetails IS NULL` у старой строки и индекс `index_marks_raceId` существует, миграция не падает
-- [ ] run instrumented test (`./gradlew connectedDebugAndroidTest`) — должен пройти на эмуляторе/устройстве (отметить как требующий девайса, если CI без него)
+- [x] поднять `version = 2`
+- [x] добавить `val MIGRATION_1_2 = object : Migration(1, 2) { override fun migrate(db) { db.execSQL("ALTER TABLE marks ADD COLUMN presentDetails TEXT") ; db.execSQL("CREATE INDEX IF NOT EXISTS index_marks_raceId ON marks(raceId)") } }` (колонка nullable без default; индекс под scope-запрос, симметрично `track_points`)
+- [x] добавить `Index("raceId")` в `@Entity(indices=[...])` на `MarkEntity` (чтобы schema 2.json совпала с миграцией — иначе `MigrationTest` validate упадёт)
+- [x] подключить `.addMigrations(MIGRATION_1_2)` в `AppDatabase.build(...)` (первое реальное подключение миграций; `fallbackToDestructiveMigrationOnDowngrade` оставить)
+- [x] обновить baseline-комментарий в `AppDatabase.companion` (миграции снова живые; сослаться на memory «приложение выпущено»)
+- [x] собрать, чтобы Room сгенерировал `schemas/2.json`; закоммитить его
+- [x] написать `MigrationTest` (инструментальный, `MigrationTestHelper`): создать v1-БД со строкой `marks`, выполнить `MIGRATION_1_2`, проверить что `presentDetails IS NULL` у старой строки и индекс `index_marks_raceId` существует, миграция не падает (компилируется через `compileDebugAndroidTestKotlin`)
+- [x] run instrumented test (`./gradlew connectedDebugAndroidTest`) — должен пройти на эмуляторе/устройстве (skipped — нет подключённого устройства/эмулятора в этой среде; androidTest скомпилирован, прогон требует девайса)
 
 ### Task 3: Запись presentDetails в MarkDao/MarkRepository (две фазы)
 

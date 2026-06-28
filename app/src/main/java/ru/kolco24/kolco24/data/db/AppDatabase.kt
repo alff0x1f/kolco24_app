@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -21,7 +23,7 @@ import androidx.room.TypeConverters
         LegendMetaEntity::class,
         TrackPointEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(
@@ -43,24 +45,40 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun trackDao(): TrackDao
 
     companion object {
-        // Schema baseline (v1). The app's only install is a dev device, so the entire v1→v11 migration
-        // history was collapsed: the schema is re-created from scratch. Add migrations here again — with
-        // a version bump and a committed schemas/<n>.json — once the app ships to real users and on-device
-        // data must be preserved across upgrades.
+        // Migrations are LIVE again as of v2. The app is shipped (project memory:
+        // room-released-with-migrations) — the v1→v11 history was collapsed to a v1 baseline back when the
+        // only install was a dev device, but that assumption no longer holds, so a real upgrade migration
+        // is now required for every schema change. v1→v2 is the first real one (adds marks.presentDetails
+        // + index_marks_raceId). Add the next migration here — with a version bump and a committed
+        // schemas/<n>.json — and append it to .addMigrations(...) below.
         //
-        // fallbackToDestructiveMigrationOnDowngrade: opening the v1 schema over an older-versioned DB
-        // (e.g. a pre-collapse v11 db restored by Android Auto Backup on reinstall — `allowBackup=true`
-        // and the backup rules do not exclude kolco24.db) wipes and recreates instead of crashing with
-        // "A migration from 11 to 1 was required but not found". Scoped to DOWNGRADE only — a missing
-        // *upgrade* migration must still fail loudly once real migrations return. dropAllTables=true
+        // fallbackToDestructiveMigrationOnDowngrade: opening a newer schema over an older-versioned DB
+        // (e.g. a db restored by Android Auto Backup on reinstall — `allowBackup=true` and the backup
+        // rules do not exclude kolco24.db) wipes and recreates instead of crashing on a downgrade. Scoped
+        // to DOWNGRADE only — a missing *upgrade* migration must still fail loudly. dropAllTables=true
         // clears even tables Room no longer knows about. Local-only data (marks/bindings/tracks) is lost
         // on the wipe; races/teams/legend re-sync from the server.
+
+        /**
+         * v1→v2: adds the nullable `marks.presentDetails` column (per-member snapshots for the upload
+         * `present[]`) and `index_marks_raceId` (symmetric to `track_points`, for the scope-filtered
+         * upload queries). Additive only — no data is touched: legacy rows keep `presentDetails IS NULL`,
+         * and the upload mapper merges over `present` so no member is ever lost.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE marks ADD COLUMN presentDetails TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_marks_raceId` ON `marks` (`raceId`)")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
+                .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }
