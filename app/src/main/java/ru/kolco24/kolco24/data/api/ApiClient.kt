@@ -11,6 +11,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import ru.kolco24.kolco24.data.api.dto.LegendResponse
 import ru.kolco24.kolco24.data.api.dto.LoginRequest
 import ru.kolco24.kolco24.data.api.dto.LoginResponse
+import ru.kolco24.kolco24.data.api.dto.MarkDto
+import ru.kolco24.kolco24.data.api.dto.MarkUploadRequest
+import ru.kolco24.kolco24.data.api.dto.MarkUploadResponse
 import ru.kolco24.kolco24.data.api.dto.MemberTagsResponse
 import ru.kolco24.kolco24.data.api.dto.RaceDto
 import ru.kolco24.kolco24.data.api.dto.RacesResponse
@@ -189,6 +192,28 @@ class ApiClient(
         val bytes = json.encodeToString(TrackUploadRequest(teamId, points)).toByteArray()
         return post("$baseUrl/app/race/$raceId/track/", bytes) {
             json.decodeFromString<TrackUploadResponse>(it)
+        }
+    }
+
+    /**
+     * `POST /app/race/<raceId>/marks/` — upload a batch of checkpoint-take [marks] for [teamId]. `200`/
+     * `201` → [PostResult.Success] with the parsed [MarkUploadResponse] (the accepted client `id`s for
+     * idempotent upsert); other statuses map per [post]. The same method serves both upload targets
+     * (cloud / local LAN) — the target is selected by the `ApiClient` instance, not a per-call URL.
+     *
+     * Unlike [uploadTrack], the body carries [sourceInstallId] (device provenance) per the marks
+     * contract; [MarkUploadRequest] is serialized to bytes once so the interceptor hashes exactly what
+     * is sent.
+     */
+    suspend fun uploadMarks(
+        raceId: Int,
+        teamId: Int,
+        sourceInstallId: String,
+        marks: List<MarkDto>,
+    ): PostResult<MarkUploadResponse> {
+        val bytes = json.encodeToString(MarkUploadRequest(teamId, sourceInstallId, marks)).toByteArray()
+        return post("$baseUrl/app/race/$raceId/marks/", bytes) {
+            json.decodeFromString<MarkUploadResponse>(it)
         }
     }
 

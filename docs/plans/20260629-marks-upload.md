@@ -257,9 +257,9 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Modify/Create: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt` (или новый `ApiClientMarksTest.kt`)
 
-- [ ] добавить `suspend fun uploadMarks(raceId: Int, teamId: Int, sourceInstallId: String, marks: List<MarkDto>): PostResult<MarkUploadResponse>` через приватный `post(url, bodyBytes, parse)`, `POST /app/race/<raceId>/marks/`; сериализовать `MarkUploadRequest(teamId, sourceInstallId, marks)` в байты один раз; парсить только на `200/201`. **NB:** `source_install_id` в теле — без прецедента у трека (`TrackUploadRequest` его НЕ несёт, хотя UPLOAD.md его и для `/track/` предписывает), так что это первое тело с этим полем — копировать неоткуда, добавляем в конверт заново
-- [ ] написать тесты против `MockWebServer`: `200 → Success(accepted)`; каждый код `400/403/404/429 → BadRequest/Forbidden/Error(404)/RateLimited`; `Offline` (IOException); тело содержит `source_install_id` и snake_case-поля; пустой `marks` → валидное тело + `200 { accepted: [] }`
-- [ ] run tests — must pass before next task
+- [x] добавить `suspend fun uploadMarks(raceId: Int, teamId: Int, sourceInstallId: String, marks: List<MarkDto>): PostResult<MarkUploadResponse>` через приватный `post(url, bodyBytes, parse)`, `POST /app/race/<raceId>/marks/`; сериализовать `MarkUploadRequest(teamId, sourceInstallId, marks)` в байты один раз; парсить только на `200/201`. **NB:** `source_install_id` в теле — без прецедента у трека (`TrackUploadRequest` его НЕ несёт, хотя UPLOAD.md его и для `/track/` предписывает), так что это первое тело с этим полем — копировать неоткуда, добавляем в конверт заново
+- [x] написать тесты против `MockWebServer`: `200 → Success(accepted)`; каждый код `400/403/404/429 → BadRequest/Forbidden/Error(404)/RateLimited`; `Offline` (IOException); тело содержит `source_install_id` и snake_case-поля; пустой `marks` → валидное тело + `200 { accepted: [] }`
+- [x] run tests — must pass before next task
 
 ### Task 6: MarkRepository — цикл выгрузки (зеркало TrackRepository) + MarkDao upload-запросы
 
