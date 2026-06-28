@@ -78,13 +78,13 @@ The grid is a 4-column `Column`/`Row` layout with **2dp gaps and 0dp radius**, s
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] add the `@Composable private fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f` helper (resolves the *applied* theme, respecting the manual Light/Dark override)
-- [ ] replace `ScorecardTile`/`NfcTileBody` with a `ColorTile(mark)` that resolves `tileFill(mark.color, isDarkScheme())` (**not** `isSystemInDarkTheme()`), fills the square (`aspectRatio(1f)`, `RectangleShape`, flat `background(fill)`, no border/stripe/elevation) and routes `mark.kind` → the new NFC body vs the existing `PhotoTileBody` (kept as-is until Task 3)
-- [ ] render the `cost-number` token as an `AnnotatedString` with the hyphen at 50% alpha, centered, RobotoMono Bold ~23sp / -0.8sp / `includeFontPadding=false` + centered-trimmed `LineHeightStyle`, color = `tileFill.text`
-- [ ] render the take time bottom-end (8dp end / 6dp bottom), RobotoMono Medium ~10.5sp, color = `tileFill.text` at 78% alpha
-- [ ] update the `TileGrid` call site `ScorecardTile(mark)` → `ColorTile(mark)`; remove the leading-stripe `Box`; **keep `TileShape`** (still used by the out-of-scope `GhostTile`); keep `scoreToken` only if still used, else inline
-- [ ] fix the now-stale `GhostTile`/`ScorecardGhostRow` KDoc/comments that reference `[ScorecardTile]` and its "top stripe" (the ghost row is behaviorally unchanged, but the comments point at the deleted composable) — repoint them at `ColorTile`
-- [ ] build: `./gradlew assembleDebug` compiles, `./gradlew testDebugUnitTest` green before Task 3 (no Compose UI test — untested per convention)
+- [x] add the `@Composable private fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f` helper (resolves the *applied* theme, respecting the manual Light/Dark override)
+- [x] replace `ScorecardTile`/`NfcTileBody` with a `ColorTile(mark)` that resolves `tileFill(mark.color, isDarkScheme())` (**not** `isSystemInDarkTheme()`), fills the square (`aspectRatio(1f)`, `RectangleShape`, flat `background(fill)`, no border/stripe/elevation) and routes `mark.kind` → the new NFC body vs the existing `PhotoTileBody` (kept as-is until Task 3)
+- [x] render the `cost-number` token as an `AnnotatedString` with the hyphen at 50% alpha, centered, RobotoMono Bold ~23sp / -0.8sp / `includeFontPadding=false` + centered-trimmed `LineHeightStyle`, color = `tileFill.text`
+- [x] render the take time bottom-end (8dp end / 6dp bottom), RobotoMono Medium ~10.5sp, color = `tileFill.text` at 78% alpha
+- [x] update the `TileGrid` call site `ScorecardTile(mark)` → `ColorTile(mark)`; remove the leading-stripe `Box`; **keep `TileShape`** (still used by the out-of-scope `GhostTile`); keep `scoreToken` only if still used, else inline
+- [x] fix the now-stale `GhostTile`/`ScorecardGhostRow` KDoc/comments that reference `[ScorecardTile]` and its "top stripe" (the ghost row is behaviorally unchanged, but the comments point at the deleted composable) — repoint them at `ColorTile`
+- [x] build: `./gradlew assembleDebug` compiles, `./gradlew testDebugUnitTest` green before Task 3 (no Compose UI test — untested per convention)
 
 ### Task 3: Photo tile body (layout now, image deferred)
 

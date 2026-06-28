@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.ui.marks
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,10 +48,16 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -530,10 +535,10 @@ private fun TrackNudge(recording: Boolean, onStart: () -> Unit, modifier: Modifi
 }
 
 /**
- * The empty-state signature: a preview of the scorecard grid this screen fills in. The first slot is a
- * solid card carrying the state's lead glyph (echoing a real [ScorecardTile]'s top stripe + frame); the
- * trailing slots are hairline-dashed placeholders that fade out, reading as "marks land here, one КП at a
- * time". Purely decorative — no state, no motion.
+ * The empty-state signature: a preview of the color-fill grid this screen fills in. The first slot is a
+ * solid card carrying the state's lead glyph (a neutral stand-in for a real [ColorTile]'s color fill +
+ * frame); the trailing slots are hairline-dashed placeholders that fade out, reading as "marks land here,
+ * one КП at a time". Purely decorative — no state, no motion.
  */
 @Composable
 private fun ScorecardGhostRow(leadGlyph: ImageVector, modifier: Modifier = Modifier) {
@@ -564,7 +569,7 @@ private fun GhostTile(
             .then(
                 if (active) {
                     Modifier.drawBehind {
-                        // Solid hairline frame, matching ScorecardTile's border.
+                        // Solid hairline frame, framing the ghost stand-in for a real grid tile.
                         drawRoundRect(
                             color = outline,
                             cornerRadius = CornerRadius(10.dp.toPx()),
@@ -589,7 +594,7 @@ private fun GhostTile(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (active) {
-                // Neutral top stripe stand-in for the КП color bar (no КП yet → no color).
+                // Neutral top stripe stand-in for the КП color fill (no КП yet → no color).
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -723,7 +728,7 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
             ) {
                 rowMarks.forEach { mark ->
                     Box(modifier = Modifier.weight(1f)) {
-                        ScorecardTile(mark = mark)
+                        ColorTile(mark = mark)
                     }
                 }
                 repeat(4 - rowMarks.size) { Box(modifier = Modifier.weight(1f)) }
@@ -734,51 +739,41 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
 
 private val TileShape = RoundedCornerShape(10.dp)
 
+/** The *resolved* theme (respecting the app's manual Light/Dark override), NOT `isSystemInDarkTheme()`. */
+@Composable
+private fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
 /**
- * One taken checkpoint as a scorecard card: a leading color bar (the КП color, matching the Легенда
- * rows), the КП number as the mono hero, the score earned (`+cost`), and the take time. NFC takes
- * read as a clean numeric card; photo takes swap the number area for the photo seat carrying a small
- * КП badge.
+ * One taken checkpoint as a flat color-fill tile: the КП discipline color fills the whole square
+ * (0dp radius, no border/elevation) so a same-color cluster reads as one tiled region. The
+ * `<стоимость>-<номер>` token sits centered (NFC takes) or as a caption over the photo scrim. The
+ * fill + readable text are resolved by the pure [tileFill] against the [isDarkScheme] result.
  */
 @Composable
-private fun ScorecardTile(mark: Mark) {
-    // Bridge until Task 2 replaces this composable with the color-fill `ColorTile`: derive the stripe
-    // shade from the new muted palette (theme-independent for actual colors). `null` → transparent.
-    val gutter = mark.color?.let { tileFill(it, false).fill } ?: Color.Transparent
-    Surface(
-        shape = TileShape,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+private fun ColorTile(mark: Mark) {
+    val tf = tileFill(mark.color, isDarkScheme())
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
+            .aspectRatio(1f)
+            .clip(RectangleShape)
+            .background(tf.fill),
     ) {
-        // The color bar caps the top edge (echoing the red reflective stripe on a physical КП),
-        // overlaid so it never shifts the centered number; clipped to the tile's rounded top.
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (mark.kind) {
-                MarkKind.NFC -> NfcTileBody(mark)
-                MarkKind.PHOTO -> PhotoTileBody(mark)
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .background(gutter),
-            )
+        when (mark.kind) {
+            MarkKind.NFC -> NfcTileBody(mark, tf.text)
+            MarkKind.PHOTO -> PhotoTileBody(mark)
         }
     }
 }
 
 @Composable
-private fun NfcTileBody(mark: Mark) {
+private fun NfcTileBody(mark: Mark, textColor: Color) {
     // Per-element placement (not a shared inset) so the «стоимость-номер» token centers on the WHOLE
     // tile while the take time hugs the bottom-right like a chat-message timestamp.
     Box(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = scoreToken(mark),
-            color = MaterialTheme.colorScheme.onSurface,
+            text = tokenAnnotated(mark, textColor),
+            color = textColor,
             maxLines = 1,
             // includeFontPadding=false + centered/trimmed line height so the digits sit optically
             // centered — without it the font's top padding makes the token look pushed down.
@@ -787,7 +782,7 @@ private fun NfcTileBody(mark: Mark) {
                 fontWeight = FontWeight.Bold,
                 fontSize = 23.sp,
                 lineHeight = 23.sp,
-                letterSpacing = (-1).sp,
+                letterSpacing = (-0.8).sp,
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                 lineHeightStyle = LineHeightStyle(
                     alignment = LineHeightStyle.Alignment.Center,
@@ -801,8 +796,9 @@ private fun NfcTileBody(mark: Mark) {
         Text(
             text = mark.time,
             fontFamily = RobotoMono,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.5.sp,
+            color = textColor.copy(alpha = 0.78f),
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
     }
@@ -813,6 +809,16 @@ private fun NfcTileBody(mark: Mark) {
  * tiles so a КП reads the same way here as in the legend. [Mark.number] is already zero-padded.
  */
 private fun scoreToken(mark: Mark): String = "${mark.cost}-${mark.number}"
+
+/**
+ * The `<стоимость>-<номер>` token with the hyphen dimmed to 50% alpha (the digits inherit the caller's
+ * text color), so the cost and number read as two values rather than one run on the color fill.
+ */
+private fun tokenAnnotated(mark: Mark, textColor: Color): AnnotatedString = buildAnnotatedString {
+    append("${mark.cost}")
+    withStyle(SpanStyle(color = textColor.copy(alpha = 0.5f))) { append("-") }
+    append(mark.number)
+}
 
 @Composable
 private fun PhotoTileBody(mark: Mark) {
