@@ -281,10 +281,10 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] добавить `val markUploadOutcomes = MutableStateFlow<Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>>(emptyMap())` (транзиентный, как `trackUploadOutcomes`)
-- [ ] перестроить lazy `markRepository`: `sourceInstallId = installId`, `cloudUploader = MarkUploader { r,t,sid,m -> apiClient.uploadMarks(r,t,sid,m) }`, `localUploader = MarkUploader { r,t,sid,m -> localApiClient.uploadMarks(r,t,sid,m) }`, `onUploadOutcome = { scope, target, kind -> markUploadOutcomes.update { it + ((scope to target) to TargetUploadOutcome(kind, System.currentTimeMillis())) } }`
-- [ ] проверить отсутствие construction-order цикла (apiClient/installId уже инициализированы к моменту первого обращения к `markRepository`)
-- [ ] без юнит-тестов (проводка/DI по конвенции) — проверить сборку и `lintDebug`
+- [x] добавить `val markUploadOutcomes = MutableStateFlow<Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>>(emptyMap())` (транзиентный, как `trackUploadOutcomes`)
+- [x] перестроить lazy `markRepository`: `sourceInstallId = installId`, `cloudUploader = MarkUploader { r,t,sid,m -> apiClient.uploadMarks(r,t,sid,m) }`, `localUploader = MarkUploader { r,t,sid,m -> localApiClient.uploadMarks(r,t,sid,m) }`, `onUploadOutcome = { scope, target, kind -> markUploadOutcomes.update { it + ((scope to target) to TargetUploadOutcome(kind, System.currentTimeMillis())) } }`
+- [x] проверить отсутствие construction-order цикла (apiClient/installId уже инициализированы к моменту первого обращения к `markRepository`)
+- [x] без юнит-тестов (проводка/DI по конвенции) — проверить сборку и `lintDebug`
 
 ### Task 8: Триггеры выгрузки — Launch B, take-complete, пиггибэк на трек
 

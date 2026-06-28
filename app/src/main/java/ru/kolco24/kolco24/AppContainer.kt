@@ -197,8 +197,33 @@ class AppContainer(private val context: Context) {
     val markRepository: MarkRepository by lazy {
         MarkRepository(
             markDao = database.markDao(),
+            // Device provenance: the marks body carries the install UUID so the server can dedup two
+            // phones of one team (unlike the track body, which omits it).
+            sourceInstallId = installId,
+            // Each target is one ApiClient instance: cloud HTTPS vs the LAN cleartext localApiClient.
+            cloudUploader = { raceId, teamId, sourceInstallId, marks ->
+                apiClient.uploadMarks(raceId, teamId, sourceInstallId, marks)
+            },
+            localUploader = { raceId, teamId, sourceInstallId, marks ->
+                localApiClient.uploadMarks(raceId, teamId, sourceInstallId, marks)
+            },
+            onUploadOutcome = { scope, target, kind ->
+                markUploadOutcomes.update {
+                    it + ((scope to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
+                }
+            },
         )
     }
+
+    /**
+     * Transient (in-memory, not persisted) per-target marks-upload outcomes, keyed by `(scope, target)`.
+     * Mirrors [trackUploadOutcomes]: the source of truth for the marks status row's "when / what error"
+     * half, refreshed within seconds of a restart by Launch B's opportunistic flush, so it needs no Room
+     * table. Marks has no destructive "clear" path, so there is no `onScopeCleared` analogue.
+     */
+    val markUploadOutcomes:
+        MutableStateFlow<Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>> =
+        MutableStateFlow(emptyMap())
 
     /**
      * Local-only GPS track store. Owns the [RawFix]→entity mapping; the recording service forwards
