@@ -333,10 +333,10 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 
 ### Task 12: [Final] Документация
 
-- [ ] обновить `docs/design/UPLOAD.md`: снять статус «эндпоинтов на бэкенде пока нет / marks local-only» → «клиент реализован, ждёт backend»; зафиксировать `present[]` из снимка + слияние с `present` при NULL; **пометить `marks[].elapsed_at` как nullable** (сейчас отмечены только `trusted_ms`/`boot_count`, но `MarkEntity.elapsedRealtimeAt` — `Long?`); **добавить в контракт `marks[].location` (nullable вложенный объект)** — античит-координата места взятия (`lat`/`lon`/`accuracy`/`altitude`/`vertical_accuracy`/`gps_time_ms`/`elapsed_at`), `null` при отсутствии фикса; описать назначение полей (`accuracy` и «возраст фикса» = `mark.elapsed_at − location.elapsed_at` как ключевые сигналы), и **замечание про cleartext-LAN** (координата идёт открытым текстом на `192.168.1.5` — приемлемо, LAN доверенный)
-- [ ] обновить `CLAUDE.md`: `MarkEntity.presentDetails` + `MarkMemberSnapshot`; upload-запросы `MarkDao`; upload-цикл `MarkRepository` + `MarkUploader`; `MarkDtos.kt`; `ApiClient.uploadMarks`; `markUploadOutcomes`; 3 триггера; статус-строка в `MarksScreen`; **факт первой реальной миграции (v1→v2) и подключения `.addMigrations`**
-- [ ] обновить memory `room-released-with-migrations.md`: зафиксировать, что миграция 1→2 заведена (первая реальная)
-- [ ] переместить план в `docs/plans/completed/`
+- [x] обновить `docs/design/UPLOAD.md`: снять статус «эндпоинтов на бэкенде пока нет / marks local-only» → «клиент реализован, ждёт backend»; зафиксировать `present[]` из снимка + слияние с `present` при NULL; **пометить `marks[].elapsed_at` как nullable** (сейчас отмечены только `trusted_ms`/`boot_count`, но `MarkEntity.elapsedRealtimeAt` — `Long?`); **добавить в контракт `marks[].location` (nullable вложенный объект)** — античит-координата места взятия (`lat`/`lon`/`accuracy`/`altitude`/`vertical_accuracy`/`gps_time_ms`/`elapsed_at`), `null` при отсутствии фикса; описать назначение полей (`accuracy` и «возраст фикса» = `mark.elapsed_at − location.elapsed_at` как ключевые сигналы), и **замечание про cleartext-LAN** (координата идёт открытым текстом на `192.168.1.5` — приемлемо, LAN доверенный)
+- [x] обновить `CLAUDE.md`: `MarkEntity.presentDetails` + `MarkMemberSnapshot`; upload-запросы `MarkDao`; upload-цикл `MarkRepository` + `MarkUploader`; `MarkDtos.kt`; `ApiClient.uploadMarks`; `markUploadOutcomes`; 3 триггера; статус-строка в `MarksScreen`; **факт первой реальной миграции (v1→v2) и подключения `.addMigrations`**
+- [x] обновить memory `room-released-with-migrations.md`: зафиксировать, что миграция 1→2 заведена (первая реальная)
+- [x] переместить план в `docs/plans/completed/`
 
 ## Post-Completion
 
