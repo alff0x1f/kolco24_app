@@ -55,11 +55,4 @@ class TileFillTest {
             assertEquals("text for $c", tileFill(c, false).text, tileFill(c, true).text)
         }
     }
-
-    @Test
-    fun `grout flips between light and dark`() {
-        assertEquals(Color(0xFFC2CBD5), gridGrout(false))
-        assertEquals(Color(0xFF11161B), gridGrout(true))
-        assertNotEquals(gridGrout(false), gridGrout(true))
-    }
 }

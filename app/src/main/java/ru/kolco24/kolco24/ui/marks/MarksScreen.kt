@@ -139,8 +139,6 @@ private val TileInk = Color(0xFF161A1F)          // text on yellow & the light n
 private val NeutralFillLight = Color(0xFFD6DCE4)
 private val NeutralFillDark = Color(0xFF2A323C)
 private val NeutralTextDark = Color(0xFFD6DCE4)   // light grey text on the dark neutral
-private val GroutLight = Color(0xFFC2CBD5)
-private val GroutDark = Color(0xFF11161B)
 
 /** A tile's flat fill and the (non-luminance, fixed) text color that reads on it. */
 internal data class TileFill(val fill: Color, val text: Color)
@@ -162,9 +160,6 @@ internal fun tileFill(color: CheckpointColor?, darkTheme: Boolean): TileFill = w
     null -> if (darkTheme) TileFill(NeutralFillDark, NeutralTextDark)
     else TileFill(NeutralFillLight, TileInk)
 }
-
-/** The grout seam color showing through the 2dp tile gaps — resolved the same testable way as [tileFill]. */
-internal fun gridGrout(darkTheme: Boolean): Color = if (darkTheme) GroutDark else GroutLight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -706,20 +701,17 @@ private fun MetricItem(
 
 /**
  * The color-fill grid: an **edge-to-edge** 4-column field of flat [ColorTile]s separated by 2dp seams.
- * The outer [Column] is painted with [gridGrout] (resolved against the *applied* theme via [isDarkScheme])
- * and the 2dp vertical/horizontal gaps let that grout show through, so a big same-color cluster reads as
- * one tiled-wall region rather than a printed slab. No horizontal padding — the grid sits flush to the
- * screen edge (the metrics card above keeps its own inset). Trailing empty cells in the last row are
- * grout-colored `weight(1f)` spacers (transparent over the Column's grout background) so the seam grid
- * stays regular all the way to the edge.
+ * The 2dp vertical/horizontal gaps (and the trailing empty cells of an incomplete last row) show the
+ * **normal app background** color through — so a partly-filled row blends into the screen rather than
+ * appearing as a darker grey band, and the seams read as the ordinary background between tiles, not a
+ * separate grout shade. No horizontal padding — the grid sits flush to the screen edge (the metrics card
+ * above keeps its own inset).
  */
 @Composable
 private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     val rows = marks.chunked(4)
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(gridGrout(isDarkScheme())),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         rows.forEach { rowMarks ->
@@ -732,8 +724,8 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
                         ColorTile(mark = mark)
                     }
                 }
-                // Grout-colored spacers (transparent over the grout background) keep the last row's
-                // seam grid regular to the edge.
+                // Empty spacers (showing the screen background) keep the last row's grid regular to the
+                // edge without tinting the leftover cells.
                 repeat(4 - rowMarks.size) { Box(modifier = Modifier.weight(1f)) }
             }
         }
