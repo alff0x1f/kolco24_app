@@ -316,11 +316,11 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] в `ScanTakeState` (или эквивалентном per-window состоянии хоста) накапливать `Map<Int, MarkMemberSnapshot>`: на каждый `Member`-результат `classifyTag` (`onScanTag`, `uid` уже в scope) строить снимок `{ numberInTeam, nfcUid = <uid сканированного браслета>, number = <participantNumber из scanChipNumbers (MainActivity.kt:653)>, code = null }` и класть в map
-- [ ] прокидывать буфер снимков в `startKpTake(bufferedMembers = ...)` и одиночный снимок в `addMember(...)` (по сигнатурам из Task 3)
-- [ ] собрать `TrackUploadStatus` отметок, **повторив scoped-pair защиту трека** (`MainActivity.kt:611`, P3 — не упрощать до `produceState<UploadCounts?>`): обернуть в `Pair<TrackScope, UploadCounts>` так, чтобы счётчики применялись только когда `pair.first == текущий scope` (иначе один кадр показываются stale-counts прошлой команды при переключении); + `container.markUploadOutcomes.collectAsState()` для `(scope, Local)`/`(scope, Cloud)`; джойн в `TrackUploadStatus` (переиспользуем тип из `ui/track`)
-- [ ] прокинуть статус в `MarksScreen(uploadStatus = ...)` (параметр добавлен в Task 9)
-- [ ] без юнит-тестов (Compose/проводка по конвенции) — проверить сборку
+- [x] в `ScanTakeState` (или эквивалентном per-window состоянии хоста) накапливать `Map<Int, MarkMemberSnapshot>`: на каждый `Member`-результат `classifyTag` (`onScanTag`, `uid` уже в scope) строить снимок `{ numberInTeam, nfcUid = <uid сканированного браслета>, number = <participantNumber из scanChipNumbers (MainActivity.kt:653)>, code = null }` и класть в map
+- [x] прокидывать буфер снимков в `startKpTake(bufferedMembers = ...)` и одиночный снимок в `addMember(...)` (по сигнатурам из Task 3)
+- [x] собрать `TrackUploadStatus` отметок, **повторив scoped-pair защиту трека** (`MainActivity.kt:611`, P3 — не упрощать до `produceState<UploadCounts?>`): обернуть в `Pair<TrackScope, UploadCounts>` так, чтобы счётчики применялись только когда `pair.first == текущий scope` (иначе один кадр показываются stale-counts прошлой команды при переключении); + `container.markUploadOutcomes.collectAsState()` для `(scope, Local)`/`(scope, Cloud)`; джойн в `TrackUploadStatus` (переиспользуем тип из `ui/track`)
+- [x] прокинуть статус в `MarksScreen(uploadStatus = ...)` (параметр добавлен в Task 9)
+- [x] без юнит-тестов (Compose/проводка по конвенции) — проверить сборку
 
 ### Task 11: Verify acceptance criteria
 
