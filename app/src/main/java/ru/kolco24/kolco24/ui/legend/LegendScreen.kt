@@ -347,8 +347,12 @@ private fun CheckpointListCard(checkpoints: List<CheckpointEntity>, takenIds: Se
 
     Column(modifier = Modifier.padding(horizontal = 8.dp)) {
         groups.forEachIndexed { index, group ->
-            CheckpointGroupCard(group = group, takenIds = takenIds)
-            if (index != groups.lastIndex) Spacer(Modifier.height(10.dp))
+            CheckpointGroupCard(
+                group = group,
+                takenIds = takenIds,
+                shape = checkpointGroupShape(index, groups.size),
+            )
+            if (index != groups.lastIndex) Spacer(Modifier.height(CheckpointGroupGap))
         }
 
         Text(
@@ -384,20 +388,49 @@ internal fun groupCheckpointsByColor(
     return groups
 }
 
+/** Outer corner radius — kept at [shapes.large] (16dp) so the КП list block stays as friendly as the
+ * hero cards above it. Used only on the list's *outermost* corners (top of the first group, bottom of
+ * the last). */
+private val CheckpointOuterRadius = 16.dp
+
+/** Inner corner radius — the seams *between* adjacent color groups. Tight so the stack reads as one
+ * rounded block (Gmail's grouped-tile look) instead of a column of fat touching pills. */
+private val CheckpointInnerRadius = 4.dp
+
+/** Hairline gap between groups — a sliver of background keeps each color run a distinct tile while the
+ * graduated radius binds them into one block. Much tighter than a normal card gap on purpose. */
+private val CheckpointGroupGap = 2.dp
+
 /**
- * One color group from [groupCheckpointsByColor]: a [shapes.large] card whose single 4dp left bar
- * runs the **full card height** (clipped by the rounded corners) instead of the old per-row gutter.
- * `null` (neutral `""`/unknown) → transparent bar, so an uncolored group looks like the prior card.
- * Rows keep their 12dp start padding (12 + 4dp bar = 16dp) and the 72dp divider inset, so per-row
- * text alignment is pixel-identical to the pre-grouping layout.
+ * Per-position corner shape for a color group at [index] of [count]: the list's outermost corners
+ * (top of the first group, bottom of the last) keep the large [CheckpointOuterRadius]; every internal
+ * seam uses the tight [CheckpointInnerRadius]. A lone group ([count] == 1) is both first and last, so
+ * all four corners stay large.
+ */
+private fun checkpointGroupShape(index: Int, count: Int): RoundedCornerShape {
+    val top = if (index == 0) CheckpointOuterRadius else CheckpointInnerRadius
+    val bottom = if (index == count - 1) CheckpointOuterRadius else CheckpointInnerRadius
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+}
+
+/**
+ * One color group from [groupCheckpointsByColor]: a rounded card (per-position [shape]) whose single
+ * 4dp left bar runs the **full card height** (clipped by the rounded corners) instead of the old
+ * per-row gutter. `null` (neutral `""`/unknown) → transparent bar, so an uncolored group looks like
+ * the prior card. Rows keep their 12dp start padding (12 + 4dp bar = 16dp) and the 72dp divider inset,
+ * so per-row text alignment is pixel-identical to the pre-grouping layout.
  */
 @Composable
-private fun CheckpointGroupCard(group: List<CheckpointEntity>, takenIds: Set<Int>) {
+private fun CheckpointGroupCard(
+    group: List<CheckpointEntity>,
+    takenIds: Set<Int>,
+    shape: RoundedCornerShape,
+) {
     val barColor = parseCheckpointColor(group.first().color)?.barColor() ?: Color.Transparent
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
