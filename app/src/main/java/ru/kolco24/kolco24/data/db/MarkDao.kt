@@ -133,19 +133,6 @@ interface MarkDao {
     @Query("UPDATE marks SET uploadedCloud = 1 WHERE id IN (:ids)")
     suspend fun markUploadedCloud(ids: List<String>)
 
-    /**
-     * Like [markUploadedLocal] but only marks rows where `locLat IS NULL` — i.e. the GPS fix had
-     * not yet arrived when the row was fetched for upload. If [attachLocation] wrote a fix between
-     * DTO creation and this call, the row's `locLat` is now non-null and this update skips it,
-     * leaving `uploadedLocal = 0` so the next trigger re-uploads the row **with** the GPS data.
-     * Use for rows whose DTO was serialized with `location = null`.
-     */
-    @Query("UPDATE marks SET uploadedLocal = 1 WHERE id IN (:ids) AND locLat IS NULL")
-    suspend fun markUploadedLocalIfNoLocation(ids: List<String>)
-
-    /** Same guard as [markUploadedLocalIfNoLocation] for the cloud target. */
-    @Query("UPDATE marks SET uploadedCloud = 1 WHERE id IN (:ids) AND locLat IS NULL")
-    suspend fun markUploadedCloudIfNoLocation(ids: List<String>)
 
     /**
      * Mark one row as locally uploaded only when its `updatedAt` still matches [updatedAt] — i.e.

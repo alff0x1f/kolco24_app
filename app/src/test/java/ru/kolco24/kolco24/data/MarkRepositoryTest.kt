@@ -472,18 +472,6 @@ private class FakeMarkDao : MarkDao {
         rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedCloud = true) else it }
     }
 
-    override suspend fun markUploadedLocalIfNoLocation(ids: List<String>) {
-        rows.value = rows.value.map {
-            if (it.id in ids && it.locLat == null) it.copy(uploadedLocal = true) else it
-        }
-    }
-
-    override suspend fun markUploadedCloudIfNoLocation(ids: List<String>) {
-        rows.value = rows.value.map {
-            if (it.id in ids && it.locLat == null) it.copy(uploadedCloud = true) else it
-        }
-    }
-
     override suspend fun markUploadedLocalIfUnchanged(id: String, updatedAt: Long) {
         rows.value = rows.value.map {
             if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedLocal = true) else it
