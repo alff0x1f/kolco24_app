@@ -108,13 +108,13 @@ The grid is a 4-column `Column`/`Row` layout with **2dp gaps and 0dp radius**, s
 - [x] run `./gradlew testDebugUnitTest` — all unit tests green
 
 ### Task 5: Verify acceptance criteria
-- [ ] grid is edge-to-edge; tiles are flat color, 0dp radius, 2dp grout gaps; metrics card unchanged
-- [ ] all 6 colors + neutral render; yellow/neutral use dark ink; neutral + grout flip in dark mode; colored fills identical light/dark
-- [ ] **manual theme override respected:** set Settings → Тема to LIGHT and DARK explicitly; neutral tiles + grout follow the chosen theme (not the OS theme) — guards the `isDarkScheme()` vs `isSystemInDarkTheme()` fix
-- [ ] token shows `cost-number` with dimmed hyphen in RobotoMono; time bottom-right legible on every fill
-- [ ] photo body fills the tile with placeholder + bottom scrim carrying the bottom-leading token + time (no real image yet, TODO present)
-- [ ] empty state / ghost row / NFC banner / metrics still work and are visually unchanged
-- [ ] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — both pass
+- [x] grid is edge-to-edge; tiles are flat color, 0dp radius, 2dp grout gaps; metrics card unchanged — verified in code (`TileGrid` edge-to-edge `Column` with grout bg + 2dp `spacedBy`, `ColorTile` `RectangleShape`/flat `background`/no border); visual confirmation is manual (skipped - not automatable)
+- [x] all 6 colors + neutral render; yellow/neutral use dark ink; neutral + grout flip in dark mode; colored fills identical light/dark — covered by `TileFillTest` unit tests; on-device color rendering is manual (skipped - not automatable)
+- [x] **manual theme override respected:** set Settings → Тема to LIGHT and DARK explicitly; neutral tiles + grout follow the chosen theme — code uses `isDarkScheme()` (resolved theme via `colorScheme.surface.luminance()`), not `isSystemInDarkTheme()`; on-device toggle is manual (skipped - not automatable)
+- [x] token shows `cost-number` with dimmed hyphen in RobotoMono; time bottom-right legible on every fill — verified in code (`tokenAnnotated` 50%-alpha hyphen `SpanStyle`, `NfcTileBody` time bottom-end); legibility is manual (skipped - not automatable)
+- [x] photo body fills the tile with placeholder + bottom scrim carrying the bottom-leading token + time (no real image yet, TODO present) — verified in code (`PhotoTileBody` gradient placeholder + bottom scrim + bottom-leading token + bottom-end time + `TODO(photo)` comment); manual visual (skipped - not automatable)
+- [x] empty state / ghost row / NFC banner / metrics still work and are visually unchanged — untouched in code (out of scope per plan); manual visual (skipped - not automatable)
+- [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — both pass (BUILD SUCCESSFUL)
 
 ### Task 6: [Final] Update documentation
 - [ ] update the `ui/marks/MarksScreen.kt` section of `CLAUDE.md` to describe the color-fill grid (NFC color tiles + photo-fill tiles, edge-to-edge grout grid, muted screen-scoped palette, `tileFill` mapping) and that `barColor` here is replaced (legend/provisioning copies unchanged)
