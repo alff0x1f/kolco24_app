@@ -24,7 +24,11 @@ import androidx.room.TypeConverters
     version = 1,
     exportSchema = true,
 )
-@TypeConverters(TeamMembersConverter::class, IntListConverter::class)
+@TypeConverters(
+    TeamMembersConverter::class,
+    IntListConverter::class,
+    MarkMemberSnapshotListConverter::class,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun raceDao(): RaceDao
     abstract fun syncMetaDao(): SyncMetaDao

@@ -200,11 +200,11 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/MarkMemberSnapshotListConverter.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/db/MarkMemberSnapshotListConverterTest.kt`
 
-- [ ] добавить **`@Serializable` `data class MarkMemberSnapshot(numberInTeam, nfcUid: String?, number, code: String? = null)`** рядом с `MarkEntity` (тот же файл, как value-тип) с KDoc «снимок участника на момент взятия — для выгрузки `present[]`». **Аннотация обязательна** — конвертер сериализует через kotlinx.serialization; без неё компиляция `Json.encodeToString` падает
-- [ ] добавить в `MarkEntity` колонку `val presentDetails: List<MarkMemberSnapshot>? = null` с KDoc: параллельна `present: List<Int>`, заполняется на момент скана, источник для `present[]` в выгрузке, NULL на legacy-строках
-- [ ] создать `MarkMemberSnapshotListConverter` (зеркало `IntListConverter`): `@TypeConverter fun fromJson(String?): List<MarkMemberSnapshot>?` / `toJson(List<MarkMemberSnapshot>?): String?` — **nullable** (NULL ↔ null), `ignoreUnknownKeys`, catch `SerializationException`/`IllegalArgumentException` → null
-- [ ] написать `MarkMemberSnapshotListConverterTest` на **реальном `Json` encode/decode** (не моках): round-trip (полный список с uid/без uid/`code=null`), `null` ↔ null, битый JSON → null, пустой список ↔ `"[]"` — тест заодно ловит отсутствие `@Serializable`
-- [ ] run tests — must pass before next task
+- [x] добавить **`@Serializable` `data class MarkMemberSnapshot(numberInTeam, nfcUid: String?, number, code: String? = null)`** рядом с `MarkEntity` (тот же файл, как value-тип) с KDoc «снимок участника на момент взятия — для выгрузки `present[]`». **Аннотация обязательна** — конвертер сериализует через kotlinx.serialization; без неё компиляция `Json.encodeToString` падает
+- [x] добавить в `MarkEntity` колонку `val presentDetails: List<MarkMemberSnapshot>? = null` с KDoc: параллельна `present: List<Int>`, заполняется на момент скана, источник для `present[]` в выгрузке, NULL на legacy-строках
+- [x] создать `MarkMemberSnapshotListConverter` (зеркало `IntListConverter`): `@TypeConverter fun fromJson(String?): List<MarkMemberSnapshot>?` / `toJson(List<MarkMemberSnapshot>?): String?` — **nullable** (NULL ↔ null), `ignoreUnknownKeys`, catch `SerializationException`/`IllegalArgumentException` → null
+- [x] написать `MarkMemberSnapshotListConverterTest` на **реальном `Json` encode/decode** (не моках): round-trip (полный список с uid/без uid/`code=null`), `null` ↔ null, битый JSON → null, пустой список ↔ `"[]"` — тест заодно ловит отсутствие `@Serializable`
+- [x] run tests — must pass before next task. ➕ Регистрация `MarkMemberSnapshotListConverter` в `@TypeConverters` (формально из Task 2) сделана здесь — это hard-зависимость компиляции KSP для новой колонки; version-bump/миграция/`schemas/2.json` остаются в Task 2 (`schemas/1.json` восстановлен из коммита)
 
 ### Task 2: Регистрация конвертера + миграция 1→2 + schemas/2.json
 
@@ -214,7 +214,7 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 - Create: `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/2.json` (генерируется сборкой)
 - Create: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
 
-- [ ] зарегистрировать `MarkMemberSnapshotListConverter::class` в `@TypeConverters` на `AppDatabase`
+- [x] зарегистрировать `MarkMemberSnapshotListConverter::class` в `@TypeConverters` на `AppDatabase` (сделано в Task 1 — hard-зависимость компиляции)
 - [ ] поднять `version = 2`
 - [ ] добавить `val MIGRATION_1_2 = object : Migration(1, 2) { override fun migrate(db) { db.execSQL("ALTER TABLE marks ADD COLUMN presentDetails TEXT") ; db.execSQL("CREATE INDEX IF NOT EXISTS index_marks_raceId ON marks(raceId)") } }` (колонка nullable без default; индекс под scope-запрос, симметрично `track_points`)
 - [ ] добавить `Index("raceId")` в `@Entity(indices=[...])` на `MarkEntity` (чтобы schema 2.json совпала с миграцией — иначе `MigrationTest` validate упадёт)
