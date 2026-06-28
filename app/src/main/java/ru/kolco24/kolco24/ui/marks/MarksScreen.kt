@@ -47,7 +47,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.AnnotatedString
@@ -93,7 +92,7 @@ enum class MarkKind { NFC, PHOTO }
  * front. [costOf] resolves a take's **live** checkpoint cost (checkpoint id → current cost) so a tile
  * reflects an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
  * [colorOf] resolves a take's checkpoint color token (checkpoint id → server token) for the tile's
- * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
+ * whole-tile fill color; it defaults to «no color» so the pure mapping stays testable without a checkpoint
  * map. The tile time is the **trusted** take time (`trustedTakenAt`) when present, falling back to the
  * raw wall `takenAt` for untrusted/legacy rows — so a phone clock reset doesn't shift displayed times.
  * Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
@@ -306,7 +305,6 @@ private fun MarksEmpty(
         val headline: String,
         val body: String,
         val ctaLabel: String? = null,
-        val ctaIcon: ImageVector? = null,
         val onCta: (() -> Unit)? = null,
         val trackNudge: Boolean = false,
     )
@@ -317,7 +315,6 @@ private fun MarksEmpty(
             headline = "Отметок пока нет",
             body = "Выберите соревнование и команду — отметки появятся здесь.",
             ctaLabel = "Выбрать команду",
-            ctaIcon = Icons.Filled.Groups,
             onCta = onChooseTeam,
         )
         nfcDisabled -> EmptyContent(
@@ -325,7 +322,6 @@ private fun MarksEmpty(
             headline = "NFC выключен",
             body = "Включите NFC, чтобы отмечать КП прикосновением.",
             ctaLabel = "Включить NFC",
-            ctaIcon = Icons.Filled.Nfc,
             onCta = onOpenNfcSettings,
         )
         !nfcAvailable -> EmptyContent(
@@ -339,7 +335,6 @@ private fun MarksEmpty(
             body = "Отметка засчитывается, только когда отмечены все участники команды. " +
                 "Сейчас с чипом $boundCount из $memberCount.",
             ctaLabel = "Привязать чипы",
-            ctaIcon = Icons.Filled.AddLink,
             onCta = onBindChips,
         )
         else -> EmptyContent(
@@ -384,10 +379,8 @@ private fun MarksEmpty(
                 ),
                 contentPadding = PaddingValues(horizontal = 22.dp),
             ) {
-                if (content.ctaIcon != null) {
-                    Icon(content.ctaIcon, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                }
+                Icon(content.glyph, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(content.ctaLabel, style = MaterialTheme.typography.titleSmall)
             }
         }
@@ -766,7 +759,6 @@ private fun ColorTile(mark: Mark) {
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RectangleShape)
             .background(tf.fill),
     ) {
         when (mark.kind) {

@@ -117,8 +117,8 @@ The grid is a 4-column `Column`/`Row` layout with **2dp gaps and 0dp radius**, s
 - [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — both pass (BUILD SUCCESSFUL)
 
 ### Task 6: [Final] Update documentation
-- [ ] update the `ui/marks/MarksScreen.kt` section of `CLAUDE.md` to describe the color-fill grid (NFC color tiles + photo-fill tiles, edge-to-edge grout grid, muted screen-scoped palette, `tileFill` mapping) and that `barColor` here is replaced (legend/provisioning copies unchanged)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update the `ui/marks/MarksScreen.kt` section of `CLAUDE.md` to describe the color-fill grid (NFC color tiles + photo-fill tiles, edge-to-edge grout grid, muted screen-scoped palette, `tileFill` mapping) and that `barColor` here is replaced (legend/provisioning copies unchanged)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Informational — manual/external, no checkboxes*
