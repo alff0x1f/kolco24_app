@@ -101,11 +101,11 @@ The grid is a 4-column `Column`/`Row` layout with **2dp gaps and 0dp radius**, s
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] rework `TileGrid`: outer `Column` with `background(gridGrout(isDarkScheme()))` and `verticalArrangement = spacedBy(2.dp)`, **no horizontal padding** (edge-to-edge); each `Row` `horizontalArrangement = spacedBy(2.dp)`
-- [ ] fill trailing empty cells in the last row with empty `Box(weight=1f)` spacers (they show the `Column`'s grout background through, so the seam grid stays regular to the edge)
-- [ ] confirm the `LazyColumn` item for the grid adds no side padding around it (the metrics card keeps its own inset; grid sits flush)
-- [ ] build: `./gradlew assembleDebug` (or `lintDebug`) — must compile before Task 5
-- [ ] run `./gradlew testDebugUnitTest` — all unit tests green
+- [x] rework `TileGrid`: outer `Column` with `background(gridGrout(isDarkScheme()))` and `verticalArrangement = spacedBy(2.dp)`, **no horizontal padding** (edge-to-edge); each `Row` `horizontalArrangement = spacedBy(2.dp)`
+- [x] fill trailing empty cells in the last row with empty `Box(weight=1f)` spacers (they show the `Column`'s grout background through, so the seam grid stays regular to the edge)
+- [x] confirm the `LazyColumn` item for the grid adds no side padding around it (the metrics card keeps its own inset; grid sits flush)
+- [x] build: `./gradlew assembleDebug` (or `lintDebug`) — must compile before Task 5
+- [x] run `./gradlew testDebugUnitTest` — all unit tests green
 
 ### Task 5: Verify acceptance criteria
 - [ ] grid is edge-to-edge; tiles are flat color, 0dp radius, 2dp grout gaps; metrics card unchanged

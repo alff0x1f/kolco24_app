@@ -711,23 +711,36 @@ private fun MetricItem(
     }
 }
 
+/**
+ * The color-fill grid: an **edge-to-edge** 4-column field of flat [ColorTile]s separated by 2dp seams.
+ * The outer [Column] is painted with [gridGrout] (resolved against the *applied* theme via [isDarkScheme])
+ * and the 2dp vertical/horizontal gaps let that grout show through, so a big same-color cluster reads as
+ * one tiled-wall region rather than a printed slab. No horizontal padding — the grid sits flush to the
+ * screen edge (the metrics card above keeps its own inset). Trailing empty cells in the last row are
+ * grout-colored `weight(1f)` spacers (transparent over the Column's grout background) so the seam grid
+ * stays regular all the way to the edge.
+ */
 @Composable
 private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     val rows = marks.chunked(4)
     Column(
-        modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(gridGrout(isDarkScheme())),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         rows.forEach { rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 rowMarks.forEach { mark ->
                     Box(modifier = Modifier.weight(1f)) {
                         ColorTile(mark = mark)
                     }
                 }
+                // Grout-colored spacers (transparent over the grout background) keep the last row's
+                // seam grid regular to the edge.
                 repeat(4 - rowMarks.size) { Box(modifier = Modifier.weight(1f)) }
             }
         }
