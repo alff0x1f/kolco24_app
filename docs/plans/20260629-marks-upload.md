@@ -306,10 +306,10 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] добавить параметр `uploadStatus: TrackUploadStatus? = null` в `MarksScreen` (дефолт `null` сохраняет все существующие вызовы/preview компилируемыми)
-- [ ] отрендерить статус-строку — копия `UploadStatusRow` из `TrackCard.kt` (тихий `labelMedium`/`onSurfaceVariant`, сворачиваемый `rememberSaveable`, тикер «N мин назад» через `produceState`/`relativeTimeRu`), скрыта при `uploadStatus == null || total == 0`; разместить внизу/вверху сетки плиток, не конкурируя с оранжевыми CTA пустого состояния
-- [ ] решить дублирование vs переиспользование `UploadStatusRow`: по умолчанию **дублируем** (как `SwitchTeamRow`/`ChangeTeamRow` в проекте — простая копия, ноль связанности между `ui/track` и `ui/marks`); если копия 1:1 крупная — вынести в `ui/common`. **Дефолт: дублировать.**
-- [ ] без юнит-тестов (Compose по конвенции) — проверить визуально/сборкой
+- [x] добавить параметр `uploadStatus: TrackUploadStatus? = null` в `MarksScreen` (дефолт `null` сохраняет все существующие вызовы/preview компилируемыми)
+- [x] отрендерить статус-строку — копия `UploadStatusRow` из `TrackCard.kt` (тихий `labelMedium`/`onSurfaceVariant`, сворачиваемый pill+popup, тикер «N мин назад» через `produceState`/`relativeTimeRu`), скрыта при `uploadStatus == null || total == 0`; размещена под `MetricsCard` (top-end), не конкурирует с оранжевыми CTA пустого состояния. NB: копия использует `remember` (как в `TrackCard`), не `rememberSaveable` — точная копия источника
+- [x] решить дублирование vs переиспользование `UploadStatusRow`: **дублировали** (как `SwitchTeamRow`/`ChangeTeamRow` — копия композаблов, ноль связанности; общие view-модели `TrackUploadStatus`/`TargetLine` переиспользованы из `ui.track`)
+- [x] без юнит-тестов (Compose по конвенции) — проверено `compileDebugKotlin` + `lintDebug` (BUILD SUCCESSFUL)
 
 ### Task 10: MainActivity — снимок участников + сбор статуса + проброс
 
