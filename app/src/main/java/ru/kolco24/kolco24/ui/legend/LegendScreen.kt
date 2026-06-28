@@ -51,6 +51,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -347,8 +348,12 @@ private fun CheckpointListCard(checkpoints: List<CheckpointEntity>, takenIds: Se
 
     Column(modifier = Modifier.padding(horizontal = 8.dp)) {
         groups.forEachIndexed { index, group ->
-            CheckpointGroupCard(group = group, takenIds = takenIds)
-            if (index != groups.lastIndex) Spacer(Modifier.height(10.dp))
+            CheckpointGroupCard(
+                group = group,
+                takenIds = takenIds,
+                shape = checkpointGroupShape(index, groups.size),
+            )
+            if (index != groups.lastIndex) Spacer(Modifier.height(CheckpointGroupGap))
         }
 
         Text(
@@ -384,28 +389,88 @@ internal fun groupCheckpointsByColor(
     return groups
 }
 
+/** Outer corner radius — kept at [shapes.large] (16dp) so the КП list block stays as friendly as the
+ * hero cards above it. Used only on the list's *outermost* corners (top of the first group, bottom of
+ * the last). */
+private val CheckpointOuterRadius = 16.dp
+
+/** Inner corner radius — the seams *between* adjacent color groups. Tight so the stack reads as one
+ * rounded block (Gmail's grouped-tile look) instead of a column of fat touching pills. */
+private val CheckpointInnerRadius = 4.dp
+
+/** Hairline gap between groups — a sliver of background keeps each color run a distinct tile while the
+ * graduated radius binds them into one block. Much tighter than a normal card gap on purpose. */
+private val CheckpointGroupGap = 2.dp
+
 /**
- * One color group from [groupCheckpointsByColor]: a [shapes.large] card whose single 4dp left bar
- * runs the **full card height** (clipped by the rounded corners) instead of the old per-row gutter.
- * `null` (neutral `""`/unknown) → transparent bar, so an uncolored group looks like the prior card.
- * Rows keep their 12dp start padding (12 + 4dp bar = 16dp) and the 72dp divider inset, so per-row
- * text alignment is pixel-identical to the pre-grouping layout.
+ * Per-position corner shape for a color group at [index] of [count]: the list's outermost corners
+ * (top of the first group, bottom of the last) keep the large [CheckpointOuterRadius]; every internal
+ * seam uses the tight [CheckpointInnerRadius]. A lone group ([count] == 1) is both first and last, so
+ * all four corners stay large.
+ */
+private fun checkpointGroupShape(index: Int, count: Int): RoundedCornerShape {
+    val top = if (index == 0) CheckpointOuterRadius else CheckpointInnerRadius
+    val bottom = if (index == count - 1) CheckpointOuterRadius else CheckpointInnerRadius
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+}
+
+/**
+ * One color group from [groupCheckpointsByColor]: a rounded card (per-position [shape]). The group's
+ * discipline color is carried two ways — a **floating rounded capsule** down the left (inset top/
+ * bottom so it reads as an intentional marker, not a flush rule) plus a **soft left-to-right color
+ * wash** that fades out before the descriptions, a gentle echo of the color-fill tiles on the
+ * «Отметки» screen so the two screens share one color language. A neutral group (`null` — `""`/unknown
+ * token) gets neither: the 4dp capsule cell stays an empty spacer, so an uncolored group looks like the
+ * prior card. Rows keep their 12dp start padding (12 + 4dp cell = 16dp) and the 72dp divider inset, so
+ * per-row text alignment is pixel-identical to the pre-grouping layout.
  */
 @Composable
-private fun CheckpointGroupCard(group: List<CheckpointEntity>, takenIds: Set<Int>) {
-    val barColor = parseCheckpointColor(group.first().color)?.barColor() ?: Color.Transparent
+private fun CheckpointGroupCard(
+    group: List<CheckpointEntity>,
+    takenIds: Set<Int>,
+    shape: RoundedCornerShape,
+) {
+    val color = parseCheckpointColor(group.first().color)?.barColor()
+    // Read the *applied* surface (respects the manual Light/Dark override) rather than
+    // isSystemInDarkTheme(). The two themes need different physics: the light card is pure white
+    // (#FFFFFF) on a grey background, so it only "lifts" by being brighter — any wash darkens it and
+    // the tile stops standing out, so light gets no wash (the capsule alone carries the color). Dark
+    // is the opposite — a glow *adds* light to the dark surface and reads great, so it keeps the wash.
+    val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val washAlpha = if (darkTheme) 0.16f else 0f
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+        Row(
+            modifier = Modifier
+                .height(IntrinsicSize.Min)
+                .drawBehind {
+                    if (color != null && washAlpha > 0f) {
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(color.copy(alpha = washAlpha), Color.Transparent),
+                                startX = 0f,
+                                endX = 120.dp.toPx(),
+                            ),
+                        )
+                    }
+                },
+        ) {
             Box(
                 modifier = Modifier
+                    .padding(vertical = 10.dp)
                     .width(4.dp)
                     .fillMaxHeight()
-                    .background(barColor),
+                    .then(
+                        if (color != null) {
+                            Modifier.clip(RoundedCornerShape(2.dp)).background(color)
+                        } else {
+                            Modifier
+                        },
+                    ),
             )
             Column(modifier = Modifier.weight(1f)) {
                 group.forEachIndexed { index, cp ->
