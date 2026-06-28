@@ -262,6 +262,75 @@ class MarkRepositoryUploadTest {
     }
 
     @Test
+    fun uploadPending_gpsArrivesAfterFetchBeforeMark_retryDeliversGpsToServer() = runTest {
+        // Reproduce the GPS-arrives-during-upload race: the row had locLat=null when the batch
+        // was fetched and the DTO was serialized (so location=null was sent), but attachLocation
+        // ran during the HTTP call. The conditional markUploadedCloudIfNoLocation must skip the
+        // row (locLat is now non-null) → the loop re-fetches, re-uploads WITH GPS, then marks.
+        // Net: server receives the GPS coordinate; the row is eventually marked uploaded.
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val cloud = FakeUploader { marks ->
+            // GPS arrives during the HTTP call (after DTO creation, before mark).
+            dao.simulateGpsArrival(marks.first().id)
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val r = repo(dao, cloud = cloud)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        // Two cloud calls: first sent location=null (conditional mark skipped, GPS arrived during
+        // the call), second re-fetched locLat≠null (unconditional mark succeeded).
+        // Server ultimately received GPS data; row is marked uploaded.
+        assertEquals(2, cloud.calls)
+        assertTrue(dao.observeForTeam(7).first().single().uploadedCloud)
+    }
+
+    @Test
+    fun uploadPending_memberAddsAfterFetchBeforeMark_retryDeliversUpdatedPresent() = runTest {
+        // Reproduce the addMember-during-upload race: the row had present=[1] when the batch
+        // was fetched and the DTO was serialized, but addMember ran during the HTTP call (bumping
+        // updatedAt). The updatedAt version guard in markUploadedCloud*IfUnchanged* must skip the
+        // row (updatedAt mismatch) → the loop re-fetches, re-uploads the updated present list,
+        // then marks. Net: server eventually receives the complete present list; no member lost.
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        var addedMember = false
+        val cloud = FakeUploader { marks ->
+            if (!addedMember) {
+                addedMember = true
+                dao.simulateMemberAdded(marks.first().id)
+            }
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val r = repo(dao, cloud = cloud)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        // Two cloud calls: first sent present=[1] (conditional mark skipped, updatedAt changed),
+        // second re-fetched the updated row (updatedAt version guard now passes → marked).
+        // Row is eventually marked uploaded.
+        assertEquals(2, cloud.calls)
+        assertTrue(dao.observeForTeam(7).first().single().uploadedCloud)
+    }
+
+    @Test
+    fun uploadPending_gpsAlreadyPresentAtFetchTime_singleUploadMarksUnconditionally() = runTest {
+        // When locLat was already set before the batch was fetched, the DTO carries the GPS
+        // coordinate. A single upload should suffice; the unconditional mark path is taken.
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        dao.simulateGpsArrival(dao.observeForTeam(7).first().single().id) // GPS before fetch
+        val cloud = FakeUploader()
+        val r = repo(dao, cloud = cloud)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(1, cloud.calls)
+        assertTrue(dao.observeForTeam(7).first().single().uploadedCloud)
+    }
+
+    @Test
     fun sourceInstallId_reachesUploader() = runTest {
         val dao = FakeMarkUploadDao()
         dao.seed(1, raceId = 1, teamId = 7)
@@ -368,6 +437,54 @@ private class FakeMarkUploadDao : MarkDao {
 
     override suspend fun markUploadedCloud(ids: List<String>) {
         rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedCloud = true) else it }
+    }
+
+    override suspend fun markUploadedLocalIfNoLocation(ids: List<String>) {
+        rows.value = rows.value.map {
+            if (it.id in ids && it.locLat == null) it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfNoLocation(ids: List<String>) {
+        rows.value = rows.value.map {
+            if (it.id in ids && it.locLat == null) it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    override suspend fun markUploadedLocalIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    override suspend fun markUploadedLocalIfUnchangedAndNoLocation(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt && it.locLat == null)
+                it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfUnchangedAndNoLocation(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt && it.locLat == null)
+                it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    /** Simulate a GPS fix arriving for [id] (writes locLat so the conditional mark skips it). */
+    fun simulateGpsArrival(id: String) {
+        rows.value = rows.value.map { if (it.id == id) it.copy(locLat = 55.75) else it }
+    }
+
+    /** Simulate [addMember] arriving during an upload (bumps [MarkEntity.updatedAt]). */
+    fun simulateMemberAdded(id: String) {
+        rows.value = rows.value.map { if (it.id == id) it.copy(updatedAt = it.updatedAt + 1_000L) else it }
     }
 
     override suspend fun pendingUploadScopes(): List<TrackScope> =

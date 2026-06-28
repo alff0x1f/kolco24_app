@@ -217,13 +217,51 @@ class MarkRepository(
         uploadLoop(
             fetch = { markDao.unuploadedLocal(raceId, teamId, UPLOAD_BATCH) },
             upload = { localUploader.upload(raceId, teamId, sourceInstallId, it) },
-            mark = { markDao.markUploadedLocal(it) },
+            mark = { batch, ids -> markLocalGpsAware(batch, ids) },
         )?.let { onUploadOutcome(scope, UploadTarget.Local, it) }
         uploadLoop(
             fetch = { markDao.unuploadedCloud(raceId, teamId, UPLOAD_BATCH) },
             upload = { cloudUploader.upload(raceId, teamId, sourceInstallId, it) },
-            mark = { markDao.markUploadedCloud(it) },
+            mark = { batch, ids -> markCloudGpsAware(batch, ids) },
         )?.let { onUploadOutcome(scope, UploadTarget.Cloud, it) }
+    }
+
+    /**
+     * Mark rows as locally uploaded with two guards per row:
+     *
+     * 1. **[updatedAt] version guard** — if [addMember] mutated the row between the batch fetch and
+     *    this call (bumping [MarkEntity.updatedAt]), the guard fails and the row stays
+     *    `uploadedLocal = 0` so the next trigger re-fetches and re-uploads the updated present list.
+     * 2. **`locLat IS NULL` guard** (rows without GPS only) — if [attachLocation] wrote a fix
+     *    between DTO creation and this call, the row is left un-marked so the next trigger
+     *    re-uploads it with the GPS coordinate.
+     *
+     * The two guards are orthogonal: [addMember] bumps [MarkEntity.updatedAt] but does not touch
+     * `locLat`; [attachLocation] sets `locLat` but does not bump [MarkEntity.updatedAt].
+     */
+    private suspend fun markLocalGpsAware(batch: List<MarkEntity>, ids: List<String>) {
+        val idToEntity = batch.associateBy { it.id }
+        for (id in ids) {
+            val entity = idToEntity[id] ?: continue
+            if (entity.locLat != null) {
+                markDao.markUploadedLocalIfUnchanged(id, entity.updatedAt)
+            } else {
+                markDao.markUploadedLocalIfUnchangedAndNoLocation(id, entity.updatedAt)
+            }
+        }
+    }
+
+    /** Same dual-guard as [markLocalGpsAware] for the cloud target. */
+    private suspend fun markCloudGpsAware(batch: List<MarkEntity>, ids: List<String>) {
+        val idToEntity = batch.associateBy { it.id }
+        for (id in ids) {
+            val entity = idToEntity[id] ?: continue
+            if (entity.locLat != null) {
+                markDao.markUploadedCloudIfUnchanged(id, entity.updatedAt)
+            } else {
+                markDao.markUploadedCloudIfUnchangedAndNoLocation(id, entity.updatedAt)
+            }
+        }
     }
 
     /**
@@ -239,7 +277,7 @@ class MarkRepository(
     private suspend fun uploadLoop(
         fetch: suspend () -> List<MarkEntity>,
         upload: suspend (List<MarkDto>) -> PostResult<MarkUploadResponse>,
-        mark: suspend (List<String>) -> Unit,
+        mark: suspend (List<MarkEntity>, List<String>) -> Unit,
     ): UploadResultKind? {
         var progressed = false
         while (true) {
@@ -250,7 +288,7 @@ class MarkRepository(
             val batchIds = batch.mapTo(HashSet()) { it.id }
             val toMark = result.data.accepted.filter { it in batchIds }
             if (toMark.isEmpty()) return UploadResultKind.Error // no progress → stop, catch up next trigger
-            mark(toMark)
+            mark(batch, toMark)
             progressed = true
         }
     }

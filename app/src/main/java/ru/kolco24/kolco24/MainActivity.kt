@@ -1091,7 +1091,18 @@ private fun Kolco24AppRoot(
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
         // !showScan guards on both of them they would win (Compose gives priority to the last registered
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
-        BackHandler(enabled = showScan) { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false }
+        //
+        // Shared close path: used by both BackHandler (system back) and ScanScreen.onClose so that every
+        // exit path — completion, window expiry, manual close, system back — triggers the upload flush.
+        val closeScanOverlay: () -> Unit = {
+            showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false
+            val raceId = selectedRaceId
+            val teamId = selectedTeamId
+            if (raceId != null && teamId != null) {
+                container.applicationScope.launch { markRepo.uploadPending(raceId, teamId) }
+            }
+        }
+        BackHandler(enabled = showScan) { closeScanOverlay() }
         if (showScan) {
             // Fresh DB-side take bookkeeping per opened overlay (parallels ScanScreen's UI session).
             val scanTake = remember { ScanTakeState() }
@@ -1240,16 +1251,7 @@ private fun Kolco24AppRoot(
                     }
                     event
                 },
-                onClose = {
-                    showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false
-                    // Flush this team's КП takes on any overlay close (complete / window expiry / manual /
-                    // FAB) — even a partial take leaves the server. Fire-and-forget, scope-guarded.
-                    val raceId = selectedRaceId
-                    val teamId = selectedTeamId
-                    if (raceId != null && teamId != null) {
-                        container.applicationScope.launch { markRepo.uploadPending(raceId, teamId) }
-                    }
-                },
+                onClose = closeScanOverlay,
                 modifier = Modifier.fillMaxSize(),
             )
         }

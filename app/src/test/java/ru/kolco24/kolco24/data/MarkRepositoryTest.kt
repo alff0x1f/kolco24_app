@@ -149,6 +149,26 @@ class MarkRepositoryTest {
     }
 
     @Test
+    fun addMember_resetsUploadFlags_soUpdatedTakeGetsReUploaded() = runTest {
+        // Simulate a track-piggyback upload completing during an active scan window: the partial
+        // take (member 1 only) was uploaded and marked done before member 2 arrived.
+        val id = startTake(point = 10, expectedCount = 2, buffered = setOf(1))
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+        assertTrue(markDao.getById(id)!!.uploadedLocal)
+        assertTrue(markDao.getById(id)!!.uploadedCloud)
+
+        // Adding the second member must reset both flags so the completed take is re-queued.
+        repository.addMember(id, checkpointId = 10, member = mem(2), expectedCount = 2, sample = sample(wall = 1_200L))
+
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf(1, 2), mark.present)
+        assertTrue(mark.complete)
+        assertFalse(mark.uploadedLocal)
+        assertFalse(mark.uploadedCloud)
+    }
+
+    @Test
     fun addMember_missingRow_isNoOp() = runTest {
         repository.addMember("nope", checkpointId = 10, member = mem(1), expectedCount = 1, sample = sample(wall = 1L))
         assertTrue(repository.observeMarks(7).first().isEmpty())
@@ -351,6 +371,24 @@ class MarkRepositoryTest {
     }
 
     @Test
+    fun attachLocation_resetsUploadFlagsOnAlreadyUploadedRow() = runTest {
+        // Simulate a race where the row was uploaded before the GPS fix arrived.
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+        assertTrue(markDao.getById(id)!!.uploadedLocal)
+        assertTrue(markDao.getById(id)!!.uploadedCloud)
+
+        // A late-arriving GPS fix must re-queue the row so the server eventually gets the coordinate.
+        repository.attachLocation(id, fix(lat = 55.0))
+
+        val mark = markDao.getById(id)!!
+        assertEquals(55.0, mark.locLat!!, 0.0)
+        assertFalse(mark.uploadedLocal)
+        assertFalse(mark.uploadedCloud)
+    }
+
+    @Test
     fun derivation_distinctScoredPointsAndScore() = runTest {
         startTake(point = 10, cost = 5, expectedCount = 1, buffered = setOf(1))
         startTake(point = 11, cost = 8, expectedCount = 1, buffered = setOf(1))
@@ -387,7 +425,8 @@ private class FakeMarkDao : MarkDao {
         gpsTimeMs: Long?,
         elapsedRealtimeAt: Long,
     ) {
-        // Column-scoped: only the loc* columns change; a missing row is a no-op.
+        // Column-scoped: only loc* and uploaded* columns change; a missing row is a no-op.
+        // Mirrors the SQL: resets upload flags so a late-arriving location re-queues the row.
         rows.value = rows.value.map { row ->
             if (row.id == id) {
                 row.copy(
@@ -398,6 +437,8 @@ private class FakeMarkDao : MarkDao {
                     locVerticalAccuracy = verticalAccuracy,
                     locGpsTimeMs = gpsTimeMs,
                     locElapsedRealtimeAt = elapsedRealtimeAt,
+                    uploadedLocal = false,
+                    uploadedCloud = false,
                 )
             } else {
                 row
@@ -429,6 +470,44 @@ private class FakeMarkDao : MarkDao {
 
     override suspend fun markUploadedCloud(ids: List<String>) {
         rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedCloud = true) else it }
+    }
+
+    override suspend fun markUploadedLocalIfNoLocation(ids: List<String>) {
+        rows.value = rows.value.map {
+            if (it.id in ids && it.locLat == null) it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfNoLocation(ids: List<String>) {
+        rows.value = rows.value.map {
+            if (it.id in ids && it.locLat == null) it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    override suspend fun markUploadedLocalIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    override suspend fun markUploadedLocalIfUnchangedAndNoLocation(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt && it.locLat == null)
+                it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfUnchangedAndNoLocation(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt && it.locLat == null)
+                it.copy(uploadedCloud = true) else it
+        }
     }
 
     override suspend fun pendingUploadScopes(): List<TrackScope> =
