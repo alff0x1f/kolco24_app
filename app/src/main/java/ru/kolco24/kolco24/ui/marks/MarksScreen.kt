@@ -700,8 +700,8 @@ private fun MetricItem(
 }
 
 /**
- * The color-fill grid: an **edge-to-edge** 4-column field of flat [ColorTile]s separated by 2dp seams.
- * The 2dp vertical/horizontal gaps (and the trailing empty cells of an incomplete last row) show the
+ * The color-fill grid: an **edge-to-edge** 4-column field of flat [ColorTile]s separated by 1dp seams.
+ * The 1dp vertical/horizontal gaps (and the trailing empty cells of an incomplete last row) show the
  * **normal app background** color through — so a partly-filled row blends into the screen rather than
  * appearing as a darker grey band, and the seams read as the ordinary background between tiles, not a
  * separate grout shade. No horizontal padding — the grid sits flush to the screen edge (the metrics card
@@ -712,12 +712,12 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     val rows = marks.chunked(4)
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         rows.forEach { rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 rowMarks.forEach { mark ->
                     Box(modifier = Modifier.weight(1f)) {
