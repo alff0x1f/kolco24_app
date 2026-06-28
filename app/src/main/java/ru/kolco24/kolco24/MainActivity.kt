@@ -1195,7 +1195,16 @@ private fun Kolco24AppRoot(
                     }
                     event
                 },
-                onClose = { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false },
+                onClose = {
+                    showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false
+                    // Flush this team's КП takes on any overlay close (complete / window expiry / manual /
+                    // FAB) — even a partial take leaves the server. Fire-and-forget, scope-guarded.
+                    val raceId = selectedRaceId
+                    val teamId = selectedTeamId
+                    if (raceId != null && teamId != null) {
+                        container.applicationScope.launch { markRepo.uploadPending(raceId, teamId) }
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

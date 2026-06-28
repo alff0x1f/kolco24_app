@@ -241,7 +241,12 @@ class TrackRecordingService : Service() {
                     container.trackRepository.insertAll(fixes, r, t, s)
                     // uploadPending is mutex-guarded (tryLock), dual-target, offline-tolerant — a stop /
                     // team-switch upload in flight just makes this a no-op; a failure leaves points pending.
-                    if (doUpload) container.trackRepository.uploadPending(r, t)
+                    if (doUpload) {
+                        container.trackRepository.uploadPending(r, t)
+                        // Piggyback the same throttled wake for КП takes (marks) so they reach the
+                        // organizers in near-real-time alongside the track. Same scope/tryLock guard.
+                        container.markRepository.uploadPending(r, t)
+                    }
                 }
             },
             onError = { err ->

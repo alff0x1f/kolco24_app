@@ -293,10 +293,10 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 - Modify: `app/src/main/java/ru/kolco24/kolco24/TrackRecordingService.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `Kolco24App` Launch B: рядом с `trackRepository.uploadAllPending()` добавить `applicationScope.launch { markRepository.uploadAllPending() }`
-- [ ] `TrackRecordingService`: получить `markRepository` из `container`; в `onPoints` в том же `applicationScope.launch`, где под `shouldLiveUpload(...)` вызывается `trackRepository.uploadPending(r,t)`, **после** него добавить `markRepository.uploadPending(r,t)` (тот же throttle/scope)
-- [ ] `MainActivity`: добавить flush в **`onClose`-лямбду scan-оверлея** (`MainActivity.kt:1188` — единый хук закрытия; нет отдельного «финализатора `ScanTakeState`», оверлей просто пересоздаёт `remember { ScanTakeState() }`). `onClose` срабатывает на ЛЮБОМ закрытии (завершение/истечение окна/ручное/FAB) — это даже лучше: частичные взятия тоже улетят. Внутри: гард на non-null `selectedRaceId`/`selectedTeamId`, затем fire-and-forget `container.applicationScope.launch { markRepo.uploadPending(raceId, teamId) }`
-- [ ] без юнит-тестов (проводка/сервис по конвенции) — проверить сборку и `lintDebug`
+- [x] `Kolco24App` Launch B: рядом с `trackRepository.uploadAllPending()` добавить `applicationScope.launch { markRepository.uploadAllPending() }`
+- [x] `TrackRecordingService`: получить `markRepository` из `container`; в `onPoints` в том же `applicationScope.launch`, где под `shouldLiveUpload(...)` вызывается `trackRepository.uploadPending(r,t)`, **после** него добавить `markRepository.uploadPending(r,t)` (тот же throttle/scope)
+- [x] `MainActivity`: добавить flush в **`onClose`-лямбду scan-оверлея** (`MainActivity.kt:1188` — единый хук закрытия; нет отдельного «финализатора `ScanTakeState`», оверлей просто пересоздаёт `remember { ScanTakeState() }`). `onClose` срабатывает на ЛЮБОМ закрытии (завершение/истечение окна/ручное/FAB) — это даже лучше: частичные взятия тоже улетят. Внутри: гард на non-null `selectedRaceId`/`selectedTeamId`, затем fire-and-forget `container.applicationScope.launch { markRepo.uploadPending(raceId, teamId) }`
+- [x] без юнит-тестов (проводка/сервис по конвенции) — проверить сборку и `lintDebug`
 
 ### Task 9: MarksScreen — параметр uploadStatus + статус-строка
 
