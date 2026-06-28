@@ -42,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
@@ -121,12 +120,10 @@ fun marksToTiles(
         }
 }
 
-// Photo-seat fill (the charcoal placeholder behind the КП photo) + the mini-badge's reflective
-// red stripe. Fixed shades, single value for light & dark, echoing the physical checkpoint markers.
+// Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
+// light & dark, echoing the physical checkpoint markers.
 private val PhotoTileTop = Color(0xFF1D242D)
 private val PhotoTileBottom = Color(0xFF2A323C)
-private val RedBand = Color(0xFFB01528)
-private val PhotoInk = Color(0xFF161A1F)
 
 // Muted whole-tile fill palette for the color-fill grid (screen-scoped — deliberately distinct from
 // the bright `CpColor*`/`Tertiary`/`OrangeCta` bar shades in `LegendScreen.kt`/`ProvisioningScreen.kt`,
@@ -805,12 +802,6 @@ private fun NfcTileBody(mark: Mark, textColor: Color) {
 }
 
 /**
- * The Легенда's checkpoint identity token — `<стоимость>-<номер>`, e.g. `3-01` — reused on the marks
- * tiles so a КП reads the same way here as in the legend. [Mark.number] is already zero-padded.
- */
-private fun scoreToken(mark: Mark): String = "${mark.cost}-${mark.number}"
-
-/**
  * The `<стоимость>-<номер>` token with the hyphen dimmed to 50% alpha (the digits inherit the caller's
  * text color), so the cost and number read as two values rather than one run on the color fill.
  */
@@ -820,55 +811,51 @@ private fun tokenAnnotated(mark: Mark, textColor: Color): AnnotatedString = buil
     append(mark.number)
 }
 
+/**
+ * A photo take's tile: the captured photo fills the whole square. The `<стоимость>-<номер>` token sits
+ * **bottom-leading** and the take time **bottom-end**, both inside a bottom scrim (transparent → ~60%
+ * black) so they read as a legible caption — *not* centered — once a real photo replaces the charcoal
+ * placeholder (a centered token would float over the bright middle of a photo with no scrim behind it).
+ */
 @Composable
 private fun PhotoTileBody(mark: Mark) {
+    // TODO(photo): fill with mark.photoPath image once photo marking ships (add Coil dependency)
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
     ) {
-        MiniCpBadge(
-            label = scoreToken(mark),
-            modifier = Modifier.align(Alignment.Center),
+        // Bottom scrim so the caption stays legible over real imagery (the placeholder is dark already,
+        // but a photo's lower edge can be bright).
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.5f)
+                .background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))),
+                ),
+        )
+        Text(
+            text = tokenAnnotated(mark, Color.White),
+            color = Color.White,
+            maxLines = 1,
+            style = TextStyle(
+                fontFamily = RobotoMono,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                letterSpacing = (-0.4).sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp, start = 8.dp),
         )
         Text(
             text = mark.time,
             fontFamily = RobotoMono,
-            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.5.sp,
             color = Color.White.copy(alpha = 0.82f),
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun MiniCpBadge(label: String, modifier: Modifier = Modifier) {
-    // White КП marker carrying the «стоимость-номер» token over its red reflective stripe — a pill
-    // (not a fixed square) so a wider token like `15-12` still reads cleanly on the photo seat.
-    Box(
-        modifier = modifier
-            .height(26.dp)
-            .shadow(1.dp, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color.White)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .align(Alignment.TopCenter)
-                .background(RedBand.copy(alpha = 0.78f)),
-        )
-        Text(
-            text = label,
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            maxLines = 1,
-            letterSpacing = (-0.4).sp,
-            color = PhotoInk,
         )
     }
 }

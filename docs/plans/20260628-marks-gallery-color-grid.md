@@ -91,10 +91,10 @@ The grid is a 4-column `Column`/`Row` layout with **2dp gaps and 0dp radius**, s
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] rework `PhotoTileBody` to fill the whole tile: charcoal placeholder (`Brush.verticalGradient(PhotoTileTop, PhotoTileBottom)`) + a bottom scrim (`transparent → black ~60%`)
-- [ ] place the `cost-number` token **bottom-leading** and the time **bottom-end**, both **inside the bottom scrim**, in white (decided: not centered — keeps them legible once a real photo replaces the placeholder); remove `MiniCpBadge` if no longer used
-- [ ] add `// TODO(photo): fill with mark.photoPath image once photo marking ships (add Coil dependency)`
-- [ ] build: `./gradlew assembleDebug` compiles before Task 4 (no Compose UI test)
+- [x] rework `PhotoTileBody` to fill the whole tile: charcoal placeholder (`Brush.verticalGradient(PhotoTileTop, PhotoTileBottom)`) + a bottom scrim (`transparent → black ~60%`)
+- [x] place the `cost-number` token **bottom-leading** and the time **bottom-end**, both **inside the bottom scrim**, in white (decided: not centered — keeps them legible once a real photo replaces the placeholder); remove `MiniCpBadge` if no longer used
+- [x] add `// TODO(photo): fill with mark.photoPath image once photo marking ships (add Coil dependency)`
+- [x] build: `./gradlew assembleDebug` compiles before Task 4 (no Compose UI test)
 
 ### Task 4: Edge-to-edge grout grid container
 
