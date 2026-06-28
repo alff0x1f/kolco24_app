@@ -1185,6 +1185,9 @@ private fun Kolco24AppRoot(
                                 scanTake.checkpointId = event.checkpointId
                                 scanTake.expectedCount = rosterSize
                                 // The buffered members were drained into the take's present-set.
+                                // Snapshots were already consumed above by bufferedMembers; clear so
+                                // stale entries from the previous take don't accumulate across KP switches.
+                                scanTake.snapshots.clear()
                                 scanTake.present.clear()
                                 scanTake.present.addAll(buffered)
                                 scanTake.buffer.clear()
