@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.ui.marks
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,16 +42,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,10 +68,6 @@ import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
-import ru.kolco24.kolco24.ui.theme.CpColorBlue
-import ru.kolco24.kolco24.ui.theme.CpColorPurple
-import ru.kolco24.kolco24.ui.theme.CpColorRed
-import ru.kolco24.kolco24.ui.theme.CpColorYellow
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
@@ -93,7 +92,7 @@ enum class MarkKind { NFC, PHOTO }
  * front. [costOf] resolves a take's **live** checkpoint cost (checkpoint id → current cost) so a tile
  * reflects an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
  * [colorOf] resolves a take's checkpoint color token (checkpoint id → server token) for the tile's
- * top color bar; it defaults to «no color» so the pure mapping stays testable without a checkpoint
+ * whole-tile fill color; it defaults to «no color» so the pure mapping stays testable without a checkpoint
  * map. The tile time is the **trusted** take time (`trustedTakenAt`) when present, falling back to the
  * raw wall `takenAt` for untrusted/legacy rows — so a phone clock reset doesn't shift displayed times.
  * Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
@@ -120,21 +119,46 @@ fun marksToTiles(
         }
 }
 
-// Photo-seat fill (the charcoal placeholder behind the КП photo) + the mini-badge's reflective
-// red stripe. Fixed shades, single value for light & dark, echoing the physical checkpoint markers.
+// Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
+// light & dark, echoing the physical checkpoint markers.
 private val PhotoTileTop = Color(0xFF1D242D)
 private val PhotoTileBottom = Color(0xFF2A323C)
-private val RedBand = Color(0xFFB01528)
-private val PhotoInk = Color(0xFF161A1F)
 
-/** КП color token → fixed bar shade — a third private copy of the mapping in `LegendScreen.kt`. */
-private fun CheckpointColor.barColor(): Color = when (this) {
-    CheckpointColor.RED -> CpColorRed
-    CheckpointColor.BLUE -> CpColorBlue
-    CheckpointColor.GREEN -> Tertiary
-    CheckpointColor.YELLOW -> CpColorYellow
-    CheckpointColor.ORANGE -> OrangeCta
-    CheckpointColor.PURPLE -> CpColorPurple
+// Muted whole-tile fill palette for the color-fill grid (screen-scoped — deliberately distinct from
+// the bright `CpColor*`/`Tertiary`/`OrangeCta` bar shades in `LegendScreen.kt`/`ProvisioningScreen.kt`,
+// which still feed the thin legend/provisioning bars). The six discipline colors are fixed across
+// light & dark so a same-color cluster reads identically; only neutral and the grout seam flip with
+// the resolved theme, so a colorless tile never glows as a bright blob among the colors.
+private val FillRed = Color(0xFFCB4233)
+private val FillOrange = Color(0xFFC15A2E)
+private val FillBlue = Color(0xFF2F6CAE)
+private val FillGreen = Color(0xFF2E9E57)
+private val FillYellow = Color(0xFFC99A1E)
+private val FillPurple = Color(0xFF7C5AC0)
+private val TileInk = Color(0xFF161A1F)          // text on yellow & the light neutral
+private val NeutralFillLight = Color(0xFFD6DCE4)
+private val NeutralFillDark = Color(0xFF2A323C)
+private val NeutralTextDark = Color(0xFFD6DCE4)   // light grey text on the dark neutral
+
+/** A tile's flat fill and the (non-luminance, fixed) text color that reads on it. */
+internal data class TileFill(val fill: Color, val text: Color)
+
+/**
+ * Pure КП-color → (fill, text) mapping for the color-fill grid. White text on red/orange/blue/green/
+ * purple, dark [TileInk] on yellow; a `null` color (no/unknown token) → the theme-aware neutral fill
+ * (light grey + ink in light, charcoal + light grey in dark). [darkTheme] is a plain Boolean (no Compose
+ * lookup inside) so this stays JVM-unit-testable; the caller resolves the *applied* theme via
+ * `isDarkScheme()`, never `isSystemInDarkTheme()`.
+ */
+internal fun tileFill(color: CheckpointColor?, darkTheme: Boolean): TileFill = when (color) {
+    CheckpointColor.RED -> TileFill(FillRed, Color.White)
+    CheckpointColor.ORANGE -> TileFill(FillOrange, Color.White)
+    CheckpointColor.BLUE -> TileFill(FillBlue, Color.White)
+    CheckpointColor.GREEN -> TileFill(FillGreen, Color.White)
+    CheckpointColor.YELLOW -> TileFill(FillYellow, TileInk)
+    CheckpointColor.PURPLE -> TileFill(FillPurple, Color.White)
+    null -> if (darkTheme) TileFill(NeutralFillDark, NeutralTextDark)
+    else TileFill(NeutralFillLight, TileInk)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -276,7 +300,6 @@ private fun MarksEmpty(
         val headline: String,
         val body: String,
         val ctaLabel: String? = null,
-        val ctaIcon: ImageVector? = null,
         val onCta: (() -> Unit)? = null,
         val trackNudge: Boolean = false,
     )
@@ -287,7 +310,6 @@ private fun MarksEmpty(
             headline = "Отметок пока нет",
             body = "Выберите соревнование и команду — отметки появятся здесь.",
             ctaLabel = "Выбрать команду",
-            ctaIcon = Icons.Filled.Groups,
             onCta = onChooseTeam,
         )
         nfcDisabled -> EmptyContent(
@@ -295,7 +317,6 @@ private fun MarksEmpty(
             headline = "NFC выключен",
             body = "Включите NFC, чтобы отмечать КП прикосновением.",
             ctaLabel = "Включить NFC",
-            ctaIcon = Icons.Filled.Nfc,
             onCta = onOpenNfcSettings,
         )
         !nfcAvailable -> EmptyContent(
@@ -309,7 +330,6 @@ private fun MarksEmpty(
             body = "Отметка засчитывается, только когда отмечены все участники команды. " +
                 "Сейчас с чипом $boundCount из $memberCount.",
             ctaLabel = "Привязать чипы",
-            ctaIcon = Icons.Filled.AddLink,
             onCta = onBindChips,
         )
         else -> EmptyContent(
@@ -354,10 +374,8 @@ private fun MarksEmpty(
                 ),
                 contentPadding = PaddingValues(horizontal = 22.dp),
             ) {
-                if (content.ctaIcon != null) {
-                    Icon(content.ctaIcon, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                }
+                Icon(content.glyph, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(content.ctaLabel, style = MaterialTheme.typography.titleSmall)
             }
         }
@@ -502,10 +520,10 @@ private fun TrackNudge(recording: Boolean, onStart: () -> Unit, modifier: Modifi
 }
 
 /**
- * The empty-state signature: a preview of the scorecard grid this screen fills in. The first slot is a
- * solid card carrying the state's lead glyph (echoing a real [ScorecardTile]'s top stripe + frame); the
- * trailing slots are hairline-dashed placeholders that fade out, reading as "marks land here, one КП at a
- * time". Purely decorative — no state, no motion.
+ * The empty-state signature: a preview of the color-fill grid this screen fills in. The first slot is a
+ * solid card carrying the state's lead glyph (a neutral stand-in for a real [ColorTile]'s color fill +
+ * frame); the trailing slots are hairline-dashed placeholders that fade out, reading as "marks land here,
+ * one КП at a time". Purely decorative — no state, no motion.
  */
 @Composable
 private fun ScorecardGhostRow(leadGlyph: ImageVector, modifier: Modifier = Modifier) {
@@ -536,7 +554,7 @@ private fun GhostTile(
             .then(
                 if (active) {
                     Modifier.drawBehind {
-                        // Solid hairline frame, matching ScorecardTile's border.
+                        // Solid hairline frame, framing the ghost stand-in for a real grid tile.
                         drawRoundRect(
                             color = outline,
                             cornerRadius = CornerRadius(10.dp.toPx()),
@@ -561,7 +579,7 @@ private fun GhostTile(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (active) {
-                // Neutral top stripe stand-in for the КП color bar (no КП yet → no color).
+                // Neutral top stripe stand-in for the КП color fill (no КП yet → no color).
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -681,23 +699,33 @@ private fun MetricItem(
     }
 }
 
+/**
+ * The color-fill grid: an **edge-to-edge** 4-column field of flat [ColorTile]s separated by 1dp seams.
+ * The 1dp vertical/horizontal gaps (and the trailing empty cells of an incomplete last row) show the
+ * **normal app background** color through — so a partly-filled row blends into the screen rather than
+ * appearing as a darker grey band, and the seams read as the ordinary background between tiles, not a
+ * separate grout shade. No horizontal padding — the grid sits flush to the screen edge (the metrics card
+ * above keeps its own inset).
+ */
 @Composable
 private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
     val rows = marks.chunked(4)
     Column(
-        modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         rows.forEach { rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 rowMarks.forEach { mark ->
                     Box(modifier = Modifier.weight(1f)) {
-                        ScorecardTile(mark = mark)
+                        ColorTile(mark = mark)
                     }
                 }
+                // Empty spacers (showing the screen background) keep the last row's grid regular to the
+                // edge without tinting the leftover cells.
                 repeat(4 - rowMarks.size) { Box(modifier = Modifier.weight(1f)) }
             }
         }
@@ -706,49 +734,40 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
 
 private val TileShape = RoundedCornerShape(10.dp)
 
+/** The *resolved* theme (respecting the app's manual Light/Dark override), NOT `isSystemInDarkTheme()`. */
+@Composable
+private fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
 /**
- * One taken checkpoint as a scorecard card: a leading color bar (the КП color, matching the Легенда
- * rows), the КП number as the mono hero, the score earned (`+cost`), and the take time. NFC takes
- * read as a clean numeric card; photo takes swap the number area for the photo seat carrying a small
- * КП badge.
+ * One taken checkpoint as a flat color-fill tile: the КП discipline color fills the whole square
+ * (0dp radius, no border/elevation) so a same-color cluster reads as one tiled region. The
+ * `<стоимость>-<номер>` token sits centered (NFC takes) or as a caption over the photo scrim. The
+ * fill + readable text are resolved by the pure [tileFill] against the [isDarkScheme] result.
  */
 @Composable
-private fun ScorecardTile(mark: Mark) {
-    val gutter = mark.color?.barColor() ?: Color.Transparent
-    Surface(
-        shape = TileShape,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+private fun ColorTile(mark: Mark) {
+    val tf = tileFill(mark.color, isDarkScheme())
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
+            .aspectRatio(1f)
+            .background(tf.fill),
     ) {
-        // The color bar caps the top edge (echoing the red reflective stripe on a physical КП),
-        // overlaid so it never shifts the centered number; clipped to the tile's rounded top.
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (mark.kind) {
-                MarkKind.NFC -> NfcTileBody(mark)
-                MarkKind.PHOTO -> PhotoTileBody(mark)
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .background(gutter),
-            )
+        when (mark.kind) {
+            MarkKind.NFC -> NfcTileBody(mark, tf.text)
+            MarkKind.PHOTO -> PhotoTileBody(mark)
         }
     }
 }
 
 @Composable
-private fun NfcTileBody(mark: Mark) {
+private fun NfcTileBody(mark: Mark, textColor: Color) {
     // Per-element placement (not a shared inset) so the «стоимость-номер» token centers on the WHOLE
     // tile while the take time hugs the bottom-right like a chat-message timestamp.
     Box(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = scoreToken(mark),
-            color = MaterialTheme.colorScheme.onSurface,
+            text = tokenAnnotated(mark, textColor),
+            color = textColor,
             maxLines = 1,
             // includeFontPadding=false + centered/trimmed line height so the digits sit optically
             // centered — without it the font's top padding makes the token look pushed down.
@@ -757,7 +776,7 @@ private fun NfcTileBody(mark: Mark) {
                 fontWeight = FontWeight.Bold,
                 fontSize = 23.sp,
                 lineHeight = 23.sp,
-                letterSpacing = (-1).sp,
+                letterSpacing = (-0.8).sp,
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                 lineHeightStyle = LineHeightStyle(
                     alignment = LineHeightStyle.Alignment.Center,
@@ -771,68 +790,69 @@ private fun NfcTileBody(mark: Mark) {
         Text(
             text = mark.time,
             fontFamily = RobotoMono,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.5.sp,
+            color = textColor.copy(alpha = 0.78f),
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
     }
 }
 
 /**
- * The Легенда's checkpoint identity token — `<стоимость>-<номер>`, e.g. `3-01` — reused on the marks
- * tiles so a КП reads the same way here as in the legend. [Mark.number] is already zero-padded.
+ * The `<стоимость>-<номер>` token with the hyphen dimmed to 50% alpha (the digits inherit the caller's
+ * text color), so the cost and number read as two values rather than one run on the color fill.
  */
-private fun scoreToken(mark: Mark): String = "${mark.cost}-${mark.number}"
+private fun tokenAnnotated(mark: Mark, textColor: Color): AnnotatedString = buildAnnotatedString {
+    append("${mark.cost}")
+    withStyle(SpanStyle(color = textColor.copy(alpha = 0.5f))) { append("-") }
+    append(mark.number)
+}
 
+/**
+ * A photo take's tile: the captured photo fills the whole square. The `<стоимость>-<номер>` token sits
+ * **bottom-leading** and the take time **bottom-end**, both inside a bottom scrim (transparent → ~60%
+ * black) so they read as a legible caption — *not* centered — once a real photo replaces the charcoal
+ * placeholder (a centered token would float over the bright middle of a photo with no scrim behind it).
+ */
 @Composable
 private fun PhotoTileBody(mark: Mark) {
+    // TODO(photo): fill with mark.photoPath image once photo marking ships (add Coil dependency)
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
     ) {
-        MiniCpBadge(
-            label = scoreToken(mark),
-            modifier = Modifier.align(Alignment.Center),
+        // Bottom scrim so the caption stays legible over real imagery (the placeholder is dark already,
+        // but a photo's lower edge can be bright).
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.5f)
+                .background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))),
+                ),
+        )
+        Text(
+            text = tokenAnnotated(mark, Color.White),
+            color = Color.White,
+            maxLines = 1,
+            style = TextStyle(
+                fontFamily = RobotoMono,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                letterSpacing = (-0.4).sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp, start = 8.dp),
         )
         Text(
             text = mark.time,
             fontFamily = RobotoMono,
-            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.5.sp,
             color = Color.White.copy(alpha = 0.82f),
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun MiniCpBadge(label: String, modifier: Modifier = Modifier) {
-    // White КП marker carrying the «стоимость-номер» token over its red reflective stripe — a pill
-    // (not a fixed square) so a wider token like `15-12` still reads cleanly on the photo seat.
-    Box(
-        modifier = modifier
-            .height(26.dp)
-            .shadow(1.dp, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color.White)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .align(Alignment.TopCenter)
-                .background(RedBand.copy(alpha = 0.78f)),
-        )
-        Text(
-            text = label,
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            maxLines = 1,
-            letterSpacing = (-0.4).sp,
-            color = PhotoInk,
         )
     }
 }
