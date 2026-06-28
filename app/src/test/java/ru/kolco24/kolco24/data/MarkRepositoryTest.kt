@@ -16,6 +16,8 @@ import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
+import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
 
@@ -402,4 +404,34 @@ private class FakeMarkDao : MarkDao {
             }
         }
     }
+
+    override fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        rows.map { list ->
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            UploadCounts(
+                total = scoped.size,
+                local = scoped.count { it.uploadedLocal },
+                cloud = scoped.count { it.uploadedCloud },
+            )
+        }
+
+    override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal }
+            .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud }
+            .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun markUploadedLocal(ids: List<String>) {
+        rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedLocal = true) else it }
+    }
+
+    override suspend fun markUploadedCloud(ids: List<String>) {
+        rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedCloud = true) else it }
+    }
+
+    override suspend fun pendingUploadScopes(): List<TrackScope> =
+        rows.value.filter { !it.uploadedLocal || !it.uploadedCloud }
+            .map { TrackScope(it.raceId, it.teamId) }.distinct()
 }

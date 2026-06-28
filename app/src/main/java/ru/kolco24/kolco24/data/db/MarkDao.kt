@@ -82,4 +82,46 @@ interface MarkDao {
         gpsTimeMs: Long?,
         elapsedRealtimeAt: Long,
     )
+
+    // Per-target upload progress for one scope (mirror of TrackDao.uploadCounts): explicit CASE over the
+    // Boolean column (SUM(boolean) is codegen-fragile), COALESCE(...,0) guards the empty-scope NULL, and
+    // aliases match UploadCounts property names so Room maps by name.
+    @Query(
+        "SELECT COUNT(*) AS total, " +
+            "COALESCE(SUM(CASE WHEN uploadedLocal THEN 1 ELSE 0 END), 0) AS local, " +
+            "COALESCE(SUM(CASE WHEN uploadedCloud THEN 1 ELSE 0 END), 0) AS cloud " +
+            "FROM marks WHERE teamId = :teamId AND raceId = :raceId"
+    )
+    fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts>
+
+    // Upload queries are scoped by (raceId, teamId): a batch goes to /race/<raceId>/marks/, so it must
+    // never sweep up another race/team's rows. Note the explicit `= :raceId AND = :teamId` — a bare
+    // `WHERE raceId AND teamId` would read the columns as truthy expressions and break the filter.
+    // All rows (complete=true AND false) upload; the server recomputes completeness from present[].
+    @Query(
+        "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
+            "AND uploadedLocal = 0 " +
+            "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
+            "LIMIT :limit"
+    )
+    suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity>
+
+    @Query(
+        "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
+            "AND uploadedCloud = 0 " +
+            "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
+            "LIMIT :limit"
+    )
+    suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity>
+
+    @Query("UPDATE marks SET uploadedLocal = 1 WHERE id IN (:ids)")
+    suspend fun markUploadedLocal(ids: List<String>)
+
+    @Query("UPDATE marks SET uploadedCloud = 1 WHERE id IN (:ids)")
+    suspend fun markUploadedCloud(ids: List<String>)
+
+    // Every (raceId, teamId) pair that still has a row not yet delivered to one of the targets — the
+    // opportunistic re-send walks all of them, not just the current selection.
+    @Query("SELECT DISTINCT raceId, teamId FROM marks WHERE uploadedLocal = 0 OR uploadedCloud = 0")
+    suspend fun pendingUploadScopes(): List<TrackScope>
 }

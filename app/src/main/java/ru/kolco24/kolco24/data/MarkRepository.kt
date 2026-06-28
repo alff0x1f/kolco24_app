@@ -2,11 +2,37 @@ package ru.kolco24.kolco24.data
 
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import ru.kolco24.kolco24.data.api.PostResult
+import ru.kolco24.kolco24.data.api.dto.MarkDto
+import ru.kolco24.kolco24.data.api.dto.MarkUploadResponse
+import ru.kolco24.kolco24.data.api.dto.toDto
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
+import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
+import ru.kolco24.kolco24.data.track.UploadResultKind
+import ru.kolco24.kolco24.data.track.UploadTarget
+import ru.kolco24.kolco24.data.track.uploadResultKind
+
+/**
+ * One upload target (cloud HTTPS / local LAN cleartext). A thin functional seam over
+ * `ApiClient.uploadMarks` so [MarkRepository]'s upload loop is unit-testable with a fake (mirrors
+ * [ru.kolco24.kolco24.data.track.TrackUploader]); in production each target is one `ApiClient` instance.
+ * Unlike the track seam, [upload] carries [sourceInstallId] — the marks body requires the device-
+ * provenance UUID inside the signed body.
+ */
+fun interface MarkUploader {
+    suspend fun upload(
+        raceId: Int,
+        teamId: Int,
+        sourceInstallId: String,
+        marks: List<MarkDto>,
+    ): PostResult<MarkUploadResponse>
+}
 
 /**
  * Single source of truth for the **local-only** checkpoint-taking events (взятия КП). Wraps [MarkDao]
@@ -25,9 +51,24 @@ import ru.kolco24.kolco24.data.track.RawFix
  */
 class MarkRepository(
     private val markDao: MarkDao,
+    private val sourceInstallId: String = "",
+    private val cloudUploader: MarkUploader = MarkUploader { _, _, _, _ -> PostResult.Offline },
+    private val localUploader: MarkUploader = MarkUploader { _, _, _, _ -> PostResult.Offline },
+    private val onUploadOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
 ) {
+    /**
+     * Guards [uploadPending]/[uploadAllPending] against concurrent entry (a take-complete flush and a
+     * Launch B opportunistic flush firing at once). `tryLock()` — not `lock()` — so the loser skips
+     * rather than queues: the same rows would otherwise be POSTed twice, and the next trigger flushes
+     * whatever the winner did not.
+     */
+    private val uploadMutex = Mutex()
+
     /** Live take events for one team, newest first. */
     fun observeMarks(teamId: Int): Flow<List<MarkEntity>> = markDao.observeForTeam(teamId)
+
+    /** Live per-target upload counts (total / uploadedLocal / uploadedCloud) for one scope. */
+    fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> = markDao.uploadCounts(teamId, raceId)
 
     /**
      * Open a new take for [checkpointId] (КП chip just scanned). Generates a fresh UUID, snapshots the
@@ -131,6 +172,91 @@ class MarkRepository(
             gpsTimeMs = fix.gpsTimeMs.takeIf { it > 0L },
             elapsedRealtimeAt = fix.elapsedRealtimeNanos / 1_000_000,
         )
+    }
+
+    /**
+     * Flush all pending marks for one `(raceId, teamId)` to **both** targets independently — a target
+     * failing (offline/`403`) never blocks the other. Guarded so two flushes never double-send; the
+     * loser is a no-op (the next trigger catches up).
+     */
+    suspend fun uploadPending(raceId: Int, teamId: Int) {
+        if (!uploadMutex.tryLock()) return
+        try {
+            flushScope(raceId, teamId)
+        } finally {
+            uploadMutex.unlock()
+        }
+    }
+
+    /**
+     * Opportunistic re-send across **every** pending scope, not just the current selection — so marks
+     * stranded under an old race/team still flush. Walks [MarkDao.pendingUploadScopes]. Same concurrency
+     * guard as [uploadPending].
+     */
+    suspend fun uploadAllPending() {
+        if (!uploadMutex.tryLock()) return
+        try {
+            for (scope in markDao.pendingUploadScopes()) {
+                flushScope(scope.raceId, scope.teamId)
+            }
+        } finally {
+            uploadMutex.unlock()
+        }
+    }
+
+    /**
+     * Flush one scope to both targets in turn; each target's loop is independent of the other's. Each
+     * loop's [UploadResultKind] (when non-null — an attempt was actually made) is reported via
+     * [onUploadOutcome] so the UI can surface the last per-target result; a `null` return means nothing
+     * was pending, so the prior outcome is left untouched (an idle re-flush never overwrites a real
+     * «ошибка» with a misleading «ok»).
+     */
+    private suspend fun flushScope(raceId: Int, teamId: Int) {
+        val scope = TrackScope(raceId, teamId)
+        uploadLoop(
+            fetch = { markDao.unuploadedLocal(raceId, teamId, UPLOAD_BATCH) },
+            upload = { localUploader.upload(raceId, teamId, sourceInstallId, it) },
+            mark = { markDao.markUploadedLocal(it) },
+        )?.let { onUploadOutcome(scope, UploadTarget.Local, it) }
+        uploadLoop(
+            fetch = { markDao.unuploadedCloud(raceId, teamId, UPLOAD_BATCH) },
+            upload = { cloudUploader.upload(raceId, teamId, sourceInstallId, it) },
+            mark = { markDao.markUploadedCloud(it) },
+        )?.let { onUploadOutcome(scope, UploadTarget.Cloud, it) }
+    }
+
+    /**
+     * Drain one target in batches until done or stuck, returning the terminal [UploadResultKind] or
+     * `null`. Terminates on: empty first fetch (**nothing pending** → `null`, no attempt made); drained
+     * to empty after marking progress (→ [UploadResultKind.Ok]); a non-`Success` response (offline/error
+     * — mapped via [uploadResultKind], retry next trigger); or **no forward progress** (none of the
+     * fetched batch's ids came back accepted → [UploadResultKind.Error], **not** the `Ok` that
+     * `uploadResultKind(Success)` would give). Only ids both `accepted` **and** in the fetched batch are
+     * marked — so a strange response can never mark a row out of this scope, and a marked row strictly
+     * shrinks the pending set, guaranteeing exit.
+     */
+    private suspend fun uploadLoop(
+        fetch: suspend () -> List<MarkEntity>,
+        upload: suspend (List<MarkDto>) -> PostResult<MarkUploadResponse>,
+        mark: suspend (List<String>) -> Unit,
+    ): UploadResultKind? {
+        var progressed = false
+        while (true) {
+            val batch = fetch()
+            if (batch.isEmpty()) return if (progressed) UploadResultKind.Ok else null
+            val result = upload(batch.map { it.toDto() })
+            if (result !is PostResult.Success) return uploadResultKind(result) // Offline / Error
+            val batchIds = batch.mapTo(HashSet()) { it.id }
+            val toMark = result.data.accepted.filter { it in batchIds }
+            if (toMark.isEmpty()) return UploadResultKind.Error // no progress → stop, catch up next trigger
+            mark(toMark)
+            progressed = true
+        }
+    }
+
+    private companion object {
+        /** Max marks per upload request; the scoped `unuploaded*` queries `LIMIT` to this. */
+        const val UPLOAD_BATCH = 500
     }
 }
 
