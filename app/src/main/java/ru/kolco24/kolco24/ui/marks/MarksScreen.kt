@@ -47,7 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -364,7 +365,7 @@ private fun MarksEmpty(
         modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ScorecardGhostRow(leadGlyph = content.glyph)
+        GhostTileRow(leadGlyph = content.glyph)
 
         Spacer(Modifier.height(22.dp))
         Text(
@@ -540,54 +541,50 @@ private fun TrackNudge(recording: Boolean, onStart: () -> Unit, modifier: Modifi
 }
 
 /**
- * The empty-state signature: a preview of the color-fill grid this screen fills in. The first slot is a
- * solid card carrying the state's lead glyph (a neutral stand-in for a real [ColorTile]'s color fill +
- * frame); the trailing slots are hairline-dashed placeholders that fade out, reading as "marks land here,
- * one КП at a time". Purely decorative — no state, no motion.
+ * The empty-state signature: a small centered preview of the grid this screen fills in — four 54dp
+ * **flat squares** (0dp radius, matching the populated `TileGrid`'s flat color-fill tiles, not the old
+ * rounded card). The first is the **next slot**: a solid neutral square (the real null-color [tileFill],
+ * so an empty slot and a colorless real take share a shade) carrying the state's lead glyph where a real
+ * tile's `<стоимость>-<номер>` token would sit. The trailing three are dashed square outlines that fade
+ * out, reading «marks land here, one КП at a time». The dashes use the readable `onSurfaceVariant` (not
+ * the near-invisible `outlineVariant`) so the stroke shows on the light surface too. Decorative — no
+ * state, no motion.
  */
 @Composable
-private fun ScorecardGhostRow(leadGlyph: ImageVector, modifier: Modifier = Modifier) {
+private fun GhostTileRow(leadGlyph: ImageVector, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GhostTile(active = true, glyph = leadGlyph)
-        GhostTile(active = false, alpha = 0.55f)
-        GhostTile(active = false, alpha = 0.32f)
-        GhostTile(active = false, alpha = 0.18f)
+        GhostTile(active = false, alpha = 0.65f)
+        GhostTile(active = false, alpha = 0.45f)
+        GhostTile(active = false, alpha = 0.30f)
     }
 }
 
 @Composable
-private fun GhostTile(
-    active: Boolean,
-    glyph: ImageVector? = null,
-    alpha: Float = 1f,
-) {
-    val outline = MaterialTheme.colorScheme.outlineVariant
-    Surface(
-        shape = TileShape,
-        color = if (active) MaterialTheme.colorScheme.surfaceContainerLowest else Color.Transparent,
+private fun GhostTile(active: Boolean, glyph: ImageVector? = null, alpha: Float = 1f) {
+    val fill = tileFill(null, isDarkScheme()).fill
+    val dash = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
         modifier = Modifier
             .size(54.dp)
             .then(
                 if (active) {
-                    Modifier.drawBehind {
-                        // Solid hairline frame, framing the ghost stand-in for a real grid tile.
-                        drawRoundRect(
-                            color = outline,
-                            cornerRadius = CornerRadius(10.dp.toPx()),
-                            style = Stroke(width = 1.dp.toPx()),
-                        )
-                    }
+                    // The next slot: a solid flat square, the same shade a colorless real tile renders.
+                    Modifier.background(fill)
                 } else {
+                    // An upcoming slot: a dashed square outline (sharp corners to match the flat tiles).
                     Modifier.drawBehind {
-                        drawRoundRect(
-                            color = outline.copy(alpha = alpha),
-                            cornerRadius = CornerRadius(10.dp.toPx()),
+                        val s = 1.dp.toPx()
+                        drawRect(
+                            color = dash.copy(alpha = alpha),
+                            topLeft = Offset(s / 2, s / 2),
+                            size = Size(size.width - s, size.height - s),
                             style = Stroke(
-                                width = 1.dp.toPx(),
+                                width = s,
                                 pathEffect = PathEffect.dashPathEffect(
                                     floatArrayOf(4.dp.toPx(), 4.dp.toPx()),
                                 ),
@@ -596,26 +593,15 @@ private fun GhostTile(
                     }
                 },
             ),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (active) {
-                // Neutral top stripe stand-in for the КП color fill (no КП yet → no color).
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .background(outline),
-                )
-            }
-            if (glyph != null) {
-                Icon(
-                    imageVector = glyph,
-                    contentDescription = null,
-                    tint = OrangeCta,
-                    modifier = Modifier.align(Alignment.Center).size(24.dp),
-                )
-            }
+        if (glyph != null) {
+            Icon(
+                imageVector = glyph,
+                contentDescription = null,
+                tint = OrangeCta,
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 }
@@ -751,8 +737,6 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
         }
     }
 }
-
-private val TileShape = RoundedCornerShape(10.dp)
 
 /** The *resolved* theme (respecting the app's manual Light/Dark override), NOT `isSystemInDarkTheme()`. */
 @Composable
