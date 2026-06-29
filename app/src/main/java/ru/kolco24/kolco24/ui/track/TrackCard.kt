@@ -218,13 +218,13 @@ fun TrackCard(
  * Collapsible, deliberately-muted upload-status row at the bottom of [TrackCard]. Collapsed it is a
  * one-liner — a calm «Загружено» when both targets have caught up, otherwise the worst pending
  * target's last-attempt summary (counts + «N мин назад» + outcome). Expanded it shows one line per
- * server («Интернет» = cloud, «Локальный» = LAN). The displayed "now" advances on a 30-second ticker
+ * server («Интернет» = cloud, «Финиш» = LAN). The displayed "now" advances on a 30-second ticker
  * so the relative time updates while the row is visible. Compose-untested per repo convention; only
  * the pure [relativeTimeRu] formatter is unit-tested.
  */
 /**
  * The upload-status footer, a **chat-style delivery receipt**: a track point really travels to two
- * destinations («Интернет» / «Локальный»), so the indicator borrows the messenger language of ticks.
+ * destinations («Интернет» / «Финиш»), so the indicator borrows the messenger language of ticks.
  *
  * Collapsed, it is a single tappable pill in the card's top-right corner showing **the cloud target
  * only** — a glyph + mono `n/total`. Tapping opens a small receipt [Popup] below the pill with both
@@ -339,9 +339,21 @@ private fun UploadReceiptCard(status: TrackUploadStatus, nowMs: Long) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
-            ReceiptLine(label = "Интернет", total = status.total, line = status.cloud, nowMs = nowMs)
+            ReceiptLine(
+                label = "Интернет",
+                total = status.total,
+                line = status.cloud,
+                nowMs = nowMs,
+                offlineLabel = "нет интернета",
+            )
             Spacer(Modifier.height(8.dp))
-            ReceiptLine(label = "Локальный", total = status.total, line = status.local, nowMs = nowMs)
+            ReceiptLine(
+                label = "Финиш",
+                total = status.total,
+                line = status.local,
+                nowMs = nowMs,
+                offlineLabel = "сервер недоступен",
+            )
         }
     }
 }
@@ -352,7 +364,13 @@ private fun UploadReceiptCard(status: TrackUploadStatus, nowMs: Long) {
  * pending with a reported outcome, a muted second line gives «time · статус».
  */
 @Composable
-private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long) {
+private fun ReceiptLine(
+    label: String,
+    total: Int,
+    line: TargetLine,
+    nowMs: Long,
+    offlineLabel: String,
+) {
     val done = line.uploaded >= total
     val outcome = line.outcome
     val isError = outcome?.kind == UploadResultKind.Error || outcome?.kind == UploadResultKind.Offline
@@ -384,7 +402,8 @@ private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long
         }
         if (!done && outcome != null) {
             Text(
-                text = "${relativeTimeRu(outcome.atWallMs, nowMs)} · ${outcomeLabelRu(outcome.kind)}",
+                text = "${relativeTimeRu(outcome.atWallMs, nowMs)} · " +
+                    outcomeLabelRu(outcome.kind, offlineLabel),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isError) {
                     MaterialTheme.colorScheme.error
@@ -397,10 +416,10 @@ private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long
     }
 }
 
-/** «ok» / «нет сети» / «ошибка» — the short outcome label shown next to a pending target. */
-private fun outcomeLabelRu(kind: UploadResultKind): String = when (kind) {
+/** «ok» / target-specific offline text / «ошибка» — the short pending-target outcome label. */
+private fun outcomeLabelRu(kind: UploadResultKind, offlineLabel: String): String = when (kind) {
     UploadResultKind.Ok -> "ok"
-    UploadResultKind.Offline -> "нет сети"
+    UploadResultKind.Offline -> offlineLabel
     UploadResultKind.Error -> "ошибка"
 }
 

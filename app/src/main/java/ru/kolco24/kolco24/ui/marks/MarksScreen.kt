@@ -921,7 +921,7 @@ private fun NfcUnavailableBanner(
 
 /**
  * The always-expanded marks delivery receipt: a calm footer card with one [ReceiptLine] per upload
- * target («Интернет» = cloud, «Локальный» = LAN). Mirrors the [MetricsCard] surface and inset so the
+ * target («Интернет» = cloud, «Финиш» = LAN). Mirrors the [MetricsCard] surface and inset so the
  * two cards bookend the edge-to-edge grid. The displayed "now" advances on a 30-second ticker so the
  * relative «N мин назад» on a pending target stays fresh.
  */
@@ -947,9 +947,21 @@ private fun MarksUploadPanel(status: TrackUploadStatus, modifier: Modifier = Mod
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
-            ReceiptLine(label = "Интернет", total = status.total, line = status.cloud, nowMs = nowMs)
+            ReceiptLine(
+                label = "Интернет",
+                total = status.total,
+                line = status.cloud,
+                nowMs = nowMs,
+                offlineLabel = "нет интернета",
+            )
             Spacer(Modifier.height(10.dp))
-            ReceiptLine(label = "Локальный", total = status.total, line = status.local, nowMs = nowMs)
+            ReceiptLine(
+                label = "Финиш",
+                total = status.total,
+                line = status.local,
+                nowMs = nowMs,
+                offlineLabel = "сервер недоступен",
+            )
         }
     }
 }
@@ -960,7 +972,13 @@ private fun MarksUploadPanel(status: TrackUploadStatus, modifier: Modifier = Mod
  * pending with a reported outcome, a muted second line gives «time · статус».
  */
 @Composable
-private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long) {
+private fun ReceiptLine(
+    label: String,
+    total: Int,
+    line: TargetLine,
+    nowMs: Long,
+    offlineLabel: String,
+) {
     val done = line.uploaded >= total
     val outcome = line.outcome
     val isError = outcome?.kind == UploadResultKind.Error || outcome?.kind == UploadResultKind.Offline
@@ -992,7 +1010,8 @@ private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long
         }
         if (!done && outcome != null) {
             Text(
-                text = "${relativeTimeRu(outcome.atWallMs, nowMs)} · ${outcomeLabelRu(outcome.kind)}",
+                text = "${relativeTimeRu(outcome.atWallMs, nowMs)} · " +
+                    outcomeLabelRu(outcome.kind, offlineLabel),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isError) {
                     MaterialTheme.colorScheme.error
@@ -1005,9 +1024,9 @@ private fun ReceiptLine(label: String, total: Int, line: TargetLine, nowMs: Long
     }
 }
 
-/** «ok» / «нет сети» / «ошибка» — the short outcome label shown next to a pending target. */
-private fun outcomeLabelRu(kind: UploadResultKind): String = when (kind) {
+/** «ok» / target-specific offline text / «ошибка» — the short pending-target outcome label. */
+private fun outcomeLabelRu(kind: UploadResultKind, offlineLabel: String): String = when (kind) {
     UploadResultKind.Ok -> "ok"
-    UploadResultKind.Offline -> "нет сети"
+    UploadResultKind.Offline -> offlineLabel
     UploadResultKind.Error -> "ошибка"
 }

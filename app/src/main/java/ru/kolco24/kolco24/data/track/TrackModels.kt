@@ -73,7 +73,7 @@ fun <T : TrackPointLike> sortedTrackPoints(points: List<T>): List<T> =
     points.sortedWith(trackPointComparator())
 
 /**
- * The two independent upload targets a track flushes to: the LAN server («Локальный») and the cloud
+ * The two independent upload targets a track flushes to: the LAN finish server («Финиш») and the cloud
  * HTTPS server («Интернет»). Pure so the upload-status model stays JVM-testable.
  */
 enum class UploadTarget { Local, Cloud }
