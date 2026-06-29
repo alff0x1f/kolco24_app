@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data
 
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -14,6 +15,9 @@ import org.junit.Before
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
+import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
 
@@ -35,11 +39,15 @@ class MarkRepositoryTest {
         boot: Int? = 42,
     ) = TimeSample(wallMs = wall, elapsedMs = elapsed, trustedMs = trusted, bootCount = boot)
 
+    private fun mem(n: Int, uid: String? = null, number: Int = 0, code: String? = null) =
+        MarkMemberSnapshot(numberInTeam = n, nfcUid = uid, number = number, code = code)
+
     private suspend fun startTake(
         point: Int = 10,
         cost: Int = 5,
         expectedCount: Int = 3,
         buffered: Set<Int> = emptySet(),
+        bufferedSnapshots: Collection<MarkMemberSnapshot> = buffered.map { mem(it) },
         sample: TimeSample = sample(),
     ): String = repository.startKpTake(
         raceId = 1,
@@ -50,7 +58,7 @@ class MarkRepositoryTest {
         cpUid = "CPUID$point",
         cpCode = "CODE$point",
         expectedCount = expectedCount,
-        bufferedMembers = buffered,
+        bufferedMembers = bufferedSnapshots,
         sample = sample,
     )
 
@@ -110,7 +118,7 @@ class MarkRepositoryTest {
         repository.addMember(
             id,
             checkpointId = 10,
-            numberInTeam = 1,
+            member = mem(1),
             expectedCount = 3,
             sample = sample(wall = 1_100L),
         )
@@ -127,13 +135,13 @@ class MarkRepositoryTest {
     @Test
     fun addMember_accumulatesAndScoresOnFullRoster() = runTest {
         val id = startTake(point = 10, expectedCount = 3)
-        repository.addMember(id, checkpointId = 10, numberInTeam = 1, expectedCount = 3, sample = sample(wall = 1_100L))
+        repository.addMember(id, checkpointId = 10, member = mem(1), expectedCount = 3, sample = sample(wall = 1_100L))
         assertFalse(markDao.getById(id)!!.complete)
-        repository.addMember(id, checkpointId = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_200L))
+        repository.addMember(id, checkpointId = 10, member = mem(2), expectedCount = 3, sample = sample(wall = 1_200L))
         // Idempotent rescan of an already-present member does not advance the count.
-        repository.addMember(id, checkpointId = 10, numberInTeam = 2, expectedCount = 3, sample = sample(wall = 1_300L))
+        repository.addMember(id, checkpointId = 10, member = mem(2), expectedCount = 3, sample = sample(wall = 1_300L))
         assertFalse(markDao.getById(id)!!.complete)
-        repository.addMember(id, checkpointId = 10, numberInTeam = 3, expectedCount = 3, sample = sample(wall = 1_400L))
+        repository.addMember(id, checkpointId = 10, member = mem(3), expectedCount = 3, sample = sample(wall = 1_400L))
         val finalMark = markDao.getById(id)!!
         assertEquals(listOf(1, 2, 3), finalMark.present)
         assertTrue(finalMark.complete)
@@ -141,8 +149,28 @@ class MarkRepositoryTest {
     }
 
     @Test
+    fun addMember_resetsUploadFlags_soUpdatedTakeGetsReUploaded() = runTest {
+        // Simulate a track-piggyback upload completing during an active scan window: the partial
+        // take (member 1 only) was uploaded and marked done before member 2 arrived.
+        val id = startTake(point = 10, expectedCount = 2, buffered = setOf(1))
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+        assertTrue(markDao.getById(id)!!.uploadedLocal)
+        assertTrue(markDao.getById(id)!!.uploadedCloud)
+
+        // Adding the second member must reset both flags so the completed take is re-queued.
+        repository.addMember(id, checkpointId = 10, member = mem(2), expectedCount = 2, sample = sample(wall = 1_200L))
+
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf(1, 2), mark.present)
+        assertTrue(mark.complete)
+        assertFalse(mark.uploadedLocal)
+        assertFalse(mark.uploadedCloud)
+    }
+
+    @Test
     fun addMember_missingRow_isNoOp() = runTest {
-        repository.addMember("nope", checkpointId = 10, numberInTeam = 1, expectedCount = 1, sample = sample(wall = 1L))
+        repository.addMember("nope", checkpointId = 10, member = mem(1), expectedCount = 1, sample = sample(wall = 1L))
         assertTrue(repository.observeMarks(7).first().isEmpty())
     }
 
@@ -152,6 +180,86 @@ class MarkRepositoryTest {
         val second = startTake(point = 10, expectedCount = 1, buffered = setOf(1), sample = sample(wall = 5_000L))
         assertNotEquals(first, second)
         assertEquals(2, repository.observeMarks(7).first().count { it.checkpointId == 10 })
+    }
+
+    @Test
+    fun startKpTake_writesPresentDetailsFromBuffer_dedupedByNumberInTeam() = runTest {
+        val id = startTake(
+            point = 10,
+            expectedCount = 3,
+            bufferedSnapshots = listOf(
+                mem(1, uid = "AA", number = 101),
+                mem(2, uid = "BB", number = 102),
+                // Duplicate slot 1 (e.g. a double-tap): must collapse, not inflate present/complete.
+                mem(1, uid = "AA", number = 101),
+            ),
+        )
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf(1, 2), mark.present)
+        assertEquals(
+            listOf(mem(1, uid = "AA", number = 101), mem(2, uid = "BB", number = 102)),
+            mark.presentDetails,
+        )
+        // distinct collapsed the doubled slot, so a 3-person roster is not yet complete.
+        assertFalse(mark.complete)
+    }
+
+    @Test
+    fun startKpTake_snapshotWithNullUid_storedVerbatim() = runTest {
+        val id = startTake(
+            point = 10,
+            expectedCount = 1,
+            bufferedSnapshots = listOf(mem(1, uid = null, number = 0)),
+        )
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf(mem(1, uid = null, number = 0)), mark.presentDetails)
+        assertTrue(mark.complete)
+    }
+
+    @Test
+    fun addMember_appendsSnapshotWithSetSemantics() = runTest {
+        val id = startTake(point = 10, expectedCount = 3)
+        repository.addMember(id, checkpointId = 10, member = mem(1, uid = "AA", number = 101), expectedCount = 3, sample = sample(wall = 1_100L))
+        repository.addMember(id, checkpointId = 10, member = mem(2, uid = "BB", number = 102), expectedCount = 3, sample = sample(wall = 1_200L))
+        // Re-scan of slot 2 is a no-op (set semantics) — does not duplicate the snapshot.
+        repository.addMember(id, checkpointId = 10, member = mem(2, uid = "BB", number = 102), expectedCount = 3, sample = sample(wall = 1_300L))
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf(1, 2), mark.present)
+        assertEquals(
+            listOf(mem(1, uid = "AA", number = 101), mem(2, uid = "BB", number = 102)),
+            mark.presentDetails,
+        )
+        assertFalse(mark.complete)
+    }
+
+    @Test
+    fun addMember_onLegacyRowWithNullPresentDetails_startsFreshList() = runTest {
+        // Simulate a legacy/seed row: present is populated but presentDetails is NULL.
+        val id = UUID.randomUUID().toString()
+        markDao.upsert(
+            MarkEntity(
+                id = id,
+                raceId = 1,
+                teamId = 7,
+                checkpointId = 10,
+                checkpointNumber = 10,
+                cost = 5,
+                method = "nfc",
+                cpUid = "CPUID10",
+                cpCode = "CODE10",
+                present = listOf(1),
+                presentDetails = null,
+                expectedCount = 3,
+                complete = false,
+                takenAt = 1_000L,
+                updatedAt = 1_000L,
+            ),
+        )
+        repository.addMember(id, checkpointId = 10, member = mem(2, uid = "BB", number = 102), expectedCount = 3, sample = sample(wall = 1_200L))
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf(1, 2), mark.present)
+        // The null presentDetails is seeded fresh with the new snapshot (no NPE, slot 1 has no snapshot).
+        assertEquals(listOf(mem(2, uid = "BB", number = 102)), mark.presentDetails)
     }
 
     private fun fix(
@@ -263,6 +371,24 @@ class MarkRepositoryTest {
     }
 
     @Test
+    fun attachLocation_resetsUploadFlagsOnAlreadyUploadedRow() = runTest {
+        // Simulate a race where the row was uploaded before the GPS fix arrived.
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+        assertTrue(markDao.getById(id)!!.uploadedLocal)
+        assertTrue(markDao.getById(id)!!.uploadedCloud)
+
+        // A late-arriving GPS fix must re-queue the row so the server eventually gets the coordinate.
+        repository.attachLocation(id, fix(lat = 55.0))
+
+        val mark = markDao.getById(id)!!
+        assertEquals(55.0, mark.locLat!!, 0.0)
+        assertFalse(mark.uploadedLocal)
+        assertFalse(mark.uploadedCloud)
+    }
+
+    @Test
     fun derivation_distinctScoredPointsAndScore() = runTest {
         startTake(point = 10, cost = 5, expectedCount = 1, buffered = setOf(1))
         startTake(point = 11, cost = 8, expectedCount = 1, buffered = setOf(1))
@@ -299,7 +425,8 @@ private class FakeMarkDao : MarkDao {
         gpsTimeMs: Long?,
         elapsedRealtimeAt: Long,
     ) {
-        // Column-scoped: only the loc* columns change; a missing row is a no-op.
+        // Column-scoped: only loc* and uploaded* columns change; a missing row is a no-op.
+        // Mirrors the SQL: resets upload flags so a late-arriving location re-queues the row.
         rows.value = rows.value.map { row ->
             if (row.id == id) {
                 row.copy(
@@ -310,10 +437,68 @@ private class FakeMarkDao : MarkDao {
                     locVerticalAccuracy = verticalAccuracy,
                     locGpsTimeMs = gpsTimeMs,
                     locElapsedRealtimeAt = elapsedRealtimeAt,
+                    uploadedLocal = false,
+                    uploadedCloud = false,
                 )
             } else {
                 row
             }
         }
     }
+
+    override fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        rows.map { list ->
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            UploadCounts(
+                total = scoped.size,
+                local = scoped.count { it.uploadedLocal },
+                cloud = scoped.count { it.uploadedCloud },
+            )
+        }
+
+    override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal }
+            .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud }
+            .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun markUploadedLocal(ids: List<String>) {
+        rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedLocal = true) else it }
+    }
+
+    override suspend fun markUploadedCloud(ids: List<String>) {
+        rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedCloud = true) else it }
+    }
+
+    override suspend fun markUploadedLocalIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    override suspend fun markUploadedLocalIfUnchangedAndNoLocation(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt && it.locLat == null)
+                it.copy(uploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun markUploadedCloudIfUnchangedAndNoLocation(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt && it.locLat == null)
+                it.copy(uploadedCloud = true) else it
+        }
+    }
+
+    override suspend fun pendingUploadScopes(): List<TrackScope> =
+        rows.value.filter { !it.uploadedLocal || !it.uploadedCloud }
+            .map { TrackScope(it.raceId, it.teamId) }.distinct()
 }

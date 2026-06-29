@@ -71,6 +71,11 @@ class Kolco24App : Application() {
                         // a concurrent service-stop flush just skips this one.
                         container.trackRepository.uploadAllPending()
                     }
+                    launch {
+                        // Same opportunistic re-send for КП takes (marks): any mark stranded under an
+                        // old race/team flushes here. Idempotent by client id, tryLock-guarded.
+                        container.markRepository.uploadAllPending()
+                    }
                 }
             }
         }

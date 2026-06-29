@@ -3,6 +3,25 @@ package ru.kolco24.kolco24.data.db
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
+
+/**
+ * Snapshot of one team member captured at the moment of a checkpoint take — the source for the
+ * `present[]` array in the marks upload contract. Parallel to [MarkEntity.present] (which stays the
+ * scoring truth): [numberInTeam] is the slot, [nfcUid] is the bracelet uid read at scan time (may be
+ * null), [number] is the global participant number (from the chip binding), and [code] is a per-member
+ * chip code placeholder (brackets carry none yet).
+ *
+ * **`@Serializable` is mandatory** — [MarkMemberSnapshotListConverter] serializes this through
+ * kotlinx.serialization; without the annotation `Json.encodeToString` fails to compile.
+ */
+@Serializable
+data class MarkMemberSnapshot(
+    val numberInTeam: Int,
+    val nfcUid: String?,
+    val number: Int,
+    val code: String? = null,
+)
 
 /**
  * A **local-only** record of one checkpoint-taking event (взятие КП). The table is designed for a
@@ -14,12 +33,12 @@ import androidx.room.PrimaryKey
  * [present] accumulates the `numberInTeam` of each member scanned within the rolling window. [complete]
  * (= counts for score) is set once `present` covers the whole roster ([expectedCount]); a partial
  * collect is stored for the server log but not scored. A repeat take of the same checkpoint produces a
- * **new** row (history for the server-side order). Upload flags are unindexed seeds — no upload queries
- * exist yet (an additive migration will add indices when they do).
+ * **new** row (history for the server-side order). Dual upload flags ([uploadedLocal]/[uploadedCloud])
+ * are indexed by `raceId` and drained by [ru.kolco24.kolco24.data.MarkRepository]'s batch upload loop.
  */
 @Entity(
     tableName = "marks",
-    indices = [Index("teamId"), Index("checkpointId")],
+    indices = [Index("teamId"), Index("checkpointId"), Index("raceId")],
 )
 data class MarkEntity(
     @PrimaryKey val id: String,
@@ -32,6 +51,14 @@ data class MarkEntity(
     val cpUid: String,
     val cpCode: String,
     val present: List<Int>,
+    /**
+     * Per-member snapshots ([MarkMemberSnapshot]) captured at scan time — the source for the upload
+     * `present[]` array (`nfc_uid`/`code`/`number`/`number_in_team`). Runs **parallel** to [present]
+     * (which stays the scoring truth — `present.size` vs [expectedCount] drives [complete]) and is
+     * filled with set-semantics by `numberInTeam` on every bracelet scan. NULL on legacy rows written
+     * before this column existed; the upload mapper merges over [present] so no member is ever lost.
+     */
+    val presentDetails: List<MarkMemberSnapshot>? = null,
     val expectedCount: Int,
     val complete: Boolean,
     val photoPath: String? = null,

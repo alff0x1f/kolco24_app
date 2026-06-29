@@ -88,6 +88,7 @@ import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.nfc.chipModelFromVersion
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.nfc.readChipVersion
+import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.takenPoints
@@ -401,6 +402,10 @@ sealed interface ScanInput {
  * - [buffer] holds member slots scanned **before** the КП chip; it is drained into [MarkRepository.startKpTake].
  * - [present] mirrors the slots already credited to the open take so a re-scan of an already-counted
  *   member is idempotent and does **not** refresh [lastScanAt] (mirrors [reduce]).
+ * - [snapshots] maps each scanned member's slot → its [MarkMemberSnapshot] (bracelet uid + participant
+ *   number), captured at scan time so the take's `present[]` upload carries real per-member identity.
+ *   Reset alongside [buffer]/[present] on window expiry; for buffered members it feeds
+ *   [MarkRepository.startKpTake], for in-window members the single snapshot feeds [MarkRepository.addMember].
  * - [lastScanAt] lazily detects window expiry (a scan more than [SCAN_WINDOW_MS] after the previous one
  *   starts a new take), keeping the persisted rows in step with the UI's timer-driven finalize. It is
  *   a **monotonic** `elapsedRealtime` ms (from [TimeSample.elapsedMs]); `null` means "no scan yet" —
@@ -412,6 +417,7 @@ private class ScanTakeState {
     var expectedCount: Int = 0
     val buffer = mutableSetOf<Int>()
     val present = mutableSetOf<Int>()
+    val snapshots = mutableMapOf<Int, MarkMemberSnapshot>()
     var lastScanAt: Long? = null
 }
 
@@ -630,6 +636,34 @@ private fun Kolco24AppRoot(
             total = counts.total,
             local = TargetLine(counts.local, uploadOutcomes[trackScope to UploadTarget.Local]),
             cloud = TargetLine(counts.cloud, uploadOutcomes[trackScope to UploadTarget.Cloud]),
+        )
+    }
+
+    // Upload-status row for the «Отметки» tab — same scoped-pair protection as the track status above:
+    // the counts carry their TrackScope so a one-frame mismatch after a team switch (counts not yet
+    // reset to null) never pairs stale counts with the new scope's outcomes.
+    val scopedMarkUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
+        val tid = selectedTeamId
+        val rid = selectedRaceId
+        value = null
+        if (tid != null && rid != null) {
+            val scope = TrackScope(rid, tid)
+            markRepo.uploadCounts(tid, rid).collect { value = scope to it }
+        }
+    }
+    val markUploadOutcomes by container.markUploadOutcomes.collectAsState()
+    val marksUploadStatus: TrackUploadStatus? = run {
+        val sc = scopedMarkUploadCounts
+        val tid = selectedTeamId
+        val rid = selectedRaceId
+        if (sc == null || tid == null || rid == null) return@run null
+        val (countScope, counts) = sc
+        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
+        val markScope = TrackScope(rid, tid)
+        TrackUploadStatus(
+            total = counts.total,
+            local = TargetLine(counts.local, markUploadOutcomes[markScope to UploadTarget.Local]),
+            cloud = TargetLine(counts.cloud, markUploadOutcomes[markScope to UploadTarget.Cloud]),
         )
     }
 
@@ -1009,6 +1043,7 @@ private fun Kolco24AppRoot(
                         onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
+                        uploadStatus = marksUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -1056,7 +1091,18 @@ private fun Kolco24AppRoot(
         // Scan overlay. Settings and team-flow handlers are registered after this one, so without the
         // !showScan guards on both of them they would win (Compose gives priority to the last registered
         // enabled BackHandler). Their guards ensure scan's back press is never masked when co-active.
-        BackHandler(enabled = showScan) { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false }
+        //
+        // Shared close path: used by both BackHandler (system back) and ScanScreen.onClose so that every
+        // exit path — completion, window expiry, manual close, system back — triggers the upload flush.
+        val closeScanOverlay: () -> Unit = {
+            showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false
+            val raceId = selectedRaceId
+            val teamId = selectedTeamId
+            if (raceId != null && teamId != null) {
+                container.applicationScope.launch { markRepo.uploadPending(raceId, teamId) }
+            }
+        }
+        BackHandler(enabled = showScan) { closeScanOverlay() }
         if (showScan) {
             // Fresh DB-side take bookkeeping per opened overlay (parallels ScanScreen's UI session).
             val scanTake = remember { ScanTakeState() }
@@ -1111,7 +1157,7 @@ private fun Kolco24AppRoot(
                             if (expired || scanTake.markId == null || scanTake.checkpointId != event.checkpointId) {
                                 // An expired window means the pre-KP buffer belongs to a dead session;
                                 // discard it so stale members are not credited to the new take.
-                                if (expired) scanTake.buffer.clear()
+                                if (expired) { scanTake.buffer.clear(); scanTake.snapshots.clear() }
                                 val buffered = scanTake.buffer.toSet()
                                 val rosterSize = scanRoster.size
                                 // applicationScope.async: the write survives the overlay closing, yet
@@ -1126,7 +1172,13 @@ private fun Kolco24AppRoot(
                                         cpUid = event.cpUid,
                                         cpCode = event.cpCode,
                                         expectedCount = rosterSize,
-                                        bufferedMembers = buffered,
+                                        // Drain each buffered member's captured snapshot (bracelet uid +
+                                        // participant number); fall back to a slot-only sentinel if a
+                                        // snapshot is somehow missing, so present[] never drops a member.
+                                        bufferedMembers = buffered.map { slot ->
+                                            scanTake.snapshots[slot]
+                                                ?: MarkMemberSnapshot(numberInTeam = slot, nfcUid = null, number = 0)
+                                        },
                                         // The touch-moment sample: monotonic window + trusted/wall/boot
                                         // fields, captured before scope.launch so slow NFC/Room work
                                         // can't stale the take time.
@@ -1144,6 +1196,9 @@ private fun Kolco24AppRoot(
                                 scanTake.checkpointId = event.checkpointId
                                 scanTake.expectedCount = rosterSize
                                 // The buffered members were drained into the take's present-set.
+                                // Snapshots were already consumed above by bufferedMembers; clear so
+                                // stale entries from the previous take don't accumulate across KP switches.
+                                scanTake.snapshots.clear()
                                 scanTake.present.clear()
                                 scanTake.present.addAll(buffered)
                                 scanTake.buffer.clear()
@@ -1156,7 +1211,18 @@ private fun Kolco24AppRoot(
                                 scanTake.checkpointId = null
                                 scanTake.buffer.clear()
                                 scanTake.present.clear()
+                                scanTake.snapshots.clear()
                             }
+                            // Snapshot the scanned bracelet for present[] upload: the chip uid plus the
+                            // participant's global number (from the binding pool), keyed by slot. Stored
+                            // before the idempotency early-returns below (a re-tap just rewrites the same
+                            // value), so a buffered member's snapshot is ready when the КП chip lands.
+                            val snapshot = MarkMemberSnapshot(
+                                numberInTeam = event.numberInTeam,
+                                nfcUid = uid,
+                                number = scanChipNumbers[event.numberInTeam] ?: 0,
+                            )
+                            scanTake.snapshots[event.numberInTeam] = snapshot
                             val markId = scanTake.markId
                             val checkpointId = scanTake.checkpointId
                             if (markId == null || checkpointId == null) {
@@ -1171,7 +1237,7 @@ private fun Kolco24AppRoot(
                                     markRepo.addMember(
                                         markId = markId,
                                         checkpointId = checkpointId,
-                                        numberInTeam = event.numberInTeam,
+                                        member = snapshot,
                                         expectedCount = scanTake.expectedCount,
                                         // The touch-moment sample (monotonic window + trusted/wall/boot).
                                         sample = sample,
@@ -1185,7 +1251,7 @@ private fun Kolco24AppRoot(
                     }
                     event
                 },
-                onClose = { showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false },
+                onClose = closeScanOverlay,
                 modifier = Modifier.fillMaxSize(),
             )
         }
