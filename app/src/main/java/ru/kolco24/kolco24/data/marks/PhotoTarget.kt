@@ -62,3 +62,20 @@ fun decidePhotoTarget(marks: List<MarkEntity>, nowMs: Long): PhotoTarget {
  */
 fun resolvePhotoCheckpoint(number: Int, legend: List<CheckpointEntity>): CheckpointEntity? =
     legend.firstOrNull { it.number == number }
+
+/**
+ * Filter the [legend] for the photo number picker by a free-text [query]. A blank query returns the
+ * whole legend (input order preserved). Otherwise a checkpoint matches when its number string contains
+ * the trimmed query (the primary numeric path) or its description contains it case-insensitively (so a
+ * named open КП can be found by text); locked КП without a description still match on number. Pure and
+ * Android-free so it is JVM-unit-tested.
+ */
+fun filterCheckpointsByQuery(legend: List<CheckpointEntity>, query: String): List<CheckpointEntity> {
+    val q = query.trim()
+    if (q.isEmpty()) return legend
+    val lower = q.lowercase()
+    return legend.filter { cp ->
+        cp.number.toString().contains(q) ||
+            cp.description?.lowercase()?.contains(lower) == true
+    }
+}

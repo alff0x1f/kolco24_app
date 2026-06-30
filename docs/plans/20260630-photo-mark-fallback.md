@@ -209,10 +209,12 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 7: Пикер номера КП (`ui/photo/PhotoNumberPicker.kt`) — оверлей
 
-- [ ] Лёгкий оверлей (`rememberSaveable`-флаг + `BackHandler`): числовое поле + список
+- [x] Лёгкий оверлей (`rememberSaveable`-флаг + `BackHandler`): числовое поле + список
       легенды с фильтром по вводу (переиспользуем легенду, уже собранную в
       `MainActivity`). Невалидный номер → инлайн-ошибка, без orphan-марок.
-- [ ] Выбор КП → переход в `PhotoCaptureScreen` с `AskNumber`-таргетом.
+- [x] Выбор КП → переход в `PhotoCaptureScreen` с `AskNumber`-таргетом. (Пикер отдаёт
+      выбранный `CheckpointEntity` через `onCheckpointSelected`; сам переход в камеру
+      монтирует хост — Task 8.)
 
 ### Task 8: Точка входа — FAB на «Отметки» (`MarksScreen.kt` + `MainActivity.kt`)
 
