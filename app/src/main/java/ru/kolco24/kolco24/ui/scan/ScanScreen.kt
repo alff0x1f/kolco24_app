@@ -461,9 +461,19 @@ private fun CheckpointSheetCard(session: ScanSession?) {
     }
 }
 
-/** «18 баллов» — the КП value, secondary to the numeral. The number itself wears the brand red. */
+/** «18 баллов» — the КП value, secondary to the numeral. The number itself wears the brand red.
+ *  A zero-cost КП (transit/test zone) shows «без баллов» instead of «0 баллов». */
 @Composable
 private fun CostStat(cost: Int?, modifier: Modifier = Modifier) {
+    if (cost == 0) {
+        Text(
+            text = "без баллов",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier,
+        )
+        return
+    }
     Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
         Text(
             text = cost?.toString() ?: "—",
