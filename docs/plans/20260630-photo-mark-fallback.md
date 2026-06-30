@@ -256,9 +256,9 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 10: Проверка
 
-- [ ] `./gradlew lintDebug` — чисто (особенно `NewApi` вокруг CameraX/файлов).
-- [ ] `./gradlew testDebugUnitTest` — новые чистые тесты зелёные.
-- [ ] Ручной прогон: NFC-взятие → в течение 3 мин FAB «Фото» → auto-attach, бейдж ×N;
+- [x] `./gradlew lintDebug` — чисто (особенно `NewApi` вокруг CameraX/файлов).
+- [x] `./gradlew testDebugUnitTest` — новые чистые тесты зелёные.
+- [x] manual test (skipped - not automatable): Ручной прогон: NFC-взятие → в течение 3 мин FAB «Фото» → auto-attach, бейдж ×N;
       по прошествии 3 мин → пикер номера → standalone-плитка; ночь → фонарик; несколько
       кадров → один тайл с count; back/discard; отказ в пермишене.
 
