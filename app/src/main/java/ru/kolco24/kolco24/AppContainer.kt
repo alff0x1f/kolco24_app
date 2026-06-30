@@ -19,6 +19,7 @@ import ru.kolco24.kolco24.data.MarkRepository
 import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.RaceRepository
+import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.TeamRepository
 import ru.kolco24.kolco24.data.ThemePreference
 import ru.kolco24.kolco24.data.TrackProfilePreference
@@ -274,6 +275,14 @@ class AppContainer(private val context: Context) {
 
     /** GPS-track recording state: written by `TrackRecordingService`, read by the UI. */
     val trackRecordingState: MutableStateFlow<TrackState> = MutableStateFlow(TrackState.Idle)
+
+    /**
+     * Scan-outcome sound + vibration adapter. Constructed **eagerly** (not `by lazy`) so its
+     * asynchronous `SoundPool.load()` of all three clips starts at `Application.onCreate`, hundreds of
+     * ms before the first NFC tap is possible. Shared across the scan overlay and the idle/bind/check/
+     * provision call sites.
+     */
+    val scanFeedback: ScanFeedbackPlayer = ScanFeedbackPlayer(context)
 
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }

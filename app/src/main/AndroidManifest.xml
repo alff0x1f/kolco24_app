@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.NFC" />
+    <!-- Scan-feedback vibration; without this every Vibrator.vibrate(...) is a silent no-op. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- GPS track recording: location for the fixes, foreground-service (+ location type on 14+) so
          recording survives a sleeping screen, POST_NOTIFICATIONS for the ongoing notification on 13+. -->
