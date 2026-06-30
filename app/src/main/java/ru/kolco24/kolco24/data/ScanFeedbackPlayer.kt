@@ -38,7 +38,6 @@ class ScanFeedbackPlayer(context: Context) {
 
     private val successSoundId: Int
     private val failureSoundId: Int
-    private val neutralSoundId: Int
 
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         context.getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -50,7 +49,6 @@ class ScanFeedbackPlayer(context: Context) {
     init {
         successSoundId = soundPool.load(context, R.raw.beep_ok3, 1)
         failureSoundId = soundPool.load(context, R.raw.beep_err, 1)
-        neutralSoundId = soundPool.load(context, R.raw.beep_scan, 1)
     }
 
     /** Recognized chip: crisp tick + a single short pulse. */
@@ -65,9 +63,9 @@ class ScanFeedbackPlayer(context: Context) {
         vibrate(longArrayOf(0, 60, 80, 60))
     }
 
-    /** Soft "tap registered" tick, no vibration. */
+    /** Unknown / not-a-working-chip tap: a single short buzz, no sound. */
     fun neutral() {
-        playSound(neutralSoundId)
+        vibrate(longArrayOf(0, 50))
     }
 
     /** Dispatch to [success]/[failure]/[neutral] by [kind]. */

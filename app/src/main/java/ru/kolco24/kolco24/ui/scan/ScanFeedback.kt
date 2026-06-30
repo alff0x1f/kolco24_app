@@ -6,9 +6,9 @@ package ru.kolco24.kolco24.ui.scan
  * - [Success] — a valid, recognized chip was read (КП/member; bind ok; check ok; provision written).
  * - [Failure] — a recognized-but-rejected tap (`BadKp`/`UnboundChip`, not-in-pool, check
  *   unknown/inconsistent/no-code, provision/server error).
- * - [Neutral] — a soft "tap registered" tick with no vibration; produced **only** by the non-overlay
- *   paths (unknown idle tag, `AlreadyBound` warn+allow, check tapped before data ready). Never the
- *   result of [feedbackFor] — see below.
+ * - [Neutral] — a single short buzz with **no sound** (sound is reserved for working chips); produced
+ *   **only** by the non-overlay paths (unknown idle tag, `AlreadyBound` warn+allow, check tapped
+ *   before data ready). Never the result of [feedbackFor] — see below.
  */
 enum class ScanFeedbackKind { Success, Failure, Neutral }
 
