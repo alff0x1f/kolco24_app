@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -192,6 +193,7 @@ fun MarksScreen(
     onOpenNfcSettings: () -> Unit = {},
     onStartTrack: () -> Unit = {},
     onRequestLocation: () -> Unit = {},
+    onPhotoClick: () -> Unit = {},
     uploadStatus: TrackUploadStatus? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -272,7 +274,19 @@ fun MarksScreen(
             }
 
             // No «Отметить КП» button — the scan overlay opens automatically when a КП chip is tapped.
-            // The «Фото» fallback FAB is hidden until photo marking is implemented.
+            // The «Фото» fallback FAB is the single FAB: a photo take is the fallback for a КП that
+            // can't be NFC-read (no NFC, ripped marker, unreadable chip). Its onClick routes through the
+            // host (decidePhotoTarget — auto-attach vs ask-number, no team → picker).
+            FloatingActionButton(
+                onClick = onPhotoClick,
+                containerColor = OrangeCta,
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            ) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = "Сфотографировать КП")
+            }
         }
     }
 }

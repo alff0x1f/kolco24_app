@@ -218,15 +218,15 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 8: Точка входа — FAB на «Отметки» (`MarksScreen.kt` + `MainActivity.kt`)
 
-- [ ] Вернуть скрытый FAB «Фото» (иконка `CameraAlt`, `OrangeCta`). NB: scan-FAB **нет**
+- [x] Вернуть скрытый FAB «Фото» (иконка `CameraAlt`, `OrangeCta`). NB: scan-FAB **нет**
       — скан открывается автоматически по NFC-тапу; это новый и единственный FAB.
-- [ ] FAB гейтится на `SelectedTeamState`: нет команды (`None`/`Missing`) → пикер команды.
-- [ ] `onClick` → `decidePhotoTarget(marks, trustedNow)`:
+- [x] FAB гейтится на `SelectedTeamState`: нет команды (`None`/`Missing`) → пикер команды.
+- [x] `onClick` → `decidePhotoTarget(marks, trustedNow)`:
   - `AttachTo` → сразу открыть камеру, в шапке «КП №N» + «изменить» (drop в пикер).
   - `AskNumber` → открыть `PhotoNumberPicker`.
-- [ ] Развести флаги оверлеев `showPhotoPicker`/`photoCapture` в `MainActivity` по
+- [x] Развести флаги оверлеев `showPhotoPicker`/`photoCapture` в `MainActivity` по
       существующему паттерну (сброс на `onScanClick`/смене команды).
-- [ ] **Взаимная блокировка оверлеев (детально, не «развести флаги»):** в `MainActivity`
+- [x] **Взаимная блокировка оверлеев (детально, не «развести флаги»):** в `MainActivity`
       много guard'ов, где scan/settings/admin/team-picker/bind взаимоисключают друг друга
       (см. busy-conditions и стек `BackHandler`'ов). Явно встроить photo picker и camera:
   - не открывать фото поверх другого оверлея (picker/settings/admin/scan/bind уже подняты);
