@@ -50,10 +50,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -115,7 +113,6 @@ fun ProvisioningScreen(
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
     val activity = context as? MainActivity
-    val haptics = LocalHapticFeedback.current
 
     Column(
         modifier = modifier
@@ -197,13 +194,6 @@ fun ProvisioningScreen(
                 }
             }
         }
-        // Light haptic stamp on a successful write.
-        LaunchedEffect(provisionState) {
-            if (provisionState is ProvisionState.Success) {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            }
-        }
-
         // Long-lived hook reads the latest checkpoints without re-arming on every recomposition.
         val cpsState = rememberUpdatedState(cps)
         DisposableEffect(raceId) {
@@ -264,6 +254,7 @@ fun ProvisioningScreen(
                                 if (bytes == null) {
                                     container.provisioningState.value =
                                         ProvisionState.Failed("Неверный код от сервера")
+                                    container.scanFeedback.failure()
                                     return@launch
                                 }
                                 val written = withContext(Dispatchers.IO) {
@@ -281,9 +272,11 @@ fun ProvisioningScreen(
                                     }
                                     container.provisioningState.value =
                                         ProvisionState.Success(result.data.number)
+                                    container.scanFeedback.success()
                                 } else {
                                     container.provisioningState.value =
                                         ProvisionState.Failed("Не удалось записать, приложите снова")
+                                    container.scanFeedback.failure()
                                 }
                             }
                             // 401: token revoked/expired server-side — clear the session and drop to login.
@@ -294,6 +287,7 @@ fun ProvisioningScreen(
                             else -> {
                                 container.provisioningState.value =
                                     ProvisionState.Failed(provisionErrorMessage(result))
+                                container.scanFeedback.failure()
                             }
                         }
                     } finally {
@@ -574,7 +568,7 @@ private fun FreshChipToken(uid: String) {
 /**
  * The scan zone — the live status line under the КП. In [ProvisionState.WaitingForChip] it pulses an
  * NFC glyph + «Приложите чип к телефону»; the working states show progress text; [ProvisionState.Success]
- * scales in (haptic stamped by the host) and [ProvisionState.Failed] shows the RU error in `error`.
+ * scales in (sound + vibration fired from the bind job) and [ProvisionState.Failed] shows the RU error in `error`.
  *
  * [reducedMotion] suppresses the pulse + scale-in (instant) when the user disabled animations.
  */

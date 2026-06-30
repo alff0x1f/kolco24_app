@@ -77,6 +77,7 @@ import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
+import ru.kolco24.kolco24.ui.scan.ScanFeedbackKind
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
@@ -169,7 +170,10 @@ fun CheckChipScreen(
                 scope.launch {
                     mutex.withLock {
                         // Ignore scans until both legend flows have delivered their first emission.
-                        if (!dataReadyLatest.value) return@withLock
+                        if (!dataReadyLatest.value) {
+                            container.scanFeedback.neutral()
+                            return@withLock
+                        }
                         val uid = normalizeNfcUid(tag.id)
                         val code = withContext(Dispatchers.IO) { readChipCode(tag) }
                         val bid = code?.let { LegendCrypto.bid(it) }
@@ -177,6 +181,10 @@ fun CheckChipScreen(
                         val cp = tagRow?.let { cpByIdLatest.value[it.checkpointId] }
                         val chipsOnKp = tagRow?.let { countsLatest.value[it.checkpointId] ?: 0 } ?: 0
                         val result = classifyChipCheck(uid, bid, tagRow, cp, chipsOnKp)
+                        container.scanFeedback.play(
+                            if (result is ChipCheckResult.Ok) ScanFeedbackKind.Success
+                            else ScanFeedbackKind.Failure,
+                        )
                         lastResult = result
                         recent.add(0, result)
                         // removeAt(lastIndex), NOT removeLast(): the stdlib extension trips a NewApi

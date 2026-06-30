@@ -82,6 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
+import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.ui.common.ClockWarningBanner
 import ru.kolco24.kolco24.ui.common.refreshErrorMessage
 import ru.kolco24.kolco24.data.UnlockOutcome
@@ -153,6 +154,13 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
      * safe because `sample()` is a lock-free `AtomicReference` read.
      */
     val trustedClock: TrustedClock by lazy { (applicationContext as Kolco24App).container.trustedClock }
+
+    /**
+     * Scan-outcome sound + vibration. Exposed here so the binder-thread idle path ([onTagDiscovered])
+     * can play the neutral "tap registered" cue on an unrecognized tag — the cue that replaces the
+     * platform beep we suppress via [READER_FLAGS].
+     */
+    val scanFeedback: ScanFeedbackPlayer by lazy { (applicationContext as Kolco24App).container.scanFeedback }
 
     /** Sink for the next scanned UID; the bind sheet registers/clears it via a DisposableEffect. */
     @Volatile var onTagScanned: ((String) -> Unit)? = null
@@ -345,7 +353,12 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         // would corrupt both window-expiry math and the stored take time.
         val sample = trustedClock.sample()
         val code = readChipCode(tag)
-        if (code == null && uid !in boundUidsSnapshot) return
+        if (code == null && uid !in boundUidsSnapshot) {
+            // An unrecognized tag — no parseable КП code, not a bound bracelet. With the platform beep
+            // suppressed this path would be silent, so play the neutral "tap registered" cue.
+            scanFeedback.neutral()
+            return
+        }
         // Publish the already-read (code, uid) — no second chip read. If onTagForMark was armed
         // while readChipCode was blocking (the overlay opened concurrently), the dispatcher sees
         // showScan=true and routes to pendingScan; the ScanScreen's continuous collect drain
@@ -359,7 +372,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 NfcAdapter.FLAG_READER_NFC_B or
                 NfcAdapter.FLAG_READER_NFC_F or
                 NfcAdapter.FLAG_READER_NFC_V or
-                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
+                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK or
+                NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
     }
 }
 
@@ -1110,6 +1124,7 @@ private fun Kolco24AppRoot(
                 roster = scanRoster,
                 chipNumbers = scanChipNumbers,
                 nfcAvailable = nfcActiveForScan,
+                scanFeedback = container.scanFeedback,
                 onScanTag = onScanTag@{ input, sample ->
                     // Monotonic "now" for the sliding window; immune to wall-clock changes. The full
                     // sample (trusted/wall/boot) is persisted with the take below.
@@ -1543,6 +1558,7 @@ private fun Kolco24AppRoot(
                                         refreshResult == RefreshResult.Forbidden
                                     ) {
                                         sheetState = BindSheetState.Waiting
+                                        container.scanFeedback.neutral()
                                         return@launch
                                     }
                                     hasSyncedPool[0] = true
@@ -1552,26 +1568,36 @@ private fun Kolco24AppRoot(
                             val poolNumber = pool.find { it.nfcUid == uid }?.number
                             val existing = bindingRepo.findByUid(uid)
                             when (val outcome = decideBind(uid, poolNumber, existing, currentSlot)) {
-                                BindOutcome.NotInPool -> sheetState = BindSheetState.NotInPool(uid)
+                                BindOutcome.NotInPool -> {
+                                    sheetState = BindSheetState.NotInPool(uid)
+                                    container.scanFeedback.failure()
+                                }
                                 is BindOutcome.AlreadyOnThisSlot -> {
                                     // Refresh the stored participantNumber from the authoritative pool
                                     // in case it changed since the original bind.
                                     try {
                                         bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
                                         sheetState = BindSheetState.Success(outcome.participantNumber)
+                                        container.scanFeedback.success()
                                     } catch (_: Exception) {
                                         sheetState = BindSheetState.Waiting
+                                        container.scanFeedback.failure()
                                     }
                                 }
                                 is BindOutcome.AlreadyBound -> {
+                                    // Warn + allow: the chip is bound elsewhere; the reassign button can
+                                    // still finish the flow, so this is a neutral "read" cue, not a failure.
                                     sheetState = BindSheetState.AlreadyBound(uid, outcome.participantNumber)
+                                    container.scanFeedback.neutral()
                                 }
                                 is BindOutcome.ReadyToBind -> {
                                     try {
                                         bindingRepo.bind(activeTeamId, activeBindSlot, uid, outcome.participantNumber)
                                         sheetState = BindSheetState.Success(outcome.participantNumber)
+                                        container.scanFeedback.success()
                                     } catch (_: Exception) {
                                         sheetState = BindSheetState.Waiting
+                                        container.scanFeedback.failure()
                                     }
                                 }
                             }
@@ -1602,8 +1628,10 @@ private fun Kolco24AppRoot(
                         try {
                             bindingRepo.bind(activeTeamId, activeBindSlot, s.uid, s.participantNumber)
                             sheetState = BindSheetState.Success(s.participantNumber)
+                            container.scanFeedback.success()
                         } catch (_: Exception) {
                             sheetState = BindSheetState.AlreadyBound(s.uid, s.participantNumber)
+                            container.scanFeedback.failure()
                         } finally {
                             scanMutex.unlock()
                         }

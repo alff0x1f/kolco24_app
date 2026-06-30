@@ -75,6 +75,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.MainActivity
 import ru.kolco24.kolco24.ScanInput
+import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.data.time.ClockStatus
@@ -99,6 +100,7 @@ fun ScanScreen(
     roster: List<TeamMemberItem>,
     chipNumbers: Map<Int, Int>,
     nfcAvailable: Boolean,
+    scanFeedback: ScanFeedbackPlayer,
     onScanTag: suspend (ScanInput, TimeSample) -> ScanEvent,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -136,6 +138,9 @@ fun ScanScreen(
         val now = sample.elapsedMs
         scanMutex.withLock {
             val event = currentOnScanTag(input, sample)
+            // One outcome cue per tap, covering every path incl. idempotent re-taps. Fired here (the
+            // single scan-overlay chokepoint) so the platform beep — suppressed app-wide — is replaced.
+            scanFeedback.play(feedbackFor(event))
             when (event) {
                 ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
                 is ScanEvent.BadKp -> diagnostic = event.reason
