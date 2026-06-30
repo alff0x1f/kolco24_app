@@ -77,7 +77,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 3: Чистая модель путей фото (data-слой, JVM-тестируемо)
 
-- [ ] Завести чистый хелпер (рядом с `MarkEntity` или отдельным файлом
+- [x] Завести чистый хелпер (рядом с `MarkEntity` или отдельным файлом
       `data/marks/PhotoPaths.kt`):
   - `encodePhotoPaths(paths: List<String>): String` — JSON-энкод (kotlinx, как
     существующие конвертеры).
@@ -85,10 +85,10 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
     мусор → `emptyList()` (никогда не бросает). **Валидация пути:** принимать только
     относительные `marks/<markId>/<uuid>.jpg`; отбрасывать absolute и любые с `..`
     (path traversal — `File(filesDir, relPath)` иначе может уйти за пределы `filesDir`).
-- [ ] Хранить **относительные** пути (`marks/<markId>/<uuid>.jpg`), абсолют резолвится
+- [x] Хранить **относительные** пути (`marks/<markId>/<uuid>.jpg`), абсолют резолвится
       от `filesDir` **в composable/адаптере** (чистый `marksToTiles` не имеет `filesDir` —
       резолв только на месте `AsyncImage`/записи файла).
-- [ ] Тест `PhotoPathsTest`: round-trip, пустые/битые входы, порядок.
+- [x] Тест `PhotoPathsTest`: round-trip, пустые/битые входы, порядок.
 
 ### Task 4: Чистый роутер точки входа (`ui/marks` или `data/marks`)
 
