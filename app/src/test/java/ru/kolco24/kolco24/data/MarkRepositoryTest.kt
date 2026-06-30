@@ -13,11 +13,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
 
@@ -388,6 +390,86 @@ class MarkRepositoryTest {
         assertFalse(mark.uploadedCloud)
     }
 
+    private fun cp(id: Int, number: Int = id, cost: Int? = 7, locked: Boolean = false) =
+        CheckpointEntity(
+            id = id,
+            raceId = 1,
+            number = number,
+            cost = cost,
+            type = "kp",
+            description = null,
+            locked = locked,
+        )
+
+    @Test
+    fun createPhotoMark_isScoredHybridTake() = runTest {
+        repository.createPhotoMark(
+            markId = "photo-1",
+            cp = cp(30, cost = 7),
+            raceId = 1,
+            teamId = 7,
+            paths = listOf("marks/photo-1/a.jpg"),
+            expectedCount = 3,
+            sample = sample(),
+        )
+        val mark = markDao.getById("photo-1")!!
+        assertEquals("photo", mark.method)
+        assertTrue(mark.complete)
+        assertEquals(emptyList<Int>(), mark.present)
+        assertEquals("", mark.cpUid)
+        assertEquals("", mark.cpCode)
+        assertEquals(listOf("marks/photo-1/a.jpg"), photoPaths(mark.photoPath))
+        // Scored locally: counts as a distinct complete КП for both metrics.
+        val marks = repository.observeMarks(7).first()
+        assertEquals(1, takenPointCount(marks))
+        assertEquals(7, totalScore(marks))
+    }
+
+    @Test
+    fun createPhotoMark_lockedCheckpoint_costFallsBackToZero() = runTest {
+        // The core "метку сорвали" case: a still-locked КП has cost = null. The hybrid take is scored
+        // with cost 0 until a later reveal; the live-cost resolver picks up the real value afterwards.
+        repository.createPhotoMark(
+            markId = "photo-2",
+            cp = cp(31, cost = null, locked = true),
+            raceId = 1,
+            teamId = 7,
+            paths = listOf("marks/photo-2/a.jpg"),
+            expectedCount = 3,
+            sample = sample(),
+        )
+        val mark = markDao.getById("photo-2")!!
+        assertEquals(0, mark.cost)
+        assertTrue(mark.complete)
+        assertEquals(setOf(31), takenPoints(repository.observeMarks(7).first()))
+    }
+
+    @Test
+    fun attachPhotos_appendsPaths_withoutNewRow_orResetUploadFlags() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        // Pretend the NFC row was already uploaded before the photo was attached.
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+
+        repository.attachPhotos(id, listOf("marks/$id/a.jpg"), now = 2_000L)
+        repository.attachPhotos(id, listOf("marks/$id/b.jpg"), now = 3_000L)
+
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf("marks/$id/a.jpg", "marks/$id/b.jpg"), photoPaths(mark.photoPath))
+        assertEquals(3_000L, mark.updatedAt)
+        // No new rows spawned by attaching.
+        assertEquals(1, repository.observeMarks(7).first().size)
+        // photoPath is not in the marks DTO → attaching must NOT re-queue the already-uploaded row.
+        assertTrue(mark.uploadedLocal)
+        assertTrue(mark.uploadedCloud)
+    }
+
+    @Test
+    fun attachPhotos_missingRow_isNoOp() = runTest {
+        repository.attachPhotos("nope", listOf("marks/nope/a.jpg"), now = 2_000L)
+        assertTrue(repository.observeMarks(7).first().isEmpty())
+    }
+
     @Test
     fun derivation_distinctScoredPointsAndScore() = runTest {
         startTake(point = 10, cost = 5, expectedCount = 1, buffered = setOf(1))
@@ -448,7 +530,7 @@ private class FakeMarkDao : MarkDao {
 
     override fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
         rows.map { list ->
-            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId && it.method != "photo" }
             UploadCounts(
                 total = scoped.size,
                 local = scoped.count { it.uploadedLocal },
@@ -456,13 +538,20 @@ private class FakeMarkDao : MarkDao {
             )
         }
 
+    // Contract mirror of the @Query filter: photo marks are excluded from the drain in Phase 1.
     override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
-        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal }
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal && it.method != "photo" }
             .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
 
     override suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
-        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud }
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud && it.method != "photo" }
             .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun updatePhotoPath(id: String, photoPath: String, now: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id) it.copy(photoPath = photoPath, updatedAt = now) else it
+        }
+    }
 
     override suspend fun markUploadedLocal(ids: List<String>) {
         rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedLocal = true) else it }
@@ -499,6 +588,6 @@ private class FakeMarkDao : MarkDao {
     }
 
     override suspend fun pendingUploadScopes(): List<TrackScope> =
-        rows.value.filter { !it.uploadedLocal || !it.uploadedCloud }
+        rows.value.filter { (!it.uploadedLocal || !it.uploadedCloud) && it.method != "photo" }
             .map { TrackScope(it.raceId, it.teamId) }.distinct()
 }

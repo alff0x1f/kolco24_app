@@ -343,6 +343,57 @@ class MarkRepositoryUploadTest {
     }
 
     @Test
+    fun photoMark_excludedFromDrain_nfcMarkUploaded() = runTest {
+        // Phase 1: a local-only photo mark must NOT be drained, while a co-located NFC mark is. This
+        // verifies the repository contract; the real SQL filter is guarded by the instrumented MarkDaoTest.
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7) // nfc
+        dao.seedPhoto(raceId = 1, teamId = 7) // photo
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        val rows = dao.observeForTeam(7).first()
+        val nfc = rows.single { it.method == "nfc" }
+        val photo = rows.single { it.method == "photo" }
+        assertTrue(nfc.uploadedLocal && nfc.uploadedCloud)
+        assertFalse(photo.uploadedLocal || photo.uploadedCloud)
+        // The photo DTO never reaches an uploader (only the single NFC mark did).
+        assertEquals(1, cloud.calls)
+        assertEquals(1, local.calls)
+    }
+
+    @Test
+    fun photoOnlyScope_notWalkedByUploadAllPending() = runTest {
+        // A scope holding only a photo mark must be absent from pendingUploadScopes — otherwise
+        // uploadAllPending would flush it on every trigger forever (the photo row never drains).
+        val dao = FakeMarkUploadDao()
+        dao.seedPhoto(raceId = 9, teamId = 3)
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        r.uploadAllPending()
+
+        assertEquals(0, cloud.calls)
+        assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun uploadCounts_excludesPhotoMarks() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7) // nfc, drains
+        dao.seedPhoto(raceId = 1, teamId = 7) // photo, never counted
+        repo(dao, cloud = FakeUploader(), local = FakeUploader()).uploadPending(raceId = 1, teamId = 7)
+
+        val counts = dao.uploadCounts(7, 1).first()
+        // Only the NFC mark is counted; the photo mark is invisible to the status row.
+        assertEquals(UploadCounts(total = 1, local = 1, cloud = 1), counts)
+    }
+
+    @Test
     fun uploadCounts_reflectsPerTargetProgress() = runTest {
         val dao = FakeMarkUploadDao()
         dao.seed(2, raceId = 1, teamId = 7)
@@ -383,6 +434,27 @@ private class FakeMarkUploadDao : MarkDao {
         rows.value = rows.value + fresh
     }
 
+    /** Seed one local-only photo mark (method="photo", uploaded*=0) — must be excluded from the drain. */
+    fun seedPhoto(raceId: Int, teamId: Int) {
+        val i = seq++
+        rows.value = rows.value + MarkEntity(
+            id = "photo-$i",
+            raceId = raceId,
+            teamId = teamId,
+            checkpointId = 20,
+            checkpointNumber = 20,
+            cost = 0,
+            method = "photo",
+            cpUid = "",
+            cpCode = "",
+            present = emptyList(),
+            expectedCount = 3,
+            complete = true,
+            takenAt = 2_000L + i,
+            updatedAt = 2_000L + i,
+        )
+    }
+
     override fun observeForTeam(teamId: Int): Flow<List<MarkEntity>> =
         rows.map { list -> list.filter { it.teamId == teamId } }
 
@@ -415,7 +487,7 @@ private class FakeMarkUploadDao : MarkDao {
 
     override fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
         rows.map { list ->
-            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId && it.method != "photo" }
             UploadCounts(
                 total = scoped.size,
                 local = scoped.count { it.uploadedLocal },
@@ -423,13 +495,20 @@ private class FakeMarkUploadDao : MarkDao {
             )
         }
 
+    // Contract mirror of the @Query filter: photo marks are excluded from the drain in Phase 1.
     override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
-        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal }
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal && it.method != "photo" }
             .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
 
     override suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
-        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud }
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud && it.method != "photo" }
             .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun updatePhotoPath(id: String, photoPath: String, now: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id) it.copy(photoPath = photoPath, updatedAt = now) else it
+        }
+    }
 
     override suspend fun markUploadedLocal(ids: List<String>) {
         rows.value = rows.value.map { if (it.id in ids) it.copy(uploadedLocal = true) else it }
@@ -476,6 +555,6 @@ private class FakeMarkUploadDao : MarkDao {
     }
 
     override suspend fun pendingUploadScopes(): List<TrackScope> =
-        rows.value.filter { !it.uploadedLocal || !it.uploadedCloud }
+        rows.value.filter { (!it.uploadedLocal || !it.uploadedCloud) && it.method != "photo" }
             .map { TrackScope(it.raceId, it.teamId) }.distinct()
 }

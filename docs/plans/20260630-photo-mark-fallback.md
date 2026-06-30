@@ -109,7 +109,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 5: `MarkRepository` / `MarkDao` — операции + фильтр drain
 
-- [ ] **`MarkDao`: добавить `AND method != 'photo'` в drain И в счётчики/scope**
+- [x] **`MarkDao`: добавить `AND method != 'photo'` в drain И в счётчики/scope**
       (только запросы, без миграции) — чтобы photo-марки не уходили в `uploadMarks` в
       Phase 1 (см. «Границы Phase 1»). В Phase 2 фильтр снимается. Затронуть **все четыре**:
   - `unuploadedLocal` / `unuploadedCloud` (drain);
@@ -118,7 +118,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
   - `pendingUploadScopes` (иначе scope с photo-маркой вечно в выборке → бесконечные
     холостые flush'и).
 
-- [ ] `createPhotoMark(markId, cp, raceId, teamId, paths, sample: TimeSample)`
+- [x] `createPhotoMark(markId, cp, raceId, teamId, paths, sample: TimeSample)`
       — **`markId` приходит снаружи** (не минтится внутри): его генерит точка входа
       ещё до камеры, чтобы кадры писались в `marks/<markId>/` под тем же id, что и строка
       (см. шаг 6 — chicken-and-egg). Новая `MarkEntity`: `method="photo"`, `cpUid=""`,
@@ -126,17 +126,24 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
       (⚠️ `CheckpointEntity.cost: Int?` — null у запертого КП, а `MarkEntity.cost` non-null),
       `expectedCount` = размер ростера (для лога), `complete=true`,
       `photoPath=encodePhotoPaths(paths)`, времена из `TimeSample`. На `applicationScope`.
-- [ ] **Момент `TimeSample` — первый сохранённый кадр**, не FAB-click и не «Готово»
+      (Сигнатура несёт явный `expectedCount: Int` — репозиторий не знает размер ростера;
+      вызов на `applicationScope` — забота точки входа, шаг 8.)
+- [x] **Момент `TimeSample` — первый сохранённый кадр**, не FAB-click и не «Готово»
       (NFC семплирует время в момент физического тапа до I/O; для фото лучший прокси
       присутствия на КП — первый удавшийся снимок). Семплировать `trustedClock.sample()`
       в коллбэке первого `takePicture`-успеха и пронести в `createPhotoMark`.
-- [ ] **Античит-координата (как у NFC-взятия):** на новой standalone photo-марке
+      (Контракт: `createPhotoMark` принимает готовый `TimeSample`; сам семпл берётся в
+      коллбэке камеры, шаг 6.)
+- [x] **Античит-координата (как у NFC-взятия):** на новой standalone photo-марке
       запустить одноразовый `currentLocationProvider.current()` → `attachLocation(markId, fix)`
       (`null` = no-op), тем же column-scoped путём, что NFC-flow на new-take ветке. Делаем
       в Phase 1, хотя выгрузка фото — Phase 2: координата важна как античит-сигнал
       (`docs/design/UPLOAD.md`), пишется в уже существующие `loc*` колонки (без миграции).
       Для `AttachTo` к NFC-строке координата уже есть — повторно не трогаем.
-- [ ] `attachPhotos(markId, newPaths)` — ⚠️ **column-scoped, НЕ `upsert(mark.copy(...))`**.
+      (Механизм — существующий `MarkRepository.attachLocation` (column-scoped); сам
+      одноразовый `currentLocationProvider.current()` вызывается из точки входа FAB, шаг 8,
+      т.к. провайдер живёт в `MainActivity`/`AppContainer`, а не в репозитории.)
+- [x] `attachPhotos(markId, newPaths)` — ⚠️ **column-scoped, НЕ `upsert(mark.copy(...))`**.
       Полный read-modify-write строки затёр бы параллельные `present`/`complete`/`loc*`
       апдейты (`addMember`/`attachLocation` бегут fire-and-forget) — ровно поэтому
       `attachLocation` сделан column-scoped UPDATE. Реализовать как `@Transaction` в DAO:
@@ -149,10 +156,10 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
       в Phase 1 не выгружается вовсе. В Phase 2 для файлов появятся **отдельные**
       `photosUploaded*` (со своим backfill уже накопленных `photoPath`), а не reset общих
       `uploaded*`.
-- [ ] Тесты в `MarkRepositoryTest`: создание photo-mark считается в
+- [x] Тесты в `MarkRepositoryTest`: создание photo-mark считается в
       `takenPointCount`/`totalScore` (distinct `complete` КП), attach дописывает пути и
       не плодит строк.
-- [ ] `MarkRepositoryUploadTest`: photo-mark (`method="photo"`, `uploaded*=0`) **не**
+- [x] `MarkRepositoryUploadTest`: photo-mark (`method="photo"`, `uploaded*=0`) **не**
       попадает в drain-выборку, а NFC-марка в том же наборе — попадает. ⚠️ Тут fake-DAO
       сам реализует фильтр в Kotlin → это проверяет **контракт репозитория**, а не реальный
       SQL. Фильтр живёт в `@Query`, поэтому добавить ещё **инструментальный `MarkDaoTest`**
