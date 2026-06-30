@@ -426,6 +426,44 @@ class MarkRepositoryTest {
     }
 
     @Test
+    fun createPhotoMark_persistsAllTimeSampleFields() = runTest {
+        val s = sample(wall = 9_000L, elapsed = 20_000L, trusted = 10_000L, boot = 7)
+        repository.createPhotoMark(
+            markId = "photo-t",
+            cp = cp(30, cost = 7),
+            raceId = 1,
+            teamId = 7,
+            paths = listOf("marks/photo-t/a.jpg"),
+            expectedCount = 3,
+            sample = s,
+        )
+        val mark = markDao.getById("photo-t")!!
+        assertEquals(s.wallMs, mark.takenAt)
+        assertEquals(s.trustedMs, mark.trustedTakenAt)
+        assertEquals(s.elapsedMs, mark.elapsedRealtimeAt)
+        assertEquals(s.bootCount, mark.bootCount)
+    }
+
+    @Test
+    fun createPhotoMark_nullTrustedAndBoot_persistAsNull() = runTest {
+        val s = sample(wall = 5_000L, elapsed = 10_000L, trusted = null, boot = null)
+        repository.createPhotoMark(
+            markId = "photo-nosync",
+            cp = cp(30, cost = 7),
+            raceId = 1,
+            teamId = 7,
+            paths = listOf("marks/photo-nosync/a.jpg"),
+            expectedCount = 3,
+            sample = s,
+        )
+        val mark = markDao.getById("photo-nosync")!!
+        assertEquals(s.wallMs, mark.takenAt)
+        assertNull(mark.trustedTakenAt)
+        assertNull(mark.bootCount)
+        assertTrue(mark.complete)
+    }
+
+    @Test
     fun createPhotoMark_lockedCheckpoint_costFallsBackToZero() = runTest {
         // The core "метку сорвали" case: a still-locked КП has cost = null. The hybrid take is scored
         // with cost 0 until a later reveal; the live-cost resolver picks up the real value afterwards.
@@ -468,6 +506,45 @@ class MarkRepositoryTest {
     fun attachPhotos_missingRow_isNoOp() = runTest {
         repository.attachPhotos("nope", listOf("marks/nope/a.jpg"), now = 2_000L)
         assertTrue(repository.observeMarks(7).first().isEmpty())
+    }
+
+    @Test
+    fun attachPhotos_unsafeNewPaths_areDropped() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        repository.attachPhotos(
+            id,
+            listOf(
+                "/absolute/path.jpg",   // absolute path — rejected by traversal guard
+                "../escape.jpg",        // path traversal — rejected
+                "marks/$id/valid.jpg",  // valid relative path — kept
+            ),
+            now = 2_000L,
+        )
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf("marks/$id/valid.jpg"), photoPaths(mark.photoPath))
+    }
+
+    @Test
+    fun attachPhotos_duplicatePaths_areDeduped() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        repository.attachPhotos(id, listOf("marks/$id/a.jpg"), now = 2_000L)
+        // Second call with the same path must not duplicate it (e.g. on a retry).
+        repository.attachPhotos(id, listOf("marks/$id/a.jpg"), now = 3_000L)
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf("marks/$id/a.jpg"), photoPaths(mark.photoPath))
+    }
+
+    @Test
+    fun attachPhotos_corruptedExistingPhotoPath_onlyStoresNewPaths() = runTest {
+        // If the existing photoPath column holds corrupted JSON, photoPaths() returns emptyList().
+        // The merge result is then only newPaths — the corrupted data is silently dropped.
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.setPhotoPath(id, "not-valid-json")
+
+        repository.attachPhotos(id, listOf("marks/$id/a.jpg"), now = 2_000L)
+
+        val mark = markDao.getById(id)!!
+        assertEquals(listOf("marks/$id/a.jpg"), photoPaths(mark.photoPath))
     }
 
     @Test
@@ -592,4 +669,9 @@ private class FakeMarkDao : MarkDao {
     override suspend fun pendingUploadScopes(): List<TrackScope> =
         rows.value.filter { (!it.uploadedLocal || !it.uploadedCloud) && it.method != "photo" }
             .map { TrackScope(it.raceId, it.teamId) }.distinct()
+
+    /** Test helper: directly set photoPath without going through attachPhotos merge logic. */
+    suspend fun setPhotoPath(id: String, raw: String) {
+        rows.value = rows.value.map { if (it.id == id) it.copy(photoPath = raw) else it }
+    }
 }

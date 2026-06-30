@@ -42,7 +42,7 @@ fun photoPaths(raw: String?): List<String> {
  * `marks/<markId>/<uuid>.jpg`: a 3-segment relative path under `marks/`, no absolute prefix, no `..`
  * traversal segment, ending in `.jpg`. Anything else is a corrupted/hostile entry and is dropped.
  */
-private fun isSafeRelativePhotoPath(path: String): Boolean {
+internal fun isSafeRelativePhotoPath(path: String): Boolean {
     if (path.isBlank()) return false
     if (path.startsWith("/")) return false
     if (!path.endsWith(".jpg")) return false

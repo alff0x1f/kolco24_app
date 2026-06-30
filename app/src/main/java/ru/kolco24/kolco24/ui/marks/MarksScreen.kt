@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOn
@@ -38,6 +39,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,6 +51,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -225,7 +229,9 @@ fun MarksScreen(
 
     // A tapped photo tile opens the view-only lightbox; the paths drive the pager. Local screen state
     // (not a `MainActivity` overlay flag) — Phase 1 view-only, dismissed by tap/back.
-    var lightboxPaths by remember { mutableStateOf<List<String>?>(null) }
+    var lightboxPaths by rememberSaveable(
+        stateSaver = listSaver(save = { it }, restore = { it }),
+    ) { mutableStateOf(emptyList<String>()) }
 
     Box(modifier = modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -318,8 +324,8 @@ fun MarksScreen(
 
         // Full-screen view-only lightbox, drawn over the whole screen (incl. the TopAppBar) so the
         // photos own the frame; tap or back dismisses it.
-        lightboxPaths?.let { paths ->
-            PhotoLightbox(paths = paths, onDismiss = { lightboxPaths = null })
+        if (lightboxPaths.isNotEmpty()) {
+            PhotoLightbox(paths = lightboxPaths, onDismiss = { lightboxPaths = emptyList() })
         }
     }
 }
@@ -866,8 +872,7 @@ private fun PhotoLightbox(paths: List<String>, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .clickable(onClick = onDismiss),
+            .background(Color.Black),
     ) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             AsyncImage(
@@ -886,6 +891,12 @@ private fun PhotoLightbox(paths: List<String>, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp),
             )
+        }
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 8.dp),
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
         }
     }
 }

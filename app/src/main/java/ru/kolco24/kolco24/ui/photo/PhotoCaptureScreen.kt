@@ -42,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -59,18 +60,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
+import android.view.Surface
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
+import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.time.TimeSample
@@ -109,8 +112,9 @@ fun PhotoCaptureScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = context as? LifecycleOwner
+    val lifecycleOwner = LocalLifecycleOwner.current
     val filesDir = context.filesDir
+    val applicationScope = remember { (context.applicationContext as Kolco24App).container.applicationScope }
     val scope = rememberCoroutineScope()
     val currentOnClose by rememberUpdatedState(onClose)
     val currentOnCommit by rememberUpdatedState(onCommit)
@@ -129,6 +133,9 @@ fun PhotoCaptureScreen(
     var firstSample by remember { mutableStateOf<TimeSample?>(null) }
     var torchOn by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
+    // True while writeDownscaledJpeg is running; blocks back/close, Готово, and «изменить» to prevent
+    // the race where scope cancellation drops an in-flight IO write from the committed frame list.
+    var isCapturing by remember { mutableStateOf(false) }
 
     var permissionGranted by remember {
         mutableStateOf(
@@ -136,7 +143,7 @@ fun PhotoCaptureScreen(
                 PackageManager.PERMISSION_GRANTED,
         )
     }
-    var permissionDenied by remember { mutableStateOf(false) }
+    var permissionDenied by rememberSaveable { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -149,14 +156,21 @@ fun PhotoCaptureScreen(
 
     val imageCapture = remember { ImageCapture.Builder().build() }
     var camera by remember { mutableStateOf<Camera?>(null) }
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
 
     // Bind CameraX once permission is granted (and re-bind across recomposition keyed on grant).
     LaunchedEffect(permissionGranted, lifecycleOwner) {
-        if (!permissionGranted || lifecycleOwner == null) return@LaunchedEffect
-        val provider = context.awaitCameraProvider()
+        if (!permissionGranted) return@LaunchedEffect
+        val provider = try {
+            context.awaitCameraProvider()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get camera provider", e)
+            return@LaunchedEffect
+        }
+        cameraProvider = provider
         val preview = Preview.Builder().build()
             .also { it.setSurfaceProvider(previewView.surfaceProvider) }
         try {
@@ -172,6 +186,11 @@ fun PhotoCaptureScreen(
         }
     }
 
+    // Release the camera when this overlay leaves the Compose tree.
+    DisposableEffect(Unit) {
+        onDispose { cameraProvider?.unbindAll() }
+    }
+
     // Keep the torch in sync with the toggle whenever the camera (re)binds.
     LaunchedEffect(camera, torchOn) {
         camera?.cameraControl?.enableTorch(torchOn)
@@ -180,8 +199,10 @@ fun PhotoCaptureScreen(
     fun discardAndClose() {
         // Delete only THIS session's frames (per-path), never the whole dir — an AttachTo target may
         // already hold previously-committed frames belonging to the NFC take.
+        // applicationScope so the delete outlives the overlay (rememberCoroutineScope is cancelled on
+        // recomposition after currentOnClose() removes this composable from the tree).
         val toDelete = frames.toList()
-        scope.launch(Dispatchers.IO) {
+        applicationScope.launch(Dispatchers.IO) {
             toDelete.forEach { PhotoStorage.deletePhoto(filesDir, it) }
         }
         frames.clear()
@@ -189,10 +210,14 @@ fun PhotoCaptureScreen(
     }
 
     fun handleBack() {
+        if (isCapturing) return
         if (frames.isEmpty()) currentOnClose() else showDiscardConfirm = true
     }
 
     fun capture() {
+        if (isCapturing) return
+        isCapturing = true
+        imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageCapturedCallback() {
@@ -201,21 +226,28 @@ fun PhotoCaptureScreen(
                     val sample = currentSampleProvider()
                     if (firstSample == null) firstSample = sample
                     val rotation = image.imageInfo.rotationDegrees
-                    val bytes = image.toJpegBytes()
-                    image.close()
+                    val bytes = try { image.toJpegBytes() } finally { image.close() }
                     scope.launch(Dispatchers.IO) {
-                        val rel = PhotoStorage.writeDownscaledJpeg(filesDir, markId, bytes, rotation)
-                        if (rel != null) {
+                        try {
+                            val rel = PhotoStorage.writeDownscaledJpeg(filesDir, markId, bytes, rotation)
                             withContext(Dispatchers.Main) {
-                                frames.add(rel)
-                                scanFeedback.success()
+                                if (rel != null) {
+                                    frames.add(rel)
+                                    scanFeedback.success()
+                                } else {
+                                    scanFeedback.failure()
+                                }
                             }
+                        } finally {
+                            withContext(Dispatchers.Main) { isCapturing = false }
                         }
                     }
                 }
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "takePicture failed", exception)
+                    isCapturing = false
+                    scanFeedback.failure()
                 }
             },
         )
@@ -252,7 +284,17 @@ fun PhotoCaptureScreen(
                 modifier = Modifier.padding(start = 4.dp),
             )
             if (onChangeCheckpoint != null) {
-                TextButton(onClick = onChangeCheckpoint) {
+                TextButton(
+                    enabled = !isCapturing,
+                    onClick = {
+                        val toDelete = frames.toList()
+                        applicationScope.launch(Dispatchers.IO) {
+                            toDelete.forEach { PhotoStorage.deletePhoto(filesDir, it) }
+                        }
+                        frames.clear()
+                        onChangeCheckpoint()
+                    },
+                ) {
                     Text("изменить", color = Color.White)
                 }
             }
@@ -295,13 +337,13 @@ fun PhotoCaptureScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Box(modifier = Modifier.size(72.dp)) // left spacer balances the «Готово» button
-                    ShutterButton(onClick = { capture() })
+                    ShutterButton(onClick = { capture() }, enabled = !isCapturing)
                     Button(
                         onClick = {
                             val sample = firstSample ?: currentSampleProvider()
                             currentOnCommit(frames.toList(), sample)
                         },
-                        enabled = frames.isNotEmpty(),
+                        enabled = frames.isNotEmpty() && !isCapturing,
                     ) {
                         Text("Готово (${frames.size})")
                     }
@@ -370,14 +412,14 @@ private fun ThumbnailStrip(
 }
 
 @Composable
-private fun ShutterButton(onClick: () -> Unit) {
+private fun ShutterButton(onClick: () -> Unit, enabled: Boolean = true) {
     Box(
         modifier = Modifier
             .size(72.dp)
-            .background(Color.White, CircleShape),
+            .background(if (enabled) Color.White else Color.Gray, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(64.dp)) {
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(64.dp)) {
             Box(
                 modifier = Modifier
                     .size(56.dp)
@@ -427,5 +469,8 @@ private fun ImageProxy.toJpegBytes(): ByteArray {
 private suspend fun Context.awaitCameraProvider(): ProcessCameraProvider =
     suspendCancellableCoroutine { cont ->
         val future = ProcessCameraProvider.getInstance(this)
-        future.addListener({ cont.resume(future.get()) }, ContextCompat.getMainExecutor(this))
+        future.addListener({
+            try { cont.resume(future.get()) } catch (e: Exception) { cont.cancel(e) }
+        }, ContextCompat.getMainExecutor(this))
+        cont.invokeOnCancellation { future.cancel(true) }
     }

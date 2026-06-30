@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
 import android.nfc.NfcAdapter
+import android.util.Log
 import android.nfc.Tag
 import android.os.Build
 import android.os.Bundle
@@ -757,6 +758,7 @@ private fun Kolco24AppRoot(
     LaunchedEffect(selectedTeamId) {
         bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
+        photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
         showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
         // Only stop recording when a different team is selected. Guard against selectedTeamId == null,
         // which occurs transiently during activity recreation (collectAsState initial = null) before Room
@@ -1861,7 +1863,7 @@ private fun Kolco24AppRoot(
                 sampleProvider = { container.trustedClock.sample() },
                 // «изменить» only on the auto-attach path — drop into the picker (becomes a standalone take).
                 onChangeCheckpoint = if (attach) {
-                    { photoCaptureMarkId = null; showPhotoPicker = true }
+                    { photoCaptureMarkId = null; photoCaptureCheckpointId = 0; photoCaptureAttach = false; showPhotoPicker = true }
                 } else {
                     null
                 },
@@ -1872,31 +1874,42 @@ private fun Kolco24AppRoot(
                     // applicationScope: the write must outlive the closing overlay (mirrors selectTeam/
                     // startKpTake). AttachTo appends paths to the existing (NFC) row; AskNumber creates a
                     // standalone hybrid photo-mark and fires a one-shot anti-cheat GPS fix for it.
-                    if (raceId != null && teamId != null) {
-                        container.applicationScope.launch {
-                            if (attach) {
-                                markRepo.attachPhotos(activePhotoMarkId, paths, firstSample.wallMs)
-                            } else if (photoCp != null) {
-                                markRepo.createPhotoMark(
-                                    markId = activePhotoMarkId,
-                                    cp = photoCp,
-                                    raceId = raceId,
-                                    teamId = teamId,
-                                    paths = paths,
-                                    expectedCount = rosterSize,
-                                    sample = firstSample,
-                                )
-                                markRepo.attachLocation(
-                                    activePhotoMarkId,
-                                    container.currentLocationProvider.current(),
-                                )
-                            }
+                    container.applicationScope.launch {
+                        if (attach) {
+                            // attachPhotos only needs the markId — proceed even if raceId/teamId is null.
+                            markRepo.attachPhotos(activePhotoMarkId, paths, firstSample.wallMs)
+                        } else if (raceId == null || teamId == null) {
+                            // The camera overlay is normally closed by LaunchedEffect(selectedTeamId) before
+                            // a team deselection reaches this point, so this branch is nearly unreachable.
+                            // The frames are orphaned here and swept on the next cold start by sweepOrphanPhotoDirs.
+                            Log.e("PhotoCapture", "raceId/teamId null at commit for id=$activePhotoMarkId — frames orphaned")
+                        } else if (photoCp != null) {
+                            markRepo.createPhotoMark(
+                                markId = activePhotoMarkId,
+                                cp = photoCp,
+                                raceId = raceId,
+                                teamId = teamId,
+                                paths = paths,
+                                expectedCount = rosterSize,
+                                sample = firstSample,
+                            )
+                            markRepo.attachLocation(
+                                activePhotoMarkId,
+                                container.currentLocationProvider.current(),
+                            )
+                        } else {
+                            // photoCp resolved null — legend refreshed and removed the checkpoint
+                            // between picker selection and commit; frames are orphaned and will
+                            // be swept on next cold start.
+                            Log.e("PhotoCapture", "photoCp null at commit for id=$activePhotoMarkId checkpointId=$photoCaptureCheckpointId — frames orphaned")
                         }
                     }
                     photoCaptureMarkId = null
                     photoCaptureAttach = false
+                    photoCaptureCheckpointId = 0
+                    photoCaptureCpNumber = 0
                 },
-                onClose = { photoCaptureMarkId = null; photoCaptureAttach = false },
+                onClose = { photoCaptureMarkId = null; photoCaptureAttach = false; photoCaptureCheckpointId = 0; photoCaptureCpNumber = 0 },
                 modifier = Modifier.fillMaxSize(),
             )
         }

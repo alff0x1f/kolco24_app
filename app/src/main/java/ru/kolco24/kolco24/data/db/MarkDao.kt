@@ -6,6 +6,7 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import ru.kolco24.kolco24.data.marks.encodePhotoPaths
+import ru.kolco24.kolco24.data.marks.isSafeRelativePhotoPath
 import ru.kolco24.kolco24.data.marks.photoPaths
 
 @Dao
@@ -203,7 +204,7 @@ interface MarkDao {
     @Transaction
     suspend fun attachPhotos(id: String, newPaths: List<String>, now: Long) {
         val mark = getById(id) ?: return
-        val merged = photoPaths(mark.photoPath) + newPaths
+        val merged = (photoPaths(mark.photoPath) + newPaths.filter(::isSafeRelativePhotoPath)).distinct()
         updatePhotoPath(id, encodePhotoPaths(merged), now)
     }
 

@@ -40,8 +40,16 @@ class FilterCheckpointsByQueryTest {
     }
 
     @Test
-    fun `exact number matches single checkpoint`() {
-        assertEquals(listOf(legend[0]), filterCheckpointsByQuery(legend, "1").filter { it.number == 1 })
+    fun `query 1 is a substring match hitting two checkpoints`() {
+        // "1" is a substring of both 1 and 12 — this tests that the result size is correct, not just
+        // that one desired item is present (a broken impl returning all 3 would still pass a find-based check).
+        val result = filterCheckpointsByQuery(legend, "1")
+        assertEquals(2, result.size)
+        assertEquals(listOf(legend[0], legend[1]), result)
+    }
+
+    @Test
+    fun `query 12 matches only checkpoint 12`() {
         assertEquals(listOf(legend[1]), filterCheckpointsByQuery(legend, "12"))
     }
 

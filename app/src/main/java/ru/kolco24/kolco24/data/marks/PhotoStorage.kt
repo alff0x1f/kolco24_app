@@ -58,8 +58,10 @@ object PhotoStorage {
         }
         val prepared = try {
             prepareBitmap(decoded, rotationDegrees)
-        } finally {
-            // prepareBitmap may return `decoded` itself (no transform) — only recycle a distinct copy.
+        } catch (e: Exception) {
+            decoded.recycle()
+            Log.e(TAG, "Failed to prepare bitmap for mark $markId", e)
+            return null
         }
         val dir = photoDir(filesDir, markId)
         if (!dir.exists() && !dir.mkdirs()) {
@@ -94,20 +96,18 @@ object PhotoStorage {
         val scaled = if (needsScale) Bitmap.createScaledBitmap(src, w, h, true) else src
         if (!needsRotate) return scaled
         val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-        val rotated = Bitmap.createBitmap(scaled, 0, 0, scaled.width, scaled.height, matrix, true)
-        if (scaled !== src) scaled.recycle()
-        return rotated
+        // Use try/finally so `scaled` is always recycled even if createBitmap throws (e.g. OOM).
+        return try {
+            Bitmap.createBitmap(scaled, 0, 0, scaled.width, scaled.height, matrix, true)
+        } finally {
+            if (scaled !== src) scaled.recycle()
+        }
     }
 
     /** Physically delete a single relative photo path; missing file is a no-op. Safe to call off the main thread. */
     fun deletePhoto(filesDir: File, relativePath: String) {
-        if (!isSafeRelativePhotoPathPublic(relativePath)) return
+        if (!isSafeRelativePhotoPath(relativePath)) return
         File(filesDir, relativePath).delete()
-    }
-
-    /** Delete the whole per-take photo directory (used when a session is discarded before commit). */
-    fun deletePhotoDir(filesDir: File, markId: String) {
-        photoDir(filesDir, markId).deleteRecursively()
     }
 
     /**
@@ -123,9 +123,6 @@ object PhotoStorage {
         }
     }
 
-    /** Re-uses the codec's path guard so [deletePhoto] can never escape `filesDir`. */
-    private fun isSafeRelativePhotoPathPublic(path: String): Boolean =
-        photoPaths(encodePhotoPaths(listOf(path))).isNotEmpty()
 }
 
 /**

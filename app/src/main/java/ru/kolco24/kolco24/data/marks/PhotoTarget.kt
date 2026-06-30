@@ -36,7 +36,7 @@ sealed interface PhotoTarget {
  */
 fun decidePhotoTarget(marks: List<MarkEntity>, nowMs: Long): PhotoTarget {
     val latest = marks
-        .filter { it.complete }
+        .filter { it.complete && it.method != "photo" }
         .maxByOrNull { it.trustedTakenAt ?: it.takenAt }
         ?: return PhotoTarget.AskNumber
     val takenAt = latest.trustedTakenAt ?: latest.takenAt

@@ -114,9 +114,15 @@ class MarkDaoTest {
         val row = dao.getById("nfc-1")!!
         assertEquals(listOf("marks/nfc-1/a.jpg", "marks/nfc-1/b.jpg"), photoPaths(row.photoPath))
         assertEquals(3_000L, row.updatedAt)
+        // uploaded* must be unchanged — photoPath is not in the upload DTO.
         assertTrue(row.uploadedLocal)
         assertTrue(row.uploadedCloud)
+        // All other columns must be untouched by the column-scoped UPDATE.
         assertEquals(listOf(1), row.present)
+        assertTrue(row.complete)
+        assertEquals("CPUID", row.cpUid)
+        assertEquals("CODE", row.cpCode)
+        assertEquals(1_000L, row.takenAt)
     }
 
     @Test

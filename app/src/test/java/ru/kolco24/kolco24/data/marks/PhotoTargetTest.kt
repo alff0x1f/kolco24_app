@@ -104,4 +104,49 @@ class PhotoTargetTest {
 
         assertEquals(PhotoTarget.AskNumber, decidePhotoTarget(marks, nowMs = 150_000L))
     }
+
+    @Test
+    fun `photo-mark within window does not attach (upload drain excludes method=photo)`() {
+        val marks = listOf(mark("photo", method = "photo", point = 3, number = 42, takenAt = 100_000L))
+
+        val target = decidePhotoTarget(marks, nowMs = 150_000L)
+
+        assertEquals(PhotoTarget.AskNumber, target)
+    }
+
+    @Test
+    fun `photo-mark is skipped and older nfc take within window attaches`() {
+        val marks = listOf(
+            mark("nfc", point = 1, number = 11, takenAt = 100_000L),
+            mark("photo", method = "photo", point = 2, number = 22, takenAt = 140_000L),
+        )
+
+        val target = decidePhotoTarget(marks, nowMs = 150_000L)
+
+        assertEquals(PhotoTarget.AttachTo(markId = "nfc", cpNumber = 11, checkpointId = 1), target)
+    }
+
+    @Test
+    fun `newest take outside window wins even if an older take is inside (newest-only semantics)`() {
+        // The newer take is just beyond the boundary; the older take is well inside it.
+        // decidePhotoTarget checks only the newest complete non-photo take, so AskNumber is correct.
+        val marks = listOf(
+            mark("inside", point = 1, number = 11, takenAt = 50_000L),
+            mark("outside", point = 2, number = 22, takenAt = 140_000L),
+        )
+        val target = decidePhotoTarget(marks, nowMs = 140_000L + PHOTO_ATTACH_WINDOW_MS + 1)
+        assertEquals(PhotoTarget.AskNumber, target)
+    }
+
+    @Test
+    fun `future-timestamped take still attaches (negative delta is within window)`() {
+        // If trusted time places the take in the future relative to nowMs (e.g. after a clock skew),
+        // the subtraction is negative and always satisfies <= PHOTO_ATTACH_WINDOW_MS. This is the
+        // intended behaviour: a slightly-future take should still attach rather than asking for a number.
+        val marks = listOf(mark("a", point = 5, number = 55, takenAt = 200_000L))
+
+        val target = decidePhotoTarget(marks, nowMs = 100_000L)
+
+        assertEquals(PhotoTarget.AttachTo(markId = "a", cpNumber = 55, checkpointId = 5), target)
+    }
 }
