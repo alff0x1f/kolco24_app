@@ -237,21 +237,21 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 9: Галерея — плитка + бейдж + лайтбокс (`MarksScreen.kt`)
 
-- [ ] `Mark` (вью-модель плитки) получает `photoPaths: List<String>` (относительные) и
+- [x] `Mark` (вью-модель плитки) получает `photoPaths: List<String>` (относительные) и
       производный `photoCount` (= `photoPaths.size`); `marksToTiles` заполняет из
       `photoPaths(m.photoPath)`. `kind` — без изменений (`method=="photo"` → `PHOTO`).
       ⚠️ Сейчас `Mark` несёт только `number/cost/kind/time/color` — путей нет, поэтому
       и плитка, и лайтбокс без этого поля рисовать нечем (TODO в `PhotoTileBody` прямо
       ждёт `mark.photoPath`).
-- [ ] `PhotoTileBody`: заполнить первым фото — `AsyncImage` по `File(filesDir, relPath)`,
+- [x] `PhotoTileBody`: заполнить первым фото — `AsyncImage` по `File(filesDir, relPath)`,
       резолв `filesDir` на месте через `LocalContext` (маппер пуст и не знает `filesDir`),
       сохранить нижний scrim-caption (номер/стоимость/время).
-- [ ] Бейдж «📷×N» в углу для **любой** плитки с `photoCount > 0` (и NFC, и PHOTO) —
+- [x] Бейдж «📷×N» в углу для **любой** плитки с `photoCount > 0` (и NFC, и PHOTO) —
       бейдж завязан на `photoCount`, плитка-тип на `method` (разводка намеренная: NFC-
       взятие может нести фото-доказательство, оставаясь цветной плиткой).
-- [ ] Тап по плитке с фото → лайтбокс: полноэкранный `HorizontalPager` по N снимкам
+- [x] Тап по плитке с фото → лайтбокс: полноэкранный `HorizontalPager` по N снимкам
       (view-only в Phase 1). Плитка без фото — поведение как сейчас.
-- [ ] Расширить `MarksMappingTest`: `photoCount` маппинг, бейдж-условие, photo-mark с
+- [x] Расширить `MarksMappingTest`: `photoCount` маппинг, бейдж-условие, photo-mark с
       пустым `present` и `complete=true` попадает в плитки.
 
 ### Task 10: Проверка
