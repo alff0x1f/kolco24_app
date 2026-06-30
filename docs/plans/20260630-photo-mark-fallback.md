@@ -71,7 +71,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 2: Манифест и пермишены
 
-- [ ] `AndroidManifest.xml`: `<uses-permission android:name="android.permission.CAMERA"/>`
+- [x] `AndroidManifest.xml`: `<uses-permission android:name="android.permission.CAMERA"/>`
       + `<uses-feature android:name="android.hardware.camera.any" android:required="false"/>`
       (как у NFC/GPS — приложение ставится и без камеры).
 
