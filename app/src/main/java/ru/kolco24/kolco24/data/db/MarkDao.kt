@@ -19,6 +19,11 @@ interface MarkDao {
     @Query("SELECT * FROM marks WHERE id = :id")
     suspend fun getById(id: String): MarkEntity?
 
+    /** Every persisted mark id — backs the startup orphan-photo-directory sweep (a dir is orphaned when
+     *  its name, the markId, has no row here). */
+    @Query("SELECT id FROM marks")
+    suspend fun allIds(): List<String>
+
     @Upsert
     suspend fun upsert(mark: MarkEntity)
 

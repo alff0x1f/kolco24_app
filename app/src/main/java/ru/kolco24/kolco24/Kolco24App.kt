@@ -24,6 +24,12 @@ class Kolco24App : Application() {
         super.onCreate()
         container = AppContainer(this)
         container.applicationScope.launch {
+            // Reclaim photo-mark frames orphaned by process death mid-capture (dir exists, row never
+            // written). Best-effort; failures are swallowed by the supervisor scope.
+            runCatching { container.sweepOrphanPhotoDirs() }
+                .onFailure { Log.w(TAG, "Orphan photo sweep failed", it) }
+        }
+        container.applicationScope.launch {
             val result = container.raceRepository.refreshRaces()
             Log.i(TAG, "Startup race refresh: $result")
             // Warm the nearest current race's teams + legend so the picker opens instantly. ETag/304

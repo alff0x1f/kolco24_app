@@ -168,32 +168,32 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 6: Камера (`ui/photo/PhotoCaptureScreen.kt`) — оверлей
 
-- [ ] Полноэкранный оверлей по паттерну `rememberSaveable`-флага + `BackHandler` после
+- [x] Полноэкранный оверлей по паттерну `rememberSaveable`-флага + `BackHandler` после
       `Scaffold` (как scan/bind). Вход: `PhotoTarget` (КП + `markId`). **`markId`
       определён до камеры** для обоих путей: `AttachTo` несёт существующий id; для
       `AskNumber` точка входа минтит новый UUID заранее и передаёт его и в путь файла, и в
       `createPhotoMark` (фикс chicken-and-egg).
-- [ ] CameraX: `PreviewView` через `AndroidView`, `ImageCapture`. Кнопка затвора,
+- [x] CameraX: `PreviewView` через `AndroidView`, `ImageCapture`. Кнопка затвора,
       тоггл фонарика (`cameraControl.enableTorch` — ночной affordance), горизонтальная
       лента миниатюр уже снятого, кнопка «Готово (N)».
-- [ ] Каждый затвор → `ImageCapture.takePicture` → даунскейл (≤1600px, JPEG ~80%) →
+- [x] Каждый затвор → `ImageCapture.takePicture` → даунскейл (≤1600px, JPEG ~80%) →
       запись `filesDir/marks/<markId>/<uuid>.jpg` на `Dispatchers.IO` → добавить в ленту.
-- [ ] **Orientation:** при даунскейле через декод/re-`compress` EXIF теряется → портрет
+- [x] **Orientation:** при даунскейле через декод/re-`compress` EXIF теряется → портрет
       боком (Coil читает EXIF, у re-encoded bitmap его нет). Применять поворот к bitmap до
       энкода **или** копировать orientation на выход (`androidx.exifinterface`, API 24+).
       Проще всего — повернуть bitmap по `imageInfo.rotationDegrees` из `ImageCapture`.
-- [ ] Удаление кадра из ленты до коммита (✕/long-press) — смазанный ночной кадр
+- [x] Удаление кадра из ленты до коммита (✕/long-press) — смазанный ночной кадр
       выкидываем; **физически удалять файл с диска** (не только из ленты).
-- [ ] «Готово» на `applicationScope`: `AttachTo` → `attachPhotos`; `AskNumber` →
+- [x] «Готово» на `applicationScope`: `AttachTo` → `attachPhotos`; `AskNumber` →
       `createPhotoMark`. Back с 0 кадров — no-op; с кадрами — confirm перед сбросом;
       **при сбросе удалить уже записанные файлы** этой сессии (иначе orphan на диске).
-- [ ] **State-restore (`rememberSaveable`):** `PhotoTarget` несёт `markId`/`cpNumber`/
+- [x] **State-restore (`rememberSaveable`):** `PhotoTarget` несёт `markId`/`cpNumber`/
       `checkpointId` — обычный data class **не сохраняется** (существующие saveable-стейты
       в `MainActivity` — примитивы/enum/int). Сделать `PhotoTarget` `@Parcelize`
       (Parcelable) **или** разложить на saveable-примитивы (`markId: String?`,
       `cpNumber: Int`, `checkpointId: Int`, mode-флаг). Ленту уже снятого тоже хранить
       `rememberSaveable` как `ArrayList<String>` — иначе поворот экрана теряет кадры.
-- [ ] **Cleanup orphan-файлов (3 источника):**
+- [x] **Cleanup orphan-файлов (3 источника):**
   - сброс сессии (back-с-кадрами/✕) — удалить файлы кадров;
   - debug-`AppContainer.clearDatabase()` (кнопка «Очистить базу данных») — чистить
     `filesDir/marks/` (иначе фото-orphan'ы после wipe БД, а фичи удаления марок нет);
@@ -202,9 +202,9 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
     подкаталоги `filesDir/marks/` и удалить те, чей `<id>` не существует как `MarkEntity.id`
     (каталог именован markId) — детерминированно реклеймит все orphan-случаи. Потеря кадров
     при kill посреди съёмки приемлема (best-effort, как у трека).
-- [ ] CAMERA-пермишен запрашивается при открытии; отказ → rationale и закрытие.
-- [ ] (Опц.) `scanFeedback.success()` на затвор — переиспользуем плеер, без нового звука.
-- [ ] Адаптер CameraX и сам composable — **без тестов по конвенции** (Android-адаптер);
+- [x] CAMERA-пермишен запрашивается при открытии; отказ → rationale и закрытие.
+- [x] (Опц.) `scanFeedback.success()` на затвор — переиспользуем плеер, без нового звука.
+- [x] Адаптер CameraX и сам composable — **без тестов по конвенции** (Android-адаптер);
       даунскейл-параметры/чистые куски — тестируемы.
 
 ### Task 7: Пикер номера КП (`ui/photo/PhotoNumberPicker.kt`) — оверлей

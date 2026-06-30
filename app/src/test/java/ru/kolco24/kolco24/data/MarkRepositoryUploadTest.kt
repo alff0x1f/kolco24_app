@@ -460,6 +460,8 @@ private class FakeMarkUploadDao : MarkDao {
 
     override suspend fun getById(id: String): MarkEntity? = rows.value.firstOrNull { it.id == id }
 
+    override suspend fun allIds(): List<String> = rows.value.map { it.id }
+
     override suspend fun upsert(mark: MarkEntity) {
         rows.value = rows.value.filterNot { it.id == mark.id } + mark
     }
