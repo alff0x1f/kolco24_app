@@ -59,7 +59,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ## Шаги Phase 1
 
-### 1. Зависимости (`gradle/libs.versions.toml` + `app/build.gradle.kts`)
+### Task 1: Зависимости (`gradle/libs.versions.toml` + `app/build.gradle.kts`)
 
 - [ ] Добавить CameraX: `androidx.camera:camera-core`, `camera-camera2`,
       `camera-lifecycle`, `camera-view` (одна версия, minSdk-21-safe).
@@ -69,13 +69,13 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
       — см. шаг 6, иначе портрет показывается боком).
 - [ ] Прогнать сборку, убедиться, что AGP 9 / KSP-пины не конфликтуют.
 
-### 2. Манифест и пермишены
+### Task 2: Манифест и пермишены
 
 - [ ] `AndroidManifest.xml`: `<uses-permission android:name="android.permission.CAMERA"/>`
       + `<uses-feature android:name="android.hardware.camera.any" android:required="false"/>`
       (как у NFC/GPS — приложение ставится и без камеры).
 
-### 3. Чистая модель путей фото (data-слой, JVM-тестируемо)
+### Task 3: Чистая модель путей фото (data-слой, JVM-тестируемо)
 
 - [ ] Завести чистый хелпер (рядом с `MarkEntity` или отдельным файлом
       `data/marks/PhotoPaths.kt`):
@@ -90,7 +90,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
       резолв только на месте `AsyncImage`/записи файла).
 - [ ] Тест `PhotoPathsTest`: round-trip, пустые/битые входы, порядок.
 
-### 4. Чистый роутер точки входа (`ui/marks` или `data/marks`)
+### Task 4: Чистый роутер точки входа (`ui/marks` или `data/marks`)
 
 - [ ] `decidePhotoTarget(marks: List<MarkEntity>, nowMs: Long): PhotoTarget` где
       `PhotoTarget = AttachTo(markId, cpNumber, checkpointId) | AskNumber`.
@@ -107,7 +107,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 - [ ] Тесты `PhotoTargetTest` / `ResolvePhotoCheckpointTest`: внутри/вне окна, пустой
       список, неизвестный номер, граница ровно 3 мин, **запертый КП резолвится (не null)**.
 
-### 5. `MarkRepository` / `MarkDao` — операции + фильтр drain
+### Task 5: `MarkRepository` / `MarkDao` — операции + фильтр drain
 
 - [ ] **`MarkDao`: добавить `AND method != 'photo'` в drain И в счётчики/scope**
       (только запросы, без миграции) — чтобы photo-марки не уходили в `uploadMarks` в
@@ -159,7 +159,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
       (Room in-memory), проверяющий, что настоящие `unuploadedLocal/Cloud`/`uploadCounts`/
       `pendingUploadScopes` исключают `method='photo'`. Fake обновить как контракт.
 
-### 6. Камера (`ui/photo/PhotoCaptureScreen.kt`) — оверлей
+### Task 6: Камера (`ui/photo/PhotoCaptureScreen.kt`) — оверлей
 
 - [ ] Полноэкранный оверлей по паттерну `rememberSaveable`-флага + `BackHandler` после
       `Scaffold` (как scan/bind). Вход: `PhotoTarget` (КП + `markId`). **`markId`
@@ -200,14 +200,14 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 - [ ] Адаптер CameraX и сам composable — **без тестов по конвенции** (Android-адаптер);
       даунскейл-параметры/чистые куски — тестируемы.
 
-### 7. Пикер номера КП (`ui/photo/PhotoNumberPicker.kt`) — оверлей
+### Task 7: Пикер номера КП (`ui/photo/PhotoNumberPicker.kt`) — оверлей
 
 - [ ] Лёгкий оверлей (`rememberSaveable`-флаг + `BackHandler`): числовое поле + список
       легенды с фильтром по вводу (переиспользуем легенду, уже собранную в
       `MainActivity`). Невалидный номер → инлайн-ошибка, без orphan-марок.
 - [ ] Выбор КП → переход в `PhotoCaptureScreen` с `AskNumber`-таргетом.
 
-### 8. Точка входа — FAB на «Отметки» (`MarksScreen.kt` + `MainActivity.kt`)
+### Task 8: Точка входа — FAB на «Отметки» (`MarksScreen.kt` + `MainActivity.kt`)
 
 - [ ] Вернуть скрытый FAB «Фото» (иконка `CameraAlt`, `OrangeCta`). NB: scan-FAB **нет**
       — скан открывается автоматически по NFC-тапу; это новый и единственный FAB.
@@ -226,7 +226,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
   - зарегистрировать `BackHandler`'ы камеры и picker в правильном порядке стекинга
     (глубже — раньше), каждый срабатывает только когда нет более глубокого оверлея.
 
-### 9. Галерея — плитка + бейдж + лайтбокс (`MarksScreen.kt`)
+### Task 9: Галерея — плитка + бейдж + лайтбокс (`MarksScreen.kt`)
 
 - [ ] `Mark` (вью-модель плитки) получает `photoPaths: List<String>` (относительные) и
       производный `photoCount` (= `photoPaths.size`); `marksToTiles` заполняет из
@@ -245,7 +245,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 - [ ] Расширить `MarksMappingTest`: `photoCount` маппинг, бейдж-условие, photo-mark с
       пустым `present` и `complete=true` попадает в плитки.
 
-### 10. Проверка
+### Task 10: Проверка
 
 - [ ] `./gradlew lintDebug` — чисто (особенно `NewApi` вокруг CameraX/файлов).
 - [ ] `./gradlew testDebugUnitTest` — новые чистые тесты зелёные.
