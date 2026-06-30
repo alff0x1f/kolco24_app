@@ -92,11 +92,11 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 4: Чистый роутер точки входа (`ui/marks` или `data/marks`)
 
-- [ ] `decidePhotoTarget(marks: List<MarkEntity>, nowMs: Long): PhotoTarget` где
+- [x] `decidePhotoTarget(marks: List<MarkEntity>, nowMs: Long): PhotoTarget` где
       `PhotoTarget = AttachTo(markId, cpNumber, checkpointId) | AskNumber`.
   - Самое свежее `complete`-взятие с `(trustedTakenAt ?: takenAt)` в пределах
     `PHOTO_ATTACH_WINDOW_MS = 180_000L` → `AttachTo`; иначе `AskNumber`.
-- [ ] `resolvePhotoCheckpoint(number: Int, legend: List<CheckpointEntity>): CheckpointEntity?`
+- [x] `resolvePhotoCheckpoint(number: Int, legend: List<CheckpointEntity>): CheckpointEntity?`
       — номер обязан быть в легенде, иначе `null` (как v1 «warning if not in legend»).
       **Запертые КП (`locked=true`, `cost=null`) НЕ блокируются** — это и есть основной
       сценарий «сорвали метку» (код не считан → КП не раскрыт). Решено в брейншторме:
@@ -104,7 +104,7 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
       (0 пока заперт), в легенде сразу «взято» (`takenPoints`), после раскрытия live-cost
       (`MarkRepository.totalScore(costOf)`) подхватывает реальную стоимость. Сервер
       пересчитает.
-- [ ] Тесты `PhotoTargetTest` / `ResolvePhotoCheckpointTest`: внутри/вне окна, пустой
+- [x] Тесты `PhotoTargetTest` / `ResolvePhotoCheckpointTest`: внутри/вне окна, пустой
       список, неизвестный номер, граница ровно 3 мин, **запертый КП резолвится (не null)**.
 
 ### Task 5: `MarkRepository` / `MarkDao` — операции + фильтр drain
