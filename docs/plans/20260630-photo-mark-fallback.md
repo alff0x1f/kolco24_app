@@ -61,13 +61,13 @@ photo-`MarkEntity` с `uploaded*=false` **уйдёт** в существующи
 
 ### Task 1: Зависимости (`gradle/libs.versions.toml` + `app/build.gradle.kts`)
 
-- [ ] Добавить CameraX: `androidx.camera:camera-core`, `camera-camera2`,
+- [x] Добавить CameraX: `androidx.camera:camera-core`, `camera-camera2`,
       `camera-lifecycle`, `camera-view` (одна версия, minSdk-21-safe).
-- [ ] Добавить Coil: `io.coil-kt:coil-compose` (рендер локального файла в плитке и
+- [x] Добавить Coil: `io.coil-kt:coil-compose` (рендер локального файла в плитке и
       лайтбоксе; ровно то, на что указывает TODO в `PhotoTileBody`).
-- [ ] Добавить `androidx.exifinterface:exifinterface` (перенос orientation при даунскейле
+- [x] Добавить `androidx.exifinterface:exifinterface` (перенос orientation при даунскейле
       — см. шаг 6, иначе портрет показывается боком).
-- [ ] Прогнать сборку, убедиться, что AGP 9 / KSP-пины не конфликтуют.
+- [x] Прогнать сборку, убедиться, что AGP 9 / KSP-пины не конфликтуют.
 
 ### Task 2: Манифест и пермишены
 
