@@ -562,7 +562,11 @@ private fun OpenCheckpointRow(cp: CheckpointEntity, taken: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "${cp.cost ?: 0}-${cp.number.toString().padStart(2, '0')}",
+            text = if (cp.cost == 0) {
+                cp.number.toString().padStart(2, '0')
+            } else {
+                "${cp.cost ?: 0}-${cp.number.toString().padStart(2, '0')}"
+            },
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,

@@ -805,11 +805,17 @@ private fun NfcTileBody(mark: Mark, textColor: Color) {
 /**
  * The `<стоимость>-<номер>` token with the hyphen dimmed to 50% alpha (the digits inherit the caller's
  * text color), so the cost and number read as two values rather than one run on the color fill.
+ * A zero-cost КП (transit/test zone) shows only the bare number — no cost prefix, no hyphen.
  */
 private fun tokenAnnotated(mark: Mark, textColor: Color): AnnotatedString = buildAnnotatedString {
-    append("${mark.cost}")
-    withStyle(SpanStyle(color = textColor.copy(alpha = 0.5f))) { append("-") }
-    append(mark.number)
+    if (mark.cost == 0) {
+        // Zero-cost КП (transit/test zone): show only the number, no cost prefix.
+        append(mark.number)
+    } else {
+        append("${mark.cost}")
+        withStyle(SpanStyle(color = textColor.copy(alpha = 0.5f))) { append("-") }
+        append(mark.number)
+    }
 }
 
 /**
