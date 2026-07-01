@@ -17,6 +17,8 @@ import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.marks.encodePhotoPaths
+import ru.kolco24.kolco24.data.marks.frameIdOf
 import ru.kolco24.kolco24.data.track.UploadResultKind
 import ru.kolco24.kolco24.data.track.UploadTarget
 
@@ -28,12 +30,18 @@ class MarkRepositoryUploadTest {
         installId: String = "install-1",
         cloud: MarkUploader = MarkUploader { _, _, _, _ -> PostResult.Offline },
         local: MarkUploader = MarkUploader { _, _, _, _ -> PostResult.Offline },
+        cloudPhoto: PhotoFrameUploader = PhotoFrameUploader { _, _, _, _ -> PostResult.Offline },
+        localPhoto: PhotoFrameUploader = PhotoFrameUploader { _, _, _, _ -> PostResult.Offline },
+        reader: PhotoFrameReader = PhotoFrameReader { null },
         onOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
     ) = MarkRepository(
         markDao = dao,
         sourceInstallId = installId,
         cloudUploader = cloud,
         localUploader = local,
+        cloudPhotoUploader = cloudPhoto,
+        localPhotoUploader = localPhoto,
+        photoFrameReader = reader,
         onUploadOutcome = onOutcome,
     )
 
@@ -58,6 +66,29 @@ class MarkRepositoryUploadTest {
             lastInstallId = sourceInstallId
             return reply(marks)
         }
+    }
+
+    /** Records `(markId, frameId)` calls and replies with [reply]; defaults to accepting every frame. */
+    private class FakePhotoFrameUploader(
+        val reply: suspend (markId: String, frameId: String) -> PostResult<Unit> = { _, _ -> PostResult.Success(Unit) },
+    ) : PhotoFrameUploader {
+        val calls = mutableListOf<Pair<String, String>>()
+
+        override suspend fun upload(raceId: Int, markId: String, frameId: String, bytes: ByteArray): PostResult<Unit> {
+            calls.add(markId to frameId)
+            return reply(markId, frameId)
+        }
+    }
+
+    /** Reads whatever bytes were [put] for a path; a path never [put] reads as `null` (missing file). */
+    private class FakeFileReader : PhotoFrameReader {
+        private val files = mutableMapOf<String, ByteArray>()
+
+        fun put(path: String, bytes: ByteArray = byteArrayOf(1, 2, 3)) {
+            files[path] = bytes
+        }
+
+        override fun read(relPath: String): ByteArray? = files[relPath]
     }
 
     private class OutcomeRecorder {
@@ -404,6 +435,238 @@ class MarkRepositoryUploadTest {
         val counts = dao.uploadCounts(7, 1).first()
         assertEquals(UploadCounts(total = 2, local = 2, cloud = 0), counts)
     }
+
+    @Test
+    fun frameDrain_metadataFirstOrdering_noFramePostWhileMetadataPending() = runTest {
+        // Metadata not yet uploaded (uploadedLocal/Cloud = false) — the metadata loop's own uploader
+        // fails, so it never flips. The frame-pending DAO query gates on uploadedX = 1, so the photo
+        // uploader must never be invoked this trigger.
+        val dao = FakeMarkUploadDao()
+        val id = dao.seedPhotoWithFrames(
+            raceId = 1, teamId = 7, paths = listOf("marks/m/f1.jpg"), uploadedLocal = false, uploadedCloud = false,
+        )
+        val reader = FakeFileReader().apply { put("marks/m/f1.jpg") }
+        val cloudPhoto = FakePhotoFrameUploader()
+        val localPhoto = FakePhotoFrameUploader()
+        val r = repo(
+            dao,
+            cloud = FakeUploader { PostResult.Offline },
+            local = FakeUploader { PostResult.Offline },
+            cloudPhoto = cloudPhoto,
+            localPhoto = localPhoto,
+            reader = reader,
+        )
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(cloudPhoto.calls.isEmpty())
+        assertTrue(localPhoto.calls.isEmpty())
+        assertFalse(dao.rowById(id).photosUploadedCloud)
+        assertFalse(dao.rowById(id).photosUploadedLocal)
+    }
+
+    @Test
+    fun frameDrain_allFramesAccepted_flipsPhotosUploadedBothTargets() = runTest {
+        val dao = FakeMarkUploadDao()
+        val paths = listOf("marks/m/f1.jpg", "marks/m/f2.jpg")
+        val id = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = paths)
+        val reader = FakeFileReader().apply { paths.forEach { put(it) } }
+        val cloudPhoto = FakePhotoFrameUploader()
+        val localPhoto = FakePhotoFrameUploader()
+        val r = repo(dao, cloudPhoto = cloudPhoto, localPhoto = localPhoto, reader = reader)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(dao.rowById(id).photosUploadedCloud)
+        assertTrue(dao.rowById(id).photosUploadedLocal)
+        assertEquals(paths.map { frameIdOf(it) }.toSet(), cloudPhoto.calls.map { it.second }.toSet())
+        assertEquals(paths.map { frameIdOf(it) }.toSet(), localPhoto.calls.map { it.second }.toSet())
+    }
+
+    @Test
+    fun frameDrain_transientFailure_stopsTargetBeforeLaterMarks_retriedNextTrigger() = runTest {
+        val dao = FakeMarkUploadDao()
+        val idA = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/a/f1.jpg"))
+        val idB = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/b/f1.jpg"))
+        val reader = FakeFileReader().apply {
+            put("marks/a/f1.jpg")
+            put("marks/b/f1.jpg")
+        }
+        var offline = true
+        val cloudPhoto = FakePhotoFrameUploader { _, _ -> if (offline) PostResult.Offline else PostResult.Success(Unit) }
+        val r = repo(dao, cloudPhoto = cloudPhoto, reader = reader)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        // First (ordering: idA before idB) mark's frame fails transiently — the whole cloud target
+        // stops immediately; idB is never attempted this trigger.
+        assertEquals(1, cloudPhoto.calls.size)
+        assertFalse(dao.rowById(idA).photosUploadedCloud)
+        assertFalse(dao.rowById(idB).photosUploadedCloud)
+
+        offline = false
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(dao.rowById(idA).photosUploadedCloud)
+        assertTrue(dao.rowById(idB).photosUploadedCloud)
+    }
+
+    @Test
+    fun frameDrain_hardFailureOnOneMark_leavesItPending_laterGoodMarkStillFlips() = runTest {
+        val dao = FakeMarkUploadDao()
+        val idBad = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/bad/f1.jpg"))
+        val idGood = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/good/f1.jpg"))
+        val reader = FakeFileReader().apply {
+            put("marks/bad/f1.jpg")
+            put("marks/good/f1.jpg")
+        }
+        val cloudPhoto = FakePhotoFrameUploader { markId, _ ->
+            if (markId == idBad) PostResult.BadRequest else PostResult.Success(Unit)
+        }
+        val r = repo(dao, cloudPhoto = cloudPhoto, reader = reader)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertFalse(dao.rowById(idBad).photosUploadedCloud)
+        assertTrue(dao.rowById(idGood).photosUploadedCloud)
+    }
+
+    @Test
+    fun frameDrain_missingFile_keepsMarkPending_drainTerminatesWithoutSpinning() = runTest {
+        val dao = FakeMarkUploadDao()
+        val id = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/m/f1.jpg"))
+        val cloudPhoto = FakePhotoFrameUploader()
+        // Reader never has the file → null read.
+        val r = repo(dao, cloudPhoto = cloudPhoto, reader = FakeFileReader())
+
+        r.uploadPending(raceId = 1, teamId = 7) // must terminate, not spin forever
+
+        assertFalse(dao.rowById(id).photosUploadedCloud)
+        assertTrue(cloudPhoto.calls.isEmpty()) // never even attempted the POST for an unreadable frame
+    }
+
+    @Test
+    fun frameDrain_dualTargetIndependence_lanOfflineCloudStillFlips() = runTest {
+        val dao = FakeMarkUploadDao()
+        val id = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/m/f1.jpg"))
+        val reader = FakeFileReader().apply { put("marks/m/f1.jpg") }
+        val cloudPhoto = FakePhotoFrameUploader()
+        val localPhoto = FakePhotoFrameUploader { _, _ -> PostResult.Offline }
+        val r = repo(dao, cloudPhoto = cloudPhoto, localPhoto = localPhoto, reader = reader)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(dao.rowById(id).photosUploadedCloud)
+        assertFalse(dao.rowById(id).photosUploadedLocal)
+    }
+
+    @Test
+    fun frameDrain_attachPhotos_requeuesFrames() = runTest {
+        val dao = FakeMarkUploadDao()
+        val id = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/m/f1.jpg"))
+        val reader = FakeFileReader().apply {
+            put("marks/m/f1.jpg")
+            put("marks/m/f2.jpg")
+        }
+        val cloudPhoto = FakePhotoFrameUploader()
+        val localPhoto = FakePhotoFrameUploader()
+        val r = repo(dao, cloudPhoto = cloudPhoto, localPhoto = localPhoto, reader = reader)
+        r.uploadPending(raceId = 1, teamId = 7)
+        assertTrue(dao.rowById(id).photosUploadedCloud)
+
+        r.attachPhotos(id, listOf("marks/m/f2.jpg"), now = dao.rowById(id).updatedAt + 1_000L)
+
+        assertFalse(dao.rowById(id).photosUploadedCloud)
+        assertFalse(dao.rowById(id).photosUploadedLocal)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(dao.rowById(id).photosUploadedCloud)
+        assertTrue(dao.rowById(id).photosUploadedLocal)
+        assertTrue(cloudPhoto.calls.any { it.second == frameIdOf("marks/m/f2.jpg") })
+    }
+
+    @Test
+    fun frameDrain_attachPhotosRacingMidDrainFlip_doesNotStrandNewFrame() = runTest {
+        // Reproduce the version-guard race: the drain fetches the mark (capturing its stale
+        // updatedAt), then — while uploading that mark's one captured frame — attachPhotos appends a
+        // new frame and bumps updatedAt. setPhotosUploadedCloudIfUnchanged(id, staleUpdatedAt) must
+        // no-op (guard fails on the mismatch) rather than falsely flip the mark to "done" with f2
+        // unsent; the drain loop's own re-fetch then picks the still-pending mark back up and sends
+        // f1 (idempotent) plus the new f2 — nothing is stranded.
+        val dao = FakeMarkUploadDao()
+        val id = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/m/f1.jpg"))
+        val reader = FakeFileReader().apply {
+            put("marks/m/f1.jpg")
+            put("marks/m/f2.jpg")
+        }
+        var raced = false
+        val cloudPhoto = FakePhotoFrameUploader { _, _ ->
+            if (!raced) {
+                raced = true
+                dao.simulateAttachPhotos(id, listOf("marks/m/f2.jpg"), now = dao.rowById(id).updatedAt + 1_000L)
+            }
+            PostResult.Success(Unit)
+        }
+        val r = repo(dao, cloudPhoto = cloudPhoto, reader = reader)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(raced)
+        // Converges without stranding: both the racing mid-drain frame (f2) and the original (f1)
+        // ultimately reach the uploader, and the mark ends up correctly flipped (not left stuck).
+        assertTrue(dao.rowById(id).photosUploadedCloud)
+        assertTrue(cloudPhoto.calls.any { it.second == frameIdOf("marks/m/f1.jpg") })
+        assertTrue(cloudPhoto.calls.any { it.second == frameIdOf("marks/m/f2.jpg") })
+    }
+
+    @Test
+    fun frameDrain_combinedOutcome_metadataErrorFrameOk_finalOutcomeNotOk() = runTest {
+        val dao = FakeMarkUploadDao()
+        // A plain nfc mark whose metadata upload fails outright (Forbidden → Error).
+        dao.seed(1, raceId = 1, teamId = 7)
+        // A photo mark whose metadata is already uploaded and whose one frame succeeds.
+        val photoId = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/m/f1.jpg"))
+        val reader = FakeFileReader().apply { put("marks/m/f1.jpg") }
+        val rec = OutcomeRecorder()
+        val r = repo(
+            dao,
+            cloud = FakeUploader { PostResult.Forbidden },
+            cloudPhoto = FakePhotoFrameUploader(),
+            reader = reader,
+            onOutcome = rec.sink,
+        )
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertTrue(dao.rowById(photoId).photosUploadedCloud) // the frame itself did succeed...
+        // ...but the combined per-target outcome must not read Ok: metadata Error takes precedence.
+        assertEquals(UploadResultKind.Error, rec.kindFor(UploadTarget.Cloud))
+    }
+}
+
+/** Pure precedence coverage for [combineOutcome]: `Error` > `Offline` > `Ok` > `null`. */
+class CombineOutcomeTest {
+    private val kinds: List<UploadResultKind?> = listOf(UploadResultKind.Error, UploadResultKind.Offline, UploadResultKind.Ok, null)
+
+    @Test
+    fun allSixteenOrderedCombinations_matchFixedPrecedence() {
+        for (metadata in kinds) {
+            for (frame in kinds) {
+                val expected = when {
+                    metadata == UploadResultKind.Error || frame == UploadResultKind.Error -> UploadResultKind.Error
+                    metadata == UploadResultKind.Offline || frame == UploadResultKind.Offline -> UploadResultKind.Offline
+                    metadata == UploadResultKind.Ok || frame == UploadResultKind.Ok -> UploadResultKind.Ok
+                    else -> null
+                }
+                assertEquals(
+                    "combineOutcome($metadata, $frame)",
+                    expected,
+                    combineOutcome(metadata, frame),
+                )
+            }
+        }
+    }
 }
 
 /** Minimal in-memory [MarkDao]; only the methods exercised by [MarkRepository]'s upload loop are real. */
@@ -455,6 +718,48 @@ private class FakeMarkUploadDao : MarkDao {
             updatedAt = 2_000L + i,
         )
     }
+
+    /**
+     * Seed a photo mark carrying [paths] as its frame list, with metadata upload flags pre-set (so the
+     * frame drain's `uploadedX = 1` gate is already satisfied) and `photosUploaded*` at false.
+     */
+    fun seedPhotoWithFrames(
+        raceId: Int,
+        teamId: Int,
+        paths: List<String>,
+        uploadedLocal: Boolean = true,
+        uploadedCloud: Boolean = true,
+    ): String {
+        val i = seq++
+        val id = "photo-$i"
+        rows.value = rows.value + MarkEntity(
+            id = id,
+            raceId = raceId,
+            teamId = teamId,
+            checkpointId = 20,
+            checkpointNumber = 20,
+            cost = 0,
+            method = "photo",
+            cpUid = "",
+            cpCode = "",
+            present = emptyList(),
+            expectedCount = 3,
+            complete = true,
+            photoPath = encodePhotoPaths(paths),
+            uploadedLocal = uploadedLocal,
+            uploadedCloud = uploadedCloud,
+            takenAt = 2_000L + i,
+            updatedAt = 2_000L + i,
+        )
+        return id
+    }
+
+    /** Bump [MarkEntity.updatedAt] and append [newPaths] — simulates `attachPhotos` racing a drain. */
+    suspend fun simulateAttachPhotos(id: String, newPaths: List<String>, now: Long) {
+        attachPhotos(id, newPaths, now)
+    }
+
+    fun rowById(id: String): MarkEntity = rows.value.single { it.id == id }
 
     override fun observeForTeam(teamId: Int): Flow<List<MarkEntity>> =
         rows.map { list -> list.filter { it.teamId == teamId } }
@@ -533,7 +838,14 @@ private class FakeMarkUploadDao : MarkDao {
 
     override suspend fun updatePhotoPath(id: String, photoPath: String, now: Long) {
         rows.value = rows.value.map {
-            if (it.id == id) it.copy(photoPath = photoPath, updatedAt = now) else it
+            if (it.id == id) {
+                it.copy(
+                    photoPath = photoPath,
+                    updatedAt = now,
+                    photosUploadedLocal = false,
+                    photosUploadedCloud = false,
+                )
+            } else it
         }
     }
 

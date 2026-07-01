@@ -14,6 +14,8 @@ import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.marks.encodePhotoPaths
+import ru.kolco24.kolco24.data.marks.frameIdOf
+import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
 import ru.kolco24.kolco24.data.track.UploadResultKind
@@ -37,6 +39,26 @@ fun interface MarkUploader {
 }
 
 /**
+ * One upload target's binary frame endpoint. A thin functional seam over `ApiClient.uploadMarkPhoto`
+ * (mirrors [MarkUploader]) so the frame drain in [MarkRepository] is unit-testable with a fake; in
+ * production each target is one `ApiClient` instance. **Defaults to [PostResult.Offline]** — never a
+ * success/no-op — so a missed wiring leaves frames pending instead of falsely marking them uploaded.
+ */
+fun interface PhotoFrameUploader {
+    suspend fun upload(raceId: Int, markId: String, frameId: String, bytes: ByteArray): PostResult<Unit>
+}
+
+/**
+ * Reads one frame's raw bytes off disk given its relative path (`marks/<markId>/<uuid>.jpg`). Wired in
+ * `AppContainer` to `File(filesDir, relPath).readBytes()`; a missing/unreadable file returns `null`,
+ * which [MarkRepository]'s frame drain treats like a hard per-frame failure (leave the mark pending,
+ * move on to the next mark — never silently "uploaded").
+ */
+fun interface PhotoFrameReader {
+    fun read(relPath: String): ByteArray?
+}
+
+/**
  * Single source of truth for the **local-only** checkpoint-taking events (взятия КП). Wraps [MarkDao]
  * for the event rows. Includes a dual-target (cloud + local LAN) idempotent batch upload loop mirroring
  * [ru.kolco24.kolco24.data.track.TrackRepository].
@@ -57,6 +79,9 @@ class MarkRepository(
     private val sourceInstallId: String = "",
     private val cloudUploader: MarkUploader = MarkUploader { _, _, _, _ -> PostResult.Offline },
     private val localUploader: MarkUploader = MarkUploader { _, _, _, _ -> PostResult.Offline },
+    private val cloudPhotoUploader: PhotoFrameUploader = PhotoFrameUploader { _, _, _, _ -> PostResult.Offline },
+    private val localPhotoUploader: PhotoFrameUploader = PhotoFrameUploader { _, _, _, _ -> PostResult.Offline },
+    private val photoFrameReader: PhotoFrameReader = PhotoFrameReader { null },
     private val onUploadOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
 ) {
     /**
@@ -268,24 +293,40 @@ class MarkRepository(
     }
 
     /**
-     * Flush one scope to both targets in turn; each target's loop is independent of the other's. Each
-     * loop's [UploadResultKind] (when non-null — an attempt was actually made) is reported via
-     * [onUploadOutcome] so the UI can surface the last per-target result; a `null` return means nothing
-     * was pending, so the prior outcome is left untouched (an idle re-flush never overwrites a real
-     * «ошибка» with a misleading «ok»).
+     * Flush one scope to both targets in turn; each target's loop is independent of the other's. Per
+     * target, the metadata loop ([uploadLoop]) runs first, then the frame drain ([frameDrainLoop]) —
+     * metadata-first ordering (the frame-pending DAO queries already gate on `uploadedX = 1`, so this
+     * is belt-and-braces). The two results are combined into **one** [onUploadOutcome] call via
+     * [combineOutcome] so a frame `Ok` can never mask a metadata `Error`/`Offline`; a combined `null`
+     * means neither loop attempted anything, so the prior outcome is left untouched (an idle re-flush
+     * never overwrites a real «ошибка» with a misleading «ok»).
      */
     private suspend fun flushScope(raceId: Int, teamId: Int) {
         val scope = TrackScope(raceId, teamId)
-        uploadLoop(
+
+        val localMeta = uploadLoop(
             fetch = { markDao.unuploadedLocal(raceId, teamId, UPLOAD_BATCH) },
             upload = { localUploader.upload(raceId, teamId, sourceInstallId, it) },
             mark = { batch, ids -> markLocalGpsAware(batch, ids) },
-        )?.let { onUploadOutcome(scope, UploadTarget.Local, it) }
-        uploadLoop(
+        )
+        val localFrame = frameDrainLoop(
+            fetch = { markDao.framePendingLocal(raceId, teamId, UPLOAD_BATCH) },
+            upload = { markId, frameId, bytes -> localPhotoUploader.upload(raceId, markId, frameId, bytes) },
+            markDone = { id, updatedAt -> markDao.setPhotosUploadedLocalIfUnchanged(id, updatedAt) },
+        )
+        combineOutcome(localMeta, localFrame)?.let { onUploadOutcome(scope, UploadTarget.Local, it) }
+
+        val cloudMeta = uploadLoop(
             fetch = { markDao.unuploadedCloud(raceId, teamId, UPLOAD_BATCH) },
             upload = { cloudUploader.upload(raceId, teamId, sourceInstallId, it) },
             mark = { batch, ids -> markCloudGpsAware(batch, ids) },
-        )?.let { onUploadOutcome(scope, UploadTarget.Cloud, it) }
+        )
+        val cloudFrame = frameDrainLoop(
+            fetch = { markDao.framePendingCloud(raceId, teamId, UPLOAD_BATCH) },
+            upload = { markId, frameId, bytes -> cloudPhotoUploader.upload(raceId, markId, frameId, bytes) },
+            markDone = { id, updatedAt -> markDao.setPhotosUploadedCloudIfUnchanged(id, updatedAt) },
+        )
+        combineOutcome(cloudMeta, cloudFrame)?.let { onUploadOutcome(scope, UploadTarget.Cloud, it) }
     }
 
     /**
@@ -355,9 +396,106 @@ class MarkRepository(
         }
     }
 
+    /**
+     * Drain one target's photo frames in batches until done or stuck, returning the terminal
+     * [UploadResultKind] or `null` (nothing pending — mirrors [uploadLoop]'s contract exactly).
+     *
+     * Per mark in the fetched batch, [uploadOneMarksFrames] is tried: a **transient/target-wide**
+     * failure (`Offline`/`403`/`404`/`429`/`401`/`409`/`5xx`/other `Error`) stops the **whole target**
+     * immediately (no point issuing N doomed requests while the endpoint is down); a **hard per-frame**
+     * failure (`400`, or `413` → `Error(413)`) or a **null read** (missing/unreadable file) leaves that
+     * mark pending and moves on to the next mark in the batch (one poison frame must not block later
+     * good marks). When all of a mark's frames are accepted, [markDone] flips its per-target flag
+     * (version-guarded by `updatedAt` — see [MarkDao.setPhotosUploadedLocalIfUnchanged]).
+     *
+     * Terminates on **no forward progress** (a pass that flips zero marks → [UploadResultKind.Error]),
+     * so a poison-only / missing-file-only batch stays visibly pending instead of spinning forever —
+     * the same stuck-detection [uploadLoop] uses.
+     */
+    private suspend fun frameDrainLoop(
+        fetch: suspend () -> List<MarkEntity>,
+        upload: suspend (markId: String, frameId: String, bytes: ByteArray) -> PostResult<Unit>,
+        markDone: suspend (id: String, updatedAt: Long) -> Unit,
+    ): UploadResultKind? {
+        var progressed = false
+        while (true) {
+            val batch = fetch()
+            if (batch.isEmpty()) return if (progressed) UploadResultKind.Ok else null
+            var flippedThisPass = false
+            for (mark in batch) {
+                when (val result = uploadOneMarksFrames(mark, upload)) {
+                    FrameMarkResult.Flipped -> {
+                        markDone(mark.id, mark.updatedAt)
+                        flippedThisPass = true
+                    }
+                    FrameMarkResult.Pending -> Unit
+                    is FrameMarkResult.Stop -> return result.kind
+                }
+            }
+            if (!flippedThisPass) return UploadResultKind.Error // no progress → stop, catch up next trigger
+            progressed = true
+        }
+    }
+
+    /** Outcome of attempting every frame of one mark within [frameDrainLoop]. */
+    private sealed interface FrameMarkResult {
+        /** Every frame accepted (or the mark carries no frames) — the mark's flag can flip. */
+        data object Flipped : FrameMarkResult
+
+        /** A hard per-frame failure or missing file — leave the mark pending, try the next mark. */
+        data object Pending : FrameMarkResult
+
+        /** A transient/target-wide failure — the whole target stops for this trigger. */
+        data class Stop(val kind: UploadResultKind) : FrameMarkResult
+    }
+
+    /**
+     * Upload every frame of one mark, reading bytes via [photoFrameReader]. A zero-frame `photoPath`
+     * (an empty `"[]"` JSON list) has nothing to send and is [FrameMarkResult.Flipped] immediately.
+     */
+    private suspend fun uploadOneMarksFrames(
+        mark: MarkEntity,
+        upload: suspend (markId: String, frameId: String, bytes: ByteArray) -> PostResult<Unit>,
+    ): FrameMarkResult {
+        for (relPath in photoPaths(mark.photoPath)) {
+            val bytes = photoFrameReader.read(relPath) ?: return FrameMarkResult.Pending
+            val result = upload(mark.id, frameIdOf(relPath), bytes)
+            if (result is PostResult.Success) continue
+            if (isHardFrameFailure(result)) return FrameMarkResult.Pending
+            return FrameMarkResult.Stop(uploadResultKind(result))
+        }
+        return FrameMarkResult.Flipped
+    }
+
     private companion object {
-        /** Max marks per upload request; the scoped `unuploaded*` queries `LIMIT` to this. */
+        /** Max marks per upload request; the scoped `unuploaded*`/`framePending*` queries `LIMIT` to this. */
         const val UPLOAD_BATCH = 500
+    }
+}
+
+/**
+ * A frame POST that is unacceptable and will never succeed on retry: `400` (malformed) or `413`
+ * (payload too large — mapped as [PostResult.Error] with `code == 413`). Draws the line between a
+ * per-frame failure (leave the mark pending, move on) and a transient/target-wide one (stop the
+ * whole target). See [MarkRepository]'s frame drain.
+ */
+internal fun isHardFrameFailure(result: PostResult<*>): Boolean =
+    result is PostResult.BadRequest || (result is PostResult.Error && result.code == 413)
+
+/**
+ * Combine a scope's metadata-loop and frame-drain-loop outcomes into the single value reported to
+ * [MarkRepository]'s `onUploadOutcome` — deterministic precedence **`Error` > `Offline` > `Ok` >
+ * `null`**, fixed so the status-row message can never depend on call order: a frame `Ok` must never
+ * mask a metadata `Error`/`Offline`. `null` only when **neither** loop attempted anything (nothing was
+ * pending for that target this trigger).
+ */
+internal fun combineOutcome(metadata: UploadResultKind?, frame: UploadResultKind?): UploadResultKind? {
+    val results = listOfNotNull(metadata, frame)
+    return when {
+        UploadResultKind.Error in results -> UploadResultKind.Error
+        UploadResultKind.Offline in results -> UploadResultKind.Offline
+        UploadResultKind.Ok in results -> UploadResultKind.Ok
+        else -> null
     }
 }
 
