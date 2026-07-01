@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.upload
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,7 +63,11 @@ fun UploadScreen(
     }
     val hasAny = listOf(marks, photos, track).any { it != null && it.total > 0 }
 
-    Column(modifier = modifier.background(MaterialTheme.colorScheme.surface)) {
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surface)
+            .pointerInput(Unit) { detectTapGestures {} },
+    ) {
         TopAppBar(
             title = { Text("Загрузка данных") },
             navigationIcon = {
