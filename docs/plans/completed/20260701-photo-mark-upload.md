@@ -281,11 +281,11 @@ Documented, not engineered around.
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] Update `MarkDao` bullets (Phase-1 `method != 'photo'` filter dropped → Phase-2 behavior; new frame-drain queries + `setPhotosUploaded*`; widened `pendingUploadScopes`; truthful `uploadCounts`)
-- [ ] Update Room references: v2 → v3, add `MIGRATION_2_3` + `schemas/3.json`; update the `connectedDebugAndroidTest` guard line to mention the new migration/DAO guards
-- [ ] Add `ApiClient.uploadMarkPhoto`, the `MarkRepository` frame loop, and the `PhotoFrameReader`/`PhotoFrameUploader` seams to the data-layer bullets
-- [ ] Update the `photo-mark-fallback-plan` memory: Phase 2 implemented
-- [ ] Move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed`)
+- [x] Update `MarkDao` bullets (Phase-1 `method != 'photo'` filter dropped → Phase-2 behavior; new frame-drain queries + `setPhotosUploaded*`; widened `pendingUploadScopes`; truthful `uploadCounts`)
+- [x] Update Room references: v2 → v3, add `MIGRATION_2_3` + `schemas/3.json`; update the `connectedDebugAndroidTest` guard line to mention the new migration/DAO guards
+- [x] Add `ApiClient.uploadMarkPhoto`, the `MarkRepository` frame loop, and the `PhotoFrameReader`/`PhotoFrameUploader` seams to the data-layer bullets
+- [x] Update the `photo-mark-fallback-plan` memory: Phase 2 implemented
+- [x] Move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed`)
 
 ## Post-Completion
 
