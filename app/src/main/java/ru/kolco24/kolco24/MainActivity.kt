@@ -75,6 +75,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -100,6 +101,7 @@ import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.UploadTarget
@@ -126,8 +128,9 @@ import ru.kolco24.kolco24.ui.team.BindSheetState
 import ru.kolco24.kolco24.ui.team.SlotKey
 import ru.kolco24.kolco24.ui.team.decideBind
 import ru.kolco24.kolco24.ui.team.TeamScreen
-import ru.kolco24.kolco24.ui.track.TargetLine
-import ru.kolco24.kolco24.ui.track.TrackUploadStatus
+import ru.kolco24.kolco24.ui.upload.TargetLine
+import ru.kolco24.kolco24.ui.upload.TrackUploadStatus
+import ru.kolco24.kolco24.ui.upload.UploadScreen
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
@@ -468,6 +471,7 @@ private fun Kolco24AppRoot(
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showUpload by rememberSaveable { mutableStateOf(false) }
     var showAdmin by rememberSaveable { mutableStateOf(false) }
     // Admin chip-provisioning pager (sub-overlay opened from the admin home, drawn above AdminScreen).
     var showProvisioning by rememberSaveable { mutableStateOf(false) }
@@ -629,62 +633,22 @@ private fun Kolco24AppRoot(
             locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
-    // Upload-status row for the TrackCard. Counts are durable+reactive (Room flags); outcomes are the
-    // transient in-memory per-target result. The scope is carried alongside the counts so that the
-    // one-frame window where selectedTeamId/selectedRaceId have changed but produceState hasn't yet
-    // restarted (and set value=null) does not pair old counts with the new scope's outcomes.
-    val scopedUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        value = null
-        if (tid != null && rid != null) {
-            val scope = TrackScope(rid, tid)
-            trackRepo.uploadCounts(tid, rid).collect { value = scope to it }
-        }
-    }
+    // Upload-status derivations feeding the TrackCard row and the «Загрузка данных» page's three
+    // sections. Counts are durable+reactive (Room flags); outcomes are the transient in-memory
+    // per-target result. See rememberUploadStatus below for the scoped-pair race guard.
     val uploadOutcomes by container.trackUploadOutcomes.collectAsState()
-    val trackUploadStatus: TrackUploadStatus? = run {
-        val sc = scopedUploadCounts
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        if (sc == null || tid == null || rid == null) return@run null
-        val (countScope, counts) = sc
-        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
-        val trackScope = TrackScope(rid, tid)
-        TrackUploadStatus(
-            total = counts.total,
-            local = TargetLine(counts.local, uploadOutcomes[trackScope to UploadTarget.Local]),
-            cloud = TargetLine(counts.cloud, uploadOutcomes[trackScope to UploadTarget.Cloud]),
-        )
-    }
+    val trackUploadStatus = rememberUploadStatus(selectedTeamId, selectedRaceId, uploadOutcomes, trackRepo::uploadCounts)
 
-    // Upload-status row for the «Отметки» tab — same scoped-pair protection as the track status above:
-    // the counts carry their TrackScope so a one-frame mismatch after a team switch (counts not yet
-    // reset to null) never pairs stale counts with the new scope's outcomes.
-    val scopedMarkUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        value = null
-        if (tid != null && rid != null) {
-            val scope = TrackScope(rid, tid)
-            markRepo.uploadCounts(tid, rid).collect { value = scope to it }
-        }
-    }
     val markUploadOutcomes by container.markUploadOutcomes.collectAsState()
-    val marksUploadStatus: TrackUploadStatus? = run {
-        val sc = scopedMarkUploadCounts
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        if (sc == null || tid == null || rid == null) return@run null
-        val (countScope, counts) = sc
-        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
-        val markScope = TrackScope(rid, tid)
-        TrackUploadStatus(
-            total = counts.total,
-            local = TargetLine(counts.local, markUploadOutcomes[markScope to UploadTarget.Local]),
-            cloud = TargetLine(counts.cloud, markUploadOutcomes[markScope to UploadTarget.Cloud]),
-        )
-    }
+
+    // Отметки section — metadata-only (does not require photo frames).
+    val marksMetadataUploadStatus =
+        rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::uploadCountsMetadata)
+
+    // Фото section — frame-granular, folded via MarkRepository.photoFrameCounts. Joined with the
+    // same markUploadOutcomes map as Отметки (outcomes are per-target/scope, not per-metric).
+    val photoUploadStatus =
+        rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::photoFrameCounts)
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
@@ -963,7 +927,7 @@ private fun Kolco24AppRoot(
         // current flow intact. The live-idle binder path can't even reach here while a bind/provision/
         // verify hook is armed, but Settings/confirm states still can.
         val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
-            showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
+            showSettings || showUpload || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
             unbindSlot != null || showPhotoPicker || photoCaptureMarkId != null
         if (busy) {
             // Narrow race: showScan is true but onTagForMark is not yet armed (DisposableEffect
@@ -978,7 +942,7 @@ private fun Kolco24AppRoot(
         when (teamState) {
             is SelectedTeamState.Present -> {
                 // Same overlay resets as onScanClick, then hand the captured tap to ScanScreen to drain.
-                teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
+                teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false; showUpload = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
                 bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
                 showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
@@ -1110,7 +1074,6 @@ private fun Kolco24AppRoot(
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
                         onPhotoClick = onPhotoClick,
-                        uploadStatus = marksUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -1128,6 +1091,7 @@ private fun Kolco24AppRoot(
                         category = tabCategory,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
                         onOpenSettings = { showSettings = true },
+                        onOpenUpload = { showUpload = true },
                         teamMissing = teamMissing,
                         teamLoading = teamState is SelectedTeamState.Loading,
                         bindings = bindings,
@@ -1147,7 +1111,6 @@ private fun Kolco24AppRoot(
                         onStartTrack = onStartTrack,
                         onStopTrack = { TrackRecordingService.stop(context) },
                         onShareTrack = onShareTrack,
-                        trackUploadStatus = trackUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
@@ -1162,7 +1125,7 @@ private fun Kolco24AppRoot(
         // Shared close path: used by both BackHandler (system back) and ScanScreen.onClose so that every
         // exit path — completion, window expiry, manual close, system back — triggers the upload flush.
         val closeScanOverlay: () -> Unit = {
-            showScan = false; showSettings = false; showAdmin = false; showProvisioning = false; showCheckChip = false
+            showScan = false; showSettings = false; showUpload = false; showAdmin = false; showProvisioning = false; showCheckChip = false
             val raceId = selectedRaceId
             val teamId = selectedTeamId
             if (raceId != null && teamId != null) {
@@ -1371,6 +1334,22 @@ private fun Kolco24AppRoot(
                 versionCode = BuildConfig.VERSION_CODE,
                 // Debug section visible immediately in debug builds; hidden until the 10-tap unlock in release.
                 debugInitiallyVisible = BuildConfig.DEBUG,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // Upload-status overlay — reached from Команда → Прочее → «Загрузка данных». Mirrors the
+        // Settings overlay's guard shape (no team-flow/scan co-render); not reachable while Settings
+        // is up (Settings is the only entry point to the picker/admin, so no co-render concern there).
+        BackHandler(
+            enabled = showUpload && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan,
+        ) { showUpload = false }
+        if (showUpload && teamFlowStep == TeamFlowStep.None && confirmTeamId == null && !showScan) {
+            UploadScreen(
+                marks = marksMetadataUploadStatus,
+                photos = photoUploadStatus,
+                track = trackUploadStatus,
+                onBack = { showUpload = false },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -1919,3 +1898,34 @@ private fun Kolco24AppRoot(
 /** Format a point's epoch-ms (`trustedMs ?: wallMs`) as a local `HH:mm` label for the track metrics. */
 private fun formatPointTime(epochMs: Long): String =
     java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date(epochMs))
+
+/**
+ * Scoped upload-status derivation shared by the track/marks-metadata/photo-frame counters.
+ * Carries the scope alongside the counts so the one-frame window where [teamId]/[raceId] have
+ * changed but `produceState` hasn't yet restarted (and set `value = null`) does not pair old
+ * counts with the new scope's [outcomes].
+ */
+@Composable
+private fun rememberUploadStatus(
+    teamId: Int?,
+    raceId: Int?,
+    outcomes: Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>,
+    counts: (teamId: Int, raceId: Int) -> Flow<UploadCounts>,
+): TrackUploadStatus? {
+    val scoped by produceState<Pair<TrackScope, UploadCounts>?>(null, teamId, raceId) {
+        value = null
+        if (teamId != null && raceId != null) {
+            val scope = TrackScope(raceId, teamId)
+            counts(teamId, raceId).collect { value = scope to it }
+        }
+    }
+    val sc = scoped ?: return null
+    if (teamId == null || raceId == null) return null
+    val (countScope, c) = sc
+    if (countScope.teamId != teamId || countScope.raceId != raceId || c.total == 0) return null
+    return TrackUploadStatus(
+        total = c.total,
+        local = TargetLine(c.local, outcomes[countScope to UploadTarget.Local]),
+        cloud = TargetLine(c.cloud, outcomes[countScope to UploadTarget.Cloud]),
+    )
+}

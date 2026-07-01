@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.data
 
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.api.dto.MarkDto
@@ -11,6 +12,7 @@ import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
+import ru.kolco24.kolco24.data.db.PhotoFrameRow
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.marks.encodePhotoPaths
@@ -97,6 +99,14 @@ class MarkRepository(
 
     /** Live per-target upload counts (total / uploadedLocal / uploadedCloud) for one scope. */
     fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> = markDao.uploadCounts(teamId, raceId)
+
+    /** Live per-target upload counts ignoring photo-frame state — "did the take row reach the server?" */
+    fun uploadCountsMetadata(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        markDao.uploadCountsMetadata(teamId, raceId)
+
+    /** Live per-target photo-frame upload counts (frame-granular), folded via [foldPhotoFrameCounts]. */
+    fun photoFrameCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        markDao.photoFrameRows(teamId, raceId).map(::foldPhotoFrameCounts)
 
     /**
      * Open a new take for [checkpointId] (КП chip just scanned). Generates a fresh UUID, snapshots the
@@ -497,6 +507,29 @@ internal fun combineOutcome(metadata: UploadResultKind?, frame: UploadResultKind
         UploadResultKind.Ok in results -> UploadResultKind.Ok
         else -> null
     }
+}
+
+/**
+ * Fold raw [PhotoFrameRow]s into frame-granular [UploadCounts]: `total` sums every row's frame count
+ * (via [photoPaths]); `local`/`cloud` sum a row's frame count only when its per-target flag is set.
+ *
+ * This is a **mark-granular tick, frame-granular denominator**: a mid-drain mark (some frames already
+ * accepted by the server, but [PhotoFrameRow.photosUploadedLocal]/[photosUploadedCloud] not yet flipped —
+ * see [MarkRepository.frameDrainLoop]) contributes its frames to `total` but **zero** to the numerator
+ * until every one of its frames lands and the flag flips. This matches what the DB can truthfully report
+ * (per-frame accepted state isn't persisted, only the all-or-nothing per-mark flag).
+ */
+fun foldPhotoFrameCounts(rows: List<PhotoFrameRow>): UploadCounts {
+    var total = 0
+    var local = 0
+    var cloud = 0
+    for (row in rows) {
+        val frameCount = photoPaths(row.photoPath).size
+        total += frameCount
+        if (row.photosUploadedLocal) local += frameCount
+        if (row.photosUploadedCloud) cloud += frameCount
+    }
+    return UploadCounts(total = total, local = local, cloud = cloud)
 }
 
 /** Distinct checkpoints scored (complete) across the given take events. */

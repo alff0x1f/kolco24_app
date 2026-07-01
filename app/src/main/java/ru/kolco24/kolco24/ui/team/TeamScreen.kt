@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -51,7 +52,6 @@ import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.track.TrackCard
-import ru.kolco24.kolco24.ui.track.TrackUploadStatus
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
@@ -78,6 +78,7 @@ fun TeamScreen(
     category: CategoryEntity?,
     onChooseTeam: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenUpload: () -> Unit,
     modifier: Modifier = Modifier,
     teamMissing: Boolean = false,
     teamLoading: Boolean = false,
@@ -96,7 +97,6 @@ fun TeamScreen(
     onStartTrack: () -> Unit = {},
     onStopTrack: () -> Unit = {},
     onShareTrack: () -> Unit = {},
-    trackUploadStatus: TrackUploadStatus? = null,
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -105,7 +105,7 @@ fun TeamScreen(
                 TeamEmptyContent(
                     onChooseTeam = onChooseTeam,
                     missing = teamMissing,
-                    footer = { MiscSection(onOpenSettings) },
+                    footer = { MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload) },
                 )
             }
         }
@@ -159,11 +159,10 @@ fun TeamScreen(
                     onStart = onStartTrack,
                     onStop = onStopTrack,
                     onShare = onShareTrack,
-                    uploadStatus = trackUploadStatus,
                 )
             }
             item("misc") {
-                MiscSection(onOpenSettings = onOpenSettings)
+                MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload)
             }
         }
         }
@@ -171,9 +170,10 @@ fun TeamScreen(
 }
 
 @Composable
-private fun MiscSection(onOpenSettings: () -> Unit) {
+private fun MiscSection(onOpenSettings: () -> Unit, onOpenUpload: () -> Unit) {
     SectionCard(title = "Прочее") {
-        MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = true, onClick = onOpenSettings)
+        MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = false, onClick = onOpenSettings)
+        MiscRow(icon = Icons.Outlined.CloudUpload, label = "Загрузка данных", subtitle = "Отметки, фото, трек", isLast = true, onClick = onOpenUpload)
     }
 }
 

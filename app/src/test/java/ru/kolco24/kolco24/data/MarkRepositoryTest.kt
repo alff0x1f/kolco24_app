@@ -17,6 +17,7 @@ import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
+import ru.kolco24.kolco24.data.db.PhotoFrameRow
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.marks.photoPaths
@@ -560,6 +561,35 @@ class MarkRepositoryTest {
         assertEquals(2, takenPointCount(marks))
         assertEquals(13, totalScore(marks))
     }
+
+    @Test
+    fun uploadCountsMetadata_delegatesToDaoIgnoringPhotoFrames() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.setPhotoPath(id, "[\"marks/$id/a.jpg\"]")
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+
+        val counts = repository.uploadCountsMetadata(teamId = 7, raceId = 1).first()
+
+        // Metadata is uploaded on both targets even though the frame itself is not — proves the
+        // repository wiring (not the DAO's frame-gated uploadCounts) is what's exercised here.
+        assertEquals(1, counts.total)
+        assertEquals(1, counts.local)
+        assertEquals(1, counts.cloud)
+    }
+
+    @Test
+    fun photoFrameCounts_foldsDaoRowsViaFoldPhotoFrameCounts() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.setPhotoPath(id, "[\"marks/$id/a.jpg\", \"marks/$id/b.jpg\"]")
+        markDao.setPhotosUploadedLocalIfUnchanged(id, updatedAt = markDao.getById(id)!!.updatedAt)
+
+        val counts = repository.photoFrameCounts(teamId = 7, raceId = 1).first()
+
+        assertEquals(2, counts.total)
+        assertEquals(2, counts.local)
+        assertEquals(0, counts.cloud)
+    }
 }
 
 private class FakeMarkDao : MarkDao {
@@ -615,6 +645,22 @@ private class FakeMarkDao : MarkDao {
                 local = scoped.count { it.uploadedLocal && (it.photoPath == null || it.photosUploadedLocal) },
                 cloud = scoped.count { it.uploadedCloud && (it.photoPath == null || it.photosUploadedCloud) },
             )
+        }
+
+    override fun uploadCountsMetadata(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        rows.map { list ->
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            UploadCounts(
+                total = scoped.size,
+                local = scoped.count { it.uploadedLocal },
+                cloud = scoped.count { it.uploadedCloud },
+            )
+        }
+
+    override fun photoFrameRows(teamId: Int, raceId: Int): Flow<List<PhotoFrameRow>> =
+        rows.map { list ->
+            list.filter { it.teamId == teamId && it.raceId == raceId && it.photoPath != null }
+                .map { PhotoFrameRow(it.photoPath, it.photosUploadedLocal, it.photosUploadedCloud) }
         }
 
     // Phase 2: photo-mark metadata shares the drain with NFC marks (filter dropped).
