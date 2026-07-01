@@ -332,15 +332,15 @@ MockWebServer/DAO setup):
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt`
 
-- [ ] add `SyncManifestDto` (`race`, `data_source`, `lease_ttl_seconds: Long? = null`,
+- [x] add `SyncManifestDto` (`race`, `data_source`, `lease_ttl_seconds: Long? = null`,
       `lease_expires_at: Long? = null`; `versions` deliberately unmapped — document why in
       KDoc, incl. the TTL-vs-absolute skew rationale)
-- [ ] add `ApiClient.fetchSync(raceId): FetchResult<SyncManifestDto>` via `conditionalGet`
+- [x] add `ApiClient.fetchSync(raceId): FetchResult<SyncManifestDto>` via `conditionalGet`
       with `etag = null` (endpoint has no 304)
-- [ ] write parsing tests: full manifest (both lease fields), stubbed manifest (both `null`),
+- [x] write parsing tests: full manifest (both lease fields), stubbed manifest (both `null`),
       unknown `versions` keys ignored
-- [ ] write error tests: 404 (unknown race), offline → `FetchResult.Error`
-- [ ] run tests — must pass before task 2
+- [x] write error tests: 404 (unknown race), offline → `FetchResult.Error`
+- [x] run tests — must pass before task 2
 
 ### Task 2: `RaceLease` pure logic + `RaceLeaseStore`
 
