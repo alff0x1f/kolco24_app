@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,6 +79,10 @@ fun SettingsScreen(
     trackPointCount: Int = 0,
     trackClearEnabled: Boolean = false,
     onClearTrack: () -> Unit = {},
+    localMode: Boolean = false,
+    localModeBusy: Boolean = false,
+    localModeExpiresAtMs: Long? = null,
+    onLocalModeChange: (Boolean) -> Unit = {},
     session: AdminSession,
     onOpenAdmin: () -> Unit,
     onResetTeam: (() -> Unit)? = null,
@@ -168,6 +174,27 @@ fun SettingsScreen(
                     onClick = onClearTrack,
                 )
             }
+        }
+
+        Text(
+            text = "Данные",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            LocalModeRow(
+                checked = localMode,
+                busy = localModeBusy,
+                expiresAtMs = localModeExpiresAtMs,
+                onCheckedChange = onLocalModeChange,
+            )
         }
 
         Text(
@@ -466,6 +493,70 @@ private fun EconomyModeRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit)
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * «Локальный сервер (Wi-Fi гонки)» row — Wi-Fi avatar, state-dependent subtitle, trailing [Switch]
+ * (replaced by a small spinner while [busy]); mirrors [EconomyModeRow] styling. Tapping the row
+ * toggles too, unless [busy] (a switch/probe already in flight). Subtitle: OFF → «Обновление из
+ * интернета», [busy] → «Обновление…», ON → «Локальный режим до HH:MM» ([expiresAtMs], local
+ * timezone; `null` while pinned falls back to the OFF subtitle rather than crashing on format).
+ */
+@Composable
+private fun LocalModeRow(
+    checked: Boolean,
+    busy: Boolean,
+    expiresAtMs: Long?,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val subtitle = when {
+        busy -> "Обновление…"
+        checked && expiresAtMs != null ->
+            "Локальный режим до ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date(expiresAtMs))}"
+        else -> "Обновление из интернета"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !busy) { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(neutralAvatarContainerColor(), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Wifi,
+                contentDescription = null,
+                tint = neutralAvatarContentColor(),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Локальный сервер (Wi-Fi гонки)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
     }
 }
 

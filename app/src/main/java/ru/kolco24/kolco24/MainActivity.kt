@@ -95,7 +95,10 @@ import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.nfc.readChipVersion
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.lease.isPinned
+import ru.kolco24.kolco24.data.nearestRaceId
 import ru.kolco24.kolco24.data.normalizeNfcUid
+import ru.kolco24.kolco24.data.sync.LocalModeOutcome
 import ru.kolco24.kolco24.data.takenPoints
 import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
@@ -531,6 +534,42 @@ private fun Kolco24AppRoot(
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
+
+    // Settings «Данные» local-mode switch: position is derived live from the lease StateFlow (not a
+    // stored preference) so a handback landing from Launch B or a pull flips it off even while
+    // Settings is open. Race resolution mirrors SyncCoordinator.enterLocalMode's own fallback.
+    val raceLease by container.raceLease.collectAsState()
+    val localModeRaceId = selectedRaceId ?: nearestRaceId(races, today)
+    val localModeNow = container.trustedClock.trusted() ?: System.currentTimeMillis()
+    val localMode = localModeRaceId != null && isPinned(raceLease, localModeRaceId, localModeNow)
+    val localModeExpiresAtMs = raceLease?.expiresAtMs?.takeIf { localMode }
+    var localModeBusy by remember { mutableStateOf(false) }
+    val onLocalModeChange: (Boolean) -> Unit = { turnOn ->
+        localModeBusy = true
+        container.applicationScope.launch {
+            val outcome = if (turnOn) {
+                container.syncCoordinator.enterLocalMode()
+            } else {
+                container.syncCoordinator.exitLocalMode()
+            }
+            val message = when (outcome) {
+                is LocalModeOutcome.PinnedUntil ->
+                    "Локальный режим до ${
+                        java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                            .format(java.util.Date(outcome.expiresAtMs))
+                    }"
+                LocalModeOutcome.LocalNoPin -> "Локальный режим не активен — данные обновлены из интернета"
+                LocalModeOutcome.LocalUnreachable -> "Локальный сервер недоступен"
+                LocalModeOutcome.CloudUpdated -> "Обновлено из интернета"
+                LocalModeOutcome.Offline -> "Нет соединения"
+                LocalModeOutcome.NoRace -> "Нет данных о гонках"
+            }
+            withContext(Dispatchers.Main) {
+                localModeBusy = false
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Pull-to-refresh: toggle the tab's spinner around a suspending refresh, then surface failures only
     // (success is silent — the Room flow updates the list). Composition scope: a foreground gesture,
@@ -1323,6 +1362,10 @@ private fun Kolco24AppRoot(
                 trackClearEnabled = safeTrack.isNotEmpty() &&
                     (trackState as? TrackState.Recording)?.teamId != selectedTeamId,
                 onClearTrack = { showClearTrackDialog = true },
+                localMode = localMode,
+                localModeBusy = localModeBusy,
+                localModeExpiresAtMs = localModeExpiresAtMs,
+                onLocalModeChange = onLocalModeChange,
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
                 onOpenAdmin = { showSettings = false; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },

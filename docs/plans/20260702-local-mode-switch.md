@@ -425,15 +425,15 @@ MockWebServer/DAO setup):
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] «Данные» card between «Запись трека» and «Администратор»: Switch row «Локальный сервер
+- [x] «Данные» card between «Запись трека» and «Администратор»: Switch row «Локальный сервер
       (Wi-Fi гонки)» on the `EconomyModeRow` idiom; subtitle OFF/«до HH:MM»/busy spinner;
       params hoisted (`localMode`, `localModeBusy`, `onLocalModeChange`)
-- [ ] `MainActivity`: collect the lease `StateFlow` once and derive the switch position
+- [x] `MainActivity`: collect the lease `StateFlow` once and derive the switch position
       (`isPinned` with `selectedTeam?.raceId ?: nearestRaceId`); `localModeBusy` flag; launch
       `enterLocalMode`/`exitLocalMode` on `applicationScope`; map `LocalModeOutcome` → RU
       Toast strings (see Technical Details)
-- [ ] no tests (Compose UI + wiring — untested by convention)
-- [ ] run full unit suite — must pass before task 6
+- [x] no tests (Compose UI + wiring — untested by convention)
+- [x] run full unit suite — must pass before task 6
 
 ### Task 6: Re-route the existing pull-to-refresh through the coordinator
 
