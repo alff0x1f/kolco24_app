@@ -54,7 +54,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.kolco24.kolco24.data.db.CheckpointEntity
@@ -584,8 +583,6 @@ private fun OpenCheckpointRow(cp: CheckpointEntity, taken: Boolean) {
                 letterSpacing = 0.sp,
             ),
             color = contentColor,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (taken) {
