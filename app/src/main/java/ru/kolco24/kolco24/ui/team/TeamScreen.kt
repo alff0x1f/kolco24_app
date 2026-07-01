@@ -56,7 +56,6 @@ import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
 import ru.kolco24.kolco24.ui.theme.OrangeCta
-import ru.kolco24.kolco24.ui.upload.TrackUploadStatus
 
 /**
  * Screen 04 — the «Команда» tab. With no selected [team] it shows [TeamEmptyContent] (onboarding,
@@ -98,7 +97,6 @@ fun TeamScreen(
     onStartTrack: () -> Unit = {},
     onStopTrack: () -> Unit = {},
     onShareTrack: () -> Unit = {},
-    trackUploadStatus: TrackUploadStatus? = null,
 ) {
     if (team == null) {
         if (!teamLoading) {
@@ -161,7 +159,6 @@ fun TeamScreen(
                     onStart = onStartTrack,
                     onStop = onStopTrack,
                     onShare = onShareTrack,
-                    uploadStatus = trackUploadStatus,
                 )
             }
             item("misc") {

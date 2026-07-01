@@ -188,12 +188,12 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `TrackCard.kt`: delete `UploadStatusRow`, `CloudReceiptPill`, `UploadReceiptCard`, `ReceiptLine`, `outcomeLabelRu`; remove the `uploadStatus: TrackUploadStatus?` param and both `if (upload != null) UploadStatusRow(...)` render sites + the `val upload = …` line; drop now-unused imports (Popup, produceState, delay, the `ui.upload.*` import added in Task 1, etc.)
-- [ ] `TeamScreen.kt`: at the `TrackCard(...)` call (line ~162) drop the `uploadStatus = trackUploadStatus` argument; delete the now-dead `trackUploadStatus: TrackUploadStatus? = null` param (line 99) and the `ui.upload.TrackUploadStatus` import (was line 54)
-- [ ] `MarksScreen.kt`: delete `MarksUploadPanel`, its `ReceiptLine`/`outcomeLabelRu` copy, the `uploadStatus` param, and the `item("upload_status")` block; drop now-unused imports (`TargetLine`, `TrackUploadStatus`, `relativeTimeRu`, `produceState`, `delay`)
-- [ ] `MainActivity`: remove `uploadStatus = marksUploadStatus` from the `MarksScreen(...)` call and `trackUploadStatus = trackUploadStatus` from the `TeamScreen(...)` call; delete **only** the orphaned `scopedMarkUploadCounts` (lines ~664-672) and `marksUploadStatus` (lines ~674-687) derivations — **keep `markUploadOutcomes` (line 673)**, which the new Task-5 derivations depend on; keep `trackUploadStatus` (now consumed by `UploadScreen`)
-- [ ] `grep -rn "MarksUploadPanel\|UploadStatusRow\|CloudReceiptPill" app/src` returns nothing
-- [ ] run `./gradlew testDebugUnitTest lintDebug` — must pass (`MarksMappingTest`/`TileFillTest` still green after MarksScreen edit)
+- [x] `TrackCard.kt`: delete `UploadStatusRow`, `CloudReceiptPill`, `UploadReceiptCard`, `ReceiptLine`, `outcomeLabelRu`; remove the `uploadStatus: TrackUploadStatus?` param and both `if (upload != null) UploadStatusRow(...)` render sites + the `val upload = …` line; drop now-unused imports (Popup, produceState, delay, the `ui.upload.*` import added in Task 1, etc.)
+- [x] `TeamScreen.kt`: at the `TrackCard(...)` call (line ~162) drop the `uploadStatus = trackUploadStatus` argument; delete the now-dead `trackUploadStatus: TrackUploadStatus? = null` param (line 99) and the `ui.upload.TrackUploadStatus` import (was line 54)
+- [x] `MarksScreen.kt`: delete `MarksUploadPanel`, its `ReceiptLine`/`outcomeLabelRu` copy, the `uploadStatus` param, and the `item("upload_status")` block; drop now-unused imports (`TargetLine`, `TrackUploadStatus`, `relativeTimeRu`, `produceState`, `delay`)
+- [x] `MainActivity`: remove `uploadStatus = marksUploadStatus` from the `MarksScreen(...)` call and `trackUploadStatus = trackUploadStatus` from the `TeamScreen(...)` call; delete **only** the orphaned `scopedMarkUploadCounts` (lines ~664-672) and `marksUploadStatus` (lines ~674-687) derivations — **keep `markUploadOutcomes` (line 673)**, which the new Task-5 derivations depend on; keep `trackUploadStatus` (now consumed by `UploadScreen`)
+- [x] `grep -rn "MarksUploadPanel\|UploadStatusRow\|CloudReceiptPill" app/src` returns nothing
+- [x] run `./gradlew testDebugUnitTest lintDebug` — must pass (`MarksMappingTest`/`TileFillTest` still green after MarksScreen edit)
 
 ### Task 7: Verify acceptance criteria
 - [ ] all three sections reachable from Команда → Прочее → «Загрузка данных»; back closes the overlay

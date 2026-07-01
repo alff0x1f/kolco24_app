@@ -660,33 +660,7 @@ private fun Kolco24AppRoot(
         )
     }
 
-    // Upload-status row for the «Отметки» tab — same scoped-pair protection as the track status above:
-    // the counts carry their TrackScope so a one-frame mismatch after a team switch (counts not yet
-    // reset to null) never pairs stale counts with the new scope's outcomes.
-    val scopedMarkUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        value = null
-        if (tid != null && rid != null) {
-            val scope = TrackScope(rid, tid)
-            markRepo.uploadCounts(tid, rid).collect { value = scope to it }
-        }
-    }
     val markUploadOutcomes by container.markUploadOutcomes.collectAsState()
-    val marksUploadStatus: TrackUploadStatus? = run {
-        val sc = scopedMarkUploadCounts
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        if (sc == null || tid == null || rid == null) return@run null
-        val (countScope, counts) = sc
-        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
-        val markScope = TrackScope(rid, tid)
-        TrackUploadStatus(
-            total = counts.total,
-            local = TargetLine(counts.local, markUploadOutcomes[markScope to UploadTarget.Local]),
-            cloud = TargetLine(counts.cloud, markUploadOutcomes[markScope to UploadTarget.Cloud]),
-        )
-    }
 
     // Upload-status for the «Загрузка данных» page's Отметки section — metadata-only (does not
     // require photo frames), same scoped-pair protection as above, joined with the same
@@ -1165,7 +1139,6 @@ private fun Kolco24AppRoot(
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
                         onPhotoClick = onPhotoClick,
-                        uploadStatus = marksUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -1203,7 +1176,6 @@ private fun Kolco24AppRoot(
                         onStartTrack = onStartTrack,
                         onStopTrack = { TrackRecordingService.stop(context) },
                         onShareTrack = onShareTrack,
-                        trackUploadStatus = trackUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                 }
