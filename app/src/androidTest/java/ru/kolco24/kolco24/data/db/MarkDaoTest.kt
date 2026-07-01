@@ -15,10 +15,11 @@ import org.junit.runner.RunWith
 import ru.kolco24.kolco24.data.marks.photoPaths
 
 /**
- * Exercises [MarkDao]'s photo-related contracts against **real Room** — the `method != 'photo'` drain/
- * counter/scope filters and the [MarkDao.attachPhotos] `@Transaction` can't be covered by the JVM fakes
- * (Robolectric is not on the classpath, and the fakes only mirror the SQL). Guards Phase 1's invariant
- * that photo marks are stored/scored locally but never enter the marks-upload loop.
+ * Exercises [MarkDao]'s photo-related contracts against **real Room** — the frame-drain queries and the
+ * [MarkDao.attachPhotos] `@Transaction` can't be covered by the JVM fakes (Robolectric is not on the
+ * classpath, and the fakes only mirror the SQL). Guards Phase 2's invariants: photo-mark metadata now
+ * shares the `/marks/` drain with NFC marks, frames drain separately once metadata lands, and
+ * `photosUploaded*` tracks per-mark frame completion independently per target.
  */
 @RunWith(AndroidJUnit4::class)
 class MarkDaoTest {
@@ -48,6 +49,9 @@ class MarkDaoTest {
         photoPath: String? = null,
         uploadedLocal: Boolean = false,
         uploadedCloud: Boolean = false,
+        photosUploadedLocal: Boolean = false,
+        photosUploadedCloud: Boolean = false,
+        updatedAt: Long = 1_000L,
     ) = MarkEntity(
         id = id,
         raceId = raceId,
@@ -63,43 +67,147 @@ class MarkDaoTest {
         complete = true,
         photoPath = photoPath,
         takenAt = 1_000L,
-        updatedAt = 1_000L,
+        updatedAt = updatedAt,
         uploadedLocal = uploadedLocal,
         uploadedCloud = uploadedCloud,
+        photosUploadedLocal = photosUploadedLocal,
+        photosUploadedCloud = photosUploadedCloud,
     )
 
     @Test
-    fun unuploadedLocalAndCloud_excludePhotoMarks() = runBlocking {
+    fun unuploadedLocalAndCloud_includePhotoMarks() = runBlocking {
+        // Phase 2: photo-mark metadata now shares the drain with NFC marks (filter dropped).
         dao.upsert(mark("nfc-1", method = "nfc"))
         dao.upsert(mark("photo-1", method = "photo"))
 
-        val local = dao.unuploadedLocal(raceId = 1, teamId = 7, limit = 100).map { it.id }
-        val cloud = dao.unuploadedCloud(raceId = 1, teamId = 7, limit = 100).map { it.id }
+        val local = dao.unuploadedLocal(raceId = 1, teamId = 7, limit = 100).map { it.id }.toSet()
+        val cloud = dao.unuploadedCloud(raceId = 1, teamId = 7, limit = 100).map { it.id }.toSet()
 
-        assertEquals(listOf("nfc-1"), local)
-        assertEquals(listOf("nfc-1"), cloud)
+        assertEquals(setOf("nfc-1", "photo-1"), local)
+        assertEquals(setOf("nfc-1", "photo-1"), cloud)
     }
 
     @Test
-    fun uploadCounts_excludePhotoMarks() = runBlocking {
-        dao.upsert(mark("nfc-1", method = "nfc"))
-        dao.upsert(mark("photo-1", method = "photo"))
+    fun uploadCounts_photoMarkCountsOnlyWhenMetadataAndFramesUploaded() = runBlocking {
+        dao.upsert(mark("nfc-1", method = "nfc", uploadedLocal = true, uploadedCloud = true))
+        // Metadata uploaded but frames not yet — must not count as uploaded for either target.
+        dao.upsert(
+            mark(
+                "photo-1", method = "photo", photoPath = "[\"marks/photo-1/a.jpg\"]",
+                uploadedLocal = true, uploadedCloud = true,
+                photosUploadedLocal = false, photosUploadedCloud = false,
+            ),
+        )
 
         val counts = dao.uploadCounts(teamId = 7, raceId = 1).first()
-        // total counts only the NFC mark; the photo mark is invisible to the status row.
-        assertEquals(1, counts.total)
+        assertEquals(2, counts.total)
+        assertEquals(1, counts.local)
+        assertEquals(1, counts.cloud)
+
+        dao.setPhotosUploadedLocalIfUnchanged("photo-1", updatedAt = 1_000L)
+        dao.setPhotosUploadedCloudIfUnchanged("photo-1", updatedAt = 1_000L)
+
+        val countsAfter = dao.uploadCounts(teamId = 7, raceId = 1).first()
+        assertEquals(2, countsAfter.local)
+        assertEquals(2, countsAfter.cloud)
     }
 
     @Test
-    fun pendingUploadScopes_excludePhotoOnlyScope() = runBlocking {
-        // Scope (1,7) has an NFC mark; scope (9,3) has only a photo mark — it must not be returned.
+    fun pendingUploadScopes_includesPhotoOnlyScope() = runBlocking {
+        // Phase 2: a scope with only a photo mark is no longer excluded (filter dropped).
         dao.upsert(mark("nfc-1", method = "nfc", raceId = 1, teamId = 7))
         dao.upsert(mark("photo-1", method = "photo", raceId = 9, teamId = 3))
 
         val scopes = dao.pendingUploadScopes()
 
         assertTrue(scopes.contains(TrackScope(1, 7)))
-        assertFalse(scopes.contains(TrackScope(9, 3)))
+        assertTrue(scopes.contains(TrackScope(9, 3)))
+    }
+
+    @Test
+    fun pendingUploadScopes_widenedForPendingFramesOnly() = runBlocking {
+        // Metadata fully uploaded but frames still pending — must still be returned so the frame
+        // drain keeps re-triggering for this scope.
+        dao.upsert(
+            mark(
+                "photo-1", method = "photo", raceId = 5, teamId = 2,
+                photoPath = "[\"marks/photo-1/a.jpg\"]",
+                uploadedLocal = true, uploadedCloud = true,
+                photosUploadedLocal = true, photosUploadedCloud = false,
+            ),
+        )
+
+        val scopes = dao.pendingUploadScopes()
+
+        assertTrue(scopes.contains(TrackScope(5, 2)))
+    }
+
+    @Test
+    fun framePending_filtersByMetadataUploadedFlagAndFlagAndPath() = runBlocking {
+        // Eligible: metadata uploaded, frames not uploaded, has a photoPath.
+        dao.upsert(
+            mark(
+                "eligible", method = "photo", photoPath = "[\"marks/eligible/a.jpg\"]",
+                uploadedLocal = true, photosUploadedLocal = false,
+            ),
+        )
+        // Excluded: metadata not yet uploaded (uploadedLocal = 0).
+        dao.upsert(
+            mark(
+                "no-metadata", method = "photo", photoPath = "[\"marks/no-metadata/a.jpg\"]",
+                uploadedLocal = false, photosUploadedLocal = false,
+            ),
+        )
+        // Excluded: frames already uploaded (photosUploadedLocal = 1).
+        dao.upsert(
+            mark(
+                "frames-done", method = "photo", photoPath = "[\"marks/frames-done/a.jpg\"]",
+                uploadedLocal = true, photosUploadedLocal = true,
+            ),
+        )
+        // Excluded: no photoPath at all.
+        dao.upsert(mark("no-photo", method = "nfc", uploadedLocal = true, photosUploadedLocal = false))
+
+        val pending = dao.framePendingLocal(raceId = 1, teamId = 7, limit = 100).map { it.id }
+
+        assertEquals(listOf("eligible"), pending)
+    }
+
+    @Test
+    fun framePending_zeroFrameRowIsStillSelected() = runBlocking {
+        // An empty-but-non-null photoPath ("[]") is a photo-frame-drain candidate at the DAO level —
+        // MarkRepository's drain loop is responsible for immediately flipping it without a spin.
+        dao.upsert(
+            mark(
+                "zero-frames", method = "photo", photoPath = "[]",
+                uploadedLocal = true, photosUploadedLocal = false,
+            ),
+        )
+
+        val pending = dao.framePendingLocal(raceId = 1, teamId = 7, limit = 100).map { it.id }
+
+        assertEquals(listOf("zero-frames"), pending)
+    }
+
+    @Test
+    fun setPhotosUploadedIfUnchanged_flipsOnMatchingUpdatedAt_noOpsOnStale() = runBlocking {
+        dao.upsert(
+            mark(
+                "photo-1", method = "photo", photoPath = "[\"marks/photo-1/a.jpg\"]",
+                uploadedLocal = true, uploadedCloud = true, updatedAt = 1_000L,
+            ),
+        )
+
+        // Stale updatedAt (simulates an attachPhotos race) — must no-op.
+        dao.setPhotosUploadedLocalIfUnchanged("photo-1", updatedAt = 999L)
+        assertFalse(dao.getById("photo-1")!!.photosUploadedLocal)
+
+        // Matching updatedAt — flips.
+        dao.setPhotosUploadedLocalIfUnchanged("photo-1", updatedAt = 1_000L)
+        dao.setPhotosUploadedCloudIfUnchanged("photo-1", updatedAt = 1_000L)
+        val row = dao.getById("photo-1")!!
+        assertTrue(row.photosUploadedLocal)
+        assertTrue(row.photosUploadedCloud)
     }
 
     @Test
