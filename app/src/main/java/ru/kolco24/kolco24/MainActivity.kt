@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -488,6 +490,7 @@ private fun Kolco24AppRoot(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
+    val hapticView = LocalView.current
     val container = remember { (context.applicationContext as Kolco24App).container }
     val raceRepo = container.raceRepository
     val teamRepo = container.teamRepository
@@ -989,6 +992,11 @@ private fun Kolco24AppRoot(
         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    fun switchToTab(page: Int) {
+        if (pagerState.targetPage == page) return
+        hapticView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        scope.launch { pagerState.animateScrollToPage(page) }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -998,7 +1006,7 @@ private fun Kolco24AppRoot(
                     val activePage = pagerState.targetPage
                     NavigationBarItem(
                         selected = activePage == 0,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                        onClick = { switchToTab(0) },
                         icon = {
                             Icon(
                                 if (activePage == 0) Icons.Filled.Flag else Icons.Outlined.Flag,
@@ -1010,7 +1018,7 @@ private fun Kolco24AppRoot(
                     )
                     NavigationBarItem(
                         selected = activePage == 1,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                        onClick = { switchToTab(1) },
                         icon = {
                             Icon(
                                 if (activePage == 1) Icons.Filled.Map else Icons.Outlined.Map,
@@ -1022,7 +1030,7 @@ private fun Kolco24AppRoot(
                     )
                     NavigationBarItem(
                         selected = activePage == 2,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
+                        onClick = { switchToTab(2) },
                         icon = {
                             Icon(
                                 if (activePage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
@@ -1053,6 +1061,7 @@ private fun Kolco24AppRoot(
                 state = pagerState,
                 modifier = pagerModifier,
                 beyondViewportPageCount = 1,
+                userScrollEnabled = false,
             ) { page ->
                 when (page) {
                     0 -> MarksScreen(
