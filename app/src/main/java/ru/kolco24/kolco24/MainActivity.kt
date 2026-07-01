@@ -75,6 +75,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -100,6 +101,7 @@ import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.UploadTarget
@@ -631,89 +633,22 @@ private fun Kolco24AppRoot(
             locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
-    // Upload-status row for the TrackCard. Counts are durable+reactive (Room flags); outcomes are the
-    // transient in-memory per-target result. The scope is carried alongside the counts so that the
-    // one-frame window where selectedTeamId/selectedRaceId have changed but produceState hasn't yet
-    // restarted (and set value=null) does not pair old counts with the new scope's outcomes.
-    val scopedUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        value = null
-        if (tid != null && rid != null) {
-            val scope = TrackScope(rid, tid)
-            trackRepo.uploadCounts(tid, rid).collect { value = scope to it }
-        }
-    }
+    // Upload-status derivations feeding the TrackCard row and the «Загрузка данных» page's three
+    // sections. Counts are durable+reactive (Room flags); outcomes are the transient in-memory
+    // per-target result. See rememberUploadStatus below for the scoped-pair race guard.
     val uploadOutcomes by container.trackUploadOutcomes.collectAsState()
-    val trackUploadStatus: TrackUploadStatus? = run {
-        val sc = scopedUploadCounts
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        if (sc == null || tid == null || rid == null) return@run null
-        val (countScope, counts) = sc
-        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
-        val trackScope = TrackScope(rid, tid)
-        TrackUploadStatus(
-            total = counts.total,
-            local = TargetLine(counts.local, uploadOutcomes[trackScope to UploadTarget.Local]),
-            cloud = TargetLine(counts.cloud, uploadOutcomes[trackScope to UploadTarget.Cloud]),
-        )
-    }
+    val trackUploadStatus = rememberUploadStatus(selectedTeamId, selectedRaceId, uploadOutcomes, trackRepo::uploadCounts)
 
     val markUploadOutcomes by container.markUploadOutcomes.collectAsState()
 
-    // Upload-status for the «Загрузка данных» page's Отметки section — metadata-only (does not
-    // require photo frames), same scoped-pair protection as above, joined with the same
-    // markUploadOutcomes map (outcomes are per-target/scope, not per-metric).
-    val scopedMarksMetadataUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        value = null
-        if (tid != null && rid != null) {
-            val scope = TrackScope(rid, tid)
-            markRepo.uploadCountsMetadata(tid, rid).collect { value = scope to it }
-        }
-    }
-    val marksMetadataUploadStatus: TrackUploadStatus? = run {
-        val sc = scopedMarksMetadataUploadCounts
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        if (sc == null || tid == null || rid == null) return@run null
-        val (countScope, counts) = sc
-        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
-        val markScope = TrackScope(rid, tid)
-        TrackUploadStatus(
-            total = counts.total,
-            local = TargetLine(counts.local, markUploadOutcomes[markScope to UploadTarget.Local]),
-            cloud = TargetLine(counts.cloud, markUploadOutcomes[markScope to UploadTarget.Cloud]),
-        )
-    }
+    // Отметки section — metadata-only (does not require photo frames).
+    val marksMetadataUploadStatus =
+        rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::uploadCountsMetadata)
 
-    // Upload-status for the «Загрузка данных» page's Фото section — frame-granular, folded via
-    // MarkRepository.photoFrameCounts; same scoped-pair protection and outcome map as above.
-    val scopedPhotoUploadCounts by produceState<Pair<TrackScope, UploadCounts>?>(null, selectedTeamId, selectedRaceId) {
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        value = null
-        if (tid != null && rid != null) {
-            val scope = TrackScope(rid, tid)
-            markRepo.photoFrameCounts(tid, rid).collect { value = scope to it }
-        }
-    }
-    val photoUploadStatus: TrackUploadStatus? = run {
-        val sc = scopedPhotoUploadCounts
-        val tid = selectedTeamId
-        val rid = selectedRaceId
-        if (sc == null || tid == null || rid == null) return@run null
-        val (countScope, counts) = sc
-        if (countScope.teamId != tid || countScope.raceId != rid || counts.total == 0) return@run null
-        val markScope = TrackScope(rid, tid)
-        TrackUploadStatus(
-            total = counts.total,
-            local = TargetLine(counts.local, markUploadOutcomes[markScope to UploadTarget.Local]),
-            cloud = TargetLine(counts.cloud, markUploadOutcomes[markScope to UploadTarget.Cloud]),
-        )
-    }
+    // Фото section — frame-granular, folded via MarkRepository.photoFrameCounts. Joined with the
+    // same markUploadOutcomes map as Отметки (outcomes are per-target/scope, not per-metric).
+    val photoUploadStatus =
+        rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::photoFrameCounts)
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
@@ -1963,3 +1898,34 @@ private fun Kolco24AppRoot(
 /** Format a point's epoch-ms (`trustedMs ?: wallMs`) as a local `HH:mm` label for the track metrics. */
 private fun formatPointTime(epochMs: Long): String =
     java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date(epochMs))
+
+/**
+ * Scoped upload-status derivation shared by the track/marks-metadata/photo-frame counters.
+ * Carries the scope alongside the counts so the one-frame window where [teamId]/[raceId] have
+ * changed but `produceState` hasn't yet restarted (and set `value = null`) does not pair old
+ * counts with the new scope's [outcomes].
+ */
+@Composable
+private fun rememberUploadStatus(
+    teamId: Int?,
+    raceId: Int?,
+    outcomes: Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>,
+    counts: (teamId: Int, raceId: Int) -> Flow<UploadCounts>,
+): TrackUploadStatus? {
+    val scoped by produceState<Pair<TrackScope, UploadCounts>?>(null, teamId, raceId) {
+        value = null
+        if (teamId != null && raceId != null) {
+            val scope = TrackScope(raceId, teamId)
+            counts(teamId, raceId).collect { value = scope to it }
+        }
+    }
+    val sc = scoped ?: return null
+    if (teamId == null || raceId == null) return null
+    val (countScope, c) = sc
+    if (countScope.teamId != teamId || countScope.raceId != raceId || c.total == 0) return null
+    return TrackUploadStatus(
+        total = c.total,
+        local = TargetLine(c.local, outcomes[countScope to UploadTarget.Local]),
+        cloud = TargetLine(c.cloud, outcomes[countScope to UploadTarget.Cloud]),
+    )
+}

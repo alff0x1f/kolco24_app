@@ -561,6 +561,35 @@ class MarkRepositoryTest {
         assertEquals(2, takenPointCount(marks))
         assertEquals(13, totalScore(marks))
     }
+
+    @Test
+    fun uploadCountsMetadata_delegatesToDaoIgnoringPhotoFrames() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.setPhotoPath(id, "[\"marks/$id/a.jpg\"]")
+        markDao.markUploadedLocal(listOf(id))
+        markDao.markUploadedCloud(listOf(id))
+
+        val counts = repository.uploadCountsMetadata(teamId = 7, raceId = 1).first()
+
+        // Metadata is uploaded on both targets even though the frame itself is not — proves the
+        // repository wiring (not the DAO's frame-gated uploadCounts) is what's exercised here.
+        assertEquals(1, counts.total)
+        assertEquals(1, counts.local)
+        assertEquals(1, counts.cloud)
+    }
+
+    @Test
+    fun photoFrameCounts_foldsDaoRowsViaFoldPhotoFrameCounts() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
+        markDao.setPhotoPath(id, "[\"marks/$id/a.jpg\", \"marks/$id/b.jpg\"]")
+        markDao.setPhotosUploadedLocalIfUnchanged(id, updatedAt = markDao.getById(id)!!.updatedAt)
+
+        val counts = repository.photoFrameCounts(teamId = 7, raceId = 1).first()
+
+        assertEquals(2, counts.total)
+        assertEquals(2, counts.local)
+        assertEquals(0, counts.cloud)
+    }
 }
 
 private class FakeMarkDao : MarkDao {
