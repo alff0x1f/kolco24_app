@@ -466,9 +466,9 @@ calls. `TeamScreen.kt` is untouched.
 
 ### Task 8: [Final] Update documentation
 
-- [ ] update `CLAUDE.md`: lease/pin subsystem (`data/lease/`, `data/sync/`), `SyncSource`
+- [x] update `CLAUDE.md`: lease/pin subsystem (`data/lease/`, `data/sync/`), `SyncSource`
       routing + persist guard convention, the Settings «Данные» card, the re-routed PTR
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
