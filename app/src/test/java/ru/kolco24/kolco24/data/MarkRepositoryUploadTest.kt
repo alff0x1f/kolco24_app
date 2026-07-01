@@ -523,12 +523,37 @@ class MarkRepositoryUploadTest {
         val cloudPhoto = FakePhotoFrameUploader { markId, _ ->
             if (markId == idBad) PostResult.BadRequest else PostResult.Success(Unit)
         }
-        val r = repo(dao, cloudPhoto = cloudPhoto, reader = reader)
+        val rec = OutcomeRecorder()
+        val r = repo(dao, cloudPhoto = cloudPhoto, reader = reader, onOutcome = rec.sink)
 
         r.uploadPending(raceId = 1, teamId = 7)
 
         assertFalse(dao.rowById(idBad).photosUploadedCloud)
         assertTrue(dao.rowById(idGood).photosUploadedCloud)
+        // idGood flipping must not mask idBad's stuck poison frame: the trigger overall is Error.
+        assertEquals(UploadResultKind.Error, rec.kindFor(UploadTarget.Cloud))
+    }
+
+    @Test
+    fun frameDrain_payloadTooLargeOnOneMark_leavesItPending_laterGoodMarkStillFlips() = runTest {
+        val dao = FakeMarkUploadDao()
+        val idBad = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/bad/f1.jpg"))
+        val idGood = dao.seedPhotoWithFrames(raceId = 1, teamId = 7, paths = listOf("marks/good/f1.jpg"))
+        val reader = FakeFileReader().apply {
+            put("marks/bad/f1.jpg")
+            put("marks/good/f1.jpg")
+        }
+        val cloudPhoto = FakePhotoFrameUploader { markId, _ ->
+            if (markId == idBad) PostResult.Error(413) else PostResult.Success(Unit)
+        }
+        val rec = OutcomeRecorder()
+        val r = repo(dao, cloudPhoto = cloudPhoto, reader = reader, onOutcome = rec.sink)
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertFalse(dao.rowById(idBad).photosUploadedCloud)
+        assertTrue(dao.rowById(idGood).photosUploadedCloud)
+        assertEquals(UploadResultKind.Error, rec.kindFor(UploadTarget.Cloud))
     }
 
     @Test
@@ -666,6 +691,34 @@ class CombineOutcomeTest {
                 )
             }
         }
+    }
+}
+
+/** Coverage for the hard-vs-transient frame-failure split [MarkRepository]'s frame drain relies on. */
+class IsHardFrameFailureTest {
+    @Test
+    fun badRequest_isHard() {
+        assertTrue(isHardFrameFailure(PostResult.BadRequest))
+    }
+
+    @Test
+    fun payloadTooLarge413_isHard() {
+        assertTrue(isHardFrameFailure(PostResult.Error(413)))
+    }
+
+    @Test
+    fun otherErrorCodes_areTransient() {
+        assertFalse(isHardFrameFailure(PostResult.Error(500)))
+        assertFalse(isHardFrameFailure(PostResult.Error(null)))
+    }
+
+    @Test
+    fun targetWideFailures_areTransient() {
+        assertFalse(isHardFrameFailure(PostResult.Offline))
+        assertFalse(isHardFrameFailure(PostResult.Unauthorized))
+        assertFalse(isHardFrameFailure(PostResult.Forbidden))
+        assertFalse(isHardFrameFailure(PostResult.Conflict))
+        assertFalse(isHardFrameFailure(PostResult.RateLimited))
     }
 }
 
