@@ -88,13 +88,14 @@ the client implementation **and** the documented wire contract.
 
 ### Response codes (frame endpoint)
 
-| Code | Meaning | Client |
-|------|---------|--------|
-| `200`/`201` | frame accepted (upsert) | mark the frame's mark done for that target once all frames accepted |
-| `404` | endpoint not deployed yet / mark row not landed | **self-heal** — leave `photosUploadedX=0`, retry next trigger |
-| `403` | signature / time window | not auto-retried (POST); self-heal next trigger |
-| `429` | rate limit | backoff, retry later |
-| `400`/`413` | unexpected for a ≤1600px JPEG | log, mark stays pending (visible in status row) |
+| Code | Meaning | Client | Drain scope |
+|------|---------|--------|-------------|
+| `200`/`201` | frame accepted (upsert) | mark's flag flips once all its frames accepted | continue |
+| `404` | endpoint not deployed yet / mark row not landed | **self-heal** — leave `photosUploadedX=0`, retry next trigger | **stop target** (transient) |
+| `403` | signature / time window | not auto-retried (POST); self-heal next trigger | **stop target** (transient) |
+| `429` | rate limit | backoff, retry later | **stop target** (transient) |
+| `5xx`/`Offline` | server / network | retry next trigger | **stop target** (transient) |
+| `400`/`413` | unacceptable frame (unexpected for a ≤1600px JPEG) | log, mark stays pending (visible in status row) | **skip mark, continue** (hard per-frame) |
 | — | offline / timeout | leave pending |
 
 ## Technical Details
@@ -120,15 +121,25 @@ the client implementation **and** the documented wire contract.
     `File(filesDir, relPath).readBytes()`; missing file → `null`.
   - Pure `frameIdOf(relPath): String` in `PhotoPaths.kt` (filename minus `.jpg`).
 - **Frame drain in `MarkRepository.flushScope`** — runs **after** each target's metadata loop. Per
-  target: fetch frame-pending marks (LIMIT), capture each mark's `updatedAt`; decode `photoPaths`; for
-  each frame read bytes — a **null read (missing/unreadable file) stops that mark and leaves it
-  pending** (not flipped), same as a non-`Success` POST (proof photos: a visibly-pending mark beats
-  silent remote loss); POST each frame, on non-`Success` stop this mark and retry next trigger; when
-  all frames were accepted call `setPhotosUploadedXIfUnchanged(mark.id, updatedAt)`. Loop terminates on
-  no-progress (zero marks flipped in a pass → stop, so a permanently-missing file stays visibly pending
-  rather than spinning). The metadata result and frame result are **combined into one** per-target
-  outcome (`combineOutcome`, precedence `Error`/`Offline` > `Ok` > `null`) before a single
-  `onUploadOutcome` call — a frame `Ok` must never mask a metadata `Error`.
+  target: fetch frame-pending marks (LIMIT), capture each mark's `updatedAt`; decode `photoPaths`; POST
+  each frame. A non-`Success` POST splits **two ways** (this is the key control-flow rule):
+  - **Transient / target-wide failure** (`Offline`, `403`, `404`, `429`, `401`, `409`, `5xx`, any other
+    `Error`) → **stop the whole target** for this trigger and return `uploadResultKind(result)`, exactly
+    like `uploadLoop` (MarkRepository.kt:349). No point issuing N doomed requests while the endpoint is
+    down/404-pending.
+    - **Hard per-frame failure** (`400 BadRequest`, `413` → `Error(413)`) → the frame is unacceptable and
+    retrying won't help: **leave this mark pending, move on to the next mark** in the batch (don't let one
+    poison frame block later good marks). A **null read** (missing/unreadable file) is treated the same —
+    leave the mark pending, continue (proof photos: a visibly-pending mark beats silent remote loss).
+  - When **all** of a mark's frames were accepted → `setPhotosUploadedXIfUnchanged(mark.id, updatedAt)`.
+  - **Loop terminates on no-progress** (a pass that flips zero marks → stop, return `Error`), so a
+    poison-only / missing-file-only batch stays visibly pending instead of spinning — same stuck-detection
+    as `uploadLoop` (MarkRepository.kt:352).
+
+  A tiny predicate `isHardFrameFailure(result) = result is BadRequest || (result is Error && result.code == 413)`
+  draws the transient/hard line. The metadata result and frame result are then **combined into one**
+  per-target outcome (`combineOutcome`, precedence **`Error` > `Offline` > `Ok` > `null`**) before a
+  single `onUploadOutcome` call — a frame `Ok` must never mask a metadata `Error`/`Offline`.
 
 ### Known tradeoff (accepted — do not build around)
 
@@ -220,10 +231,10 @@ Documented, not engineered around.
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryUploadTest.kt`
 
 - [ ] Add `PhotoFrameUploader` fun-interface `(raceId, markId, frameId, bytes) -> PostResult<Unit>` and `PhotoFrameReader` fun-interface `(relPath) -> ByteArray?`; inject both into `MarkRepository`. **`PhotoFrameUploader` MUST default to `PostResult.Offline`** (never a success/no-op — a missed AppContainer wiring or bare fake must leave frames pending, not falsely mark them uploaded), mirroring `MarkUploader`'s `Offline` default (MarkRepository.kt:58). `PhotoFrameReader` defaults to `{ null }` (safe: a null read now keeps the mark pending — see below).
-- [ ] Add a private frame-drain loop (per target): fetch frame-pending marks (LIMIT), **capture each mark's `updatedAt`**, decode `photoPaths`, for each frame read bytes; **a null read (missing/unreadable file) does NOT flip the flag — it stops that mark and leaves it pending** (proof photos: silent remote loss is worse than a visibly-pending mark; log it), same as a non-`Success` POST; POST each present frame via uploader, stop the mark on non-`Success`; when **all** frames were POSTed and accepted call `setPhotosUploadedXIfUnchanged(mark.id, updatedAt)` (guard against an `attachPhotos` that raced the drain — stale `updatedAt` leaves the flag 0 so the next trigger re-drains, re-sending `f1`/`f2` idempotently and the new `f3`); **loop terminates on no-progress** (a pass that flips zero marks → stop and return, so a permanently-missing file stays visibly pending instead of spinning — same stuck-detection as `uploadLoop`, MarkRepository.kt:352); return `UploadResultKind?`
-- [ ] **Combine the two per-target results into ONE `onUploadOutcome` call** (not two): `onUploadOutcome` is last-write-wins per `(scope, target)` (AppContainer.kt:212-216), so reporting metadata then frame separately would let a frame `Ok` mask a metadata `Error`/`Offline`. Add a pure `combineOutcome(metadata: UploadResultKind?, frame: UploadResultKind?): UploadResultKind?` with precedence **`Error`/`Offline` > `Ok` > `null`** (a non-`Ok` wins; `Ok` only when both drains are clean; `null` only when neither attempted), and report the combined value once per target in `flushScope`. Keep cloud/LAN independent.
-- [ ] Extend `MarkRepositoryUploadTest` (fake uploader + fake reader): metadata-first ordering (no frame POST while `uploadedX=0`); all-frames-accepted flips `photosUploadedX`; mid-mark failure leaves flag 0 and retries next trigger; **missing-file frame keeps the mark pending (flag stays 0) and the drain terminates (no spin)**; dual-target independence (LAN offline, cloud still flips); `attachPhotos` re-queues frames; **an `attachPhotos` racing a mid-drain flip does not strand the new frame** (fake uploader bumps `updatedAt` between fetch and flip → guard no-ops → next drain sends the new frame); **combined outcome: metadata `Offline`/`Error` + frame `Ok` → final per-target outcome is NOT `Ok`** (`combineOutcome` precedence)
-- [ ] Add a pure `combineOutcome` unit test (all 9 precedence combinations of `{Error, Offline, Ok, null}`)
+- [ ] Add a private frame-drain loop (per target): fetch frame-pending marks (LIMIT), **capture each mark's `updatedAt`**, decode `photoPaths`, POST each frame. Split non-`Success` **two ways**: a **transient/target-wide failure** (`Offline`/`403`/`404`/`429`/`401`/`409`/`5xx`/other `Error`) **stops the whole target** and returns `uploadResultKind(result)` (no N doomed requests while the endpoint is down); a **hard per-frame failure** (`400`, or `413` → `Error(413)`) **or a null read** (missing file) leaves that mark pending and **continues to the next mark** (one poison frame must not block later good marks). Use `isHardFrameFailure(result) = result is BadRequest || (result is Error && result.code == 413)`. When **all** of a mark's frames were accepted call `setPhotosUploadedXIfUnchanged(mark.id, updatedAt)` (guard against an `attachPhotos` that raced the drain — stale `updatedAt` leaves the flag 0 so the next trigger re-drains, re-sending `f1`/`f2` idempotently and the new `f3`). **Loop terminates on no-progress** (a pass that flips zero marks → stop, return `Error`, so a poison/missing-only batch stays visibly pending instead of spinning — same stuck-detection as `uploadLoop`, MarkRepository.kt:352). Return `UploadResultKind?`.
+- [ ] **Combine the two per-target results into ONE `onUploadOutcome` call** (not two): `onUploadOutcome` is last-write-wins per `(scope, target)` (AppContainer.kt:212-216), so reporting metadata then frame separately would let a frame `Ok` mask a metadata `Error`/`Offline`. Add a pure `combineOutcome(metadata: UploadResultKind?, frame: UploadResultKind?): UploadResultKind?` with **deterministic** precedence **`Error` > `Offline` > `Ok` > `null`** (order fixed so the UI message can't depend on call order: `Error` and `Offline` are distinct status-row messages — `UploadResultKind { Ok, Offline, Error }`, TrackModels.kt:82). `Ok` only when both drains are clean; `null` only when neither attempted. Report the combined value once per target in `flushScope`. Keep cloud/LAN independent.
+- [ ] Extend `MarkRepositoryUploadTest` (fake uploader + fake reader): metadata-first ordering (no frame POST while `uploadedX=0`); all-frames-accepted flips `photosUploadedX`; **transient failure (`Offline`/`404`) stops the target after the first bad mark (later marks not attempted this trigger, retried next)**; **hard `400`/`413` on one mark leaves it pending but a later good mark still flips**; **missing-file frame keeps the mark pending (flag stays 0) and the drain terminates (no spin)**; dual-target independence (LAN offline, cloud still flips); `attachPhotos` re-queues frames; **an `attachPhotos` racing a mid-drain flip does not strand the new frame** (fake uploader bumps `updatedAt` between fetch and flip → guard no-ops → next drain sends the new frame); **combined outcome: metadata `Offline`/`Error` + frame `Ok` → final per-target outcome is NOT `Ok`**
+- [ ] Add a pure `combineOutcome` unit test covering **all 16 ordered `(metadata, frame)` combinations** of `{Error, Offline, Ok, null}` (assert the fixed `Error > Offline > Ok > null` precedence)
 - [ ] Run `./gradlew testDebugUnitTest` (MarkRepositoryUploadTest) — must pass before Task 7
 
 ### Task 7: Wire seams in AppContainer
