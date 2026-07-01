@@ -3,6 +3,7 @@ package ru.kolco24.kolco24
 import android.content.Context
 import android.os.SystemClock
 import android.provider.Settings
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +19,8 @@ import ru.kolco24.kolco24.data.LegendRepository
 import ru.kolco24.kolco24.data.MarkRepository
 import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
+import ru.kolco24.kolco24.data.PhotoFrameReader
+import ru.kolco24.kolco24.data.PhotoFrameUploader
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.TeamRepository
@@ -208,6 +211,15 @@ class AppContainer(private val context: Context) {
             },
             localUploader = { raceId, teamId, sourceInstallId, marks ->
                 localApiClient.uploadMarks(raceId, teamId, sourceInstallId, marks)
+            },
+            cloudPhotoUploader = PhotoFrameUploader { raceId, markId, frameId, bytes ->
+                apiClient.uploadMarkPhoto(raceId, markId, frameId, bytes)
+            },
+            localPhotoUploader = PhotoFrameUploader { raceId, markId, frameId, bytes ->
+                localApiClient.uploadMarkPhoto(raceId, markId, frameId, bytes)
+            },
+            photoFrameReader = PhotoFrameReader { relPath ->
+                runCatching { File(context.filesDir, relPath).readBytes() }.getOrNull()
             },
             onUploadOutcome = { scope, target, kind ->
                 markUploadOutcomes.update {

@@ -242,11 +242,11 @@ Documented, not engineered around.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] Build `cloudPhotoUploader`/`localPhotoUploader` from the two `ApiClient` instances (`PhotoFrameUploader { r, m, f, b -> apiClient.uploadMarkPhoto(r, m, f, b) }`)
-- [ ] Build `photoFrameReader = PhotoFrameReader { rel -> runCatching { File(filesDir, rel).readBytes() }.getOrNull() }`
-- [ ] Pass all three into the `MarkRepository` constructor
-- [ ] Confirm no new `collectAsState`/scope introduced; frame drain rides the existing `uploadPending`/`uploadAllPending` triggers (Launch B + service live-upload)
-- [ ] Build `./gradlew assembleDebug` + `lintDebug` — must pass before Task 8
+- [x] Build `cloudPhotoUploader`/`localPhotoUploader` from the two `ApiClient` instances (`PhotoFrameUploader { r, m, f, b -> apiClient.uploadMarkPhoto(r, m, f, b) }`)
+- [x] Build `photoFrameReader = PhotoFrameReader { rel -> runCatching { File(filesDir, rel).readBytes() }.getOrNull() }`
+- [x] Pass all three into the `MarkRepository` constructor
+- [x] Confirm no new `collectAsState`/scope introduced; frame drain rides the existing `uploadPending`/`uploadAllPending` triggers (Launch B + service live-upload)
+- [x] Build `./gradlew assembleDebug` + `lintDebug` — must pass before Task 8
 
 ### Task 8: `MarkDtoMappingTest` coverage for photo marks
 
