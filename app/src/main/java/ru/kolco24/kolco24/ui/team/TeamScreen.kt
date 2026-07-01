@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -192,12 +193,29 @@ private fun TeamTopBar() {
 private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount: Int, boundCount: Int) {
     val allBound = totalCount > 0 && boundCount >= totalCount
     val number = team.startNumber?.takeIf { it.isNotBlank() }
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val cardColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+        else MaterialTheme.colorScheme.inverseSurface
+    val contentColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.inverseOnSurface
+    val badgeColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHighest
+        else Color.White.copy(alpha = 0.10f)
+    val badgeBorderColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.outlineVariant
+        else Color.White.copy(alpha = 0.18f)
+    val boundDotColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.tertiary
+        else MaterialTheme.colorScheme.tertiaryContainer
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.inverseSurface,
+        color = cardColor,
+        border = if (isDarkTheme) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
             Row(
@@ -209,13 +227,13 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
                         text = number,
                         style = MaterialTheme.typography.displaySmall,
                         fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        color = contentColor,
                     )
                 }
                 Text(
                     text = displayTeamName(team),
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                    color = contentColor,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
             }
@@ -223,14 +241,14 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
             Text(
                 text = peopleLine(category, totalCount),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.70f),
+                color = contentColor.copy(alpha = 0.70f),
             )
 
             Spacer(Modifier.height(14.dp))
             Surface(
                 shape = MaterialTheme.shapes.small,
-                color = Color.White.copy(alpha = 0.10f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                color = badgeColor,
+                border = BorderStroke(1.dp, badgeBorderColor),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -239,7 +257,7 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
                 ) {
                     Box(
                         modifier = Modifier.size(6.dp).background(
-                            if (allBound) MaterialTheme.colorScheme.tertiaryContainer else Color(0xFFFFD7A2),
+                            if (allBound) boundDotColor else Color(0xFFFFD7A2),
                             CircleShape,
                         )
                     )
@@ -247,7 +265,7 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
                         text = "$boundCount / $totalCount с чипом",
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        color = contentColor,
                     )
                 }
             }
@@ -257,7 +275,7 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
                 Text(
                     text = chipNotBoundText(totalCount - boundCount),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.65f),
+                    color = contentColor.copy(alpha = 0.65f),
                 )
             }
         }

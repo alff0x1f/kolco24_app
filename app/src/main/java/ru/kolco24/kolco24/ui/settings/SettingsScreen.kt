@@ -49,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -320,6 +322,22 @@ private fun themeModeLabel(mode: ThemeMode): String =
         ThemeMode.DARK -> "Тёмная"
     }
 
+@Composable
+private fun neutralAvatarContainerColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    } else {
+        MaterialTheme.colorScheme.inverseSurface
+    }
+
+@Composable
+private fun neutralAvatarContentColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.inverseOnSurface
+    }
+
 /**
  * «Версия» row — info avatar, «versionName (versionCode)» subtitle; mirrors [ThemeRow] styling but
  * with no trailing chevron (it's informational). Tapping forwards to [onTap], which the host uses as
@@ -338,13 +356,13 @@ private fun VersionRow(versionName: String, versionCode: Int, onTap: () -> Unit)
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+                .background(neutralAvatarContainerColor(), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.Info,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = neutralAvatarContentColor(),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -377,13 +395,13 @@ private fun ThemeRow(currentMode: ThemeMode, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+                .background(neutralAvatarContainerColor(), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.Palette,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = neutralAvatarContentColor(),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -425,13 +443,13 @@ private fun EconomyModeRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit)
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+                .background(neutralAvatarContainerColor(), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.BatterySaver,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = neutralAvatarContentColor(),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -616,13 +634,13 @@ private fun AdminRow(session: AdminSession, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+                .background(neutralAvatarContainerColor(), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.AdminPanelSettings,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = neutralAvatarContentColor(),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -660,13 +678,13 @@ private fun ChangeTeamRow(onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+                .background(neutralAvatarContainerColor(), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.SwapHoriz,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = neutralAvatarContentColor(),
                 modifier = Modifier.size(20.dp),
             )
         }
