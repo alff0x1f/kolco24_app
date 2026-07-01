@@ -217,12 +217,12 @@ Documented, not engineered around.
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientMarksTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/SigningTest.kt`
 
-- [ ] Generalize the `internal post()` to accept a `mediaType: MediaType = JSON_MEDIA_TYPE`; body = `bodyBytes.toRequestBody(mediaType)` (existing callers default unchanged)
-- [ ] Add `IMAGE_JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()`
-- [ ] Add `uploadMarkPhoto(raceId, markId, frameId, bytes): PostResult<Unit>` → `post("$baseUrl/app/race/$raceId/mark/$markId/photo/$frameId", bytes, mediaType = IMAGE_JPEG_MEDIA_TYPE) { }` (Unit parser; note `404 → Error(404)` self-heal in KDoc)
-- [ ] Extend `ApiClientMarksTest` (MockWebServer): correct URL + method, `Content-Type: image/jpeg`, `200 → Success`, `404 → Error(404)`, `400 → BadRequest`, `429 → RateLimited`
-- [ ] Extend `SigningTest`: a binary-body request signs `sha256(jpeg)` as the body hash (canonical path includes `/mark/<id>/photo/<frame>`)
-- [ ] Run `./gradlew testDebugUnitTest` (ApiClientMarksTest, SigningTest) — must pass before Task 6
+- [x] Generalize the `internal post()` to accept a `mediaType: MediaType = JSON_MEDIA_TYPE`; body = `bodyBytes.toRequestBody(mediaType)` (existing callers default unchanged)
+- [x] Add `IMAGE_JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()`
+- [x] Add `uploadMarkPhoto(raceId, markId, frameId, bytes): PostResult<Unit>` → `post("$baseUrl/app/race/$raceId/mark/$markId/photo/$frameId", bytes, mediaType = IMAGE_JPEG_MEDIA_TYPE) { }` (Unit parser; note `404 → Error(404)` self-heal in KDoc)
+- [x] Extend `ApiClientMarksTest` (MockWebServer): correct URL + method, `Content-Type: image/jpeg`, `200 → Success`, `404 → Error(404)`, `400 → BadRequest`, `429 → RateLimited`
+- [x] Extend `SigningTest`: a binary-body request signs `sha256(jpeg)` as the body hash (canonical path includes `/mark/<id>/photo/<frame>`)
+- [x] Run `./gradlew testDebugUnitTest` (ApiClientMarksTest, SigningTest) — must pass before Task 6
 
 ### Task 6: `PhotoFrameUploader` + `PhotoFrameReader` seams, repository frame drain
 

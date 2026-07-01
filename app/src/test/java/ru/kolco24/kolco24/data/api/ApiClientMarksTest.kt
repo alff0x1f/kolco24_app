@@ -171,4 +171,50 @@ class ApiClientMarksTest {
 
         assertEquals(PostResult.Offline, apiClient.uploadMarks(8, 42, "install-abc", emptyList()))
     }
+
+    @Test
+    fun uploadMarkPhoto_200_postsRawJpegToFrameUrl_withImageContentType() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200))
+        val jpegBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3)
+
+        val result = apiClient.uploadMarkPhoto(8, "mark-1", "frame-uuid", jpegBytes)
+
+        assertTrue(result is PostResult.Success)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/race/8/mark/mark-1/photo/frame-uuid", recorded.path)
+        assertEquals("image/jpeg", recorded.getHeader("Content-Type"))
+        assertEquals(jpegBytes.toList(), recorded.body.readByteArray().toList())
+    }
+
+    @Test
+    fun uploadMarkPhoto_404_returnsError404() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertEquals(
+            PostResult.Error(404),
+            apiClient.uploadMarkPhoto(8, "mark-1", "frame-uuid", ByteArray(0)),
+        )
+    }
+
+    @Test
+    fun uploadMarkPhoto_400_returnsBadRequest() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400))
+
+        assertEquals(
+            PostResult.BadRequest,
+            apiClient.uploadMarkPhoto(8, "mark-1", "frame-uuid", ByteArray(0)),
+        )
+    }
+
+    @Test
+    fun uploadMarkPhoto_429_returnsRateLimited() = runTest {
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        assertEquals(
+            PostResult.RateLimited,
+            apiClient.uploadMarkPhoto(8, "mark-1", "frame-uuid", ByteArray(0)),
+        )
+    }
 }
