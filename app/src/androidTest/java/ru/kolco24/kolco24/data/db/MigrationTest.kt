@@ -79,4 +79,45 @@ class MigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun migrate2To3_addsPhotosUploadedColumnsDefaultZeroAndPreservesRows() {
+        // Create the v2 schema and insert one pre-Phase-2 mark (no photosUploaded* columns exist yet).
+        helper.createDatabase(testDb, 2).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO marks (
+                    id, raceId, teamId, checkpointId, checkpointNumber, cost, method,
+                    cpUid, cpCode, present, presentDetails, expectedCount, complete, takenAt, updatedAt,
+                    uploadedLocal, uploadedCloud
+                ) VALUES (
+                    'm1', 7, 42, 100, 1, 10, 'photo',
+                    '', '', '[]', NULL, 3, 1, 1000, 1000,
+                    1, 0
+                )
+                """.trimIndent(),
+            )
+        }
+
+        // Run the migration; MigrationTestHelper validates the result against schemas/3.json.
+        val db = helper.runMigrationsAndValidate(testDb, 3, true, AppDatabase.MIGRATION_2_3)
+
+        // The legacy row survived migration with original data intact.
+        db.query("SELECT COUNT(*), teamId, method, uploadedLocal FROM marks").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals(42, c.getInt(1))
+            assertEquals("photo", c.getString(2))
+            assertEquals(1, c.getInt(3))
+        }
+
+        // The new columns default to 0 (not uploaded yet), not corrupted or NULL.
+        db.query("SELECT photosUploadedLocal, photosUploadedCloud FROM marks WHERE id = 'm1'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+            assertEquals(0, c.getInt(1))
+        }
+
+        db.close()
+    }
 }

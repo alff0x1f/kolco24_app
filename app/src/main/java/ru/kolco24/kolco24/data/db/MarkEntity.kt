@@ -67,6 +67,16 @@ data class MarkEntity(
     val uploadedLocal: Boolean = false,
     val uploadedCloud: Boolean = false,
     /**
+     * Per-target flag for the photo-frame drain (Phase 2): flips to true only once **all** of this
+     * mark's frames (see [photoPath]) have been accepted by the local (LAN) target. Independent of
+     * [uploadedLocal] (metadata) — the frame drain is gated on metadata landing first (metadata-first
+     * ordering), so this stays false until [uploadedLocal] is true. Reset to false by `attachPhotos`
+     * when new frames are appended (re-queues the drain).
+     */
+    val photosUploadedLocal: Boolean = false,
+    /** Same as [photosUploadedLocal], for the cloud target (see [uploadedCloud]). */
+    val photosUploadedCloud: Boolean = false,
+    /**
      * Trusted take time (monotonic-anchored server time) — the scoring/order source. NULL on legacy
      * rows and whenever no clock sync has happened (the raw [takenAt] wall time is the fallback).
      */
