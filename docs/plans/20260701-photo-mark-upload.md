@@ -195,10 +195,10 @@ Documented, not engineered around.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/MarkDao.kt`
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MarkDaoTest.kt`
 
-- [ ] Update `updatePhotoPath` to also set `photosUploadedLocal = 0, photosUploadedCloud = 0` (still NOT `uploaded*` — `photoPath` isn't in the DTO)
-- [ ] Update `attachPhotos` KDoc: appending frames re-queues the frame drain, metadata untouched
-- [ ] Extend `MarkDaoTest`: `attachPhotos` on a fully-frame-uploaded row resets `photosUploaded*` to 0 but leaves `uploaded*` intact
-- [ ] Run `connectedDebugAndroidTest` (MarkDaoTest) — must pass before Task 4
+- [x] Update `updatePhotoPath` to also set `photosUploadedLocal = 0, photosUploadedCloud = 0` (still NOT `uploaded*` — `photoPath` isn't in the DTO)
+- [x] Update `attachPhotos` KDoc: appending frames re-queues the frame drain, metadata untouched
+- [x] Extend `MarkDaoTest`: `attachPhotos` on a fully-frame-uploaded row resets `photosUploaded*` to 0 but leaves `uploaded*` intact
+- [x] Run `connectedDebugAndroidTest` (MarkDaoTest) — skipped, no emulator/device available in this environment; `compileDebugAndroidTestKotlin` + `lintDebug` + `testDebugUnitTest` pass
 
 ### Task 4: `frameIdOf` pure helper
 

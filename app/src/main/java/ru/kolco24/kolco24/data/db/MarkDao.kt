@@ -237,8 +237,8 @@ interface MarkDao {
      *
      * **`uploaded*` is deliberately NOT reset.** This attaches to an already-uploaded NFC row, but
      * `photoPath` is not part of the marks DTO — re-queuing the marks metadata would be a useless POST.
-     * The photo file itself is not uploaded at all in Phase 1; Phase 2 gets its own `photosUploaded*`
-     * flags rather than resetting the shared `uploaded*`. A missing row is a silent no-op.
+     * **`photosUploaded*` IS reset to 0** — appending frames re-queues the frame drain (the new frames
+     * haven't been sent), while the metadata upload flags stay untouched.
      */
     @Transaction
     suspend fun attachPhotos(id: String, newPaths: List<String>, now: Long) {
@@ -247,7 +247,13 @@ interface MarkDao {
         updatePhotoPath(id, encodePhotoPaths(merged), now)
     }
 
-    /** Column-scoped UPDATE touching only `photoPath` and `updatedAt` (see [attachPhotos]). */
-    @Query("UPDATE marks SET photoPath = :photoPath, updatedAt = :now WHERE id = :id")
+    /**
+     * Column-scoped UPDATE touching only `photoPath`, `updatedAt`, and `photosUploaded*` (see
+     * [attachPhotos]) — resets the frame-upload flags so newly-appended frames get drained.
+     */
+    @Query(
+        "UPDATE marks SET photoPath = :photoPath, updatedAt = :now, " +
+            "photosUploadedLocal = 0, photosUploadedCloud = 0 WHERE id = :id"
+    )
     suspend fun updatePhotoPath(id: String, photoPath: String, now: Long)
 }

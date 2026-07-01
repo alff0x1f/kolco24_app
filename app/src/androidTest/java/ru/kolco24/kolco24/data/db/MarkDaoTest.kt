@@ -238,4 +238,30 @@ class MarkDaoTest {
         dao.attachPhotos("nope", listOf("marks/nope/a.jpg"), now = 2_000L)
         assertEquals(null, dao.getById("nope"))
     }
+
+    @Test
+    fun attachPhotos_onFullyFrameUploadedRow_resetsPhotosUploadedButLeavesUploadedIntact() = runBlocking {
+        // A row whose frames already finished draining: appending a new frame must re-queue the
+        // frame drain (photosUploaded* -> 0) without touching the metadata uploaded* flags.
+        dao.upsert(
+            mark(
+                "photo-1", method = "photo",
+                photoPath = """["marks/photo-1/a.jpg"]""",
+                uploadedLocal = true, uploadedCloud = true,
+                photosUploadedLocal = true, photosUploadedCloud = true,
+            )
+        )
+
+        dao.attachPhotos("photo-1", listOf("marks/photo-1/b.jpg"), now = 2_000L)
+
+        val row = dao.getById("photo-1")!!
+        assertEquals(
+            listOf("marks/photo-1/a.jpg", "marks/photo-1/b.jpg"),
+            photoPaths(row.photoPath)
+        )
+        assertFalse(row.photosUploadedLocal)
+        assertFalse(row.photosUploadedCloud)
+        assertTrue(row.uploadedLocal)
+        assertTrue(row.uploadedCloud)
+    }
 }
