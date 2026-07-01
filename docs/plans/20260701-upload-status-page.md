@@ -146,11 +146,11 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/MarkRepository.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/PhotoFrameCountsTest.kt`
 
-- [ ] add pure `foldPhotoFrameCounts(rows: List<PhotoFrameRow>): UploadCounts` using `photoPaths(...)` for per-row frame count; document the mark-granular-tick / frame-granular-denominator behavior in a KDoc comment
-- [ ] add `MarkRepository.uploadCountsMetadata(teamId, raceId)` delegating to the DAO
-- [ ] add `MarkRepository.photoFrameCounts(teamId, raceId): Flow<UploadCounts>` = `markDao.photoFrameRows(...).map(::foldPhotoFrameCounts)`
-- [ ] write unit tests for `foldPhotoFrameCounts`: empty list → 0/0/0; a non-null empty encoded list (`"[]"`) → 0 frames (row present, no frames); single mark 3 frames both flags set → 3/3/3; mid-drain mark (flags 0) contributes 0 to numerators but frames to total; mixed (one local-done, one cloud-done) → asymmetric local/cloud
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] add pure `foldPhotoFrameCounts(rows: List<PhotoFrameRow>): UploadCounts` using `photoPaths(...)` for per-row frame count; document the mark-granular-tick / frame-granular-denominator behavior in a KDoc comment
+- [x] add `MarkRepository.uploadCountsMetadata(teamId, raceId)` delegating to the DAO
+- [x] add `MarkRepository.photoFrameCounts(teamId, raceId): Flow<UploadCounts>` = `markDao.photoFrameRows(...).map(::foldPhotoFrameCounts)`
+- [x] write unit tests for `foldPhotoFrameCounts`: empty list → 0/0/0; a non-null empty encoded list (`"[]"`) → 0 frames (row present, no frames); single mark 3 frames both flags set → 3/3/3; mid-drain mark (flags 0) contributes 0 to numerators but frames to total; mixed (one local-done, one cloud-done) → asymmetric local/cloud
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 4: Build `UploadScreen` overlay with three sections, «Финиш» gating, empty state
 

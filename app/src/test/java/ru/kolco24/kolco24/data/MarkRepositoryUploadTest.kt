@@ -15,6 +15,7 @@ import ru.kolco24.kolco24.data.api.dto.MarkDto
 import ru.kolco24.kolco24.data.api.dto.MarkUploadResponse
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.db.PhotoFrameRow
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.marks.encodePhotoPaths
@@ -854,6 +855,22 @@ private class FakeMarkUploadDao : MarkDao {
                 local = scoped.count { it.uploadedLocal && (it.photoPath == null || it.photosUploadedLocal) },
                 cloud = scoped.count { it.uploadedCloud && (it.photoPath == null || it.photosUploadedCloud) },
             )
+        }
+
+    override fun uploadCountsMetadata(teamId: Int, raceId: Int): Flow<UploadCounts> =
+        rows.map { list ->
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
+            UploadCounts(
+                total = scoped.size,
+                local = scoped.count { it.uploadedLocal },
+                cloud = scoped.count { it.uploadedCloud },
+            )
+        }
+
+    override fun photoFrameRows(teamId: Int, raceId: Int): Flow<List<PhotoFrameRow>> =
+        rows.map { list ->
+            list.filter { it.teamId == teamId && it.raceId == raceId && it.photoPath != null }
+                .map { PhotoFrameRow(it.photoPath, it.photosUploadedLocal, it.photosUploadedCloud) }
         }
 
     // Phase 2: photo-mark metadata shares the drain with NFC marks (filter dropped).
