@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.marks.encodePhotoPaths
 import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
@@ -22,6 +23,7 @@ class MarksMappingTest {
         complete: Boolean = true,
         takenAt: Long = 1_000L,
         trustedTakenAt: Long? = null,
+        photoPath: String? = null,
     ) = MarkEntity(
         id = id,
         raceId = 1,
@@ -38,6 +40,7 @@ class MarksMappingTest {
         takenAt = takenAt,
         updatedAt = takenAt,
         trustedTakenAt = trustedTakenAt,
+        photoPath = photoPath,
     )
 
     private fun hhmm(epoch: Long) = SimpleDateFormat("HH:mm", Locale.US).format(Date(epoch))
@@ -194,5 +197,64 @@ class MarksMappingTest {
     fun `marksToTiles cost defaults to the snapshot without a resolver`() {
         val tiles = marksToTiles(listOf(mark("a", point = 1, number = 1, cost = 7)))
         assertEquals(7, tiles.single().cost)
+    }
+
+    @Test
+    fun `photoPaths and photoCount map from the encoded photoPath column`() {
+        val paths = listOf("marks/a/1.jpg", "marks/a/2.jpg", "marks/a/3.jpg")
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 1, photoPath = encodePhotoPaths(paths))),
+        )
+        val tile = tiles.single()
+        // Order is preserved and the badge count is the derived list size.
+        assertEquals(paths, tile.photoPaths)
+        assertEquals(3, tile.photoCount)
+    }
+
+    @Test
+    fun `a tile without photos has empty paths and zero count`() {
+        val tile = marksToTiles(listOf(mark("a", point = 1, number = 1, cost = 1))).single()
+        assertTrue(tile.photoPaths.isEmpty())
+        assertEquals(0, tile.photoCount)
+    }
+
+    @Test
+    fun `an nfc take can carry photo evidence so the badge shows on a colored tile`() {
+        // NFC tile keeps its kind, but photoCount > 0 drives the «📷×N» badge independently.
+        val tile = marksToTiles(
+            listOf(
+                mark(
+                    "a", point = 1, number = 1, cost = 2, method = "nfc",
+                    photoPath = encodePhotoPaths(listOf("marks/a/1.jpg")),
+                ),
+            ),
+        ).single()
+        assertEquals(MarkKind.NFC, tile.kind)
+        assertEquals(1, tile.photoCount)
+    }
+
+    @Test
+    fun `a photo mark with empty present and complete is tiled`() {
+        // A standalone photo take (no NFC roster scanned) is present=[] complete=true; it must still tile.
+        val marks = listOf(
+            mark(
+                "p", point = 1, number = 3, cost = 4, method = "photo", complete = true,
+                photoPath = encodePhotoPaths(listOf("marks/p/1.jpg")),
+            ),
+        )
+        val tiles = marksToTiles(marks)
+        assertEquals(1, tiles.size)
+        assertEquals(MarkKind.PHOTO, tiles.single().kind)
+        assertEquals(1, tiles.single().photoCount)
+    }
+
+    @Test
+    fun `a corrupted photoPath column degrades to no photos`() {
+        // photoPaths(...) never throws — garbage decodes to emptyList, so the tile simply shows no badge.
+        val tile = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 1, photoPath = "{not json")),
+        ).single()
+        assertTrue(tile.photoPaths.isEmpty())
+        assertEquals(0, tile.photoCount)
     }
 }

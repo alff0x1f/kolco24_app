@@ -5,6 +5,9 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import ru.kolco24.kolco24.data.marks.encodePhotoPaths
+import ru.kolco24.kolco24.data.marks.isSafeRelativePhotoPath
+import ru.kolco24.kolco24.data.marks.photoPaths
 
 @Dao
 interface MarkDao {
@@ -16,6 +19,11 @@ interface MarkDao {
 
     @Query("SELECT * FROM marks WHERE id = :id")
     suspend fun getById(id: String): MarkEntity?
+
+    /** Every persisted mark id — backs the startup orphan-photo-directory sweep (a dir is orphaned when
+     *  its name, the markId, has no row here). */
+    @Query("SELECT id FROM marks")
+    suspend fun allIds(): List<String>
 
     @Upsert
     suspend fun upsert(mark: MarkEntity)
@@ -99,11 +107,16 @@ interface MarkDao {
     // Per-target upload progress for one scope (mirror of TrackDao.uploadCounts): explicit CASE over the
     // Boolean column (SUM(boolean) is codegen-fragile), COALESCE(...,0) guards the empty-scope NULL, and
     // aliases match UploadCounts property names so Room maps by name.
+    //
+    // `method != 'photo'` excludes the local-only photo marks (Phase 1: photos are stored/scored on-device
+    // but never uploaded — see MarkEntity / the Phase-1 plan). Without it the UI upload-status row would
+    // count photo marks as perpetually pending (their uploaded* never flips). Phase 2 drops this filter
+    // once the multipart file endpoint exists.
     @Query(
         "SELECT COUNT(*) AS total, " +
             "COALESCE(SUM(CASE WHEN uploadedLocal THEN 1 ELSE 0 END), 0) AS local, " +
             "COALESCE(SUM(CASE WHEN uploadedCloud THEN 1 ELSE 0 END), 0) AS cloud " +
-            "FROM marks WHERE teamId = :teamId AND raceId = :raceId"
+            "FROM marks WHERE teamId = :teamId AND raceId = :raceId AND method != 'photo'"
     )
     fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts>
 
@@ -111,9 +124,14 @@ interface MarkDao {
     // never sweep up another race/team's rows. Note the explicit `= :raceId AND = :teamId` — a bare
     // `WHERE raceId AND teamId` would read the columns as truthy expressions and break the filter.
     // All rows (complete=true AND false) upload; the server recomputes completeness from present[].
+    //
+    // `method != 'photo'` keeps the local-only photo marks out of the drain (Phase 1). The marks DTO has
+    // no photoPath field and a photo row carries empty cpUid/cpCode, so sending it would be a useless POST
+    // and risks dropping the whole batch to a 400 — taking valid NFC marks down with it. Phase 2 removes
+    // this filter when metadata + file upload together.
     @Query(
         "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
-            "AND uploadedLocal = 0 " +
+            "AND uploadedLocal = 0 AND method != 'photo' " +
             "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
             "LIMIT :limit"
     )
@@ -121,7 +139,7 @@ interface MarkDao {
 
     @Query(
         "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
-            "AND uploadedCloud = 0 " +
+            "AND uploadedCloud = 0 AND method != 'photo' " +
             "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
             "LIMIT :limit"
     )
@@ -162,7 +180,35 @@ interface MarkDao {
     suspend fun markUploadedCloudIfUnchangedAndNoLocation(id: String, updatedAt: Long)
 
     // Every (raceId, teamId) pair that still has a row not yet delivered to one of the targets — the
-    // opportunistic re-send walks all of them, not just the current selection.
-    @Query("SELECT DISTINCT raceId, teamId FROM marks WHERE uploadedLocal = 0 OR uploadedCloud = 0")
+    // opportunistic re-send walks all of them, not just the current selection. `method != 'photo'` is
+    // required (Phase 1) so a scope with only photo marks is never returned — otherwise uploadAllPending
+    // would flush it forever (the photo rows stay pending because the drain excludes them).
+    @Query(
+        "SELECT DISTINCT raceId, teamId FROM marks " +
+            "WHERE (uploadedLocal = 0 OR uploadedCloud = 0) AND method != 'photo'"
+    )
     suspend fun pendingUploadScopes(): List<TrackScope>
+
+    /**
+     * Append [newPaths] to an existing take's [MarkEntity.photoPath] JSON list — **column-scoped** like
+     * [attachLocation]: it reads the current paths, merges, and writes back **only** `photoPath` and
+     * `updatedAt`. A full-row read-modify-write would lose-update the parallel fire-and-forget
+     * `present`/`complete`/`loc*` writes (see [attachLocation]'s rationale), so the merge runs inside a
+     * `@Transaction` and the write is a column-scoped `UPDATE`.
+     *
+     * **`uploaded*` is deliberately NOT reset.** This attaches to an already-uploaded NFC row, but
+     * `photoPath` is not part of the marks DTO — re-queuing the marks metadata would be a useless POST.
+     * The photo file itself is not uploaded at all in Phase 1; Phase 2 gets its own `photosUploaded*`
+     * flags rather than resetting the shared `uploaded*`. A missing row is a silent no-op.
+     */
+    @Transaction
+    suspend fun attachPhotos(id: String, newPaths: List<String>, now: Long) {
+        val mark = getById(id) ?: return
+        val merged = (photoPaths(mark.photoPath) + newPaths.filter(::isSafeRelativePhotoPath)).distinct()
+        updatePhotoPath(id, encodePhotoPaths(merged), now)
+    }
+
+    /** Column-scoped UPDATE touching only `photoPath` and `updatedAt` (see [attachPhotos]). */
+    @Query("UPDATE marks SET photoPath = :photoPath, updatedAt = :now WHERE id = :id")
+    suspend fun updatePhotoPath(id: String, photoPath: String, now: Long)
 }

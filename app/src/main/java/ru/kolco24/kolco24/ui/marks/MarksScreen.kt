@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.marks
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,14 +16,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOn
@@ -33,7 +38,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,7 +49,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -54,6 +66,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -66,11 +80,14 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.data.track.UploadResultKind
@@ -89,7 +106,13 @@ data class Mark(
     val kind: MarkKind,
     val time: String,
     val color: CheckpointColor? = null,
-)
+    // Relative (`marks/<markId>/<uuid>.jpg`) photo paths captured for this take; `filesDir` is resolved
+    // at the `AsyncImage` site, never here. Carried on **any** take (an NFC take can also carry photo
+    // evidence) so the «📷×N» badge is driven by [photoCount], independent of the tile [kind].
+    val photoPaths: List<String> = emptyList(),
+) {
+    val photoCount: Int get() = photoPaths.size
+}
 
 enum class MarkKind { NFC, PHOTO }
 
@@ -126,6 +149,7 @@ fun marksToTiles(
                 // untrusted/legacy rows where no server time was anchored at take.
                 time = fmt.format(Date(m.trustedTakenAt ?: m.takenAt)),
                 color = colorOf(m),
+                photoPaths = photoPaths(m.photoPath),
             )
         }
 }
@@ -192,6 +216,7 @@ fun MarksScreen(
     onOpenNfcSettings: () -> Unit = {},
     onStartTrack: () -> Unit = {},
     onRequestLocation: () -> Unit = {},
+    onPhotoClick: () -> Unit = {},
     uploadStatus: TrackUploadStatus? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -203,7 +228,14 @@ fun MarksScreen(
     val takenScore = totalScore(marks, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    // A tapped photo tile opens the view-only lightbox; the paths drive the pager. Local screen state
+    // (not a `MainActivity` overlay flag) — Phase 1 view-only, dismissed by tap/back.
+    var lightboxPaths by rememberSaveable(
+        stateSaver = listSaver(save = { it }, restore = { it }),
+    ) { mutableStateOf(emptyList<String>()) }
+
+    Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Отметки") },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -246,7 +278,10 @@ fun MarksScreen(
                     }
                 } else {
                     item("tile_grid") {
-                        TileGrid(marks = tiles)
+                        TileGrid(
+                            marks = tiles,
+                            onPhotoTileClick = { paths -> lightboxPaths = paths },
+                        )
                     }
                     // The empty state folds the NFC notice into its own message, so only surface the
                     // standalone banner once there are tiles to sit above.
@@ -272,7 +307,26 @@ fun MarksScreen(
             }
 
             // No «Отметить КП» button — the scan overlay opens automatically when a КП chip is tapped.
-            // The «Фото» fallback FAB is hidden until photo marking is implemented.
+            // The «Фото» fallback FAB is the single FAB: a photo take is the fallback for a КП that
+            // can't be NFC-read (no NFC, ripped marker, unreadable chip). Its onClick routes through the
+            // host (decidePhotoTarget — auto-attach vs ask-number, no team → picker).
+            FloatingActionButton(
+                onClick = onPhotoClick,
+                containerColor = OrangeCta,
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            ) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = "Сфотографировать КП")
+            }
+        }
+    }
+
+        // Full-screen view-only lightbox, drawn over the whole screen (incl. the TopAppBar) so the
+        // photos own the frame; tap or back dismisses it.
+        if (lightboxPaths.isNotEmpty()) {
+            PhotoLightbox(paths = lightboxPaths, onDismiss = { lightboxPaths = emptyList() })
         }
     }
 }
@@ -714,7 +768,11 @@ private fun MetricItem(
  * above keeps its own inset).
  */
 @Composable
-private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
+private fun TileGrid(
+    marks: List<Mark>,
+    onPhotoTileClick: (List<String>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val rows = marks.chunked(4)
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -727,7 +785,7 @@ private fun TileGrid(marks: List<Mark>, modifier: Modifier = Modifier) {
             ) {
                 rowMarks.forEach { mark ->
                     Box(modifier = Modifier.weight(1f)) {
-                        ColorTile(mark = mark)
+                        ColorTile(mark = mark, onPhotoTileClick = onPhotoTileClick)
                     }
                 }
                 // Empty spacers (showing the screen background) keep the last row's grid regular to the
@@ -749,17 +807,97 @@ private fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.surface.luminanc
  * fill + readable text are resolved by the pure [tileFill] against the [isDarkScheme] result.
  */
 @Composable
-private fun ColorTile(mark: Mark) {
+private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
     val tf = tileFill(mark.color, isDarkScheme())
+    val hasPhotos = mark.photoCount > 0
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(tf.fill),
+            .background(tf.fill)
+            // Only a tile that actually carries photos is tappable (opens the lightbox); a plain NFC
+            // tile keeps its current inert behaviour.
+            .then(if (hasPhotos) Modifier.clickable { onPhotoTileClick(mark.photoPaths) } else Modifier),
     ) {
         when (mark.kind) {
             MarkKind.NFC -> NfcTileBody(mark, tf.text)
             MarkKind.PHOTO -> PhotoTileBody(mark)
+        }
+        // The «📷×N» badge rides on **any** tile with photos (NFC takes can carry photo evidence too),
+        // so it is gated on [Mark.photoCount], not the tile [kind].
+        if (hasPhotos) {
+            PhotoCountBadge(
+                count = mark.photoCount,
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+            )
+        }
+    }
+}
+
+/** Small «📷×N» corner badge over a tile carrying captured photos. */
+@Composable
+private fun PhotoCountBadge(count: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(
+            Icons.Filled.CameraAlt,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(11.dp),
+        )
+        Text(
+            text = "×$count",
+            color = Color.White,
+            fontFamily = RobotoMono,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.sp,
+        )
+    }
+}
+
+/**
+ * Full-screen, view-only photo lightbox: a [HorizontalPager] over the take's N captured frames, resolved
+ * from `filesDir` at render time (the [Mark] carries only relative paths). A «k/N» counter rides the top
+ * when there is more than one frame; a tap anywhere or back dismisses. Phase 1 has no edit/delete here.
+ */
+@Composable
+private fun PhotoLightbox(paths: List<String>, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val pagerState = rememberPagerState(pageCount = { paths.size })
+    BackHandler(onBack = onDismiss)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    ) {
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+            AsyncImage(
+                model = File(context.filesDir, paths[page]),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (paths.size > 1) {
+            Text(
+                text = "${pagerState.currentPage + 1}/${paths.size}",
+                color = Color.White,
+                fontFamily = RobotoMono,
+                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp),
+            )
+        }
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 8.dp),
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
         }
     }
 }
@@ -826,12 +964,23 @@ private fun tokenAnnotated(mark: Mark, textColor: Color): AnnotatedString = buil
  */
 @Composable
 private fun PhotoTileBody(mark: Mark) {
-    // TODO(photo): fill with mark.photoPath image once photo marking ships (add Coil dependency)
+    val context = LocalContext.current
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
     ) {
+        // The first captured frame fills the tile; the charcoal gradient shows through until it loads
+        // (and stays as the seat if the file is missing). `filesDir` is resolved here — the pure mapper
+        // carries only relative paths.
+        mark.photoPaths.firstOrNull()?.let { rel ->
+            AsyncImage(
+                model = File(context.filesDir, rel),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         // Bottom scrim so the caption stays legible over real imagery (the placeholder is dark already,
         // but a photo's lower edge can be bright).
         Box(

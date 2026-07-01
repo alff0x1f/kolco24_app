@@ -28,6 +28,7 @@ import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
@@ -362,7 +363,21 @@ class AppContainer(private val context: Context) {
     /**
      * Debug/testing only — wipes every Room table (races, categories, teams, selected_team,
      * checkpoints) plus the `sync_meta` ETags, so the next refresh re-fetches everything from
-     * scratch. Blocking; call from a background dispatcher.
+     * scratch. Also deletes every captured photo-mark frame under `filesDir/marks/` (the mark rows
+     * are gone, so the frames would otherwise be orphaned on disk — there is no per-mark delete UI).
+     * Blocking; call from a background dispatcher.
      */
-    fun clearDatabase() = database.clearAllTables()
+    fun clearDatabase() {
+        database.clearAllTables()
+        PhotoStorage.marksRoot(context.filesDir).deleteRecursively()
+    }
+
+    /**
+     * Startup sweep of orphaned photo-mark directories: a `filesDir/marks/<id>/` whose `<id>` is not a
+     * live `MarkEntity` id (process death struck between writing frames and persisting the row — see the
+     * Phase-1 plan). Best-effort; runs on [applicationScope].
+     */
+    suspend fun sweepOrphanPhotoDirs() {
+        PhotoStorage.sweepOrphanDirs(context.filesDir, database.markDao().allIds().toHashSet())
+    }
 }

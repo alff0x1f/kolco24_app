@@ -7,11 +7,13 @@ import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.api.dto.MarkDto
 import ru.kolco24.kolco24.data.api.dto.MarkUploadResponse
 import ru.kolco24.kolco24.data.api.dto.toDto
+import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.db.MarkDao
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.marks.encodePhotoPaths
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
 import ru.kolco24.kolco24.data.track.UploadResultKind
@@ -152,6 +154,66 @@ class MarkRepository(
             now = sample.wallMs,
             expectedCount = expectedCount,
         )
+    }
+
+    /**
+     * Create a **standalone photo-mark** ([markId] already minted by the entry point so the captured
+     * frames were written under `marks/<markId>/` before the row existed — see the Phase-1 plan). The row
+     * is a hybrid take: `method = "photo"`, `complete = true` (scored locally), `present = emptyList()`
+     * (the composition is not asserted — only that the team reached the КП), and `cpUid`/`cpCode` are
+     * empty (no chip was read).
+     *
+     * [cp] is the resolved checkpoint; `cost` falls back to `0` for a still-locked КП ([CheckpointEntity.cost]
+     * is null while locked) — the legend's live-cost resolver picks up the real value after a later reveal.
+     * [expectedCount] is the roster size, stored for the server log only — it does **not** drive `complete`
+     * here (set explicitly). [paths] are the **relative** photo paths; they are JSON-encoded into
+     * [MarkEntity.photoPath]. Times come from [sample] (captured at the first saved frame), exactly as
+     * [startKpTake] persists an NFC take's [TimeSample].
+     *
+     * The anti-cheat coordinate is attached separately via [attachLocation] (the same column-scoped path
+     * the NFC new-take branch uses); the entry-point wiring fires a one-shot `currentLocationProvider`.
+     */
+    suspend fun createPhotoMark(
+        markId: String,
+        cp: CheckpointEntity,
+        raceId: Int,
+        teamId: Int,
+        paths: List<String>,
+        expectedCount: Int,
+        sample: TimeSample,
+    ) {
+        markDao.upsert(
+            MarkEntity(
+                id = markId,
+                raceId = raceId,
+                teamId = teamId,
+                checkpointId = cp.id,
+                checkpointNumber = cp.number,
+                cost = cp.cost ?: 0,
+                method = "photo",
+                cpUid = "",
+                cpCode = "",
+                present = emptyList(),
+                presentDetails = null,
+                expectedCount = expectedCount,
+                complete = true,
+                photoPath = encodePhotoPaths(paths),
+                takenAt = sample.wallMs,
+                updatedAt = sample.wallMs,
+                trustedTakenAt = sample.trustedMs,
+                elapsedRealtimeAt = sample.elapsedMs,
+                bootCount = sample.bootCount,
+            ),
+        )
+    }
+
+    /**
+     * Append [newPaths] to take [markId]'s photo list (column-scoped via [MarkDao.attachPhotos]; only
+     * `photoPath`/`updatedAt` change, `uploaded*` is left intact — `photoPath` is not in the marks DTO).
+     * A missing row is a no-op. [now] bumps `updatedAt`. Used by the "photo after NFC" auto-attach path.
+     */
+    suspend fun attachPhotos(markId: String, newPaths: List<String>, now: Long) {
+        markDao.attachPhotos(markId, newPaths, now)
     }
 
     /**

@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
 import android.nfc.NfcAdapter
+import android.util.Log
 import android.nfc.Tag
 import android.os.Build
 import android.os.Bundle
@@ -107,8 +108,12 @@ import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
 import java.io.File
+import ru.kolco24.kolco24.data.marks.PhotoTarget
+import ru.kolco24.kolco24.data.marks.decidePhotoTarget
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
+import ru.kolco24.kolco24.ui.photo.PhotoCaptureScreen
+import ru.kolco24.kolco24.ui.photo.PhotoNumberPicker
 import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
 import ru.kolco24.kolco24.ui.scan.ScanScreen
 import ru.kolco24.kolco24.ui.scan.ScanEvent
@@ -720,6 +725,18 @@ private fun Kolco24AppRoot(
     var pickerRaceId by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirmTeamId by rememberSaveable { mutableStateOf<Int?>(null) }
 
+    // Photo-mark overlays. The number picker (AskNumber path) is a simple boolean; the camera overlay's
+    // target is decomposed into saveable primitives (a plain data class is not saved by rememberSaveable):
+    // photoCaptureMarkId != null is the open-gate (the id is minted by the entry point before the camera
+    // opens so frames write under marks/<id>/ — see PhotoCaptureScreen). photoCaptureAttach distinguishes
+    // the «photo after NFC» auto-attach (reuse the recent take's id, show «изменить») from a standalone
+    // AskNumber take (a fresh UUID, createPhotoMark on commit).
+    var showPhotoPicker by rememberSaveable { mutableStateOf(false) }
+    var photoCaptureMarkId by rememberSaveable { mutableStateOf<String?>(null) }
+    var photoCaptureCpNumber by rememberSaveable { mutableStateOf(0) }
+    var photoCaptureCheckpointId by rememberSaveable { mutableStateOf(0) }
+    var photoCaptureAttach by rememberSaveable { mutableStateOf(false) }
+
     // Bind-chip overlay: which member slot (numberInTeam) is being bound, or null when the sheet is closed.
     var bindSlot by rememberSaveable { mutableStateOf<Int?>(null) }
     // Unbind confirmation: which member slot (numberInTeam) is pending unbind, or null when no dialog.
@@ -740,6 +757,8 @@ private fun Kolco24AppRoot(
     // recording also stops the service — the running track belongs to the team we are leaving.
     LaunchedEffect(selectedTeamId) {
         bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false
+        showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
+        photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
         showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
         // Only stop recording when a different team is selected. Guard against selectedTeamId == null,
         // which occurs transiently during activity recreation (collectAsState initial = null) before Room
@@ -894,6 +913,38 @@ private fun Kolco24AppRoot(
         }
     }
 
+    // Photo-mark FAB entry point. Gated on a resolved team (else route to the picker, mirroring the
+    // captured-scan no-team path). With a team, the pure router decides: a complete take within the
+    // 3-minute window auto-attaches photos to it (camera opens directly, header «изменить» can drop into
+    // the picker); otherwise the КП number must be picked first. "Now" is the trusted epoch (falling back
+    // to wall), matching decidePhotoTarget's `trustedTakenAt ?: takenAt` comparison.
+    val onPhotoClick: () -> Unit = {
+        when (teamState) {
+            is SelectedTeamState.Present -> {
+                val s = container.trustedClock.sample()
+                val now = s.trustedMs ?: s.wallMs
+                when (val target = decidePhotoTarget(safeMarks, now)) {
+                    is PhotoTarget.AttachTo -> {
+                        photoCaptureMarkId = target.markId
+                        photoCaptureCpNumber = target.cpNumber
+                        photoCaptureCheckpointId = target.checkpointId
+                        photoCaptureAttach = true
+                        showPhotoPicker = false
+                    }
+                    PhotoTarget.AskNumber -> {
+                        showPhotoPicker = true
+                    }
+                }
+            }
+            SelectedTeamState.None, SelectedTeamState.Missing -> {
+                pickerRaceId = selectedRaceId
+                teamFlowStep = TeamFlowStep.CompPicker
+            }
+            // Mid team-switch: ignore the tap rather than open a camera with no team to score against.
+            SelectedTeamState.Loading -> Unit
+        }
+    }
+
     // Mirror the roster-filtered bound uids onto the Activity so the binder-thread idle path can
     // recognize a bound bracelet (open the overlay) without touching Compose state. A coarse open-gate
     // only: it may briefly lag a team switch, so a stale bracelet could open an overlay that then reads
@@ -913,7 +964,7 @@ private fun Kolco24AppRoot(
         // verify hook is armed, but Settings/confirm states still can.
         val busy = showScan || teamFlowStep != TeamFlowStep.None || confirmTeamId != null ||
             showSettings || showAdmin || showProvisioning || showCheckChip || bindSlot != null ||
-            unbindSlot != null
+            unbindSlot != null || showPhotoPicker || photoCaptureMarkId != null
         if (busy) {
             // Narrow race: showScan is true but onTagForMark is not yet armed (DisposableEffect
             // hasn't run). The idle path fires and publishes a live scan here instead of routing to
@@ -930,6 +981,7 @@ private fun Kolco24AppRoot(
                 teamFlowStep = TeamFlowStep.None; confirmTeamId = null; showSettings = false
                 showAdmin = false; showProvisioning = false; showCheckChip = false
                 bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
+                showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
                 showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
                 act.pendingScan.value = scan
                 showScan = true
@@ -1057,6 +1109,7 @@ private fun Kolco24AppRoot(
                         onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
+                        onPhotoClick = onPhotoClick,
                         uploadStatus = marksUploadStatus,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
@@ -1772,6 +1825,92 @@ private fun Kolco24AppRoot(
                 dismissButton = {
                     TextButton(onClick = { showLocationDeniedDialog = false }) { Text("Закрыть") }
                 },
+            )
+        }
+
+        // Photo-mark overlays — rendered last so their (unconditional) internal BackHandlers win the
+        // back press; they never co-render with another overlay (the FAB is covered while one is up, and
+        // every open path resets the sibling flags). The camera takes precedence over the picker: opening
+        // the camera (AskNumber select, or AttachTo) sets photoCaptureMarkId and clears showPhotoPicker.
+        val activePhotoMarkId = photoCaptureMarkId
+        if (showPhotoPicker && activePhotoMarkId == null) {
+            PhotoNumberPicker(
+                legend = safeCheckpoints,
+                onCheckpointSelected = { cp ->
+                    // A standalone photo-mark: mint the row id here (before the camera) so frames write
+                    // under marks/<id>/ matching the row created on commit (fixes the chicken-and-egg).
+                    photoCaptureMarkId = java.util.UUID.randomUUID().toString()
+                    photoCaptureCpNumber = cp.number
+                    photoCaptureCheckpointId = cp.id
+                    photoCaptureAttach = false
+                    showPhotoPicker = false
+                },
+                onBack = { showPhotoPicker = false },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (activePhotoMarkId != null) {
+            // Resolve the target checkpoint for the standalone-create path (createPhotoMark needs the
+            // CheckpointEntity for its cost/number). Null for an AttachTo (we only attach paths there).
+            val photoCp = remember(activePhotoMarkId, photoCaptureCheckpointId, safeCheckpoints) {
+                safeCheckpoints.find { it.id == photoCaptureCheckpointId }
+            }
+            val attach = photoCaptureAttach
+            PhotoCaptureScreen(
+                markId = activePhotoMarkId,
+                cpNumber = photoCaptureCpNumber,
+                scanFeedback = container.scanFeedback,
+                sampleProvider = { container.trustedClock.sample() },
+                // «изменить» only on the auto-attach path — drop into the picker (becomes a standalone take).
+                onChangeCheckpoint = if (attach) {
+                    { photoCaptureMarkId = null; photoCaptureCheckpointId = 0; photoCaptureAttach = false; showPhotoPicker = true }
+                } else {
+                    null
+                },
+                onCommit = { paths, firstSample ->
+                    val raceId = selectedRaceId
+                    val teamId = selectedTeamId
+                    val rosterSize = teamForTab?.members?.size ?: 0
+                    // applicationScope: the write must outlive the closing overlay (mirrors selectTeam/
+                    // startKpTake). AttachTo appends paths to the existing (NFC) row; AskNumber creates a
+                    // standalone hybrid photo-mark and fires a one-shot anti-cheat GPS fix for it.
+                    container.applicationScope.launch {
+                        if (attach) {
+                            // attachPhotos only needs the markId — proceed even if raceId/teamId is null.
+                            markRepo.attachPhotos(activePhotoMarkId, paths, firstSample.wallMs)
+                        } else if (raceId == null || teamId == null) {
+                            // The camera overlay is normally closed by LaunchedEffect(selectedTeamId) before
+                            // a team deselection reaches this point, so this branch is nearly unreachable.
+                            // The frames are orphaned here and swept on the next cold start by sweepOrphanPhotoDirs.
+                            Log.e("PhotoCapture", "raceId/teamId null at commit for id=$activePhotoMarkId — frames orphaned")
+                        } else if (photoCp != null) {
+                            markRepo.createPhotoMark(
+                                markId = activePhotoMarkId,
+                                cp = photoCp,
+                                raceId = raceId,
+                                teamId = teamId,
+                                paths = paths,
+                                expectedCount = rosterSize,
+                                sample = firstSample,
+                            )
+                            markRepo.attachLocation(
+                                activePhotoMarkId,
+                                container.currentLocationProvider.current(),
+                            )
+                        } else {
+                            // photoCp resolved null — legend refreshed and removed the checkpoint
+                            // between picker selection and commit; frames are orphaned and will
+                            // be swept on next cold start.
+                            Log.e("PhotoCapture", "photoCp null at commit for id=$activePhotoMarkId checkpointId=$photoCaptureCheckpointId — frames orphaned")
+                        }
+                    }
+                    photoCaptureMarkId = null
+                    photoCaptureAttach = false
+                    photoCaptureCheckpointId = 0
+                    photoCaptureCpNumber = 0
+                },
+                onClose = { photoCaptureMarkId = null; photoCaptureAttach = false; photoCaptureCheckpointId = 0; photoCaptureCpNumber = 0 },
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

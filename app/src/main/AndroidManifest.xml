@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.NFC" />
     <!-- Scan-feedback vibration; without this every Vibrator.vibrate(...) is a silent no-op. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Photo-mark fallback: in-app CameraX capture when NFC is unavailable / the chip won't read. -->
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- GPS track recording: location for the fixes, foreground-service (+ location type on 14+) so
          recording survives a sleeping screen, POST_NOTIFICATIONS for the ongoing notification on 13+. -->
@@ -24,6 +26,12 @@
          blocked, recording. -->
     <uses-feature
         android:name="android.hardware.location.gps"
+        android:required="false" />
+
+    <!-- required="false" (mirrors NFC/GPS) keeps the app installable on camera-less devices —
+         photo-mark is a fallback affordance, not a hard requirement. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
         android:required="false" />
 
     <application
