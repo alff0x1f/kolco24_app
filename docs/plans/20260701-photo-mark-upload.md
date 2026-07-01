@@ -261,11 +261,11 @@ Documented, not engineered around.
 **Files:**
 - Modify: `docs/design/UPLOAD.md`
 
-- [ ] Replace the "сам файл фото — отдельной задачей (multipart-эндпоинт)" stub with a full frame-endpoint section: endpoint shape, `image/jpeg` body, signing note (body hash = `sha256(jpeg)`), idempotency by `(race, mark_id, frame_id)`
-- [ ] Add a response-code table row for the frame endpoint incl. the `404 → self-heal` semantics
-- [ ] Note that `method="photo"` metadata now flows through `/marks/` (filter dropped; `verified=false` on empty `cp_code`)
-- [ ] **Pin the `/marks/` partial-accept requirement**: the endpoint MUST return `accepted[]` excluding any rejected rows and MUST NOT whole-batch `400` on a photo row (a photo row now shares the batch with valid NFC marks; a whole-request `400` would strand them). State the interim-safety reasoning (filter-drop is a no-op while `/marks/` 404s)
-- [ ] No tests (docs only)
+- [x] Replace the "сам файл фото — отдельной задачей (multipart-эндпоинт)" stub with a full frame-endpoint section: endpoint shape, `image/jpeg` body, signing note (body hash = `sha256(jpeg)`), idempotency by `(race, mark_id, frame_id)`
+- [x] Add a response-code table row for the frame endpoint incl. the `404 → self-heal` semantics
+- [x] Note that `method="photo"` metadata now flows through `/marks/` (filter dropped; `verified=false` on empty `cp_code`)
+- [x] **Pin the `/marks/` partial-accept requirement**: the endpoint MUST return `accepted[]` excluding any rejected rows and MUST NOT whole-batch `400` on a photo row (a photo row now shares the batch with valid NFC marks; a whole-request `400` would strand them). State the interim-safety reasoning (filter-drop is a no-op while `/marks/` 404s)
+- [x] No tests (docs only)
 
 ### Task 10: Verify acceptance criteria
 
