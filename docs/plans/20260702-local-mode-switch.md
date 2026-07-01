@@ -18,15 +18,18 @@ decides the source:
   «Обновить» button, no mandatory LAN probe on every manual refresh —
   `SmartRefreshPlan`/`decideSmartRefresh` (5 branches) are dropped entirely, replaced by a tiny
   pure `applySyncResponse` (local → renew, cloud → clear, error → no-op).
-- **Admin decides the duration**: the server's `lease_expires_at` (admin sets it ≈ time to
-  reach civilization + sync) wins whenever present; the client's 12 h default only covers
-  today's stubbed `null`. No app update needed when the backend ships the real lease.
+- **Admin decides the duration**: the server's lease (admin sets it ≈ time to reach
+  civilization + sync) wins whenever present — preferably a relative `lease_ttl_seconds`
+  (clock-skew-immune), with the already-designed absolute `lease_expires_at` as fallback; the
+  client's 12 h default only covers today's stubbed `null`. No app update needed when the
+  backend ships the real lease.
 - **Everyday refresh is pull-to-refresh** — already wired on «Команда» (and «Легенда» / the
   races picker) via `RefreshableList`; the change is **re-routing** the existing gesture
   through `sourceFor(raceId)`: pinned → LAN, else cloud.
 - The pin is a **lease, not a latch**: released by expiry, by server handback
   (`data_source:"cloud"`), or by the switch — never by connectivity loss (leaving Wi-Fi for
-  5 minutes must not fall back to a stale cloud roster). Every successful local sync renews it.
+  5 minutes must not fall back to a stale cloud roster). Every successful local manifest probe
+  renews it.
 - **Uploads are untouched** — marks/track/photo POSTs keep flushing to both targets; this plan
   is GET-only.
 
@@ -104,15 +107,17 @@ decides the source:
 Switch semantics (approved in brainstorm):
 
 ```
-Switch position = derived from isPinned(lease, raceId, now) at Settings open
-                  (NOT a stored preference — the pin auto-expires / hands back,
-                   so the switch honestly flips itself off)
+Switch position = derived from the lease StateFlow via isPinned(lease, raceId, now)
+                  (NOT a stored preference — a handback landing from Launch B or a pull
+                   flips the switch off live even while Settings is open; pure time
+                   expiry shows on the next recomposition trigger / Settings open)
 
 Turn ON  (async, Bluetooth-style: tap → busy spinner → resolve)
 ├ LAN fetchSync ok, data_source=local → pin (renewedLease) →
 │     races+teams+legend+member_tags from LAN → ON, «Локальный режим до HH:MM»
-├ LAN fetchSync ok, data_source=cloud → NO pin, data still refreshed from LAN
-│     (user explicitly asked for local) → bounce OFF, «Локальный режим не активен»
+├ LAN fetchSync ok, data_source=cloud → NO pin; a server that disclaims authority must
+│     not have its rows persisted (it may be a stale mirror) — refresh from CLOUD instead
+│     → bounce OFF, «Локальный режим не активен»
 └ LAN unreachable → nothing written, pin untouched → bounce OFF,
       «Локальный сервер недоступен»
 
@@ -149,9 +154,17 @@ Lease rules (all in pure functions, tested):
 data class SyncManifestDto(
     val race: Int,
     @SerialName("data_source") val dataSource: String,   // "cloud" | "local"
-    @SerialName("lease_expires_at") val leaseExpiresAt: Long? = null, // epoch seconds; stubbed null today
+    @SerialName("lease_ttl_seconds") val leaseTtlSeconds: Long? = null,   // preferred: relative TTL (backend TODO)
+    @SerialName("lease_expires_at") val leaseExpiresAt: Long? = null,     // fallback: epoch seconds; stubbed null today
 )
 ```
+
+**Why TTL is preferred**: a race-day fresh install may have a cold `TrustedClock` (no cloud
+contact yet) and `localApiClient` deliberately carries no `ServerTimeInterceptor`, so lease
+math against an **absolute** server timestamp is exposed to phone wall-clock skew (a skewed
+clock could instantly expire a valid pin or over-pin past handback). A relative TTL is computed
+against receipt time and is immune. The absolute fallback relies on ops keeping the local
+server clock correct (see Post-Completion).
 
 `versions{...}` is deliberately **not** mapped: the client never compares manifest versions
 (they are opaque hashes; per-origin ETag/304 already answers "did it change").
@@ -167,8 +180,10 @@ data class RaceLease(val raceId: Int, val expiresAtMs: Long)
 
 const val DEFAULT_LEASE_MS = 12 * 60 * 60 * 1000L  // client default while the server stubs null
 
-fun renewedLease(raceId: Int, serverLeaseExpiresAtSec: Long?, nowMs: Long): RaceLease
-    // expiry = serverLeaseExpiresAtSec * 1000 when present, else nowMs + DEFAULT_LEASE_MS
+fun renewedLease(raceId: Int, serverTtlSec: Long?, serverLeaseExpiresAtSec: Long?, nowMs: Long): RaceLease
+    // expiry precedence: nowMs + serverTtlSec*1000 (relative, clock-skew-immune)
+    //   → serverLeaseExpiresAtSec*1000 (absolute; relies on sane clocks)
+    //   → nowMs + DEFAULT_LEASE_MS
 
 fun isPinned(lease: RaceLease?, raceId: Int, nowMs: Long): Boolean
     // lease != null && lease.raceId == raceId && nowMs < lease.expiresAtMs
@@ -176,8 +191,8 @@ fun isPinned(lease: RaceLease?, raceId: Int, nowMs: Long): Boolean
 sealed interface LeaseAction {
     data class Renew(val lease: RaceLease) : LeaseAction  // manifest says local
     object Clear : LeaseAction                            // manifest says cloud (handback)
-    object Keep : LeaseAction                             // error / unreachable / wrong race
-}
+    object Keep : LeaseAction   // error / unreachable / wrong race / unknown data_source
+}                               // (never renew on garbage — an unknown value must not pin)
 
 fun applySyncResponse(manifest: SyncManifestDto?, raceId: Int, nowMs: Long): LeaseAction
 ```
@@ -189,8 +204,10 @@ gone because the user picks the source explicitly.
 `load`/`save`, single delimited key `"$raceId|$expiresAtMs"` (atomic — whole or absent),
 `read(): RaceLease?` returns `null` on malformed input, `write`/`clear`,
 `fromSharedPreferences(context)` adapter (`PREFS_NAME = "kolco24.lease"`). Synchronous read at
-construction; `AppContainer` holds the current lease in an `AtomicReference<RaceLease?>` seeded
-from the store (readable from any thread, every mutation writes through to prefs).
+construction; `AppContainer` holds the current lease in a `MutableStateFlow<RaceLease?>` seeded
+from the store — synchronous `.value` reads for the `isRacePinned` lambda (any thread),
+collectable by the UI so the Settings switch tracks handback live; every mutation writes
+through to prefs.
 
 **Time source**: `nowMs` comes from a `nowMs: () -> Long` lambda owned by `AppContainer` —
 trusted time when the `TrustedClock` anchor is warm, wall clock otherwise. Worst case (clock
@@ -229,7 +246,11 @@ suspend fun refreshTeams(raceId: Int, source: SyncSource = SyncSource.Cloud): Re
 ### SyncCoordinator
 
 `data/sync/SyncCoordinator.kt` — thin orchestration owned by `AppContainer`; lease branching
-lives in the pure `applySyncResponse`, the coordinator just executes:
+lives in the pure `applySyncResponse`, the coordinator just executes. Constructor dependencies
+are **lambda seams** (project idiom, same as `tokenProvider`): suspend function types for the
+LAN `fetchSync` and the four per-source refresh calls, plus lease read/write and `nowMs` —
+`AppContainer` binds them to the real repos, `SyncCoordinatorTest` injects fakes (no
+MockWebServer/DAO setup):
 
 - `sourceFor(raceId): SyncSource` — `Local` when pinned, else `Cloud`;
 - `probeLocalAndRenew(raceId)` — LAN `fetchSync` → `applySyncResponse` → `Renew`/`Clear`/`Keep`
@@ -237,15 +258,18 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
 - `enterLocalMode(): LocalModeOutcome` — the switch-on flow: resolve the race
   (`selectedTeam?.raceId`, else `nearestRaceId` over cached races; empty cache — fresh APK in
   the forest — first `refreshRaces(Local)` and recompute), LAN `fetchSync`, then per the
-  approved flow above (pin on `local`; **no pin but still LAN data** on `cloud`; nothing
-  written on unreachable). Data fan-out: races+teams+legend+member-tags concurrently in a
-  `supervisorScope`, all `SyncSource.Local`;
+  approved flow above (pin + **Local** fan-out on `local`; no pin + **Cloud** fan-out on
+  `cloud` — a server that disclaims authority must not have its race-scoped rows persisted;
+  nothing written on unreachable). Fan-out = races+teams+legend+member-tags concurrently in a
+  `supervisorScope`;
 - `exitLocalMode(): LocalModeOutcome` — clear the lease unconditionally, full cloud fan-out;
 - `refreshAll(raceId): RefreshResult` — the PTR body: when pinned, `probeLocalAndRenew` first
   (heartbeat + handback on every pull), then races+teams+legend+member-tags via
-  `sourceFor(raceId)` re-read after the probe; worst single result wins (for the snackbar
-  mapping). Note this intentionally **broadens** the «Команда» pull from teams-only to the
-  full resource set.
+  `sourceFor(raceId)` re-read after the probe; the fan-out results are folded by a pure
+  `combineRefreshResults(results): RefreshResult` with an explicit severity order
+  (`HttpError > Forbidden > Offline > Updated > NotModified > Skipped`) so the snackbar is
+  deterministic regardless of child completion order. Note this intentionally **broadens**
+  the «Команда» pull from teams-only to the full resource set.
 
 `LocalModeOutcome` enum for the switch Toasts: `PinnedUntil(expiresAtMs)` / `LocalNoPin` /
 `LocalUnreachable` / `CloudUpdated` / `Offline` / `NoRace`.
@@ -269,15 +293,17 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
   spinner, ON → «Локальный режим до HH:MM» (`SimpleDateFormat("HH:mm")`, local timezone, from
   `expiresAtMs`).
 - **`MainActivity`** hosts the state: `localModeBusy` flag; switch position derived from the
-  container's lease state via `isPinned(lease, raceId, now)` with `raceId =
+  **collected** lease `StateFlow` (collected once in `MainActivity` and threaded down — same
+  pattern as theme/economy) via `isPinned(lease, raceId, now)` with `raceId =
   selectedTeam?.raceId ?: nearestRaceId` (the same resolution `enterLocalMode` uses — a pin
-  held for a *different* race reads OFF, acceptable under the single-pin model), recomputed
-  when Settings opens and after each switch action (no ticker — staleness by minutes is fine,
-  reopening recomputes). `enterLocalMode`/`exitLocalMode`
+  held for a *different* race reads OFF, acceptable under the single-pin model). A handback
+  landing from Launch B or a pull flips the switch off live even while Settings is open; pure
+  time expiry has no ticker and shows on the next recomposition trigger / Settings open
+  (minute-level staleness is fine). `enterLocalMode`/`exitLocalMode`
   launched on `container.applicationScope` (writes outlive overlays — project rule), outcome →
   Toast:
   - `PinnedUntil` → «Локальный режим до HH:MM»
-  - `LocalNoPin` → «Обновлено с локального сервера (локальный режим не активен)»
+  - `LocalNoPin` → «Локальный режим не активен — данные обновлены из интернета»
   - `LocalUnreachable` → «Локальный сервер недоступен»
   - `CloudUpdated` → «Обновлено из интернета»
   - `Offline` → «Нет соединения»
@@ -306,12 +332,13 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/ApiClientTest.kt`
 
-- [ ] add `SyncManifestDto` (`race`, `data_source`, `lease_expires_at: Long? = null`; `versions`
-      deliberately unmapped — document why in KDoc)
+- [ ] add `SyncManifestDto` (`race`, `data_source`, `lease_ttl_seconds: Long? = null`,
+      `lease_expires_at: Long? = null`; `versions` deliberately unmapped — document why in
+      KDoc, incl. the TTL-vs-absolute skew rationale)
 - [ ] add `ApiClient.fetchSync(raceId): FetchResult<SyncManifestDto>` via `conditionalGet`
       with `etag = null` (endpoint has no 304)
-- [ ] write parsing tests: full manifest, stubbed manifest (`lease_expires_at: null`), unknown
-      `versions` keys ignored
+- [ ] write parsing tests: full manifest (both lease fields), stubbed manifest (both `null`),
+      unknown `versions` keys ignored
 - [ ] write error tests: 404 (unknown race), offline → `FetchResult.Error`
 - [ ] run tests — must pass before task 2
 
@@ -323,13 +350,15 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/lease/RaceLeaseTest.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/lease/RaceLeaseStoreTest.kt`
 
-- [ ] `RaceLease` data class + `renewedLease` (server seconds win; `null` → `nowMs +
-      DEFAULT_LEASE_MS`) + `isPinned` + `LeaseAction` + `applySyncResponse`
+- [ ] `RaceLease` data class + `renewedLease` (precedence TTL → absolute → client default) +
+      `isPinned` + `LeaseAction` + `applySyncResponse`
 - [ ] `RaceLeaseStore` on the `ClockAnchorStore` pattern: pure `load`/`save` seam, single
       delimited key, `read`/`write`/`clear`, `fromSharedPreferences`
-- [ ] `RaceLeaseTest`: renew with/without server lease; pin match/mismatch/expiry boundary;
-      `applySyncResponse` — `local` → `Renew`, `cloud` → `Clear`, `null` manifest → `Keep`,
-      manifest for another race → `Keep`
+- [ ] `RaceLeaseTest`: renew precedence (TTL beats absolute beats default); pin
+      match/mismatch/expiry boundary; **past server lease → `isPinned` false** (never a
+      user-visible active pin); `applySyncResponse` — `local` → `Renew`, `cloud` → `Clear`,
+      `null` manifest → `Keep`, manifest for another race → `Keep`, **unknown `data_source`
+      → `Keep`** (never renews)
 - [ ] `RaceLeaseStoreTest`: round-trip; malformed (wrong segment count, non-numeric) → `null`;
       `clear`
 - [ ] run tests — must pass before task 3
@@ -354,8 +383,8 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
       (`refreshErrorMessage` → `null`)
 - [ ] guard in Team/Legend/MemberTags repos: `Cloud` + pinned → `Skipped` at entry **and**
       re-checked in the `200` branch before persist
-- [ ] `AppContainer`: build the lease store + `AtomicReference` lease state + `nowMs` lambda
-      (trusted-time-or-wall), wire repos
+- [ ] `AppContainer`: build the lease store + `MutableStateFlow<RaceLease?>` lease state +
+      `nowMs` lambda (trusted-time-or-wall), wire repos
 - [ ] tests: `Local` source hits the local client and stores the ETag under the LAN origin;
       `Cloud` + pinned → `Skipped`, nothing persisted, cloud client not called; `Cloud` +
       pin-appearing-mid-flight (pin flips between fetch and persist) → nothing persisted;
@@ -370,20 +399,24 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (`onRaceSelected` only)
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/sync/SyncCoordinatorTest.kt`
 
-- [ ] `SyncCoordinator` with `sourceFor`, `probeLocalAndRenew` (executes `applySyncResponse`),
-      `enterLocalMode` (race resolution incl. empty-cache LAN-races fallback; `supervisorScope`
-      fan-out; `data_source=cloud` → no pin but LAN data; unreachable → no writes, lease
-      untouched), `exitLocalMode` (clear lease + Cloud fan-out), `refreshAll(raceId)` for PTR
-      (pinned → probe first, then fan-out via re-read `sourceFor`); returns
-      `LocalModeOutcome`/`RefreshResult` for the UI
+- [ ] `SyncCoordinator` with **lambda-seam constructor** (suspend fun types for LAN `fetchSync`
+      + the four per-source refresh calls, lease read/write, `nowMs`); `sourceFor`,
+      `probeLocalAndRenew` (executes `applySyncResponse`), `enterLocalMode` (race resolution
+      incl. empty-cache LAN-races fallback; `data_source=cloud` → no pin + **Cloud** fan-out;
+      unreachable → no writes, lease untouched), `exitLocalMode` (clear lease + Cloud fan-out),
+      `refreshAll(raceId)` for PTR (pinned → probe first, then fan-out via re-read `sourceFor`);
+      returns `LocalModeOutcome`/`RefreshResult` for the UI
+- [ ] pure `combineRefreshResults(results): RefreshResult` — explicit severity order
+      `HttpError > Forbidden > Offline > Updated > NotModified > Skipped`
 - [ ] Launch B: pinned race → probe first, then refresh via `sourceFor` (re-read after probe);
       Launch A nearest-race prefetch + `onRaceSelected` prefetch via `sourceFor`
-- [ ] tests (injected fake clients/repos, pattern of existing repo tests): `sourceFor` pinned/
-      unpinned; probe renews on `local`, clears on `cloud`, keeps lease on error;
-      `enterLocalMode` — empty cache pulls races from LAN first, `local` pins + fans out,
-      `cloud` fans out without pinning, unreachable writes nothing; `exitLocalMode` always
-      unpins; `refreshAll` — pinned probes first (renews / detects handback and falls back to
-      Cloud fan-out), unpinned never touches the LAN
+- [ ] tests (injected fake lambdas — no MockWebServer/DAO): `sourceFor` pinned/unpinned; probe
+      renews on `local`, clears on `cloud`, keeps lease on error; `enterLocalMode` — empty
+      cache pulls races from LAN first, `local` pins + Local fan-out, `cloud` → no pin + Cloud
+      fan-out (no LAN race-scoped rows persisted), unreachable writes nothing, past server
+      lease → outcome is not `PinnedUntil`; `exitLocalMode` always unpins; `refreshAll` —
+      pinned probes first (renews / detects handback and falls back to Cloud fan-out),
+      unpinned never touches the LAN; `combineRefreshResults` severity table
 - [ ] run tests — must pass before task 5
 
 ### Task 5: Settings «Данные» card with the local-mode switch
@@ -395,8 +428,8 @@ lives in the pure `applySyncResponse`, the coordinator just executes:
 - [ ] «Данные» card between «Запись трека» and «Администратор»: Switch row «Локальный сервер
       (Wi-Fi гонки)» on the `EconomyModeRow` idiom; subtitle OFF/«до HH:MM»/busy spinner;
       params hoisted (`localMode`, `localModeBusy`, `onLocalModeChange`)
-- [ ] `MainActivity`: derive switch position from the container lease state (recompute on
-      Settings open + after each action); `localModeBusy` flag; launch
+- [ ] `MainActivity`: collect the lease `StateFlow` once and derive the switch position
+      (`isPinned` with `selectedTeam?.raceId ?: nearestRaceId`); `localModeBusy` flag; launch
       `enterLocalMode`/`exitLocalMode` on `applicationScope`; map `LocalModeOutcome` → RU
       Toast strings (see Technical Details)
 - [ ] no tests (Compose UI + wiring — untested by convention)
@@ -424,7 +457,7 @@ calls. `TeamScreen.kt` is untouched.
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] all approved switch-flow branches implemented (pin on `local`, no-pin-but-LAN-data on
+- [ ] all approved switch-flow branches implemented (pin on `local`, no-pin + Cloud fan-out on
       `cloud`, bounce on unreachable, exit = unpin + cloud, heartbeat, handback, in-flight
       cloud guard, connectivity loss never releases)
 - [ ] `./gradlew testDebugUnitTest` — green
@@ -441,13 +474,18 @@ calls. `TeamScreen.kt` is untouched.
 
 **Backend TODO (hand to backenders — one item):**
 - Real per-race lease in `SyncView` (`src/apps/mobile/views.py`): replace the stub with
-  `data_source` resolved per race and an **admin-settable** `lease_expires_at` (the admin sets
-  it ≈ time to drive to civilization + run the local→cloud sync; must outlive the post-race
-  reconciliation window). The client already prefers the server value over its 12 h default —
-  no app update needed when this ships.
+  `data_source` resolved per race and an **admin-settable** lease duration (the admin sets it
+  ≈ time to drive to civilization + run the local→cloud sync; must outlive the post-race
+  reconciliation window). **Prefer emitting `lease_ttl_seconds` (relative)** — immune to phone
+  clock skew on race-day fresh installs; `lease_expires_at` (absolute epoch seconds) is the
+  accepted fallback. The client already handles both plus its 12 h default — no app update
+  needed when this ships.
 
 **Deployment / ops:**
 - Local race-day server sets `MOBILE_DATA_SOURCE=local` (env already supported).
+- Keep the local server's clock correct (NTP or manual sync) — required for the absolute
+  `lease_expires_at` fallback and generally sane HTTP behavior; irrelevant once the backend
+  emits the relative TTL.
 - If the LAN host ever differs from `192.168.1.5`, update `LOCAL_API_BASE_URL` **and**
   `res/xml/network_security_config.xml` in lockstep (documented coupling).
 
