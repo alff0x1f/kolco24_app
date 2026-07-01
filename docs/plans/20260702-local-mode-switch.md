@@ -457,12 +457,12 @@ calls. `TeamScreen.kt` is untouched.
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] all approved switch-flow branches implemented (pin on `local`, no-pin + Cloud fan-out on
+- [x] all approved switch-flow branches implemented (pin on `local`, no-pin + Cloud fan-out on
       `cloud`, bounce on unreachable, exit = unpin + cloud, heartbeat, handback, in-flight
       cloud guard, connectivity loss never releases)
-- [ ] `./gradlew testDebugUnitTest` — green
-- [ ] `./gradlew lintDebug` — green (watch `NewApi` on any new API usage)
-- [ ] `./gradlew assembleDebug` — builds
+- [x] `./gradlew testDebugUnitTest` — green
+- [x] `./gradlew lintDebug` — green (watch `NewApi` on any new API usage)
+- [x] `./gradlew assembleDebug` — builds
 
 ### Task 8: [Final] Update documentation
 
