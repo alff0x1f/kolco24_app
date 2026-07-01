@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -78,6 +79,7 @@ fun TeamScreen(
     category: CategoryEntity?,
     onChooseTeam: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenUpload: () -> Unit,
     modifier: Modifier = Modifier,
     teamMissing: Boolean = false,
     teamLoading: Boolean = false,
@@ -105,7 +107,7 @@ fun TeamScreen(
                 TeamEmptyContent(
                     onChooseTeam = onChooseTeam,
                     missing = teamMissing,
-                    footer = { MiscSection(onOpenSettings) },
+                    footer = { MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload) },
                 )
             }
         }
@@ -163,7 +165,7 @@ fun TeamScreen(
                 )
             }
             item("misc") {
-                MiscSection(onOpenSettings = onOpenSettings)
+                MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload)
             }
         }
         }
@@ -171,9 +173,10 @@ fun TeamScreen(
 }
 
 @Composable
-private fun MiscSection(onOpenSettings: () -> Unit) {
+private fun MiscSection(onOpenSettings: () -> Unit, onOpenUpload: () -> Unit) {
     SectionCard(title = "Прочее") {
-        MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = true, onClick = onOpenSettings)
+        MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = false, onClick = onOpenSettings)
+        MiscRow(icon = Icons.Outlined.CloudUpload, label = "Загрузка данных", subtitle = "Отметки, фото, трек", isLast = true, onClick = onOpenUpload)
     }
 }
 
