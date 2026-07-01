@@ -121,12 +121,12 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] move `data class TargetLine` and `data class TrackUploadStatus` (with `fullyUploaded`) verbatim from `TrackCard.kt` into new `ui/upload/UploadStatusModels.kt` (package `ru.kolco24.kolco24.ui.upload`)
-- [ ] `TrackCard.kt` still uses both types (param line 118, render sites) through Task 6 — add `import ru.kolco24.kolco24.ui.upload.TargetLine`/`TrackUploadStatus` now that they left its own file
-- [ ] update the `ui.track.TrackUploadStatus` import in `TeamScreen.kt` (line 54) → `ui.upload.TrackUploadStatus` (it declares a `trackUploadStatus: TrackUploadStatus?` param, line 99)
-- [ ] update imports in `MainActivity.kt` (`ui.track.TargetLine`/`TrackUploadStatus` → `ui.upload.…`) and `MarksScreen.kt` (line 100-101)
-- [ ] confirm no other references (`grep -rn "ui.track.TargetLine\|ui.track.TrackUploadStatus" app/src` returns nothing)
-- [ ] build compiles: `./gradlew compileDebugKotlin` (pure move, no behavior change — no new test needed; note in commit)
+- [x] move `data class TargetLine` and `data class TrackUploadStatus` (with `fullyUploaded`) verbatim from `TrackCard.kt` into new `ui/upload/UploadStatusModels.kt` (package `ru.kolco24.kolco24.ui.upload`)
+- [x] `TrackCard.kt` still uses both types (param line 118, render sites) through Task 6 — add `import ru.kolco24.kolco24.ui.upload.TargetLine`/`TrackUploadStatus` now that they left its own file
+- [x] update the `ui.track.TrackUploadStatus` import in `TeamScreen.kt` (line 54) → `ui.upload.TrackUploadStatus` (it declares a `trackUploadStatus: TrackUploadStatus?` param, line 99)
+- [x] update imports in `MainActivity.kt` (`ui.track.TargetLine`/`TrackUploadStatus` → `ui.upload.…`) and `MarksScreen.kt` (line 100-101)
+- [x] confirm no other references (`grep -rn "ui.track.TargetLine\|ui.track.TrackUploadStatus" app/src` returns nothing)
+- [x] build compiles: `./gradlew compileDebugKotlin` (pure move, no behavior change — no new test needed; note in commit)
 
 ### Task 2: Add metadata-only + photo-frame DAO queries and `PhotoFrameRow`
 

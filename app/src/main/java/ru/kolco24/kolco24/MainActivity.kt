@@ -126,8 +126,8 @@ import ru.kolco24.kolco24.ui.team.BindSheetState
 import ru.kolco24.kolco24.ui.team.SlotKey
 import ru.kolco24.kolco24.ui.team.decideBind
 import ru.kolco24.kolco24.ui.team.TeamScreen
-import ru.kolco24.kolco24.ui.track.TargetLine
-import ru.kolco24.kolco24.ui.track.TrackUploadStatus
+import ru.kolco24.kolco24.ui.upload.TargetLine
+import ru.kolco24.kolco24.ui.upload.TrackUploadStatus
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet

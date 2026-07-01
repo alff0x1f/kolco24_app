@@ -51,11 +51,11 @@ import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.track.TrackCard
-import ru.kolco24.kolco24.ui.track.TrackUploadStatus
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.upload.TrackUploadStatus
 
 /**
  * Screen 04 — the «Команда» tab. With no selected [team] it shows [TeamEmptyContent] (onboarding,

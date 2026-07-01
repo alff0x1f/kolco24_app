@@ -97,8 +97,8 @@ import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
-import ru.kolco24.kolco24.ui.track.TargetLine
-import ru.kolco24.kolco24.ui.track.TrackUploadStatus
+import ru.kolco24.kolco24.ui.upload.TargetLine
+import ru.kolco24.kolco24.ui.upload.TrackUploadStatus
 
 data class Mark(
     val number: String,
