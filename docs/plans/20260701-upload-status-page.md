@@ -158,14 +158,14 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/upload/UploadScreen.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/upload/FinishLineVisibilityTest.kt`
 
-- [ ] pure `showFinishLine(line: TargetLine): Boolean = line.outcome != null || line.uploaded > 0`
-- [ ] `UploadScreen(marks: TrackUploadStatus?, photos: TrackUploadStatus?, track: TrackUploadStatus?, onBack: () -> Unit)` — `TopAppBar` «Загрузка данных» + back arrow (mirror `SettingsScreen`), scrollable `Column`
-- [ ] one page-level 30s ticker `produceState` → `nowMs`, threaded to all sections
-- [ ] `UploadSection(title, status, nowMs)` card (`surfaceContainerLow`, large shape, `MarksUploadPanel` inset vocabulary): header + always-shown «Интернет» `ReceiptLine` + conditional «Финиш» `ReceiptLine` gated on `showFinishLine(status.local)`; render the section only when `status != null && status.total > 0`
-- [ ] canonical `ReceiptLine` + `outcomeLabelRu` copied here (single home); order sections Отметки → Фото → GPS-трек
-- [ ] empty state (all three null/`total==0`): centered cloud glyph + «Пока нечего загружать» + subtitle naming отметки/фото/GPS-трек
-- [ ] write unit tests for `showFinishLine` (no outcome + 0 uploaded → false; outcome present → true; uploaded>0 no outcome → true)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] pure `showFinishLine(line: TargetLine): Boolean = line.outcome != null || line.uploaded > 0`
+- [x] `UploadScreen(marks: TrackUploadStatus?, photos: TrackUploadStatus?, track: TrackUploadStatus?, onBack: () -> Unit)` — `TopAppBar` «Загрузка данных» + back arrow (mirror `SettingsScreen`), scrollable `Column`
+- [x] one page-level 30s ticker `produceState` → `nowMs`, threaded to all sections
+- [x] `UploadSection(title, status, nowMs)` card (`surfaceContainerLow`, large shape, `MarksUploadPanel` inset vocabulary): header + always-shown «Интернет» `ReceiptLine` + conditional «Финиш» `ReceiptLine` gated on `showFinishLine(status.local)`; render the section only when `status != null && status.total > 0`
+- [x] canonical `ReceiptLine` + `outcomeLabelRu` copied here (single home); order sections Отметки → Фото → GPS-трек
+- [x] empty state (all three null/`total==0`): centered cloud glyph + «Пока нечего загружать» + subtitle naming отметки/фото/GPS-трек
+- [x] write unit tests for `showFinishLine` (no outcome + 0 uploaded → false; outcome present → true; uploaded>0 no outcome → true)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 5: Wire the overlay + entry row + derivations in MainActivity and TeamScreen
 
