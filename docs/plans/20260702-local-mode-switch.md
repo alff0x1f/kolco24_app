@@ -350,18 +350,18 @@ MockWebServer/DAO setup):
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/lease/RaceLeaseTest.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/lease/RaceLeaseStoreTest.kt`
 
-- [ ] `RaceLease` data class + `renewedLease` (precedence TTL → absolute → client default) +
+- [x] `RaceLease` data class + `renewedLease` (precedence TTL → absolute → client default) +
       `isPinned` + `LeaseAction` + `applySyncResponse`
-- [ ] `RaceLeaseStore` on the `ClockAnchorStore` pattern: pure `load`/`save` seam, single
+- [x] `RaceLeaseStore` on the `ClockAnchorStore` pattern: pure `load`/`save` seam, single
       delimited key, `read`/`write`/`clear`, `fromSharedPreferences`
-- [ ] `RaceLeaseTest`: renew precedence (TTL beats absolute beats default); pin
+- [x] `RaceLeaseTest`: renew precedence (TTL beats absolute beats default); pin
       match/mismatch/expiry boundary; **past server lease → `isPinned` false** (never a
       user-visible active pin); `applySyncResponse` — `local` → `Renew`, `cloud` → `Clear`,
       `null` manifest → `Keep`, manifest for another race → `Keep`, **unknown `data_source`
       → `Keep`** (never renews)
-- [ ] `RaceLeaseStoreTest`: round-trip; malformed (wrong segment count, non-numeric) → `null`;
+- [x] `RaceLeaseStoreTest`: round-trip; malformed (wrong segment count, non-numeric) → `null`;
       `clear`
-- [ ] run tests — must pass before task 3
+- [x] run tests — must pass before task 3
 
 ### Task 3: `SyncSource` routing + cloud-persist guard in repos
 
