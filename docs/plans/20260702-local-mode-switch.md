@@ -444,16 +444,16 @@ calls. `TeamScreen.kt` is untouched.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] «Команда»: point the existing `onRefresh` (~line 1112) at
+- [x] «Команда»: point the existing `onRefresh` (~line 1112) at
       `syncCoordinator.refreshAll(raceId)` instead of `teamRepo::refreshTeams` (fits the
       existing `pullRefresh` signature; intentionally broadens the pull to
       races+teams+legend+member-tags)
-- [ ] «Легенда»: pass `source = sourceFor(raceId)` to its existing pull `refreshLegend` call
+- [x] «Легенда»: pass `source = sourceFor(raceId)` to its existing pull `refreshLegend` call
       (a pinned pull must go to LAN, not silently `Skipped` by the cloud guard); races picker
       pull stays Cloud
-- [ ] no tests (wiring — untested by convention; `refreshErrorMessage`'s new `Skipped` branch
+- [x] no tests (wiring — untested by convention; `refreshErrorMessage`'s new `Skipped` branch
       is compiler-enforced)
-- [ ] run full unit suite — must pass before task 7
+- [x] run full unit suite — must pass before task 7
 
 ### Task 7: Verify acceptance criteria
 

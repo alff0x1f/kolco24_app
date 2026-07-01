@@ -1131,7 +1131,11 @@ private fun Kolco24AppRoot(
                         takenIds = takenIds,
                         totalScore = legendTotalCost,
                         isRefreshing = legendRefreshing,
-                        onRefresh = { pullRefresh({ legendRefreshing = it }, legendRepo::refreshLegend) },
+                        onRefresh = {
+                            pullRefresh({ legendRefreshing = it }) { raceId ->
+                                legendRepo.refreshLegend(raceId, container.syncCoordinator.sourceFor(raceId))
+                            }
+                        },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     2 -> TeamScreen(
@@ -1149,7 +1153,7 @@ private fun Kolco24AppRoot(
                         onUnbindMember = { member -> unbindSlot = member.numberInTeam },
                         nfcAvailable = nfcAvailable,
                         isRefreshing = teamRefreshing,
-                        onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
+                        onRefresh = { pullRefresh({ teamRefreshing = it }, container.syncCoordinator::refreshAll) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
                         trackSegmentCount = trackSegmentCount,
