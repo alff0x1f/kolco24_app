@@ -35,6 +35,11 @@ private fun legendResource(raceId: Int): String = "race/$raceId/legend"
  * rows (the row's `locked` flag is cleared to `false` and its content fills in).
  *
  * @param origin base URL the data is associated with — used as the ETag partition key in `sync_meta`.
+ * @param localApiClient LAN client for [SyncSource.Local] fetches (the local race-day server).
+ * @param localOrigin the LAN client's base URL — the ETag partition key for LAN fetches.
+ * @param isRacePinned `true` when [raceId] is currently pinned to LAN — a [SyncSource.Cloud]
+ *   refresh for a pinned race must not persist (a stale cloud mirror must not clobber fresher
+ *   local rows).
  */
 class LegendRepository(
     private val apiClient: ApiClient,
@@ -44,6 +49,9 @@ class LegendRepository(
     private val syncMetaDao: SyncMetaDao,
     private val origin: String,
     private val json: Json,
+    private val localApiClient: ApiClient,
+    private val localOrigin: String,
+    private val isRacePinned: (raceId: Int) -> Boolean,
 ) {
     /** Offline-readable checkpoints of one race, ordered by number then id. */
     fun checkpointsForRace(raceId: Int): Flow<List<CheckpointEntity>> =
@@ -74,12 +82,23 @@ class LegendRepository(
      * checkpoints **and** tags, then saves the new ETag. Like [TeamRepository.refreshTeams], the data
      * writes and the ETag write are separate transactions on purpose: a crash between them leaves
      * fresh data with a stale ETag, so the next refresh gets another `200` and self-heals.
+     *
+     * Guarded against clobbering a pinned race: a [SyncSource.Cloud] call for a currently-pinned
+     * [raceId] returns [RefreshResult.Skipped] **before** hitting the network, and the guard is
+     * re-checked before persisting a `200` (an in-flight cloud response that started before the pin
+     * landed must not overwrite fresher local rows).
      */
-    suspend fun refreshLegend(raceId: Int): RefreshResult {
+    suspend fun refreshLegend(raceId: Int, source: SyncSource = SyncSource.Cloud): RefreshResult {
+        if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
+        val (client, originKey) = when (source) {
+            SyncSource.Cloud -> apiClient to origin
+            SyncSource.Local -> localApiClient to localOrigin
+        }
         val resource = legendResource(raceId)
-        val etag = syncMetaDao.getEtag(origin, resource)
-        return when (val result = apiClient.fetchLegend(raceId, etag)) {
+        val etag = syncMetaDao.getEtag(originKey, resource)
+        return when (val result = client.fetchLegend(raceId, etag)) {
             is FetchResult.Success -> {
+                if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
                 val response = result.data
                 checkpointDao.replaceAllForRace(
                     raceId = raceId,
@@ -91,7 +110,7 @@ class LegendRepository(
                 )
                 legendMetaDao.upsert(LegendMetaEntity(raceId, response.totalCost))
                 if (result.etag != null) {
-                    syncMetaDao.upsert(SyncMetaEntity(origin, resource, result.etag))
+                    syncMetaDao.upsert(SyncMetaEntity(originKey, resource, result.etag))
                 }
                 RefreshResult.Updated
             }

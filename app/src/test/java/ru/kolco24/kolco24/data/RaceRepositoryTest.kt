@@ -24,10 +24,12 @@ import ru.kolco24.kolco24.data.db.SyncMetaEntity
 class RaceRepositoryTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var localServer: MockWebServer
     private lateinit var raceDao: FakeRaceDao
     private lateinit var syncMetaDao: FakeSyncMetaDao
     private lateinit var repository: RaceRepository
     private lateinit var origin: String
+    private lateinit var localOrigin: String
 
     private val json = Json { ignoreUnknownKeys = true }
     private val callLog = mutableListOf<String>()
@@ -54,6 +56,9 @@ class RaceRepositoryTest {
         server = MockWebServer()
         server.start()
         origin = server.url("/").toString()
+        localServer = MockWebServer()
+        localServer.start()
+        localOrigin = localServer.url("/").toString()
         val interceptor = AppSignatureInterceptor(
             keyId = "android-v1",
             secret = "test-secret-123",
@@ -62,14 +67,17 @@ class RaceRepositoryTest {
             nowSeconds = { 1718200000L },
         )
         val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        val localApiClient =
+            ApiClient(localOrigin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
         raceDao = FakeRaceDao(callLog)
         syncMetaDao = FakeSyncMetaDao(callLog)
-        repository = RaceRepository(apiClient, raceDao, syncMetaDao, origin)
+        repository = RaceRepository(apiClient, raceDao, syncMetaDao, origin, localApiClient, localOrigin)
     }
 
     @After
     fun tearDown() {
         server.shutdown()
+        localServer.shutdown()
     }
 
     @Test
@@ -175,6 +183,23 @@ class RaceRepositoryTest {
         repository.refreshRaces()
 
         assertEquals(listOf("replaceAll", "upsertEtag"), callLog)
+    }
+
+    @Test
+    fun localSource_hitsLocalClientAndStoresEtagUnderLocalOrigin() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"")
+                .setBody(racesJson(8, "Кольцо24 (LAN)")),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces(SyncSource.Local))
+
+        assertEquals(1, repository.races.first().size)
+        assertEquals("Кольцо24 (LAN)", repository.races.first()[0].name)
+        assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "races"))
+        assertNull("cloud origin must stay untouched", syncMetaDao.getEtag(origin, "races"))
+        assertEquals(0, server.requestCount)
+        assertEquals(1, localServer.requestCount)
     }
 
     private fun entity(id: Int, name: String) = RaceEntity(

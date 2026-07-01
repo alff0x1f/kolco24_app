@@ -31,12 +31,20 @@ private fun memberTagsSyncedResource(raceId: Int): String = "race/$raceId/member
  * disjoint ETags — and it stays correct once the backend serves a genuinely different pool per race.
  *
  * @param origin base URL the data is associated with — used as the ETag partition key in `sync_meta`.
+ * @param localApiClient LAN client for [SyncSource.Local] fetches (the local race-day server).
+ * @param localOrigin the LAN client's base URL — the ETag partition key for LAN fetches.
+ * @param isRacePinned `true` when [raceId] is currently pinned to LAN — a [SyncSource.Cloud]
+ *   refresh for a pinned race must not persist (a stale cloud mirror must not clobber fresher
+ *   local rows).
  */
 class MemberTagsRepository(
     private val apiClient: ApiClient,
     private val memberTagDao: MemberTagDao,
     private val syncMetaDao: SyncMetaDao,
     private val origin: String,
+    private val localApiClient: ApiClient,
+    private val localOrigin: String,
+    private val isRacePinned: (raceId: Int) -> Boolean,
 ) {
     /** Offline-readable member-tag pool of one race, ordered by participant number then uid. */
     fun observeForRace(raceId: Int): Flow<List<MemberTagEntity>> =
@@ -65,23 +73,34 @@ class MemberTagsRepository(
      * race's member-tag rows, then saves the new ETag. Like [LegendRepository.refreshLegend], the
      * data write and the ETag write are separate transactions on purpose: a crash between them leaves
      * fresh data with a stale ETag, so the next refresh gets another `200` and self-heals.
+     *
+     * Guarded against clobbering a pinned race: a [SyncSource.Cloud] call for a currently-pinned
+     * [raceId] returns [RefreshResult.Skipped] **before** hitting the network, and the guard is
+     * re-checked before persisting a `200` (an in-flight cloud response that started before the pin
+     * landed must not overwrite fresher local rows).
      */
-    suspend fun refreshMemberTags(raceId: Int): RefreshResult {
+    suspend fun refreshMemberTags(raceId: Int, source: SyncSource = SyncSource.Cloud): RefreshResult {
+        if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
+        val (client, originKey) = when (source) {
+            SyncSource.Cloud -> apiClient to origin
+            SyncSource.Local -> localApiClient to localOrigin
+        }
         val resource = memberTagsResource(raceId)
-        val etag = syncMetaDao.getEtag(origin, resource)
-        return when (val result = apiClient.fetchMemberTags(raceId, etag)) {
+        val etag = syncMetaDao.getEtag(originKey, resource)
+        return when (val result = client.fetchMemberTags(raceId, etag)) {
             is FetchResult.Success -> {
+                if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
                 memberTagDao.replaceAllForRace(
                     raceId = raceId,
                     tags = result.data.memberTags.map { it.toEntity(raceId) },
                 )
                 if (result.etag != null) {
-                    syncMetaDao.upsert(SyncMetaEntity(origin, resource, result.etag))
+                    syncMetaDao.upsert(SyncMetaEntity(originKey, resource, result.etag))
                 } else {
                     // No ETag from the server: write a sync-marker so hasBeenSynced() returns true
                     // after activity recreation even when the pool is empty (an ETag-less empty-pool
                     // response is a legitimate server response, not a "not yet synced" condition).
-                    syncMetaDao.upsert(SyncMetaEntity(origin, memberTagsSyncedResource(raceId), "1"))
+                    syncMetaDao.upsert(SyncMetaEntity(originKey, memberTagsSyncedResource(raceId), "1"))
                 }
                 RefreshResult.Updated
             }

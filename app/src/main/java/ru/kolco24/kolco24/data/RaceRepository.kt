@@ -22,6 +22,9 @@ sealed interface RefreshResult {
     data object Offline : RefreshResult
     data object Forbidden : RefreshResult
     data class HttpError(val code: Int) : RefreshResult
+
+    /** A [SyncSource.Cloud] refresh was skipped because the race is currently pinned to LAN. */
+    data object Skipped : RefreshResult
 }
 
 /**
@@ -30,12 +33,18 @@ sealed interface RefreshResult {
  * the local table.
  *
  * @param origin base URL the data is associated with — used as the ETag partition key in `sync_meta`.
+ * @param localApiClient LAN client for [SyncSource.Local] fetches (the local race-day server).
+ * @param localOrigin the LAN client's base URL — the ETag partition key for LAN fetches. Races are
+ *   global (not race-scoped), so unlike the other three repos this one carries no pin guard: it is
+ *   only ever called with [SyncSource.Local] from inside `enterLocalMode`/`refreshAll` while pinned.
  */
 class RaceRepository(
     private val apiClient: ApiClient,
     private val raceDao: RaceDao,
     private val syncMetaDao: SyncMetaDao,
     private val origin: String,
+    private val localApiClient: ApiClient,
+    private val localOrigin: String,
 ) {
     /** Offline-readable race list, ordered newest first. */
     val races: Flow<List<RaceEntity>> = raceDao.observeRaces()
@@ -46,13 +55,17 @@ class RaceRepository(
      * a crash between them leaves fresh data with a stale ETag, so the next refresh gets another
      * `200` and self-heals; the reverse order would pin a new ETag onto stale data forever.
      */
-    suspend fun refreshRaces(): RefreshResult {
-        val etag = syncMetaDao.getEtag(origin, RESOURCE_RACES)
-        return when (val result = apiClient.fetchRaces(etag)) {
+    suspend fun refreshRaces(source: SyncSource = SyncSource.Cloud): RefreshResult {
+        val (client, originKey) = when (source) {
+            SyncSource.Cloud -> apiClient to origin
+            SyncSource.Local -> localApiClient to localOrigin
+        }
+        val etag = syncMetaDao.getEtag(originKey, RESOURCE_RACES)
+        return when (val result = client.fetchRaces(etag)) {
             is FetchResult.Success -> {
                 raceDao.replaceAll(result.data.map { it.toEntity() })
                 if (result.etag != null) {
-                    syncMetaDao.upsert(SyncMetaEntity(origin, RESOURCE_RACES, result.etag))
+                    syncMetaDao.upsert(SyncMetaEntity(originKey, RESOURCE_RACES, result.etag))
                 }
                 RefreshResult.Updated
             }

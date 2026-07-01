@@ -28,10 +28,14 @@ import ru.kolco24.kolco24.data.db.SyncMetaEntity
 class MemberTagsRepositoryTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var localServer: MockWebServer
     private lateinit var memberTagDao: FakeMemberTagDao
     private lateinit var syncMetaDao: FakeMemberTagsSyncMetaDao
     private lateinit var repository: MemberTagsRepository
     private lateinit var origin: String
+    private lateinit var localOrigin: String
+    private lateinit var apiClient: ApiClient
+    private lateinit var localApiClient: ApiClient
 
     private val json = Json { ignoreUnknownKeys = true }
     private val callLog = mutableListOf<String>()
@@ -51,6 +55,9 @@ class MemberTagsRepositoryTest {
         server = MockWebServer()
         server.start()
         origin = server.url("/").toString()
+        localServer = MockWebServer()
+        localServer.start()
+        localOrigin = localServer.url("/").toString()
         val interceptor = AppSignatureInterceptor(
             keyId = "android-v1",
             secret = "test-secret-123",
@@ -58,15 +65,21 @@ class MemberTagsRepositoryTest {
             appVersion = "2.0.1",
             nowSeconds = { 1718200000L },
         )
-        val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        localApiClient =
+            ApiClient(localOrigin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
         memberTagDao = FakeMemberTagDao(callLog)
         syncMetaDao = FakeMemberTagsSyncMetaDao(callLog)
-        repository = MemberTagsRepository(apiClient, memberTagDao, syncMetaDao, origin)
+        repository = MemberTagsRepository(
+            apiClient, memberTagDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { false },
+        )
     }
 
     @After
     fun tearDown() {
         server.shutdown()
+        localServer.shutdown()
     }
 
     @Test
@@ -215,6 +228,63 @@ class MemberTagsRepositoryTest {
         assertEquals(101, repository.findByUid(8, "04A2B3C4D5E680")?.number)
         assertNull(repository.findByUid(8, "DEADBEEF"))
         assertNull("uid belongs to race 8, not 9", repository.findByUid(9, "04A2B3C4D5E680"))
+    }
+
+    @Test
+    fun localSource_hitsLocalClientAndStoresEtagUnderLocalOrigin() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"").setBody(memberTagsJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshMemberTags(8, SyncSource.Local))
+
+        assertEquals(1, repository.observeForRace(8).first().size)
+        assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "race/8/member_tags"))
+        assertNull("cloud origin must stay untouched", syncMetaDao.getEtag(origin, "race/8/member_tags"))
+        assertEquals(0, server.requestCount)
+        assertEquals(1, localServer.requestCount)
+    }
+
+    @Test
+    fun cloudSource_pinnedRace_skipsWithoutTouchingNetworkOrData() = runTest {
+        memberTagDao.setTags(listOf(MemberTagEntity(raceId = 8, nfcUid = "AABB", number = 99)))
+        val pinnedRepo = MemberTagsRepository(
+            apiClient, memberTagDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { true },
+        )
+
+        assertEquals(RefreshResult.Skipped, pinnedRepo.refreshMemberTags(8, SyncSource.Cloud))
+
+        assertEquals(0, server.requestCount)
+        assertEquals(1, pinnedRepo.observeForRace(8).first().size)
+    }
+
+    @Test
+    fun cloudSource_pinAppearingMidFlight_doesNotPersist() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(memberTagsJson()))
+        var checks = 0
+        val pinnedRepo = MemberTagsRepository(
+            apiClient, memberTagDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { checks++ > 0 },
+        )
+
+        assertEquals(RefreshResult.Skipped, pinnedRepo.refreshMemberTags(8, SyncSource.Cloud))
+
+        assertTrue(
+            "in-flight response must not persist once pinned",
+            pinnedRepo.observeForRace(8).first().isEmpty(),
+        )
+        assertNull(syncMetaDao.getEtag(origin, "race/8/member_tags"))
+    }
+
+    @Test
+    fun unpinnedCloud_behaviorUnchanged() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(memberTagsJson()))
+
+        assertEquals(RefreshResult.Updated, repository.refreshMemberTags(8, SyncSource.Cloud))
+
+        assertEquals(1, repository.observeForRace(8).first().size)
+        assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/member_tags"))
     }
 
     @Test

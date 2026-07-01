@@ -38,12 +38,16 @@ import javax.crypto.spec.SecretKeySpec
 class LegendRepositoryTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var localServer: MockWebServer
     private lateinit var checkpointDao: FakeCheckpointDao
     private lateinit var tagDao: FakeTagDao
     private lateinit var legendMetaDao: FakeLegendMetaDao
     private lateinit var syncMetaDao: FakeLegendSyncMetaDao
     private lateinit var repository: LegendRepository
     private lateinit var origin: String
+    private lateinit var localOrigin: String
+    private lateinit var apiClient: ApiClient
+    private lateinit var localApiClient: ApiClient
 
     private val json = Json { ignoreUnknownKeys = true }
     private val callLog = mutableListOf<String>()
@@ -66,6 +70,9 @@ class LegendRepositoryTest {
         server = MockWebServer()
         server.start()
         origin = server.url("/").toString()
+        localServer = MockWebServer()
+        localServer.start()
+        localOrigin = localServer.url("/").toString()
         val interceptor = AppSignatureInterceptor(
             keyId = "android-v1",
             secret = "test-secret-123",
@@ -73,17 +80,23 @@ class LegendRepositoryTest {
             appVersion = "2.0.1",
             nowSeconds = { 1718200000L },
         )
-        val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        localApiClient =
+            ApiClient(localOrigin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
         checkpointDao = FakeCheckpointDao(callLog)
         tagDao = FakeTagDao(callLog)
         legendMetaDao = FakeLegendMetaDao(callLog)
         syncMetaDao = FakeLegendSyncMetaDao(callLog)
-        repository = LegendRepository(apiClient, checkpointDao, tagDao, legendMetaDao, syncMetaDao, origin, json)
+        repository = LegendRepository(
+            apiClient, checkpointDao, tagDao, legendMetaDao, syncMetaDao, origin, json,
+            localApiClient, localOrigin, isRacePinned = { false },
+        )
     }
 
     @After
     fun tearDown() {
         server.shutdown()
+        localServer.shutdown()
     }
 
     @Test
@@ -368,6 +381,67 @@ class LegendRepositoryTest {
         )
 
         assertTrue(repository.unlock(8, code) is UnlockOutcome.Failed)
+    }
+
+    @Test
+    fun localSource_hitsLocalClientAndStoresEtagUnderLocalOrigin() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"").setBody(legendJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshLegend(8, SyncSource.Local))
+
+        assertEquals(1, repository.checkpointsForRace(8).first().size)
+        assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "race/8/legend"))
+        assertNull("cloud origin must stay untouched", syncMetaDao.getEtag(origin, "race/8/legend"))
+        assertEquals(0, server.requestCount)
+        assertEquals(1, localServer.requestCount)
+    }
+
+    @Test
+    fun cloudSource_pinnedRace_skipsWithoutTouchingNetworkOrData() = runTest {
+        checkpointDao.setCheckpoints(listOf(checkpointEntity(id = 99, raceId = 8)))
+        val pinnedRepo = LegendRepository(
+            apiClient, checkpointDao, tagDao, legendMetaDao, syncMetaDao, origin, json,
+            localApiClient, localOrigin, isRacePinned = { true },
+        )
+
+        assertEquals(RefreshResult.Skipped, pinnedRepo.refreshLegend(8, SyncSource.Cloud))
+
+        assertEquals(0, server.requestCount)
+        assertEquals(1, pinnedRepo.checkpointsForRace(8).first().size)
+    }
+
+    @Test
+    fun cloudSource_pinAppearingMidFlight_doesNotPersist() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(legendJson()),
+        )
+        var checks = 0
+        val pinnedRepo = LegendRepository(
+            apiClient, checkpointDao, tagDao, legendMetaDao, syncMetaDao, origin, json,
+            localApiClient, localOrigin, isRacePinned = { checks++ > 0 },
+        )
+
+        assertEquals(RefreshResult.Skipped, pinnedRepo.refreshLegend(8, SyncSource.Cloud))
+
+        assertTrue(
+            "in-flight response must not persist once pinned",
+            pinnedRepo.checkpointsForRace(8).first().isEmpty(),
+        )
+        assertNull(syncMetaDao.getEtag(origin, "race/8/legend"))
+    }
+
+    @Test
+    fun unpinnedCloud_behaviorUnchanged() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(legendJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshLegend(8, SyncSource.Cloud))
+
+        assertEquals(1, repository.checkpointsForRace(8).first().size)
+        assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/legend"))
     }
 
     /** Test-only AES-256-GCM seal, mirroring [LegendCrypto.open]'s decrypt direction. */

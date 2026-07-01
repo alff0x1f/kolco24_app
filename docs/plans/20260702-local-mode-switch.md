@@ -375,21 +375,21 @@ MockWebServer/DAO setup):
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 - Modify: repo unit tests (pattern: `MemberTagsRepositoryTest`)
 
-- [ ] add `SyncSource { Cloud, Local }`; extend repo constructors with
+- [x] add `SyncSource { Cloud, Local }`; extend repo constructors with
       `localApiClient`/`localOrigin`/`isRacePinned` (races repo: no pin lambda); add
       `source: SyncSource = Cloud` param to the four refresh methods — existing call sites
       compile unchanged
-- [ ] add `RefreshResult.Skipped`; fix every exhaustive `when` the compiler flags
+- [x] add `RefreshResult.Skipped`; fix every exhaustive `when` the compiler flags
       (`refreshErrorMessage` → `null`)
-- [ ] guard in Team/Legend/MemberTags repos: `Cloud` + pinned → `Skipped` at entry **and**
+- [x] guard in Team/Legend/MemberTags repos: `Cloud` + pinned → `Skipped` at entry **and**
       re-checked in the `200` branch before persist
-- [ ] `AppContainer`: build the lease store + `MutableStateFlow<RaceLease?>` lease state +
+- [x] `AppContainer`: build the lease store + `MutableStateFlow<RaceLease?>` lease state +
       `nowMs` lambda (trusted-time-or-wall), wire repos
-- [ ] tests: `Local` source hits the local client and stores the ETag under the LAN origin;
+- [x] tests: `Local` source hits the local client and stores the ETag under the LAN origin;
       `Cloud` + pinned → `Skipped`, nothing persisted, cloud client not called; `Cloud` +
       pin-appearing-mid-flight (pin flips between fetch and persist) → nothing persisted;
       unpinned `Cloud` behavior unchanged
-- [ ] run tests — must pass before task 4
+- [x] run tests — must pass before task 4
 
 ### Task 4: `SyncCoordinator` + pin-aware auto-syncs
 

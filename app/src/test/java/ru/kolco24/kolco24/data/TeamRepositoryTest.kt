@@ -29,11 +29,15 @@ import ru.kolco24.kolco24.data.db.TeamEntity
 class TeamRepositoryTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var localServer: MockWebServer
     private lateinit var teamDao: FakeTeamDao
     private lateinit var selectedTeamDao: FakeSelectedTeamDao
     private lateinit var syncMetaDao: FakeTeamsSyncMetaDao
     private lateinit var repository: TeamRepository
     private lateinit var origin: String
+    private lateinit var localOrigin: String
+    private lateinit var apiClient: ApiClient
+    private lateinit var localApiClient: ApiClient
 
     private val json = Json { ignoreUnknownKeys = true }
     private val callLog = mutableListOf<String>()
@@ -68,6 +72,9 @@ class TeamRepositoryTest {
         server = MockWebServer()
         server.start()
         origin = server.url("/").toString()
+        localServer = MockWebServer()
+        localServer.start()
+        localOrigin = localServer.url("/").toString()
         val interceptor = AppSignatureInterceptor(
             keyId = "android-v1",
             secret = "test-secret-123",
@@ -75,16 +82,22 @@ class TeamRepositoryTest {
             appVersion = "2.0.1",
             nowSeconds = { 1718200000L },
         )
-        val apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        apiClient = ApiClient(origin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
+        localApiClient =
+            ApiClient(localOrigin, OkHttpClient.Builder().addInterceptor(interceptor).build(), json)
         teamDao = FakeTeamDao(callLog)
         selectedTeamDao = FakeSelectedTeamDao()
         syncMetaDao = FakeTeamsSyncMetaDao(callLog)
-        repository = TeamRepository(apiClient, teamDao, selectedTeamDao, syncMetaDao, origin)
+        repository = TeamRepository(
+            apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { false },
+        )
     }
 
     @After
     fun tearDown() {
         server.shutdown()
+        localServer.shutdown()
     }
 
     @Test
@@ -226,6 +239,68 @@ class TeamRepositoryTest {
 
         repository.selectTeam(raceId = 9, teamId = 305)
         assertEquals(SelectedTeamEntity(id = 1, raceId = 9, teamId = 305), repository.selectedTeam.first())
+    }
+
+    @Test
+    fun localSource_hitsLocalClientAndStoresEtagUnderLocalOrigin() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"").setBody(teamsJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshTeams(8, SyncSource.Local))
+
+        assertEquals(1, repository.teamsForRace(8).first().size)
+        assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "race/8/teams"))
+        assertNull("cloud origin must stay untouched", syncMetaDao.getEtag(origin, "race/8/teams"))
+        assertEquals(0, server.requestCount)
+        assertEquals(1, localServer.requestCount)
+    }
+
+    @Test
+    fun cloudSource_pinnedRace_skipsWithoutTouchingNetworkOrData() = runTest {
+        teamDao.setTeams(listOf(teamEntity(201, raceId = 8, name = "Cached")))
+        val pinnedRepo = TeamRepository(
+            apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { true },
+        )
+
+        assertEquals(RefreshResult.Skipped, pinnedRepo.refreshTeams(8, SyncSource.Cloud))
+
+        assertEquals(0, server.requestCount)
+        val teams = pinnedRepo.teamsForRace(8).first()
+        assertEquals(1, teams.size)
+        assertEquals("Cached", teams[0].teamname)
+    }
+
+    @Test
+    fun cloudSource_pinAppearingMidFlight_doesNotPersist() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(teamsJson()),
+        )
+        var checks = 0
+        // false on the entry guard, true on the pre-persist re-check — simulates the pin landing
+        // while the cloud fetch was in flight.
+        val pinnedRepo = TeamRepository(
+            apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { checks++ > 0 },
+        )
+
+        assertEquals(RefreshResult.Skipped, pinnedRepo.refreshTeams(8, SyncSource.Cloud))
+
+        assertTrue("in-flight response must not persist once pinned", pinnedRepo.teamsForRace(8).first().isEmpty())
+        assertNull(syncMetaDao.getEtag(origin, "race/8/teams"))
+    }
+
+    @Test
+    fun unpinnedCloud_behaviorUnchanged() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(teamsJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshTeams(8, SyncSource.Cloud))
+
+        assertEquals(1, repository.teamsForRace(8).first().size)
+        assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/teams"))
     }
 
     private fun teamEntity(id: Int, raceId: Int, name: String) = TeamEntity(

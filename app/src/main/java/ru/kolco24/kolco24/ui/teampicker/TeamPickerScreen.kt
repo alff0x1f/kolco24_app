@@ -103,7 +103,7 @@ fun TeamPickerScreen(
     LaunchedEffect(raceId, retryKey) {
         load = PickerLoad.Loading
         load = when (onRefresh(raceId)) {
-            RefreshResult.Updated, RefreshResult.NotModified -> PickerLoad.Loaded
+            RefreshResult.Updated, RefreshResult.NotModified, RefreshResult.Skipped -> PickerLoad.Loaded
             RefreshResult.Offline -> PickerLoad.Offline
             RefreshResult.Forbidden -> PickerLoad.Forbidden
             is RefreshResult.HttpError -> PickerLoad.HttpError

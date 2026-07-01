@@ -31,6 +31,9 @@ import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.lease.RaceLease
+import ru.kolco24.kolco24.data.lease.RaceLeaseStore
+import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
@@ -153,12 +156,35 @@ class AppContainer(private val context: Context) {
 
     private val database: AppDatabase by lazy { AppDatabase.build(context) }
 
+    /** Persisted race-lease store backing [raceLease] (see the local-mode-switch plan). */
+    private val raceLeaseStore: RaceLeaseStore by lazy { RaceLeaseStore.fromSharedPreferences(context) }
+
+    /**
+     * Current LAN-data-source pin, `null` = no race pinned. Seeded synchronously from
+     * [raceLeaseStore] at construction; every mutation (renew/clear) writes through to prefs. A
+     * `MutableStateFlow` (not a plain field) so the Settings switch can collect it and reflect a
+     * handback or expiry live.
+     */
+    val raceLease: MutableStateFlow<RaceLease?> = MutableStateFlow(raceLeaseStore.read())
+
+    /**
+     * Trusted time when the [TrustedClock] anchor is warm, wall clock otherwise — the time source
+     * for all lease math (renew/expiry checks). Worst case (a wall-clock change with no anchor yet)
+     * shifts auto-expiry; the heartbeat probe keeps correcting it on every successful LAN contact.
+     */
+    private val nowMs: () -> Long = { trustedClock.trusted() ?: System.currentTimeMillis() }
+
+    /** `true` when [raceId] is currently pinned to the LAN data source. Read-at-call-time lambda. */
+    private val isRacePinned: (raceId: Int) -> Boolean = { raceId -> isPinned(raceLease.value, raceId, nowMs()) }
+
     val raceRepository: RaceRepository by lazy {
         RaceRepository(
             apiClient = apiClient,
             raceDao = database.raceDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
         )
     }
 
@@ -169,6 +195,9 @@ class AppContainer(private val context: Context) {
             selectedTeamDao = database.selectedTeamDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
+            isRacePinned = isRacePinned,
         )
     }
 
@@ -181,6 +210,9 @@ class AppContainer(private val context: Context) {
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
             json = json,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
+            isRacePinned = isRacePinned,
         )
     }
 
@@ -190,6 +222,9 @@ class AppContainer(private val context: Context) {
             memberTagDao = database.memberTagDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
+            isRacePinned = isRacePinned,
         )
     }
 
