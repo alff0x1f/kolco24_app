@@ -157,4 +157,41 @@ class MarkDtoMappingTest {
         val dto = mark(present = emptyList()).toDto()
         assertEquals(0, dto.present.size)
     }
+
+    @Test
+    fun photoMark_mapsMethodEmptyCpFieldsEmptyPresentComplete() {
+        // Mirrors MarkRepository.createPhotoMark: method="photo", cpUid/cpCode="", present=[]
+        val entity = mark(present = emptyList()).copy(
+            method = "photo",
+            cpUid = "",
+            cpCode = "",
+            presentDetails = null,
+            complete = true,
+        )
+        val dto = entity.toDto()
+
+        assertEquals("photo", dto.method)
+        assertEquals("", dto.cpCode)
+        assertEquals("", dto.cpNfcUid)
+        assertEquals(0, dto.present.size)
+        assertEquals(true, dto.complete)
+        assertEquals(1_718_900_000_000L, dto.wallMs)
+        assertEquals(1_718_900_000_123L, dto.trustedMs)
+        assertEquals(9_876_543L, dto.elapsedAt)
+    }
+
+    @Test
+    fun photoMark_withLocation_mapsAntiCheatCoordinate() {
+        val entity = mark(present = emptyList(), locLat = 55.75).copy(
+            method = "photo",
+            cpUid = "",
+            cpCode = "",
+        )
+        val dto = entity.toDto()
+
+        assertEquals("photo", dto.method)
+        val loc = dto.location!!
+        assertEquals(55.75, loc.lat, 0.0)
+        assertEquals(37.61, loc.lon, 0.0)
+    }
 }

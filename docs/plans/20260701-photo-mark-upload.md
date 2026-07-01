@@ -253,8 +253,8 @@ Documented, not engineered around.
 **Files:**
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/api/dto/MarkDtoMappingTest.kt`
 
-- [ ] Add/confirm a test: a `method="photo"` mark maps to a DTO with `method="photo"`, empty `cp_code`/`cp_nfc_uid`, empty `present`, `complete=true`, correct times/location (guards the metadata now flowing through `/marks/`)
-- [ ] Run `./gradlew testDebugUnitTest` (MarkDtoMappingTest) — must pass before Task 9
+- [x] Add/confirm a test: a `method="photo"` mark maps to a DTO with `method="photo"`, empty `cp_code`/`cp_nfc_uid`, empty `present`, `complete=true`, correct times/location (guards the metadata now flowing through `/marks/`)
+- [x] Run `./gradlew testDebugUnitTest` (MarkDtoMappingTest) — must pass before Task 9
 
 ### Task 9: Document the contract in UPLOAD.md
 
