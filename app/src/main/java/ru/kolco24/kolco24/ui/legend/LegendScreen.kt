@@ -497,9 +497,22 @@ private fun LegendFilterChip(
     onClick: () -> Unit,
     label: String,
 ) {
-    val backgroundColor = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
-    val contentColor = if (selected) MaterialTheme.colorScheme.inverseOnSurface else MaterialTheme.colorScheme.onSurface
-    val border = if (selected) null else BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val backgroundColor = when {
+        selected && isDarkTheme -> MaterialTheme.colorScheme.surfaceContainerHighest
+        selected -> MaterialTheme.colorScheme.onSurface
+        else -> Color.Transparent
+    }
+    val contentColor = when {
+        selected && isDarkTheme -> MaterialTheme.colorScheme.onSurface
+        selected -> MaterialTheme.colorScheme.inverseOnSurface
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val border = when {
+        selected && isDarkTheme -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        selected -> null
+        else -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
+    }
 
     Surface(
         onClick = onClick,

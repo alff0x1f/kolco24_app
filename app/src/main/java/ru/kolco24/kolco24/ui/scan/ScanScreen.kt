@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -63,6 +64,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -348,6 +350,7 @@ fun ScanScreen(
 
 @Composable
 private fun ScanTopBar(canFinish: Boolean, onClose: () -> Unit, onFinish: () -> Unit) {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -355,7 +358,13 @@ private fun ScanTopBar(canFinish: Boolean, onClose: () -> Unit, onFinish: () -> 
             .padding(end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onClose) {
+        IconButton(
+            onClick = onClose,
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+                contentColor = if (isDarkTheme) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+        ) {
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = "Закрыть",
@@ -800,8 +809,14 @@ private fun ScanTimerStrip(
     )
     val urgent = seconds < 5f
     val accent = if (urgent) Color(0xFFFFB4AB) else Color(0xFFFFC98A)
-    val onDark = MaterialTheme.colorScheme.inverseOnSurface
-    val trackColor = onDark.copy(alpha = 0.12f)
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val containerColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+        else MaterialTheme.colorScheme.inverseSurface
+    val contentColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.inverseOnSurface
+    val trackColor = contentColor.copy(alpha = if (isDarkTheme) 0.16f else 0.12f)
     val one = remainingScans % 10 == 1 && remainingScans % 100 != 11
     val chipWord = when {
         remainingScans % 100 in 11..14 -> "чипов"
@@ -822,7 +837,8 @@ private fun ScanTimerStrip(
             .fillMaxWidth()
             .padding(start = 8.dp, end = 8.dp, bottom = 14.dp),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.inverseSurface,
+        color = containerColor,
+        border = if (isDarkTheme) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
     ) {
         Column {
             Row(
@@ -835,19 +851,19 @@ private fun ScanTimerStrip(
                         text = seconds.toInt().toString(),
                         fontFamily = RobotoMono,
                         fontSize = 34.sp,
-                        color = if (urgent) accent else onDark,
+                        color = if (urgent) accent else contentColor,
                     )
                     Text(
                         text = " с",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = onDark.copy(alpha = 0.65f),
+                        color = contentColor.copy(alpha = 0.65f),
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = onDark,
+                    color = contentColor,
                     modifier = Modifier.weight(1f),
                 )
             }
