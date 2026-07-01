@@ -196,11 +196,11 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - [x] run `./gradlew testDebugUnitTest lintDebug` — must pass (`MarksMappingTest`/`TileFillTest` still green after MarksScreen edit)
 
 ### Task 7: Verify acceptance criteria
-- [ ] all three sections reachable from Команда → Прочее → «Загрузка данных»; back closes the overlay
-- [ ] a section hides when its total is 0; «Финиш» hides until it reports; empty state shows when nothing recorded
-- [ ] no upload UI remains on the Отметки or Команда tabs
-- [ ] run full unit suite: `./gradlew testDebugUnitTest`
-- [ ] run `./gradlew lintDebug`
+- [x] all three sections reachable from Команда → Прочее → «Загрузка данных»; back closes the overlay (verified by code inspection: `MiscRow(onClick = onOpenUpload)` in `TeamScreen.kt` sets `showUpload = true` in `MainActivity.kt`; `BackHandler(enabled = showUpload && …) { showUpload = false }` — full manual on-device confirmation remains in Post-Completion)
+- [x] a section hides when its total is 0; «Финиш» hides until it reports; empty state shows when nothing recorded (verified in `UploadScreen.kt`: `UploadSection` returns early on `status.total <= 0`, `showFinishLine` gates the «Финиш» line and is unit-tested by `FinishLineVisibilityTest`, `hasAny` drives the empty state)
+- [x] no upload UI remains on the Отметки or Команда tabs (`grep -rn "MarksUploadPanel\|UploadStatusRow\|CloudReceiptPill" app/src` returns nothing, confirmed in Task 6)
+- [x] run full unit suite: `./gradlew testDebugUnitTest` — passes
+- [x] run `./gradlew lintDebug` — passes
 
 ### Task 8: Update documentation and file the plan
 - [ ] update `CLAUDE.md`: add `ui/upload/UploadScreen.kt` + `UploadStatusModels.kt` bullets; note the new `MarkDao.uploadCountsMetadata`/`photoFrameRows` + `foldPhotoFrameCounts`; update the `TrackCard`/`MarksScreen` bullets to drop the removed upload rows; add `showUpload` to the overlay-stack list; update the instrumented-test note to include the new MarkDao queries
