@@ -113,6 +113,43 @@ class MarkDaoTest {
     }
 
     @Test
+    fun uploadCountsMetadata_ignoresPendingFrames() = runBlocking {
+        dao.upsert(mark("nfc-1", method = "nfc", uploadedLocal = true, uploadedCloud = true))
+        // Metadata uploaded but frames not yet — must still count for the metadata-only view.
+        dao.upsert(
+            mark(
+                "photo-1", method = "photo", photoPath = "[\"marks/photo-1/a.jpg\"]",
+                uploadedLocal = true, uploadedCloud = false,
+                photosUploadedLocal = false, photosUploadedCloud = false,
+            ),
+        )
+
+        val counts = dao.uploadCountsMetadata(teamId = 7, raceId = 1).first()
+
+        assertEquals(2, counts.total)
+        assertEquals(2, counts.local)
+        assertEquals(1, counts.cloud)
+    }
+
+    @Test
+    fun photoFrameRows_returnsOnlyPhotoRowsWithFlags() = runBlocking {
+        dao.upsert(mark("nfc-1", method = "nfc", uploadedLocal = true, uploadedCloud = true))
+        dao.upsert(
+            mark(
+                "photo-1", method = "photo", photoPath = "[\"marks/photo-1/a.jpg\"]",
+                photosUploadedLocal = true, photosUploadedCloud = false,
+            ),
+        )
+
+        val rows = dao.photoFrameRows(teamId = 7, raceId = 1).first()
+
+        assertEquals(
+            listOf(PhotoFrameRow("[\"marks/photo-1/a.jpg\"]", photosUploadedLocal = true, photosUploadedCloud = false)),
+            rows,
+        )
+    }
+
+    @Test
     fun pendingUploadScopes_includesPhotoOnlyScope() = runBlocking {
         // Phase 2: a scope with only a photo mark is no longer excluded (filter dropped).
         dao.upsert(mark("nfc-1", method = "nfc", raceId = 1, teamId = 7))

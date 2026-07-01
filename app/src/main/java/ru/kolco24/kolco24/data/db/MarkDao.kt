@@ -122,6 +122,26 @@ interface MarkDao {
     )
     fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts>
 
+    // Metadata-only variant of [uploadCounts]: answers "did the take row reach the server?"
+    // independent of its photo frames (the Фото upload section covers frame completion
+    // separately via [photoFrameRows]/`foldPhotoFrameCounts`).
+    @Query(
+        "SELECT COUNT(*) AS total, " +
+            "COALESCE(SUM(CASE WHEN uploadedLocal THEN 1 ELSE 0 END), 0) AS local, " +
+            "COALESCE(SUM(CASE WHEN uploadedCloud THEN 1 ELSE 0 END), 0) AS cloud " +
+            "FROM marks WHERE teamId = :teamId AND raceId = :raceId"
+    )
+    fun uploadCountsMetadata(teamId: Int, raceId: Int): Flow<UploadCounts>
+
+    // Raw per-mark frame flags for every photo-carrying row in scope — folded into frame-granular
+    // UploadCounts by `foldPhotoFrameCounts` (MarkRepository), since a mark's `photoPath` JSON list
+    // can hold more than one frame and only the caller knows how to decode it.
+    @Query(
+        "SELECT photoPath, photosUploadedLocal, photosUploadedCloud FROM marks " +
+            "WHERE teamId = :teamId AND raceId = :raceId AND photoPath IS NOT NULL"
+    )
+    fun photoFrameRows(teamId: Int, raceId: Int): Flow<List<PhotoFrameRow>>
+
     // Upload queries are scoped by (raceId, teamId): a batch goes to /race/<raceId>/marks/, so it must
     // never sweep up another race/team's rows. Note the explicit `= :raceId AND = :teamId` — a bare
     // `WHERE raceId AND teamId` would read the columns as truthy expressions and break the filter.

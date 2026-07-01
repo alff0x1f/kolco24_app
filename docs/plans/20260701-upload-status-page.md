@@ -134,11 +134,11 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/MarkDao.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/PhotoFrameRow.kt` (or co-locate in MarkDao.kt)
 
-- [ ] add `data class PhotoFrameRow(val photoPath: String?, val photosUploadedLocal: Boolean, val photosUploadedCloud: Boolean)`
-- [ ] add `uploadCountsMetadata(teamId, raceId): Flow<UploadCounts>` — copy of `uploadCounts` with `CASE WHEN uploadedLocal …` / `CASE WHEN uploadedCloud …` (drop the `photoPath`/`photosUploadedX` term); alias `total`/`local`/`cloud`
-- [ ] add `photoFrameRows(teamId, raceId): Flow<List<PhotoFrameRow>>` — `SELECT photoPath, photosUploadedLocal, photosUploadedCloud FROM marks WHERE teamId = :teamId AND raceId = :raceId AND photoPath IS NOT NULL`
-- [ ] add the two queries to instrumented `MarkDaoTest` (metadata-only counts ignore pending frames; `photoFrameRows` returns only photo rows with the right flags)
-- [ ] run `./gradlew compileDebugKotlin` and confirm Room codegen is happy (instrumented test run deferred to Task 6 / Post-Completion since it needs a device)
+- [x] add `data class PhotoFrameRow(val photoPath: String?, val photosUploadedLocal: Boolean, val photosUploadedCloud: Boolean)`
+- [x] add `uploadCountsMetadata(teamId, raceId): Flow<UploadCounts>` — copy of `uploadCounts` with `CASE WHEN uploadedLocal …` / `CASE WHEN uploadedCloud …` (drop the `photoPath`/`photosUploadedX` term); alias `total`/`local`/`cloud`
+- [x] add `photoFrameRows(teamId, raceId): Flow<List<PhotoFrameRow>>` — `SELECT photoPath, photosUploadedLocal, photosUploadedCloud FROM marks WHERE teamId = :teamId AND raceId = :raceId AND photoPath IS NOT NULL`
+- [x] add the two queries to instrumented `MarkDaoTest` (metadata-only counts ignore pending frames; `photoFrameRows` returns only photo rows with the right flags)
+- [x] run `./gradlew compileDebugKotlin` and confirm Room codegen is happy (instrumented test run deferred to Task 6 / Post-Completion since it needs a device)
 
 ### Task 3: Add repository counters and the pure photo-frame fold
 
