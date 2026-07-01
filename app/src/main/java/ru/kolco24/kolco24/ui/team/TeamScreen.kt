@@ -326,6 +326,18 @@ private fun MemberRow(
     onUnbind: () -> Unit,
 ) {
     val bound = binding != null
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    // Dark theme's containerLowest is *darker* than the row's own surfaceContainerLow background
+    // (Material3's tonal elevation runs the opposite direction there), so this used to render as a
+    // near-invisible hole with a faint outline instead of a tappable CTA. surfaceContainerHighest
+    // is the brightest elevated dark surface, so the button correctly "lifts" off the row, and an
+    // orange-tinted border ties it to the NFC brand color instead of a neutral outline.
+    val bindContainerColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerLowest
+    val bindBorderColor =
+        if (isDarkTheme) OrangeCta.copy(alpha = 0.55f)
+        else MaterialTheme.colorScheme.outlineVariant
     Column {
         Row(
             modifier = Modifier
@@ -357,10 +369,10 @@ private fun MemberRow(
                     onClick = onBind,
                     enabled = nfcAvailable,
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        containerColor = bindContainerColor,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    border = BorderStroke(1.dp, bindBorderColor),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 ) {
                     Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)
