@@ -52,3 +52,9 @@ internal fun isSafeRelativePhotoPath(path: String): Boolean {
     if (segments.any { it.isBlank() || it == "." || it == ".." }) return false
     return true
 }
+
+/**
+ * The `<uuid>` filename stem of a relative photo path (`marks/<markId>/<uuid>.jpg` → `<uuid>`) — the
+ * stable, unique frame identity used as the idempotency key on the frame-upload endpoint.
+ */
+fun frameIdOf(relPath: String): String = relPath.substringAfterLast("/").removeSuffix(".jpg")

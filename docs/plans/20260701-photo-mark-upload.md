@@ -206,9 +206,9 @@ Documented, not engineered around.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/marks/PhotoPaths.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/marks/PhotoPathsTest.kt`
 
-- [ ] Add pure `frameIdOf(relPath: String): String` — the `<uuid>` filename stem (drop directory + `.jpg`)
-- [ ] Extend `PhotoPathsTest`: `frameIdOf` for a valid `marks/<markId>/<uuid>.jpg` path, and a defensive case (no extension / nested)
-- [ ] Run `./gradlew testDebugUnitTest` (PhotoPathsTest) — must pass before Task 5
+- [x] Add pure `frameIdOf(relPath: String): String` — the `<uuid>` filename stem (drop directory + `.jpg`)
+- [x] Extend `PhotoPathsTest`: `frameIdOf` for a valid `marks/<markId>/<uuid>.jpg` path, and a defensive case (no extension / nested)
+- [x] Run `./gradlew testDebugUnitTest` (PhotoPathsTest) — must pass before Task 5
 
 ### Task 5: `ApiClient.uploadMarkPhoto` (binary POST)
 
