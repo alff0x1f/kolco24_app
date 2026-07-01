@@ -81,4 +81,23 @@ class PhotoPathsTest {
 
         assertEquals(listOf("marks/m1/a.jpg"), restored)
     }
+
+    @Test
+    fun frameIdOfValidPathReturnsUuidStem() {
+        assertEquals(
+            "550e8400-e29b-41d4-a716-446655440000",
+            frameIdOf("marks/m1/550e8400-e29b-41d4-a716-446655440000.jpg"),
+        )
+    }
+
+    @Test
+    fun frameIdOfDefensiveCases() {
+        // No extension: only the trailing ".jpg" suffix is stripped, so an extensionless name is
+        // returned unchanged rather than throwing.
+        assertEquals("noext", frameIdOf("marks/m1/noext"))
+        // Nested path: only the last segment matters.
+        assertEquals("a", frameIdOf("marks/m1/sub/a.jpg"))
+        // Bare filename, no directory at all.
+        assertEquals("a", frameIdOf("a.jpg"))
+    }
 }

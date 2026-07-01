@@ -108,15 +108,17 @@ interface MarkDao {
     // Boolean column (SUM(boolean) is codegen-fragile), COALESCE(...,0) guards the empty-scope NULL, and
     // aliases match UploadCounts property names so Room maps by name.
     //
-    // `method != 'photo'` excludes the local-only photo marks (Phase 1: photos are stored/scored on-device
-    // but never uploaded — see MarkEntity / the Phase-1 plan). Without it the UI upload-status row would
-    // count photo marks as perpetually pending (their uploaded* never flips). Phase 2 drops this filter
-    // once the multipart file endpoint exists.
+    // Phase 2: a photo mark (photoPath NOT NULL) counts as uploaded for a target only when BOTH its
+    // metadata (uploadedX) and its frames (photosUploadedX) have landed — else the status row would read
+    // "uploaded" while frames are still pending. A non-photo row is unaffected (photoPath IS NULL short-
+    // circuits the OR).
     @Query(
         "SELECT COUNT(*) AS total, " +
-            "COALESCE(SUM(CASE WHEN uploadedLocal THEN 1 ELSE 0 END), 0) AS local, " +
-            "COALESCE(SUM(CASE WHEN uploadedCloud THEN 1 ELSE 0 END), 0) AS cloud " +
-            "FROM marks WHERE teamId = :teamId AND raceId = :raceId AND method != 'photo'"
+            "COALESCE(SUM(CASE WHEN uploadedLocal AND (photoPath IS NULL OR photosUploadedLocal) " +
+            "THEN 1 ELSE 0 END), 0) AS local, " +
+            "COALESCE(SUM(CASE WHEN uploadedCloud AND (photoPath IS NULL OR photosUploadedCloud) " +
+            "THEN 1 ELSE 0 END), 0) AS cloud " +
+            "FROM marks WHERE teamId = :teamId AND raceId = :raceId"
     )
     fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts>
 
@@ -125,13 +127,13 @@ interface MarkDao {
     // `WHERE raceId AND teamId` would read the columns as truthy expressions and break the filter.
     // All rows (complete=true AND false) upload; the server recomputes completeness from present[].
     //
-    // `method != 'photo'` keeps the local-only photo marks out of the drain (Phase 1). The marks DTO has
-    // no photoPath field and a photo row carries empty cpUid/cpCode, so sending it would be a useless POST
-    // and risks dropping the whole batch to a 400 — taking valid NFC marks down with it. Phase 2 removes
-    // this filter when metadata + file upload together.
+    // Phase 2 drops the Phase-1 `method != 'photo'` filter: photo-mark metadata (empty cpUid/cpCode,
+    // method="photo") now shares this batch with NFC marks — the `/marks/` backend contract requires
+    // partial-accept (accepted[] minus rejected rows, never a whole-batch 400) so a photo row can never
+    // strand valid NFC marks in the same batch (see the plan's backend-contract gate).
     @Query(
         "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
-            "AND uploadedLocal = 0 AND method != 'photo' " +
+            "AND uploadedLocal = 0 " +
             "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
             "LIMIT :limit"
     )
@@ -139,11 +141,32 @@ interface MarkDao {
 
     @Query(
         "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
-            "AND uploadedCloud = 0 AND method != 'photo' " +
+            "AND uploadedCloud = 0 " +
             "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
             "LIMIT :limit"
     )
     suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity>
+
+    // Frame-drain candidates for one target: metadata-first ordering (uploadedX = 1 gates this — the
+    // server must have the mark row before frames can attach) AND this mark's frames not yet fully
+    // accepted by this target AND it actually carries frames. Method-agnostic on purpose — an NFC take
+    // with attached photos drains here too, not just method="photo" rows.
+    @Query(
+        "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
+            "AND uploadedLocal = 1 AND photosUploadedLocal = 0 AND photoPath IS NOT NULL " +
+            "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
+            "LIMIT :limit"
+    )
+    suspend fun framePendingLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity>
+
+    /** Same frame-drain candidate query as [framePendingLocal], for the cloud target. */
+    @Query(
+        "SELECT * FROM marks WHERE raceId = :raceId AND teamId = :teamId " +
+            "AND uploadedCloud = 1 AND photosUploadedCloud = 0 AND photoPath IS NOT NULL " +
+            "ORDER BY COALESCE(trustedTakenAt, takenAt), id " +
+            "LIMIT :limit"
+    )
+    suspend fun framePendingCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity>
 
     @Query("UPDATE marks SET uploadedLocal = 1 WHERE id IN (:ids)")
     suspend fun markUploadedLocal(ids: List<String>)
@@ -179,13 +202,29 @@ interface MarkDao {
     @Query("UPDATE marks SET uploadedCloud = 1 WHERE id = :id AND updatedAt = :updatedAt AND locLat IS NULL")
     suspend fun markUploadedCloudIfUnchangedAndNoLocation(id: String, updatedAt: Long)
 
-    // Every (raceId, teamId) pair that still has a row not yet delivered to one of the targets — the
-    // opportunistic re-send walks all of them, not just the current selection. `method != 'photo'` is
-    // required (Phase 1) so a scope with only photo marks is never returned — otherwise uploadAllPending
-    // would flush it forever (the photo rows stay pending because the drain excludes them).
+    /**
+     * Flips the local frame-drain flag once all of a mark's frames have been accepted by the local
+     * target — guarded by [updatedAt] like [markUploadedLocalIfUnchanged]: if `attachPhotos` appended a
+     * new frame between the drain's fetch and this call (bumping `updatedAt` and resetting the flag to
+     * 0), the guard no-ops and the next trigger re-drains including the new frame instead of falsely
+     * flipping to "all uploaded" with one frame stranded.
+     */
+    @Query("UPDATE marks SET photosUploadedLocal = 1 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun setPhotosUploadedLocalIfUnchanged(id: String, updatedAt: Long)
+
+    /** Same [updatedAt] version guard as [setPhotosUploadedLocalIfUnchanged] for the cloud target. */
+    @Query("UPDATE marks SET photosUploadedCloud = 1 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun setPhotosUploadedCloudIfUnchanged(id: String, updatedAt: Long)
+
+    // Every (raceId, teamId) pair that still has a row not yet fully delivered to one of the targets —
+    // the opportunistic re-send walks all of them, not just the current selection. Phase 2 widens this
+    // beyond bare metadata: a scope whose metadata is fully uploaded but whose frames are still pending
+    // (photoPath NOT NULL AND photosUploadedX = 0) must still be returned, or uploadAllPending would never
+    // re-trigger the frame drain for it.
     @Query(
         "SELECT DISTINCT raceId, teamId FROM marks " +
-            "WHERE (uploadedLocal = 0 OR uploadedCloud = 0) AND method != 'photo'"
+            "WHERE (uploadedLocal = 0 OR uploadedCloud = 0) " +
+            "OR (photoPath IS NOT NULL AND (photosUploadedLocal = 0 OR photosUploadedCloud = 0))"
     )
     suspend fun pendingUploadScopes(): List<TrackScope>
 
@@ -198,8 +237,8 @@ interface MarkDao {
      *
      * **`uploaded*` is deliberately NOT reset.** This attaches to an already-uploaded NFC row, but
      * `photoPath` is not part of the marks DTO — re-queuing the marks metadata would be a useless POST.
-     * The photo file itself is not uploaded at all in Phase 1; Phase 2 gets its own `photosUploaded*`
-     * flags rather than resetting the shared `uploaded*`. A missing row is a silent no-op.
+     * **`photosUploaded*` IS reset to 0** — appending frames re-queues the frame drain (the new frames
+     * haven't been sent), while the metadata upload flags stay untouched.
      */
     @Transaction
     suspend fun attachPhotos(id: String, newPaths: List<String>, now: Long) {
@@ -208,7 +247,13 @@ interface MarkDao {
         updatePhotoPath(id, encodePhotoPaths(merged), now)
     }
 
-    /** Column-scoped UPDATE touching only `photoPath` and `updatedAt` (see [attachPhotos]). */
-    @Query("UPDATE marks SET photoPath = :photoPath, updatedAt = :now WHERE id = :id")
+    /**
+     * Column-scoped UPDATE touching only `photoPath`, `updatedAt`, and `photosUploaded*` (see
+     * [attachPhotos]) — resets the frame-upload flags so newly-appended frames get drained.
+     */
+    @Query(
+        "UPDATE marks SET photoPath = :photoPath, updatedAt = :now, " +
+            "photosUploadedLocal = 0, photosUploadedCloud = 0 WHERE id = :id"
+    )
     suspend fun updatePhotoPath(id: String, photoPath: String, now: Long)
 }

@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -218,23 +219,44 @@ class ApiClient(
     }
 
     /**
-     * Shared `POST` of an exact `application/json` [bodyBytes] to [url]. Signing is handled by
-     * [okHttpClient]'s interceptor (which hashes the exact bytes). [parse] turns the body into the
-     * payload [T] and is invoked **only** on the `200`/`201` branch — error bodies are never parsed,
-     * so an empty-body endpoint with a `{ Unit }` parser is safe. Status mapping: `200`/`201` →
-     * [PostResult.Success]; `400` → [PostResult.BadRequest]; `401` → [PostResult.Unauthorized];
-     * `403` → [PostResult.Forbidden]; `409` → [PostResult.Conflict]; `429` → [PostResult.RateLimited];
-     * any other code → [PostResult.Error]. Runs on [Dispatchers.IO]; `IOException` →
-     * [PostResult.Offline], `SerializationException` → [PostResult.Error] with a `null` code.
+     * `POST /app/race/<raceId>/mark/<markId>/photo/<frameId>` — upload one downscaled JPEG frame.
+     * `frameId` is the frame's stable `<uuid>` filename stem (see `frameIdOf`), doubling as the
+     * server-side idempotency key alongside `(raceId, markId)`. `200`/`201` → [PostResult.Success]
+     * of [Unit] (empty body, never parsed on error branches); `404` means the endpoint isn't
+     * deployed yet or the mark row hasn't landed — maps to [PostResult.Error] with code `404` and
+     * **self-heals** (the caller leaves the per-target photo-uploaded flag at `0` and retries on the
+     * next drain trigger, identical to any other transient failure). Same signing as [uploadMarks]:
+     * the interceptor hashes the raw JPEG bytes as the body. The same method serves both upload
+     * targets (cloud / local LAN) — the target is selected by the `ApiClient` instance.
+     */
+    suspend fun uploadMarkPhoto(
+        raceId: Int,
+        markId: String,
+        frameId: String,
+        bytes: ByteArray,
+    ): PostResult<Unit> =
+        post("$baseUrl/app/race/$raceId/mark/$markId/photo/$frameId", bytes, mediaType = IMAGE_JPEG_MEDIA_TYPE) { }
+
+    /**
+     * Shared `POST` of exact [bodyBytes] (default `application/json`, override via [mediaType]) to
+     * [url]. Signing is handled by [okHttpClient]'s interceptor (which hashes the exact bytes).
+     * [parse] turns the body into the payload [T] and is invoked **only** on the `200`/`201` branch —
+     * error bodies are never parsed, so an empty-body endpoint with a `{ Unit }` parser is safe.
+     * Status mapping: `200`/`201` → [PostResult.Success]; `400` → [PostResult.BadRequest]; `401` →
+     * [PostResult.Unauthorized]; `403` → [PostResult.Forbidden]; `409` → [PostResult.Conflict];
+     * `429` → [PostResult.RateLimited]; any other code → [PostResult.Error]. Runs on
+     * [Dispatchers.IO]; `IOException` → [PostResult.Offline], `SerializationException` →
+     * [PostResult.Error] with a `null` code.
      */
     internal suspend fun <T> post(
         url: String,
         bodyBytes: ByteArray,
+        mediaType: MediaType = JSON_MEDIA_TYPE,
         parse: (String) -> T,
     ): PostResult<T> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
-            .post(bodyBytes.toRequestBody(JSON_MEDIA_TYPE))
+            .post(bodyBytes.toRequestBody(mediaType))
             .build()
         try {
             okHttpClient.newCall(request).execute().use { response ->
@@ -260,6 +282,7 @@ class ApiClient(
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        private val IMAGE_JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()
 
         /**
          * OkHttp client with the signing interceptor and configurable connect/read timeouts (default

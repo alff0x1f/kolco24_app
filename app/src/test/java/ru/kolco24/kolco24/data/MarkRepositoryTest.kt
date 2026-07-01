@@ -609,22 +609,46 @@ private class FakeMarkDao : MarkDao {
 
     override fun uploadCounts(teamId: Int, raceId: Int): Flow<UploadCounts> =
         rows.map { list ->
-            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId && it.method != "photo" }
+            val scoped = list.filter { it.teamId == teamId && it.raceId == raceId }
             UploadCounts(
                 total = scoped.size,
-                local = scoped.count { it.uploadedLocal },
-                cloud = scoped.count { it.uploadedCloud },
+                local = scoped.count { it.uploadedLocal && (it.photoPath == null || it.photosUploadedLocal) },
+                cloud = scoped.count { it.uploadedCloud && (it.photoPath == null || it.photosUploadedCloud) },
             )
         }
 
-    // Contract mirror of the @Query filter: photo marks are excluded from the drain in Phase 1.
+    // Phase 2: photo-mark metadata shares the drain with NFC marks (filter dropped).
     override suspend fun unuploadedLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
-        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal && it.method != "photo" }
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedLocal }
             .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
 
     override suspend fun unuploadedCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
-        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud && it.method != "photo" }
+        rows.value.filter { it.raceId == raceId && it.teamId == teamId && !it.uploadedCloud }
             .sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun framePendingLocal(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
+        rows.value.filter {
+            it.raceId == raceId && it.teamId == teamId &&
+                it.uploadedLocal && !it.photosUploadedLocal && it.photoPath != null
+        }.sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun framePendingCloud(raceId: Int, teamId: Int, limit: Int): List<MarkEntity> =
+        rows.value.filter {
+            it.raceId == raceId && it.teamId == teamId &&
+                it.uploadedCloud && !it.photosUploadedCloud && it.photoPath != null
+        }.sortedWith(compareBy({ it.trustedTakenAt ?: it.takenAt }, { it.id })).take(limit)
+
+    override suspend fun setPhotosUploadedLocalIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(photosUploadedLocal = true) else it
+        }
+    }
+
+    override suspend fun setPhotosUploadedCloudIfUnchanged(id: String, updatedAt: Long) {
+        rows.value = rows.value.map {
+            if (it.id == id && it.updatedAt == updatedAt) it.copy(photosUploadedCloud = true) else it
+        }
+    }
 
     override suspend fun updatePhotoPath(id: String, photoPath: String, now: Long) {
         rows.value = rows.value.map {
@@ -667,8 +691,10 @@ private class FakeMarkDao : MarkDao {
     }
 
     override suspend fun pendingUploadScopes(): List<TrackScope> =
-        rows.value.filter { (!it.uploadedLocal || !it.uploadedCloud) && it.method != "photo" }
-            .map { TrackScope(it.raceId, it.teamId) }.distinct()
+        rows.value.filter {
+            !it.uploadedLocal || !it.uploadedCloud ||
+                (it.photoPath != null && (!it.photosUploadedLocal || !it.photosUploadedCloud))
+        }.map { TrackScope(it.raceId, it.teamId) }.distinct()
 
     /** Test helper: directly set photoPath without going through attachPhotos merge logic. */
     suspend fun setPhotoPath(id: String, raw: String) {

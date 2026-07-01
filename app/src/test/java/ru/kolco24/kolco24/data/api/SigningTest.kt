@@ -118,6 +118,29 @@ class SigningTest {
     }
 
     @Test
+    fun interceptor_binaryPostBodyHashSignsRawBytes() {
+        val jpegBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3)
+        val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
+        val captured = captureSignedRequest(token = null) {
+            Request.Builder()
+                .url("https://example.test/app/race/8/mark/mark-1/photo/frame-uuid")
+                .post(body)
+                .build()
+        }
+        // ts is fixed at 100 by the fake clock below
+        val expected = sign(
+            "secret",
+            buildCanonical(
+                "POST",
+                "/app/race/8/mark/mark-1/photo/frame-uuid",
+                "100",
+                sha256Hex(jpegBytes),
+            ),
+        )
+        assertEquals(expected, captured.header("X-App-Sig"))
+    }
+
+    @Test
     fun interceptor_emptyGetBodyUsesEmptyBodyHash() {
         val captured = captureSignedRequest(token = null) {
             Request.Builder().url("https://example.test/app/races/").get().build()

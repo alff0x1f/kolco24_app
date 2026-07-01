@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LegendMetaEntity::class,
         TrackPointEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(
@@ -72,13 +72,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2→v3 (Phase 2, photo-mark upload): adds `marks.photosUploadedLocal`/`photosUploadedCloud`
+         * (per-target frame-drain flags, see [MarkEntity.photosUploadedLocal]). Additive only, default
+         * 0 — legacy rows are treated as "no frames uploaded yet", which is correct for both a row with
+         * no photos (the drain query also requires `photoPath IS NOT NULL`) and a row with unsent frames.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE marks ADD COLUMN photosUploadedLocal INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE marks ADD COLUMN photosUploadedCloud INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }
