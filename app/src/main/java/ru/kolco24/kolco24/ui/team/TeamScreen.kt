@@ -41,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -194,30 +197,53 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
     val allBound = totalCount > 0 && boundCount >= totalCount
     val number = team.startNumber?.takeIf { it.isNotBlank() }
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val cardColor =
-        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHigh
-        else MaterialTheme.colorScheme.inverseSurface
+    // Gradient core + corner glow (rhymes with LegendScreen's LockedHero and the empty-state
+    // illustrations) instead of a flat single-color fill — the card is the first thing on the tab.
+    val coreBrush = if (isDarkTheme) {
+        Brush.linearGradient(
+            listOf(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        )
+    } else {
+        Brush.linearGradient(listOf(Color(0xFF1D242D), Color(0xFF2A333E)))
+    }
+    val glowColor = if (isDarkTheme) MaterialTheme.colorScheme.primary else Color(0xFFC3011C)
     val contentColor =
         if (isDarkTheme) MaterialTheme.colorScheme.onSurface
-        else MaterialTheme.colorScheme.inverseOnSurface
-    val badgeColor =
-        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHighest
-        else Color.White.copy(alpha = 0.10f)
-    val badgeBorderColor =
+        else Color.White
+    val borderColor =
         if (isDarkTheme) MaterialTheme.colorScheme.outlineVariant
-        else Color.White.copy(alpha = 0.18f)
-    val boundDotColor =
-        if (isDarkTheme) MaterialTheme.colorScheme.tertiary
-        else MaterialTheme.colorScheme.tertiaryContainer
+        else Color.White.copy(alpha = 0.14f)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.large,
-        color = cardColor,
-        border = if (isDarkTheme) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+        color = Color.Transparent,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
+        Column(
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.large)
+                .drawBehind {
+                    drawRect(brush = coreBrush)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                glowColor.copy(alpha = if (isDarkTheme) 0.18f else 0.45f),
+                                glowColor.copy(alpha = 0f),
+                            ),
+                            center = Offset(size.width, 0f),
+                            radius = size.width * 0.6f,
+                        ),
+                        center = Offset(size.width, 0f),
+                        radius = size.width * 0.6f,
+                    )
+                }
+                .border(1.dp, borderColor, MaterialTheme.shapes.large)
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+        ) {
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -244,34 +270,8 @@ private fun TeamHeroCard(team: TeamEntity, category: CategoryEntity?, totalCount
                 color = contentColor.copy(alpha = 0.70f),
             )
 
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = badgeColor,
-                border = BorderStroke(1.dp, badgeBorderColor),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    Box(
-                        modifier = Modifier.size(6.dp).background(
-                            if (allBound) boundDotColor else Color(0xFFFFD7A2),
-                            CircleShape,
-                        )
-                    )
-                    Text(
-                        text = "$boundCount / $totalCount с чипом",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = contentColor,
-                    )
-                }
-            }
-
             if (!allBound && totalCount > 0) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(14.dp))
                 Text(
                     text = chipNotBoundText(totalCount - boundCount),
                     style = MaterialTheme.typography.bodySmall,
@@ -326,6 +326,18 @@ private fun MemberRow(
     onUnbind: () -> Unit,
 ) {
     val bound = binding != null
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    // Dark theme's containerLowest is *darker* than the row's own surfaceContainerLow background
+    // (Material3's tonal elevation runs the opposite direction there), so this used to render as a
+    // near-invisible hole with a faint outline instead of a tappable CTA. surfaceContainerHighest
+    // is the brightest elevated dark surface, so the button correctly "lifts" off the row, and an
+    // orange-tinted border ties it to the NFC brand color instead of a neutral outline.
+    val bindContainerColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerLowest
+    val bindBorderColor =
+        if (isDarkTheme) OrangeCta.copy(alpha = 0.55f)
+        else MaterialTheme.colorScheme.outlineVariant
     Column {
         Row(
             modifier = Modifier
@@ -357,10 +369,10 @@ private fun MemberRow(
                     onClick = onBind,
                     enabled = nfcAvailable,
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        containerColor = bindContainerColor,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    border = BorderStroke(1.dp, bindBorderColor),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 ) {
                     Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(18.dp), tint = OrangeCta)

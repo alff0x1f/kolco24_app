@@ -1,6 +1,5 @@
 package ru.kolco24.kolco24.ui.teampicker
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -21,11 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.ui.theme.OrangeCta
@@ -102,10 +104,31 @@ fun TeamEmptyContent(
     }
 }
 
-/** Charcoal core circle with a red glow and the team glyph, wrapped in a dashed orange ring. */
+/**
+ * Core circle with a glow and the team glyph, wrapped in a dashed orange ring. Rhymes with
+ * [ru.kolco24.kolco24.ui.legend.MapIllustration] and `LockedHero`'s dark-theme branch: reads the
+ * *applied* surface (not [androidx.compose.foundation.isSystemInDarkTheme]) since a manual theme
+ * override must flip it too. Light keeps the fixed charcoal core + red glow; dark swaps to
+ * elevated `surfaceContainer*` tokens + a `primary` glow so the circle still reads as "raised"
+ * against the dark background instead of a charcoal blob nearly matching it.
+ */
 @Composable
 private fun EmptyIllustration() {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val ringColor = OrangeCta.copy(alpha = 0.45f)
+    val coreBrush = if (isDarkTheme) {
+        Brush.linearGradient(
+            listOf(
+                MaterialTheme.colorScheme.surfaceContainerHighest,
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
+        )
+    } else {
+        Brush.linearGradient(listOf(Color(0xFF1D242D), Color(0xFF2A333E)))
+    }
+    val glowColor = if (isDarkTheme) MaterialTheme.colorScheme.primary else Color(0xFFC3011C)
+    val iconTint = if (isDarkTheme) MaterialTheme.colorScheme.onSurface else Color.White
+
     Box(
         modifier = Modifier
             .size(132.dp)
@@ -126,23 +149,16 @@ private fun EmptyIllustration() {
         Box(
             modifier = Modifier
                 .size(104.dp)
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.inverseSurface,
-                            MaterialTheme.colorScheme.surfaceContainerHighest,
-                        ),
-                    ),
-                    shape = CircleShape,
-                )
+                .clip(CircleShape)
                 .drawBehind {
+                    drawRect(brush = coreBrush)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFC3011C).copy(alpha = 0.55f),
-                                Color(0x00C3011C),
+                                glowColor.copy(alpha = if (isDarkTheme) 0.22f else 0.55f),
+                                glowColor.copy(alpha = 0f),
                             ),
-                            center = androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.15f),
+                            center = Offset(size.width * 0.85f, size.height * 0.15f),
                             radius = size.minDimension * 0.7f,
                         ),
                     )
@@ -152,7 +168,7 @@ private fun EmptyIllustration() {
             Icon(
                 imageVector = Icons.Filled.Groups,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = iconTint,
                 modifier = Modifier.size(50.dp),
             )
         }

@@ -762,13 +762,31 @@ private fun LegendNoTeam(onChooseTeam: () -> Unit) {
     }
 }
 
-/** Charcoal map core circle wrapped in a dashed orange "to fill" ring (rhymes with the empty team state). */
+/**
+ * Map core circle with a glow, wrapped in a dashed orange "to fill" ring (rhymes with
+ * [ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent]'s empty-team illustration and `LockedHero`'s
+ * dark-theme branch). Reads the *applied* surface, not `isSystemInDarkTheme()`, so a manual theme
+ * override flips it too. Light keeps the fixed charcoal core; dark swaps to elevated
+ * `surfaceContainer*` tokens + a `primary` glow so the circle reads as "raised" against the dark
+ * background instead of nearly matching it.
+ */
 @Composable
 private fun MapIllustration() {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val ringColor = OrangeCta.copy(alpha = 0.45f)
-    val coreBrush = Brush.linearGradient(
-        listOf(Color(0xFF1D242D), Color(0xFF2A333E)),
-    )
+    val coreBrush = if (isDarkTheme) {
+        Brush.linearGradient(
+            listOf(
+                MaterialTheme.colorScheme.surfaceContainerHighest,
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
+        )
+    } else {
+        Brush.linearGradient(listOf(Color(0xFF1D242D), Color(0xFF2A333E)))
+    }
+    val glowColor = if (isDarkTheme) MaterialTheme.colorScheme.primary else Color(0xFFC3011C)
+    val iconTint = if (isDarkTheme) MaterialTheme.colorScheme.onSurface else Color.White
+
     Box(
         modifier = Modifier
             .size(132.dp)
@@ -790,13 +808,25 @@ private fun MapIllustration() {
             modifier = Modifier
                 .size(104.dp)
                 .clip(CircleShape)
-                .drawBehind { drawRect(brush = coreBrush) },
+                .drawBehind {
+                    drawRect(brush = coreBrush)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                glowColor.copy(alpha = if (isDarkTheme) 0.22f else 0.55f),
+                                glowColor.copy(alpha = 0f),
+                            ),
+                            center = Offset(size.width * 0.85f, size.height * 0.15f),
+                            radius = size.minDimension * 0.7f,
+                        ),
+                    )
+                },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.Map,
                 contentDescription = null,
-                tint = Color.White,
+                tint = iconTint,
                 modifier = Modifier.size(50.dp),
             )
         }
