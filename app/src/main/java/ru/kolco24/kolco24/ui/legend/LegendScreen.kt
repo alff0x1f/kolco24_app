@@ -271,10 +271,25 @@ private fun ProgressBar(progress: Float, modifier: Modifier = Modifier) {
  */
 @Composable
 private fun LockedHero(lockedCount: Int) {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val coreBrush = Brush.linearGradient(
-        listOf(Color(0xFF1D242D), Color(0xFF2A333E)),
+        if (isDarkTheme) {
+            listOf(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                MaterialTheme.colorScheme.surfaceContainer,
+            )
+        } else {
+            listOf(Color(0xFF1D242D), Color(0xFF2A333E))
+        },
     )
-    val glow = Color(0xFFC3011C)
+    val glow = if (isDarkTheme) MaterialTheme.colorScheme.primary else Color(0xFFC3011C)
+    val contentColor = if (isDarkTheme) MaterialTheme.colorScheme.onSurface else Color.White
+    val iconContainerColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.surfaceContainerHighest
+        else Color.White.copy(alpha = 0.07f)
+    val borderColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.outlineVariant
+        else Color.White.copy(alpha = 0.14f)
 
     Surface(
         modifier = Modifier
@@ -290,7 +305,10 @@ private fun LockedHero(lockedCount: Int) {
                     drawRect(brush = coreBrush)
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(glow.copy(alpha = 0.5f), glow.copy(alpha = 0f)),
+                            colors = listOf(
+                                glow.copy(alpha = if (isDarkTheme) 0.18f else 0.5f),
+                                glow.copy(alpha = 0f),
+                            ),
                             center = Offset(size.width, 0f),
                             radius = 200f,
                         ),
@@ -298,6 +316,7 @@ private fun LockedHero(lockedCount: Int) {
                         radius = 200f,
                     )
                 }
+                .border(1.dp, borderColor, MaterialTheme.shapes.large)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -307,15 +326,15 @@ private fun LockedHero(lockedCount: Int) {
                     .size(64.dp)
                     .clip(CircleShape)
                     .drawBehind {
-                        drawCircle(color = Color.White.copy(alpha = 0.07f))
+                        drawCircle(color = iconContainerColor)
                     }
-                    .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape),
+                    .border(1.dp, borderColor, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Lock,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = contentColor,
                     modifier = Modifier.size(28.dp),
                 )
             }
@@ -326,15 +345,15 @@ private fun LockedHero(lockedCount: Int) {
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.2).sp,
+                        letterSpacing = 0.sp,
                     ),
-                    color = Color.White,
+                    color = contentColor,
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = "Стоимость и описания КП появятся позже",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                    color = Color.White.copy(alpha = 0.58f),
+                    color = contentColor.copy(alpha = 0.68f),
                 )
             }
         }
