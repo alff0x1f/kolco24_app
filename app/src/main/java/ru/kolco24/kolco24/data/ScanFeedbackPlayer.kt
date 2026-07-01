@@ -38,6 +38,7 @@ class ScanFeedbackPlayer(context: Context) {
 
     private val successSoundId: Int
     private val failureSoundId: Int
+    private val shutterSoundId: Int
 
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         context.getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -49,12 +50,13 @@ class ScanFeedbackPlayer(context: Context) {
     init {
         successSoundId = soundPool.load(context, R.raw.beep_ok3, 1)
         failureSoundId = soundPool.load(context, R.raw.beep_err, 1)
+        shutterSoundId = soundPool.load(context, R.raw.shutter, 1)
     }
 
     /** Recognized chip: crisp tick + a single short pulse. */
     fun success() {
         playSound(successSoundId)
-        vibrate(longArrayOf(0, 40))
+        vibrate(SUCCESS_VIBRATION_PATTERN)
     }
 
     /** Recognized-but-rejected tap: error tone + a double buzz. */
@@ -66,6 +68,17 @@ class ScanFeedbackPlayer(context: Context) {
     /** Unknown / not-a-working-chip tap: a single short buzz, no sound. */
     fun neutral() {
         vibrate(longArrayOf(0, 50))
+    }
+
+    /** Camera shutter click, played immediately on capture press — no vibration (photo-mark only). */
+    fun shutter() {
+        playSound(shutterSoundId)
+    }
+
+    /** Tactile confirmation that a photo-mark frame was written to disk — vibration only, no sound
+     *  (the audible feedback already happened at [shutter], before the write finished). */
+    fun photoCaptureConfirm() {
+        vibrate(SUCCESS_VIBRATION_PATTERN)
     }
 
     /** Dispatch to [success]/[failure]/[neutral] by [kind]. */
@@ -87,5 +100,9 @@ class ScanFeedbackPlayer(context: Context) {
             @Suppress("DEPRECATION")
             vibrator.vibrate(pattern, -1)
         }
+    }
+
+    private companion object {
+        val SUCCESS_VIBRATION_PATTERN = longArrayOf(0, 40)
     }
 }

@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
@@ -157,12 +158,17 @@ fun PhotoCaptureScreen(
     val imageCapture = remember { ImageCapture.Builder().build() }
     var camera by remember { mutableStateOf<Camera?>(null) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var isFrontCamera by rememberSaveable { mutableStateOf(false) }
+    var hasFrontCamera by remember { mutableStateOf(false) }
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
 
-    // Bind CameraX once permission is granted (and re-bind across recomposition keyed on grant).
-    LaunchedEffect(permissionGranted, lifecycleOwner) {
+    // Bind CameraX once permission is granted (and re-bind on grant or on a front/back toggle).
+    // ImageCapture (unlike CameraController) never mirrors the saved JPEG on its own — only
+    // PreviewView auto-mirrors the live preview — so selfies save right-reading (КП numbers legible)
+    // without any extra flip code here.
+    LaunchedEffect(permissionGranted, lifecycleOwner, isFrontCamera) {
         if (!permissionGranted) return@LaunchedEffect
         val provider = try {
             context.awaitCameraProvider()
@@ -171,13 +177,15 @@ fun PhotoCaptureScreen(
             return@LaunchedEffect
         }
         cameraProvider = provider
+        hasFrontCamera = provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)
+        val selector = if (isFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
         val preview = Preview.Builder().build()
             .also { it.setSurfaceProvider(previewView.surfaceProvider) }
         try {
             provider.unbindAll()
             camera = provider.bindToLifecycle(
                 lifecycleOwner,
-                CameraSelector.DEFAULT_BACK_CAMERA,
+                selector,
                 preview,
                 imageCapture,
             )
@@ -217,6 +225,7 @@ fun PhotoCaptureScreen(
     fun capture() {
         if (isCapturing) return
         isCapturing = true
+        scanFeedback.shutter()
         imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
@@ -233,7 +242,7 @@ fun PhotoCaptureScreen(
                             withContext(Dispatchers.Main) {
                                 if (rel != null) {
                                     frames.add(rel)
-                                    scanFeedback.success()
+                                    scanFeedback.photoCaptureConfirm()
                                 } else {
                                     scanFeedback.failure()
                                 }
@@ -299,7 +308,7 @@ fun PhotoCaptureScreen(
                 }
             }
             Box(modifier = Modifier.weight(1f))
-            if (permissionGranted) {
+            if (permissionGranted && !isFrontCamera) {
                 IconButton(onClick = { torchOn = !torchOn }) {
                     Icon(
                         imageVector = if (torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
@@ -336,7 +345,18 @@ fun PhotoCaptureScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Box(modifier = Modifier.size(72.dp)) // left spacer balances the «Готово» button
+                    Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+                        // left slot balances the «Готово» button; the switch icon lives here when available
+                        if (hasFrontCamera) {
+                            IconButton(onClick = { isFrontCamera = !isFrontCamera }, enabled = !isCapturing) {
+                                Icon(
+                                    imageVector = Icons.Filled.Cameraswitch,
+                                    contentDescription = if (isFrontCamera) "Переключить на тыловую камеру" else "Переключить на фронтальную камеру",
+                                    tint = Color.White,
+                                )
+                            }
+                        }
+                    }
                     ShutterButton(onClick = { capture() }, enabled = !isCapturing)
                     Button(
                         onClick = {
