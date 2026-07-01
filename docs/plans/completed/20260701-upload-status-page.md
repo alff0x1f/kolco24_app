@@ -203,8 +203,8 @@ A single page-level 30s ticker feeds `nowMs` to all sections.
 - [x] run `./gradlew lintDebug` — passes
 
 ### Task 8: Update documentation and file the plan
-- [ ] update `CLAUDE.md`: add `ui/upload/UploadScreen.kt` + `UploadStatusModels.kt` bullets; note the new `MarkDao.uploadCountsMetadata`/`photoFrameRows` + `foldPhotoFrameCounts`; update the `TrackCard`/`MarksScreen` bullets to drop the removed upload rows; add `showUpload` to the overlay-stack list; update the instrumented-test note to include the new MarkDao queries
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md`: add `ui/upload/UploadScreen.kt` + `UploadStatusModels.kt` bullets; note the new `MarkDao.uploadCountsMetadata`/`photoFrameRows` + `foldPhotoFrameCounts`; update the `TrackCard`/`MarksScreen` bullets to drop the removed upload rows; add `showUpload` to the overlay-stack list; update the instrumented-test note to include the new MarkDao queries
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual / device-bound — no checkboxes.*
