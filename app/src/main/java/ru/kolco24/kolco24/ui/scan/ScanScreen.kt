@@ -724,12 +724,20 @@ private fun WaitingChipIcon() {
 @Composable
 private fun HeroSuccessCard(session: ScanSession?) {
     val number = session?.checkpointNumber
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val containerColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.tertiaryContainer
+        else MaterialTheme.colorScheme.tertiary
+    val contentColor =
+        if (isDarkTheme) MaterialTheme.colorScheme.onTertiaryContainer
+        else Color.White
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.tertiary,
+        color = containerColor,
+        border = if (isDarkTheme) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
     ) {
         Column(
             modifier = Modifier
@@ -740,7 +748,7 @@ private fun HeroSuccessCard(session: ScanSession?) {
             Text(
                 text = "ГОТОВО",
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.9f),
+                color = contentColor.copy(alpha = 0.9f),
             )
             Box(
                 modifier = Modifier
@@ -748,7 +756,7 @@ private fun HeroSuccessCard(session: ScanSession?) {
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                CheckStamp(color = Color.White, modifier = Modifier.size(104.dp))
+                CheckStamp(color = contentColor, modifier = Modifier.size(104.dp))
             }
             Text(
                 text = if (number != null) {
@@ -757,7 +765,7 @@ private fun HeroSuccessCard(session: ScanSession?) {
                     "Вся команда отмечена"
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.9f),
+                color = contentColor.copy(alpha = 0.9f),
             )
         }
     }
