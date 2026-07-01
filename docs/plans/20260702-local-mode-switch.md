@@ -399,25 +399,25 @@ MockWebServer/DAO setup):
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (`onRaceSelected` only)
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/sync/SyncCoordinatorTest.kt`
 
-- [ ] `SyncCoordinator` with **lambda-seam constructor** (suspend fun types for LAN `fetchSync`
+- [x] `SyncCoordinator` with **lambda-seam constructor** (suspend fun types for LAN `fetchSync`
       + the four per-source refresh calls, lease read/write, `nowMs`); `sourceFor`,
       `probeLocalAndRenew` (executes `applySyncResponse`), `enterLocalMode` (race resolution
       incl. empty-cache LAN-races fallback; `data_source=cloud` → no pin + **Cloud** fan-out;
       unreachable → no writes, lease untouched), `exitLocalMode` (clear lease + Cloud fan-out),
       `refreshAll(raceId)` for PTR (pinned → probe first, then fan-out via re-read `sourceFor`);
       returns `LocalModeOutcome`/`RefreshResult` for the UI
-- [ ] pure `combineRefreshResults(results): RefreshResult` — explicit severity order
+- [x] pure `combineRefreshResults(results): RefreshResult` — explicit severity order
       `HttpError > Forbidden > Offline > Updated > NotModified > Skipped`
-- [ ] Launch B: pinned race → probe first, then refresh via `sourceFor` (re-read after probe);
+- [x] Launch B: pinned race → probe first, then refresh via `sourceFor` (re-read after probe);
       Launch A nearest-race prefetch + `onRaceSelected` prefetch via `sourceFor`
-- [ ] tests (injected fake lambdas — no MockWebServer/DAO): `sourceFor` pinned/unpinned; probe
+- [x] tests (injected fake lambdas — no MockWebServer/DAO): `sourceFor` pinned/unpinned; probe
       renews on `local`, clears on `cloud`, keeps lease on error; `enterLocalMode` — empty
       cache pulls races from LAN first, `local` pins + Local fan-out, `cloud` → no pin + Cloud
       fan-out (no LAN race-scoped rows persisted), unreachable writes nothing, past server
       lease → outcome is not `PinnedUntil`; `exitLocalMode` always unpins; `refreshAll` —
       pinned probes first (renews / detects handback and falls back to Cloud fan-out),
       unpinned never touches the LAN; `combineRefreshResults` severity table
-- [ ] run tests — must pass before task 5
+- [x] run tests — must pass before task 5
 
 ### Task 5: Settings «Данные» card with the local-mode switch
 

@@ -21,6 +21,7 @@ import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.PhotoFrameReader
 import ru.kolco24.kolco24.data.PhotoFrameUploader
+import kotlinx.coroutines.flow.first
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.TeamRepository
@@ -28,6 +29,7 @@ import ru.kolco24.kolco24.data.ThemePreference
 import ru.kolco24.kolco24.data.TrackProfilePreference
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
+import ru.kolco24.kolco24.data.api.FetchResult
 import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.db.TrackScope
@@ -35,6 +37,7 @@ import ru.kolco24.kolco24.data.lease.RaceLease
 import ru.kolco24.kolco24.data.lease.RaceLeaseStore
 import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.marks.PhotoStorage
+import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
@@ -225,6 +228,34 @@ class AppContainer(private val context: Context) {
             localApiClient = localApiClient,
             localOrigin = BuildConfig.LOCAL_API_BASE_URL,
             isRacePinned = isRacePinned,
+        )
+    }
+
+    /**
+     * Thin orchestration for the local-mode switch + pin-aware auto-syncs (see the
+     * local-mode-switch plan). Binds [SyncCoordinator]'s lambda seams to the real lease state,
+     * store, and the four repos.
+     */
+    val syncCoordinator: SyncCoordinator by lazy {
+        SyncCoordinator(
+            readLease = { raceLease.value },
+            writeLease = { lease ->
+                raceLease.value = lease
+                if (lease != null) raceLeaseStore.write(lease) else raceLeaseStore.clear()
+            },
+            nowMs = nowMs,
+            fetchSync = { raceId ->
+                when (val result = localApiClient.fetchSync(raceId)) {
+                    is FetchResult.Success -> result.data
+                    else -> null
+                }
+            },
+            selectedRaceId = { teamRepository.selectedTeam.first()?.raceId },
+            cachedRaces = { raceRepository.races.first() },
+            refreshRaces = { source -> raceRepository.refreshRaces(source) },
+            refreshTeams = { raceId, source -> teamRepository.refreshTeams(raceId, source) },
+            refreshLegend = { raceId, source -> legendRepository.refreshLegend(raceId, source) },
+            refreshMemberTags = { raceId, source -> memberTagsRepository.refreshMemberTags(raceId, source) },
         )
     }
 
