@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.FactCheck
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,6 +71,7 @@ fun AdminScreen(
     onClose: () -> Unit,
     onOpenProvisioning: () -> Unit = {},
     onOpenCheckChip: () -> Unit = {},
+    onOpenCheckMemberChip: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -99,6 +101,7 @@ fun AdminScreen(
                 session = session,
                 onOpenProvisioning = onOpenProvisioning,
                 onOpenCheckChip = onOpenCheckChip,
+                onOpenCheckMemberChip = onOpenCheckMemberChip,
             )
         }
     }
@@ -224,6 +227,7 @@ private fun AdminHome(
     session: AdminSession.LoggedIn,
     onOpenProvisioning: () -> Unit,
     onOpenCheckChip: () -> Unit,
+    onOpenCheckMemberChip: () -> Unit,
 ) {
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
@@ -271,6 +275,22 @@ private fun AdminHome(
                 title = "Проверить чип КП",
                 subtitle = "Узнать, к какому КП привязан чип",
                 onClick = onOpenCheckChip,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            AdminActionRow(
+                icon = Icons.Filled.PersonSearch,
+                title = "Проверить чип участника",
+                subtitle = "Узнать, чей это браслет",
+                onClick = onOpenCheckMemberChip,
             )
         }
 

@@ -1,25 +1,22 @@
 package ru.kolco24.kolco24.ui.admin
 
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -27,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Warning
@@ -52,17 +48,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -72,33 +63,32 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.MainActivity
-import ru.kolco24.kolco24.data.crypto.LegendCrypto
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.pluralRu
-import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.scan.ScanFeedbackKind
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
 
 /**
- * Compose host of the read-only chip-verification overlay («Проверка чипов КП»). The admin taps a
- * chip; the host reads its code over NfcA, derives the `bid`, matches it against the **already
- * collected** legend tags/checkpoints for [raceId], and renders the [ChipCheckResult]. Identity-only
- * and fully offline — no `unlock`/decrypt, no `reveal` side effect, no server round-trip (see the
- * pure model in `ChipCheckModel.kt`).
+ * Compose host of the read-only member-bracelet verification overlay («Проверка браслетов
+ * участников»). The admin taps a chip; the host normalizes its UID and matches it against the
+ * **already collected** member-tag pool for [raceId], rendering the [MemberChipCheckResult] (see the
+ * pure model in `MemberChipCheckModel.kt`). Identity-only and fully offline — the pool is the
+ * server-synced `member_tags` table; local member↔chip bindings are per-device and deliberately not
+ * consulted. Only when the UID is **not** in the pool does the host read the on-chip code, purely to
+ * tell a mis-tapped КП chip apart from an unknown bracelet.
  *
- * Mirrors `ProvisioningScreen`'s overlay scaffold (tap-swallowing `Column`, `TopAppBar` with a back
- * arrow, a `DisposableEffect(raceId)` that arms/clears [MainActivity.onTagForVerify]) but keeps its
- * result state in transient `remember` rather than app-scoped flows: verification has no in-flight
- * write to survive rotation, so a composition-scoped [rememberCoroutineScope] is used (a late
- * `readChipCode` result can't write stale state into a disposed composition) and losing the last
- * result + recent log on rotation is acceptable.
+ * Mirrors `CheckChipScreen`'s scaffold verbatim: tap-swallowing `Column`, a `DisposableEffect(raceId)`
+ * arming [MainActivity.onTagForVerify] (the two verify overlays are mutually exclusive, so sharing
+ * the hook is safe), transient `remember` result state on a composition-scoped
+ * [rememberCoroutineScope], null-sentinel Flow initial so scans are ignored until the pool's first
+ * Room emission.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CheckChipScreen(
+fun CheckMemberChipScreen(
     raceId: Int?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -115,7 +105,7 @@ fun CheckChipScreen(
             .pointerInput(Unit) { detectTapGestures {} },
     ) {
         TopAppBar(
-            title = { Text("Проверка чипов КП") },
+            title = { Text("Проверка браслетов") },
             navigationIcon = {
                 IconButton(onClick = onClose) {
                     Icon(
@@ -130,36 +120,27 @@ fun CheckChipScreen(
         )
 
         if (raceId == null) {
-            CheckChipHint("Сначала выберите команду в разделе «Команда»")
+            CheckMemberChipHint("Сначала выберите команду в разделе «Команда»")
             return@Column
         }
 
-        // Use null as sentinel: null = first emission not yet received, emptyList = loaded (possibly empty).
-        // This prevents processing scans against stale empty data during the brief Room delivery window.
-        val tagsState by remember(raceId) {
-            container.legendRepository.tagsForRace(raceId)
+        // Use null as sentinel: null = first emission not yet received, emptyList = loaded (possibly
+        // empty). Prevents classifying scans against stale empty data during the Room delivery window.
+        val poolState by remember(raceId) {
+            container.memberTagsRepository.observeForRace(raceId)
         }.collectAsState(initial = null)
 
-        val checkpointsState by remember(raceId) {
-            container.legendRepository.checkpointsForRace(raceId)
-        }.collectAsState(initial = null)
+        val dataReady = poolState != null
+        val pool = poolState ?: emptyList()
 
-        val dataReady = tagsState != null && checkpointsState != null
-        val tags = tagsState ?: emptyList()
-        val checkpoints = checkpointsState ?: emptyList()
-        val checkpointsById = remember(checkpoints) { checkpoints.associateBy { it.id } }
-        val countsByCheckpointId = remember(tags) { tags.groupingBy { it.checkpointId }.eachCount() }
-
-        var lastResult by remember(raceId) { mutableStateOf<ChipCheckResult?>(null) }
-        val recent = remember(raceId) { mutableStateListOf<ChipCheckResult>() }
+        var lastResult by remember(raceId) { mutableStateOf<MemberChipCheckResult?>(null) }
+        val recent = remember(raceId) { mutableStateListOf<MemberChipCheckResult>() }
         val mutex = remember(raceId) { Mutex() }
         val scope = rememberCoroutineScope()
 
-        // Long-lived hook reads the latest collected lists without re-arming on every recomposition.
+        // Long-lived hook reads the latest collected pool without re-arming on every recomposition.
         val dataReadyLatest = rememberUpdatedState(dataReady)
-        val tagsLatest = rememberUpdatedState(tags)
-        val cpByIdLatest = rememberUpdatedState(checkpointsById)
-        val countsLatest = rememberUpdatedState(countsByCheckpointId)
+        val poolLatest = rememberUpdatedState(pool)
 
         DisposableEffect(raceId) {
             val host = activity
@@ -169,20 +150,20 @@ fun CheckChipScreen(
             host?.onTagForVerify = { tag ->
                 scope.launch {
                     mutex.withLock {
-                        // Ignore scans until both legend flows have delivered their first emission.
+                        // Ignore scans until the pool flow has delivered its first emission.
                         if (!dataReadyLatest.value) {
                             container.scanFeedback.neutral()
                             return@withLock
                         }
                         val uid = normalizeNfcUid(tag.id)
-                        val code = withContext(Dispatchers.IO) { readChipCode(tag) }
-                        val bid = code?.let { LegendCrypto.bid(it) }
-                        val tagRow = bid?.let { b -> tagsLatest.value.firstOrNull { it.bid == b } }
-                        val cp = tagRow?.let { cpByIdLatest.value[it.checkpointId] }
-                        val chipsOnKp = tagRow?.let { countsLatest.value[it.checkpointId] ?: 0 } ?: 0
-                        val result = classifyChipCheck(uid, bid, tagRow, cp, chipsOnKp)
+                        val memberTag = poolLatest.value.firstOrNull { it.nfcUid == uid }
+                        // The code read is a diagnostic for the not-in-pool branch only; a pooled UID
+                        // is Ok regardless, so the happy path skips the (slow) NfcA transceive.
+                        val hasKpCode = memberTag == null &&
+                            withContext(Dispatchers.IO) { readChipCode(tag) } != null
+                        val result = classifyMemberChipCheck(uid, memberTag, hasKpCode)
                         container.scanFeedback.play(
-                            if (result is ChipCheckResult.Ok) ScanFeedbackKind.Success
+                            if (result is MemberChipCheckResult.Ok) ScanFeedbackKind.Success
                             else ScanFeedbackKind.Failure,
                         )
                         lastResult = result
@@ -197,11 +178,12 @@ fun CheckChipScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        CheckChipHero(
+        CheckMemberChipHero(
             result = lastResult,
             // The chip scanned just before this one — recent[0] is the current result, recent[1] the
             // previous; their UID diff highlights the digits that changed between the two.
             previousUid = recent.getOrNull(1)?.uid,
+            poolSize = pool.size,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
@@ -220,7 +202,7 @@ fun CheckChipScreen(
             ) {
                 itemsIndexed(recent) { index, result ->
                     // recent is newest-first, so the scan before this row is the next (older) item.
-                    RecentCheckRow(result, previousUid = recent.getOrNull(index + 1)?.uid)
+                    RecentMemberCheckRow(result, previousUid = recent.getOrNull(index + 1)?.uid)
                 }
             }
         }
@@ -229,7 +211,7 @@ fun CheckChipScreen(
 
 /** Centered muted hint for the no-race state. */
 @Composable
-private fun CheckChipHint(text: String) {
+private fun CheckMemberChipHint(text: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -246,14 +228,15 @@ private fun CheckChipHint(text: String) {
 }
 
 /**
- * The hero result card. `null` → a pulsing NFC glyph + «Приложите чип КП»; the four [ChipCheckResult]
- * variants render their status verbatim (КП number/cost/color band + diagnostics on [ChipCheckResult.Ok];
- * the amber/red messages otherwise).
+ * The hero result card. `null` → a pulsing NFC glyph + «Приложите браслет участника» with the pool
+ * size as a subline (a `0` doubles as the "pool not synced" tell); the three [MemberChipCheckResult]
+ * variants render their status verbatim.
  */
 @Composable
-private fun CheckChipHero(
-    result: ChipCheckResult?,
+private fun CheckMemberChipHero(
+    result: MemberChipCheckResult?,
     previousUid: String?,
+    poolSize: Int,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -262,45 +245,35 @@ private fun CheckChipHero(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         when (result) {
-            null -> IdleHero()
-            is ChipCheckResult.Ok -> OkHero(result, previousUid)
-            is ChipCheckResult.UnknownChip -> MessageHero(
+            null -> MemberIdleHero(poolSize)
+            is MemberChipCheckResult.Ok -> MemberOkHero(result, previousUid)
+            is MemberChipCheckResult.KpChip -> MemberMessageHero(
                 color = OrangeCta,
                 icon = Icons.Filled.Warning,
-                title = "Чип не привязан к КП этой гонки (другая гонка или устаревший список)",
+                title = "Это чип КП, а не браслет участника",
                 uid = result.uid,
                 previousUid = previousUid,
-                diagnostic = "bid ${result.bid}",
             )
-            is ChipCheckResult.Inconsistent -> MessageHero(
-                color = MaterialTheme.colorScheme.error,
-                icon = Icons.Filled.Error,
-                title = "КП id=${result.checkpointId} нет в легенде — обновите данные",
-                uid = result.uid,
-                previousUid = previousUid,
-                diagnostic = "bid ${result.bid}",
-            )
-            is ChipCheckResult.NoCode -> MessageHero(
+            is MemberChipCheckResult.Unknown -> MemberMessageHero(
                 color = OrangeCta,
                 icon = Icons.Filled.HelpOutline,
-                title = "Нет кода КП: пустой чип, браслет участника или ошибка чтения — приложите ещё раз",
+                title = "Чип не найден в списке участников этой гонки (другая гонка или устаревший список)",
                 uid = result.uid,
                 previousUid = previousUid,
-                diagnostic = null,
             )
         }
     }
 }
 
-/** Idle state — pulsing NFC glyph + prompt (mirrors `ProvisioningScreen.ScanZone`). */
+/** Idle state — pulsing NFC glyph + prompt + pool size (mirrors `CheckChipScreen.IdleHero`). */
 @Composable
-private fun IdleHero() {
-    val transition = rememberInfiniteTransition(label = "verify-pulse")
+private fun MemberIdleHero(poolSize: Int) {
+    val transition = rememberInfiniteTransition(label = "member-verify-pulse")
     val pulse by transition.animateFloat(
         initialValue = 0.4f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "verify-pulse-alpha",
+        label = "member-verify-pulse-alpha",
     )
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
@@ -322,94 +295,73 @@ private fun IdleHero() {
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Приложите чип КП",
+            text = "Приложите браслет участника",
             style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = if (poolSize > 0) {
+                "В списке $poolSize ${pluralRu(poolSize, "браслет", "браслета", "браслетов")}"
+            } else {
+                "Список браслетов пуст — обновите данные"
+            },
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-/** The «Привязан корректно» hero: color band + КП number + cost + green check + diagnostics. */
+/** The «Браслет участника» hero: big participant number + green check + uid diagnostics. */
 @Composable
-private fun OkHero(result: ChipCheckResult.Ok, previousUid: String?) {
-    val band = result.color?.barColor() ?: Color.Transparent
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(IntrinsicSize.Min),
+private fun MemberOkHero(result: MemberChipCheckResult.Ok, previousUid: String?) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .width(8.dp)
-                .fillMaxHeight()
-                .background(band),
+        Text(
+            text = "Участник",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Column(
-            modifier = Modifier.weight(1f).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Text(
+            text = "№${result.number}",
+            fontFamily = RobotoMono,
+            fontWeight = FontWeight.Bold,
+            fontSize = 72.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = "КП",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = Tertiary,
+                modifier = Modifier.size(20.dp),
             )
             Text(
-                text = result.number.toString().padStart(2, '0'),
-                fontFamily = RobotoMono,
-                fontWeight = FontWeight.Bold,
-                fontSize = 96.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = result.cost?.let { "$it ${pluralRu(it, "балл", "балла", "баллов")}" } ?: "—",
+                text = "Браслет участника",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = Tertiary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    text = "Привязан корректно",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Tertiary,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            UidDiff(uid = result.uid, previousUid = previousUid, fontSize = 18.sp)
-            val others = (result.chipsOnKp - 1).coerceAtLeast(0)
-            if (others > 0) {
-                Text(
-                    text = "На этом КП ещё $others чип(ов)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                text = "${result.bid} · ${result.checkMethod}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Tertiary,
+                fontWeight = FontWeight.Bold,
             )
         }
+        Spacer(Modifier.height(12.dp))
+        UidDiff(uid = result.uid, previousUid = previousUid, fontSize = 18.sp)
     }
 }
 
-/** A non-Ok hero: colored status icon, message, the chip uid, and an optional diagnostic line. */
+/** A non-Ok hero: colored status icon, message, and the chip uid. */
 @Composable
-private fun MessageHero(
+private fun MemberMessageHero(
     color: Color,
     icon: ImageVector,
     title: String,
     uid: String,
     previousUid: String?,
-    diagnostic: String?,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
@@ -437,93 +389,27 @@ private fun MessageHero(
         )
         Spacer(Modifier.height(8.dp))
         UidDiff(uid = uid, previousUid = previousUid, fontSize = 18.sp)
-        if (diagnostic != null) {
-            Text(
-                text = diagnostic,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
-/**
- * The chip UID in monospace, grouped into byte pairs (`1D C7 60 63 03 10 80`), with the nibbles that
- * changed since [previousUid] lit up in [OrangeCta] and the shared boilerplate dimmed — so the digits
- * that differ between two chips are the only thing the eye lands on. With no [previousUid] (the first
- * chip of the session, or a rescan of the same chip) the uid renders plain at full emphasis.
- *
- * `internal` (not private): reused by [CheckMemberChipScreen] in the same package — the `barColor()`
- * precedent, not the copy-small-rows one.
- */
+/** One «Недавние проверки» row: participant label + diff-highlighted uid + status icon. */
 @Composable
-internal fun UidDiff(
-    uid: String,
-    previousUid: String?,
-    fontSize: TextUnit,
-    modifier: Modifier = Modifier,
-) {
-    val baseColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val dimColor = baseColor.copy(alpha = 0.5f)
-    val text = remember(uid, previousUid, baseColor) {
-        val changed = changedNibbles(uid, previousUid)
-        // A previous uid exists but nothing changed (rescanned the same chip) → still dim, not plain.
-        val hasBaseline = !previousUid.isNullOrEmpty()
-        buildAnnotatedString {
-            uid.forEachIndexed { i, c ->
-                if (i > 0 && i % 2 == 0) append(' ') // group into bytes for at-a-glance comparison
-                val isChanged = i in changed
-                withStyle(
-                    SpanStyle(
-                        color = when {
-                            isChanged -> OrangeCta
-                            hasBaseline -> dimColor
-                            else -> baseColor
-                        },
-                        fontWeight = if (isChanged) FontWeight.Bold else FontWeight.Normal,
-                        background = if (isChanged) OrangeCta.copy(alpha = 0.14f) else Color.Transparent,
-                    ),
-                ) { append(c) }
-            }
-        }
-    }
-    Text(
-        text = text,
-        fontFamily = RobotoMono,
-        fontSize = fontSize,
-        modifier = modifier,
-    )
-}
-
-/** One «Недавние проверки» row: color dot + КП label + diff-highlighted uid + status icon. */
-@Composable
-private fun RecentCheckRow(result: ChipCheckResult, previousUid: String?) {
-    val neutral = MaterialTheme.colorScheme.outlineVariant
-    val dot: Color
+private fun RecentMemberCheckRow(result: MemberChipCheckResult, previousUid: String?) {
     val label: String
     val icon: ImageVector
     val iconTint: Color
     when (result) {
-        is ChipCheckResult.Ok -> {
-            dot = result.color?.barColor() ?: neutral
-            label = "КП ${result.number.toString().padStart(2, '0')}"
+        is MemberChipCheckResult.Ok -> {
+            label = "№${result.number}"
             icon = Icons.Filled.Check
             iconTint = Tertiary
         }
-        is ChipCheckResult.UnknownChip -> {
-            dot = neutral
-            label = "—"
+        is MemberChipCheckResult.KpChip -> {
+            label = "КП"
             icon = Icons.Filled.Warning
             iconTint = OrangeCta
         }
-        is ChipCheckResult.Inconsistent -> {
-            dot = neutral
-            label = "—"
-            icon = Icons.Filled.Error
-            iconTint = MaterialTheme.colorScheme.error
-        }
-        is ChipCheckResult.NoCode -> {
-            dot = neutral
+        is MemberChipCheckResult.Unknown -> {
             label = "—"
             icon = Icons.Filled.HelpOutline
             iconTint = OrangeCta
@@ -539,12 +425,6 @@ private fun RecentCheckRow(result: ChipCheckResult, previousUid: String?) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(dot),
-            )
             Text(
                 text = label,
                 fontFamily = RobotoMono,
