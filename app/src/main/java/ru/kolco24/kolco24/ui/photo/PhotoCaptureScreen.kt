@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import android.view.OrientationEventListener
 import android.view.Surface
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +81,37 @@ import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.time.TimeSample
 
 private const val TAG = "PhotoCaptureScreen"
+
+/**
+ * Buckets a raw [OrientationEventListener] reading into one of the four 90°-wide device-tilt buckets
+ * `{0, 90, 180, 270}`. `-1` ([OrientationEventListener.ORIENTATION_UNKNOWN] — device flat / sensor
+ * unreliable) returns [previous] unchanged rather than flipping to a spurious bucket.
+ */
+fun bucketOrientationDegrees(orientationDegrees: Int, previous: Int): Int {
+    if (orientationDegrees < 0) return previous
+    return when (orientationDegrees) {
+        in 45 until 135 -> 270
+        in 135 until 225 -> 180
+        in 225 until 315 -> 90
+        else -> 0
+    }
+}
+
+/**
+ * Tracks the phone's physical tilt via the accelerometer, independent of the window's own rotation
+ * (which is permanently [Surface.ROTATION_0] now that the app is portrait-locked). [degrees] is one of
+ * the four buckets from [bucketOrientationDegrees], read by `capture()` to set `imageCapture.targetRotation`
+ * so a frame shot in landscape still comes out upright. Callbacks land on the thread that constructed this
+ * (main thread here), so no synchronization is needed.
+ */
+private class RotationTracker(context: Context, initialDegrees: Int) : OrientationEventListener(context) {
+    var degrees: Int = initialDegrees
+        private set
+
+    override fun onOrientationChanged(orientation: Int) {
+        degrees = bucketOrientationDegrees(orientation, degrees)
+    }
+}
 
 /**
  * Full-screen CameraX photo-capture overlay (the photo-mark fallback for a КП that can't be NFC-read).
@@ -163,6 +195,7 @@ fun PhotoCaptureScreen(
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
+    val rotationTracker = remember { RotationTracker(context, 0) }
 
     // Bind CameraX once permission is granted (and re-bind on grant or on a front/back toggle).
     // ImageCapture (unlike CameraController) never mirrors the saved JPEG on its own — only
@@ -199,6 +232,12 @@ fun PhotoCaptureScreen(
         onDispose { cameraProvider?.unbindAll() }
     }
 
+    // Track physical tilt for capture() below — the window itself never rotates (portrait-locked).
+    DisposableEffect(Unit) {
+        if (rotationTracker.canDetectOrientation()) rotationTracker.enable()
+        onDispose { rotationTracker.disable() }
+    }
+
     // Keep the torch in sync with the toggle whenever the camera (re)binds.
     LaunchedEffect(camera, torchOn) {
         camera?.cameraControl?.enableTorch(torchOn)
@@ -226,7 +265,12 @@ fun PhotoCaptureScreen(
         if (isCapturing) return
         isCapturing = true
         scanFeedback.shutter()
-        imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0
+        imageCapture.targetRotation = when (rotationTracker.degrees) {
+            90 -> Surface.ROTATION_90
+            180 -> Surface.ROTATION_180
+            270 -> Surface.ROTATION_270
+            else -> Surface.ROTATION_0
+        }
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageCapturedCallback() {
