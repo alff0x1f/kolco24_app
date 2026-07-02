@@ -63,11 +63,11 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add top-level `const val UPLOAD_RETRY_INTERVAL_MS = 300_000L` with a short comment (foreground retry cadence; recording already has the service's 10-min loop)
-- [ ] next to the 5 s clock ticker (`MainActivity.kt:533`), add the `LaunchedEffect(Unit)` + `repeatOnLifecycle(Lifecycle.State.STARTED)` loop: each tick launches `trackRepo.uploadAllPending()` and `markRepo.uploadAllPending()` on `container.applicationScope` (two separate `launch`es; `trackRepo`/`markRepo` are the existing local vals at `:510-511`), then `delay(UPLOAD_RETRY_INTERVAL_MS)`
-- [ ] resolve `lifecycleOwner` via `LocalLifecycleOwner.current`; add the three imports
-- [ ] comment: attempt-before-delay is deliberate (return-to-foreground = immediate retry); overlap with Launch B / service loop / take-flush is safe via the repos' `tryLock`
-- [ ] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 2
+- [x] add top-level `const val UPLOAD_RETRY_INTERVAL_MS = 300_000L` with a short comment (foreground retry cadence; recording already has the service's 10-min loop)
+- [x] next to the 5 s clock ticker (`MainActivity.kt:533`), add the `LaunchedEffect(Unit)` + `repeatOnLifecycle(Lifecycle.State.STARTED)` loop: each tick launches `trackRepo.uploadAllPending()` and `markRepo.uploadAllPending()` on `container.applicationScope` (two separate `launch`es; `trackRepo`/`markRepo` are the existing local vals at `:510-511`), then `delay(UPLOAD_RETRY_INTERVAL_MS)`
+- [x] resolve `lifecycleOwner` via `LocalLifecycleOwner.current`; add the three imports
+- [x] comment: attempt-before-delay is deliberate (return-to-foreground = immediate retry); overlap with Launch B / service loop / take-flush is safe via the repos' `tryLock`
+- [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 2
 
 ### Task 2: UploadScreen gains pull-to-refresh (stateless params + RefreshableList)
 

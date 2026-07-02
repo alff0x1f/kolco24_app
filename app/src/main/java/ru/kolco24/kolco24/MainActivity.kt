@@ -73,6 +73,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -152,6 +155,13 @@ import ru.kolco24.kolco24.ui.theme.isDark
 
 /** Whether the device can currently read NFC tags, readable by composables for the bind UI. */
 enum class NfcState { NoHardware, Disabled, Available }
+
+/**
+ * Foreground-only retry cadence for pending marks/track uploads: 5 min. A recording session already
+ * gets [LIVE_UPLOAD_MIN_INTERVAL_MS]'s 10-min loop from the service; this covers the app-open,
+ * not-recording gap where nothing else retries a failed upload until restart.
+ */
+const val UPLOAD_RETRY_INTERVAL_MS = 300_000L
 
 class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
@@ -534,6 +544,23 @@ private fun Kolco24AppRoot(
         while (true) {
             delay(5_000)
             container.trustedClock.recomputeStatus()
+        }
+    }
+    // Foreground-only retry loop for pending marks/track uploads (Launch B, take-complete flush, and
+    // the recording service's own 10-min loop are the other triggers — all safe to overlap via the
+    // repos' Mutex.tryLock guard). repeatOnLifecycle cancels this block when the Activity leaves
+    // STARTED (backgrounded) and restarts it on return, so firing before the delay is deliberate:
+    // returning to the app is itself treated as a retry opportunity. Attempts run on
+    // container.applicationScope (not this composition scope) so backgrounding mid-batch doesn't
+    // cancel an in-flight upload.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(Unit) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                container.applicationScope.launch { trackRepo.uploadAllPending() }
+                container.applicationScope.launch { markRepo.uploadAllPending() }
+                delay(UPLOAD_RETRY_INTERVAL_MS)
+            }
         }
     }
     // GPS-track recording state (written by TrackRecordingService, read here for the «Команда» card).
