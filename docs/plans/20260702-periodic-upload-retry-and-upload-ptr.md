@@ -85,9 +85,9 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `var uploadRefreshing by remember { mutableStateOf(false) }` near `showUpload` (`MainActivity.kt:482`); `remember`, not `rememberSaveable` — transient spinner state
-- [ ] at the `UploadScreen` call site (`MainActivity.kt:1446`), pass `refreshing = uploadRefreshing` and the `onRefresh` lambda from Technical Details (guard on `!uploadRefreshing`, `applicationScope.launch` + `coroutineScope` of two child launches, `finally { uploadRefreshing = false }`)
-- [ ] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 4
+- [x] add `var uploadRefreshing by remember { mutableStateOf(false) }` near `showUpload` (`MainActivity.kt:482`); `remember`, not `rememberSaveable` — transient spinner state
+- [x] at the `UploadScreen` call site (`MainActivity.kt:1446`), pass `refreshing = uploadRefreshing` and the `onRefresh` lambda from Technical Details (guard on `!uploadRefreshing`, `applicationScope.launch` + `coroutineScope` of two child launches, `finally { uploadRefreshing = false }`)
+- [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 4
 
 ### Task 4: Verify acceptance criteria
 - [ ] loop is lifecycle-gated (block body cancelled when the Activity leaves STARTED; restarts and fires immediately on return)

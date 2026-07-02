@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -507,6 +508,8 @@ private fun Kolco24AppRoot(
     // so a refresh on one can be in flight while the other is shown). Snackbar surfaces failures only.
     var legendRefreshing by remember { mutableStateOf(false) }
     var teamRefreshing by remember { mutableStateOf(false) }
+    // Upload-screen PTR spinner — transient, not worth restoring across recreation.
+    var uploadRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
@@ -1475,6 +1478,22 @@ private fun Kolco24AppRoot(
                 photos = photoUploadStatus,
                 track = trackUploadStatus,
                 onBack = { showUpload = false },
+                refreshing = uploadRefreshing,
+                onRefresh = {
+                    if (!uploadRefreshing) {
+                        uploadRefreshing = true
+                        container.applicationScope.launch {
+                            try {
+                                coroutineScope {
+                                    launch { trackRepo.uploadAllPending() }
+                                    launch { markRepo.uploadAllPending() }
+                                }
+                            } finally {
+                                uploadRefreshing = false
+                            }
+                        }
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }
