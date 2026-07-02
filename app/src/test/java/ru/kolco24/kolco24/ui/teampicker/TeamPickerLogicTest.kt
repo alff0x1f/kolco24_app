@@ -65,9 +65,11 @@ class TeamPickerLogicTest {
     }
 
     @Test
-    fun statusSoldOut() {
+    fun statusSoldOutHasNoBadge() {
+        // Registration state is irrelevant on the team-picker screen — a sold_out race shows no
+        // "Мест нет" badge, just the neutral "Скоро" like any other current race.
         val r = race(date = "2026-06-20", regStatus = "sold_out")
-        assertEquals(RaceStatusPill.SoldOut, raceStatusPill(r, today = "2026-06-13"))
+        assertEquals(RaceStatusPill.Upcoming, raceStatusPill(r, today = "2026-06-13"))
     }
 
     @Test

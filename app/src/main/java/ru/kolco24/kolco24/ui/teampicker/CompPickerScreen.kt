@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -303,13 +304,19 @@ private fun CompRow(
 @Composable
 private fun DateToken(date: String) {
     val (month, day) = monthDay(date)
+    // Resolve the *applied* theme (not isSystemInDarkTheme) so a manual override matches — mirrors MarksScreen.
+    // The light-theme charcoal blends into the dark surface, so lift it to an elevated cool grey in dark.
+    val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val tokenColors = if (darkTheme) {
+        listOf(Color(0xFF39414B), Color(0xFF2A313A))
+    } else {
+        listOf(Color(0xFF1D242D), Color(0xFF2A323C))
+    }
     Box(
         modifier = Modifier
             .size(44.dp)
             .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFF1D242D), Color(0xFF2A323C)),
-                ),
+                brush = Brush.linearGradient(colors = tokenColors),
                 shape = MaterialTheme.shapes.medium,
             ),
         contentAlignment = Alignment.Center,

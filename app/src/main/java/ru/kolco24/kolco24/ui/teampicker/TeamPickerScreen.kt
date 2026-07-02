@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -316,10 +317,16 @@ private fun CompContextCard(race: RaceEntity?, onChangeRace: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Applied-theme resolve (not isSystemInDarkTheme) — the charcoal box blends into the dark
+            // surface, so lift it to an elevated cool grey in dark; mirrors DateToken/TeamToken.
+            val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(Color(0xFF1D242D), MaterialTheme.shapes.medium),
+                    .background(
+                        if (darkTheme) Color(0xFF39414B) else Color(0xFF1D242D),
+                        MaterialTheme.shapes.medium,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -513,13 +520,18 @@ private fun PickerStatusMessage(
 /** Grey squircle token with the monospace start number (or monogram). Shared with [TeamSwitchSheet]. */
 @Composable
 internal fun TeamToken(text: String, size: Dp = 40.dp) {
+    // Resolve the *applied* theme (not isSystemInDarkTheme) so a manual override matches — mirrors MarksScreen.
+    val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val tokenColors = if (darkTheme) {
+        listOf(Color(0xFF39414B), Color(0xFF2A313A))
+    } else {
+        listOf(Color(0xFFE2E6EB), Color(0xFFC5CCD5))
+    }
     Box(
         modifier = Modifier
             .size(size)
             .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFFE2E6EB), Color(0xFFC5CCD5)),
-                ),
+                brush = Brush.linearGradient(colors = tokenColors),
                 shape = MaterialTheme.shapes.medium,
             ),
         contentAlignment = Alignment.Center,
