@@ -172,17 +172,18 @@ are `raceId`-scoped only):
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add a private `rememberJudgeUploadStatus(raceId: Int?, outcomes: Map<Pair<Int, UploadTarget>, TargetUploadOutcome>, counts: (raceId: Int) -> Flow<UploadCounts>): TrackUploadStatus?`
+- [x] add a private `rememberJudgeUploadStatus(raceId: Int?, outcomes: Map<Pair<Int, UploadTarget>, TargetUploadOutcome>, counts: (raceId: Int) -> Flow<UploadCounts>): TrackUploadStatus?`
       — a race-only sibling of `rememberUploadStatus`: `produceState` keyed on `raceId`, guards
       `raceId != null` and `total > 0`, keys outcomes by `raceId to target`
-- [ ] collect `val judgeScanUploadOutcomes by container.judgeScanUploadOutcomes.collectAsState()`
-- [ ] derive `val judgeUploadStatus = rememberJudgeUploadStatus(selectedRaceId, judgeScanUploadOutcomes, container.judgeScanRepository::uploadCounts)`
+- [x] collect `val judgeScanUploadOutcomes by container.judgeScanUploadOutcomes.collectAsState()`
+- [x] derive `val judgeUploadStatus = rememberJudgeUploadStatus(selectedRaceId, judgeScanUploadOutcomes, container.judgeScanRepository::uploadCounts)`
       (add a `judgeScanRepo` local if it reads cleaner, matching the `trackRepo`/`markRepo` pattern)
-- [ ] pass `judge = judgeUploadStatus` into the `UploadScreen(...)` call
-- [ ] add a third `launch { container.judgeScanRepository.uploadAllPending() }` inside the PTR
+- [x] pass `judge = judgeUploadStatus` into the `UploadScreen(...)` call
+      (required adding a default-`null` `judge` param to `UploadScreen` a task early — Task 5 renders it)
+- [x] add a third `launch { container.judgeScanRepository.uploadAllPending() }` inside the PTR
       `onRefresh` `supervisorScope` (alongside track + marks)
-- [ ] no test (Compose wiring, untested by convention)
-- [ ] build check: `./gradlew assembleDebug` compiles — must pass before Task 5
+- [x] no test (Compose wiring, untested by convention)
+- [x] build check: `./gradlew assembleDebug` compiles — must pass before Task 5
 
 ### Task 5: Render the «Судейские отметки» section in `UploadScreen`
 

@@ -56,6 +56,7 @@ fun UploadScreen(
     marks: TrackUploadStatus?,
     photos: TrackUploadStatus?,
     track: TrackUploadStatus?,
+    judge: TrackUploadStatus? = null,
     refreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     onBack: () -> Unit,
