@@ -91,7 +91,7 @@ private const val TIMER_TICK_MS = 250L
 // The completing tap plays the ordinary scan tick first, then the fanfare.
 private const val COMPLETE_FANFARE_DELAY_MS = 275L
 // Holds the green "Готово!" screen through the final scan tick plus the checkpoint-complete fanfare.
-private const val SUCCESS_HOLD_MS = 3_850L
+private const val SUCCESS_HOLD_MS = 3_300L
 
 data class ScanChip(
     val chipNumber: Int?,
