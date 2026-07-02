@@ -40,7 +40,9 @@
       uploadRefreshing = true
       container.applicationScope.launch {
           try {
-              coroutineScope {
+              // supervisorScope, not coroutineScope: mirrors the Kolco24App Launch B precedent so one
+              // target failing doesn't cancel the other in-flight upload.
+              supervisorScope {
                   launch { trackRepo.uploadAllPending() }
                   launch { markRepo.uploadAllPending() }
               }
@@ -86,12 +88,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
 - [x] add `var uploadRefreshing by remember { mutableStateOf(false) }` near `showUpload` (`MainActivity.kt:482`); `remember`, not `rememberSaveable` — transient spinner state
-- [x] at the `UploadScreen` call site (`MainActivity.kt:1446`), pass `refreshing = uploadRefreshing` and the `onRefresh` lambda from Technical Details (guard on `!uploadRefreshing`, `applicationScope.launch` + `coroutineScope` of two child launches, `finally { uploadRefreshing = false }`)
+- [x] at the `UploadScreen` call site (`MainActivity.kt:1446`), pass `refreshing = uploadRefreshing` and the `onRefresh` lambda from Technical Details (guard on `!uploadRefreshing`, `applicationScope.launch` + `supervisorScope` of two child launches, `finally { uploadRefreshing = false }`)
 - [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 4
 
 ### Task 4: Verify acceptance criteria
 - [x] loop is lifecycle-gated (block body cancelled when the Activity leaves STARTED; restarts and fires immediately on return) — `MainActivity.kt:559-568` wraps the loop in `lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED)`, attempt-before-delay confirmed
-- [x] PTR spinner spins until both `uploadAllPending()` calls complete; a near-instant blip when the mutex skips (another trigger already draining) is expected behavior, not a bug — `MainActivity.kt:1481-1493` guards on `!uploadRefreshing`, runs both calls in a `coroutineScope`, clears the flag in `finally`
+- [x] PTR spinner spins until both `uploadAllPending()` calls complete; a near-instant blip when the mutex skips (another trigger already draining) is expected behavior, not a bug — `MainActivity.kt:1481-1493` guards on `!uploadRefreshing`, runs both calls in a `supervisorScope`, clears the flag in `finally`
 - [x] no data-layer or DB changes crept in (no migration concerns) — only `MainActivity.kt` and `ui/upload/UploadScreen.kt` touched across Tasks 1-3, no DAO/entity/migration files
 - [x] full check: `./gradlew lintDebug testDebugUnitTest` — BUILD SUCCESSFUL
 

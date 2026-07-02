@@ -79,7 +79,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,6 +86,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
@@ -1484,7 +1484,9 @@ private fun Kolco24AppRoot(
                         uploadRefreshing = true
                         container.applicationScope.launch {
                             try {
-                                coroutineScope {
+                                // supervisorScope (not coroutineScope): mirrors the Kolco24App Launch B
+                                // precedent — one target failing must not cancel the other in-flight upload.
+                                supervisorScope {
                                     launch { trackRepo.uploadAllPending() }
                                     launch { markRepo.uploadAllPending() }
                                 }
