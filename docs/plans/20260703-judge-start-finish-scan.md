@@ -268,12 +268,12 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/admin/JudgeScanModel.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/admin/JudgeScanModelTest.kt`
 
-- [ ] `sealed interface JudgeScanResult { Recorded(uid, number); UnknownChip(uid); KpChip; PoolNotReady }`
-- [ ] `classifyJudgeScan(uid, memberTag, hasKpCode, poolReady)` with branch order
+- [x] `sealed interface JudgeScanResult { Recorded(uid, number); UnknownChip(uid); KpChip; PoolNotReady }`
+- [x] `classifyJudgeScan(uid, memberTag, hasKpCode, poolReady)` with branch order
       PoolNotReady → Recorded → KpChip → UnknownChip
-- [ ] write test: pool-not-ready short-circuits even when a memberTag would match
-- [ ] write test: pooled UID → Recorded(number); not-in-pool + code → KpChip; not-in-pool + no code → UnknownChip
-- [ ] run tests — must pass before next task
+- [x] write test: pool-not-ready short-circuits even when a memberTag would match
+- [x] write test: pooled UID → Recorded(number); not-in-pool + code → KpChip; not-in-pool + no code → UnknownChip
+- [x] run tests — must pass before next task
 
 ### Task 8: `JudgeScanDao` + `MIGRATION_4_5` instrumented tests
 
