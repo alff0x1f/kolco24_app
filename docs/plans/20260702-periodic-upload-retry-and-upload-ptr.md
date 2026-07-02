@@ -74,11 +74,11 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/upload/UploadScreen.kt`
 
-- [ ] add `refreshing: Boolean` and `onRefresh: () -> Unit` params to `UploadScreen` (before `onBack`)
-- [ ] wrap **only the `hasAny` branch** in `RefreshableList(isRefreshing = refreshing, onRefresh = onRefresh)` from `ui/common/PullToRefresh.kt`; the `UploadEmptyState` branch stays as-is (no gesture — nothing to upload by construction, mirrors `LegendScreen.kt:104-114`)
-- [ ] give the inner scroll `Column` `Modifier.fillMaxSize().verticalScroll(rememberScrollState())` so the `PullToRefreshBox` fills the viewport below the `TopAppBar` even with short content
-- [ ] update the file's KDoc header (screen now hosts PTR on the content branch; host owns the flag; outcome surfaces via the receipt lines, no snackbar)
-- [ ] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 3
+- [x] add `refreshing: Boolean` and `onRefresh: () -> Unit` params to `UploadScreen` (before `onBack`) — given default values (`false`/`{}`, mirroring `LegendScreen`'s `isRefreshing`/`onRefresh` defaults) so the existing named-arg call site in `MainActivity.kt` keeps compiling ahead of Task 3's wiring
+- [x] wrap **only the `hasAny` branch** in `RefreshableList(isRefreshing = refreshing, onRefresh = onRefresh)` from `ui/common/PullToRefresh.kt`; the `UploadEmptyState` branch stays as-is (no gesture — nothing to upload by construction, mirrors `LegendScreen.kt:104-114`)
+- [x] give the inner scroll `Column` `Modifier.fillMaxSize().verticalScroll(rememberScrollState())` so the `PullToRefreshBox` fills the viewport below the `TopAppBar` even with short content
+- [x] update the file's KDoc header (screen now hosts PTR on the content branch; host owns the flag; outcome surfaces via the receipt lines, no snackbar)
+- [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 3
 
 ### Task 3: Host wiring — uploadRefreshing in MainActivity
 
