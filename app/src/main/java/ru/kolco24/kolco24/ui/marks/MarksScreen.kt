@@ -776,20 +776,21 @@ private fun GhostTile(active: Boolean, glyph: ImageVector? = null, alpha: Float 
  * alert, not a status light — no photo takes, no card). Explains that the photo portion of СУММА is
  * provisional: a take without a chip scores only after judges verify the photos. The title names the
  * checkpoints under review by their tile tokens — «3 КП по фото (1-02, 2-03, 5-04) · 8 баллов» — so the
- * team can match the notice against the grid without hunting for camera chips. Styled in the
- * [LocationNudge]/[TrackNudge] card vocabulary, but the lead badge is a flat neutral square (the
- * null-color [tileFill], the tile grid's own «photo» vocabulary) instead of the orange CTA circle —
- * this card asks for nothing and is not clickable. When the photo points sum to 0 (all photo КП still
- * locked in the legend, `cost = null → 0`) the «· 0 баллов» part is dropped rather than showing a
- * misleading zero; the figure self-corrects on reveal.
+ * team can match the notice against the grid without hunting for camera chips. Styled as a **warning**
+ * in the app's one alert palette (`errorContainer`/`onErrorContainer`, the [ClockWarningBanner]/
+ * `NfcUnavailableBanner` vocabulary — deliberately no third amber hue): these points are at stake until
+ * the judges rule, which is exactly what that palette flags elsewhere. The lead badge stays the tile
+ * grid's flat square, but in the `error` color with a white [CameraAlt][Icons.Filled.CameraAlt] glyph —
+ * warning weight, photo vocabulary. Not clickable — the card asks for nothing. When the photo points sum
+ * to 0 (all photo КП still locked in the legend, `cost = null → 0`) the «· 0 баллов» part is dropped
+ * rather than showing a misleading zero; the figure self-corrects on reveal.
  */
 @Composable
 private fun PhotoReviewNotice(summary: PhotoReviewSummary, modifier: Modifier = Modifier) {
-    val badge = tileFill(null, isDarkScheme())
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = MaterialTheme.colorScheme.errorContainer,
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -797,13 +798,13 @@ private fun PhotoReviewNotice(summary: PhotoReviewSummary, modifier: Modifier = 
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                modifier = Modifier.size(40.dp).background(badge.fill),
+                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.error),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Filled.CameraAlt,
                     contentDescription = null,
-                    tint = badge.text,
+                    tint = MaterialTheme.colorScheme.onError,
                     modifier = Modifier.size(22.dp),
                 )
             }
@@ -818,12 +819,14 @@ private fun PhotoReviewNotice(summary: PhotoReviewSummary, modifier: Modifier = 
                     },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Text(
                     text = "Баллы засчитают после проверки судьями",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // The container's own on-color at reduced alpha keeps the secondary line quieter
+                    // than the title while staying in the warning palette (no grey on red-tinted ground).
+                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                 )
             }
         }
