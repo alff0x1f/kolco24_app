@@ -221,11 +221,11 @@ are `raceId`-scoped only):
 - Modify: `docs/design/DATA-NOTES.md`
 - Modify: `docs/design/UI-NOTES.md`
 
-- [ ] DATA-NOTES: update `JudgeScanRepository` / `JudgeScanDao` entries with the new `uploadCounts`
+- [x] DATA-NOTES: update `JudgeScanRepository` / `JudgeScanDao` entries with the new `uploadCounts`
       flow + `onUploadOutcome` callback (and the `AppContainer.judgeScanUploadOutcomes` StateFlow)
-- [ ] UI-NOTES: update the `UploadScreen` entry — now four sections incl. race-scoped «Судейские отметки»
-- [ ] CLAUDE.md: no change needed (no new pattern; connected-test inventory already lists JudgeScanDaoTest)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] UI-NOTES: update the `UploadScreen` entry — now four sections incl. race-scoped «Судейские отметки»
+- [x] CLAUDE.md: no change needed (no new pattern; connected-test inventory already lists JudgeScanDaoTest)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
