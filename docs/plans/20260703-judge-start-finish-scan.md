@@ -333,16 +333,16 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/admin/AdminScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add two `AdminActionRow` entries in `AdminHome` («Отметка старта» / «Отметка финиша»)
-- [ ] host state in MainActivity: `showJudgeScan: String?` (null | "start" | "finish") via `rememberSaveable`;
+- [x] add two `AdminActionRow` entries in `AdminHome` («Отметка старта» / «Отметка финиша»)
+- [x] host state in MainActivity: `showJudgeScan: String?` (null | "start" | "finish") via `rememberSaveable`;
       render `JudgeScanScreen` overlay after `Scaffold`, dismiss via `BackHandler`
-- [ ] add a dedicated 60 s ticker in its **own coroutine** — the existing marks/track loop
+- [x] add a dedicated 60 s ticker in its **own coroutine** — the existing marks/track loop
       (`while(true){ … delay(UPLOAD_RETRY_INTERVAL_MS) }`, MainActivity ~568-573) never returns, so a
       second bare `while(true)` in the same coroutine is unreachable and the tick would never fire.
       Use a separate `LaunchedEffect { repeatOnLifecycle(STARTED) { while (true) {
       container.applicationScope.launch { judgeScanRepo.uploadAllPending() }; delay(60_000L) } } }`
       (or wrap each loop in its own `launch { }` inside one `repeatOnLifecycle` block)
-- [ ] (manual-verification only — overlay wiring + ticker untested by convention)
+- [x] (manual-verification only — overlay wiring + ticker untested by convention)
 
 ### Task 11: Verify acceptance criteria
 

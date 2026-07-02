@@ -18,11 +18,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.FactCheck
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonSearch
+import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,6 +76,7 @@ fun AdminScreen(
     onOpenProvisioning: () -> Unit = {},
     onOpenCheckChip: () -> Unit = {},
     onOpenCheckMemberChip: () -> Unit = {},
+    onOpenJudgeScan: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -104,6 +107,7 @@ fun AdminScreen(
                 onOpenProvisioning = onOpenProvisioning,
                 onOpenCheckChip = onOpenCheckChip,
                 onOpenCheckMemberChip = onOpenCheckMemberChip,
+                onOpenJudgeScan = onOpenJudgeScan,
             )
         }
     }
@@ -230,6 +234,7 @@ private fun AdminHome(
     onOpenProvisioning: () -> Unit,
     onOpenCheckChip: () -> Unit,
     onOpenCheckMemberChip: () -> Unit,
+    onOpenJudgeScan: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
@@ -293,6 +298,38 @@ private fun AdminHome(
                 title = "Проверить чип участника",
                 subtitle = "Узнать, чей это браслет",
                 onClick = onOpenCheckMemberChip,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            AdminActionRow(
+                icon = Icons.AutoMirrored.Filled.DirectionsRun,
+                title = "Отметка старта",
+                subtitle = "Пикать браслеты участников на старте",
+                onClick = { onOpenJudgeScan("start") },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            AdminActionRow(
+                icon = Icons.Filled.SportsScore,
+                title = "Отметка финиша",
+                subtitle = "Пикать браслеты участников на финише",
+                onClick = { onOpenJudgeScan("finish") },
             )
         }
 
