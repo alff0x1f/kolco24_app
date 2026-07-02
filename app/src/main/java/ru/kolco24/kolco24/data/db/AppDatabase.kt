@@ -22,8 +22,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MarkEntity::class,
         LegendMetaEntity::class,
         TrackPointEntity::class,
+        JudgeScanEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(
@@ -43,6 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun markDao(): MarkDao
     abstract fun legendMetaDao(): LegendMetaDao
     abstract fun trackDao(): TrackDao
+    abstract fun judgeScanDao(): JudgeScanDao
 
     companion object {
         // Migrations are LIVE again as of v2. The app is shipped (project memory:
