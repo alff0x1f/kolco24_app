@@ -15,6 +15,8 @@ import kotlinx.serialization.json.Json
 import ru.kolco24.kolco24.data.AdminAuthRepository
 import ru.kolco24.kolco24.data.AdminTokenStore
 import ru.kolco24.kolco24.data.InstallId
+import ru.kolco24.kolco24.data.JudgeScanRepository
+import ru.kolco24.kolco24.data.JudgeScanUploader
 import ru.kolco24.kolco24.data.LegendRepository
 import ru.kolco24.kolco24.data.MarkRepository
 import ru.kolco24.kolco24.data.MemberChipBindingRepository
@@ -315,6 +317,24 @@ class AppContainer(private val context: Context) {
     val markUploadOutcomes:
         MutableStateFlow<Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>> =
         MutableStateFlow(emptyMap())
+
+    /**
+     * Judge-side start/finish pik store (see the judge-start-finish-scan plan): raceId-scoped,
+     * write-once rows, same dual-target (cloud + LAN) idempotent-by-UUID upload loop as
+     * [markRepository]. Unlike marks there is no photo phase and no team dimension.
+     */
+    val judgeScanRepository: JudgeScanRepository by lazy {
+        JudgeScanRepository(
+            judgeScanDao = database.judgeScanDao(),
+            sourceInstallId = installId,
+            cloudUploader = JudgeScanUploader { raceId, sourceInstallId, scans ->
+                apiClient.uploadJudgeScans(raceId, sourceInstallId, scans)
+            },
+            localUploader = JudgeScanUploader { raceId, sourceInstallId, scans ->
+                localApiClient.uploadJudgeScans(raceId, sourceInstallId, scans)
+            },
+        )
+    }
 
     /**
      * Local-only GPS track store. Owns the [RawFix]→entity mapping; the recording service forwards

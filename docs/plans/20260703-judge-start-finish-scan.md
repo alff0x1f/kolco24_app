@@ -257,10 +257,10 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/Kolco24App.kt`
 
-- [ ] add lazy `judgeScanRepository` wiring `cloudUploader = apiClient::uploadJudgeScans`,
+- [x] add lazy `judgeScanRepository` wiring `cloudUploader = apiClient::uploadJudgeScans`,
       `localUploader = localApiClient::uploadJudgeScans`, `dao = database.judgeScanDao()`, `installId`
-- [ ] add a `judgeScanRepository.uploadAllPending()` call to the Launch B startup flush sequence
-- [ ] (manual-verification only — DI/wiring untested by convention; note in Post-Completion)
+- [x] add a `judgeScanRepository.uploadAllPending()` call to the Launch B startup flush sequence
+- [x] (manual-verification only — DI/wiring untested by convention; note in Post-Completion)
 
 ### Task 7: Pure `JudgeScanModel`
 
