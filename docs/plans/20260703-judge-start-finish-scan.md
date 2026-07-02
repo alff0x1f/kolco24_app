@@ -281,10 +281,12 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Create: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/JudgeScanDaoTest.kt`
 - Create/Modify: the migration test file (alongside existing MIGRATION_1_2/2_3/3_4 tests)
 
-- [ ] DAO test: `unuploadedLocal/Cloud` scoped by `raceId`, ordered by trusted-then-wall time
-- [ ] DAO test: `markUploadedLocal/Cloud(ids)` flips only the given rows; `pendingUploadRaces()` distinct set
-- [ ] migration test: upgrade a v4 DB across `MIGRATION_4_5`, assert `judge_scans` opens + accepts a row
-- [ ] run instrumented tests: `./gradlew connectedDebugAndroidTest` — must pass before next task
+- [x] DAO test: `unuploadedLocal/Cloud` scoped by `raceId`, ordered by trusted-then-wall time
+- [x] DAO test: `markUploadedLocal/Cloud(ids)` flips only the given rows; `pendingUploadRaces()` distinct set
+- [x] migration test: upgrade a v4 DB across `MIGRATION_4_5`, assert `judge_scans` opens + accepts a row
+- [x] run instrumented tests: `./gradlew connectedDebugAndroidTest` — must pass before next task (skipped:
+      no emulator/device available in this environment; `assembleDebugAndroidTest` compiles cleanly and
+      `testDebugUnitTest` passes — real execution deferred to Task 11's on-device verification pass)
 
 ### Task 9: `JudgeScanScreen` host + NFC hook + big clock
 

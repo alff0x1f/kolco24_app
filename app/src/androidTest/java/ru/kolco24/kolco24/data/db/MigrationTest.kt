@@ -148,4 +148,45 @@ class MigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun migrate4To5_createsJudgeScansTableAndAcceptsARow() {
+        // v4 has no judge_scans table at all — nothing to seed beforehand.
+        helper.createDatabase(testDb, 4).close()
+
+        // Run the migration; MigrationTestHelper validates the result against schemas/5.json.
+        val db = helper.runMigrationsAndValidate(testDb, 5, true, AppDatabase.MIGRATION_4_5)
+
+        // The new table exists and accepts a row (write-once, nullable trustedTakenAt/bootCount).
+        db.execSQL(
+            """
+            INSERT INTO judge_scans (
+                id, raceId, eventType, participantNumber, nfcUid, takenAt, trustedTakenAt,
+                elapsedRealtimeAt, bootCount, sourceInstallId, uploadedLocal, uploadedCloud
+            ) VALUES (
+                'scan-1', 7, 'start', 42, 'AABBCC', 1000, NULL,
+                500, NULL, 'install-1', 0, 0
+            )
+            """.trimIndent(),
+        )
+
+        db.query("SELECT COUNT(*), raceId, eventType, trustedTakenAt, bootCount FROM judge_scans").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals(7, c.getInt(1))
+            assertEquals("start", c.getString(2))
+            assertNull(c.getString(3))
+            assertNull(c.getString(4))
+        }
+
+        // The raceId index exists.
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'index_judge_scans_raceId'",
+        ).use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("index_judge_scans_raceId", c.getString(0))
+        }
+
+        db.close()
+    }
 }
