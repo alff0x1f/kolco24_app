@@ -401,6 +401,7 @@ fun ScanScreen(
 private fun ConfettiOverlay(running: Boolean, modifier: Modifier = Modifier) {
     val pieces = remember {
         List(CONFETTI_PIECE_COUNT) {
+            val fall = 0.55f + Random.nextFloat() * 0.35f
             ConfettiPiece(
                 xStart = Random.nextFloat(),
                 color = ConfettiColors[Random.nextInt(ConfettiColors.size)],
@@ -408,8 +409,11 @@ private fun ConfettiOverlay(running: Boolean, modifier: Modifier = Modifier) {
                 turns = 1f + Random.nextFloat() * 3f,
                 startAngle = Random.nextFloat() * 360f,
                 drift = (Random.nextFloat() - 0.5f) * 0.4f,
-                fallFraction = 0.55f + Random.nextFloat() * 0.35f,
-                delayFraction = Random.nextFloat() * 0.35f,
+                fallFraction = fall,
+                // Bound the stagger so `delay + fall <= 1`: every piece completes its fall (and leaves
+                // the screen) by the time `progress` reaches 1. Otherwise a late/slow piece is still
+                // mid-screen when `progress` pins at 1 for the rest of SUCCESS_HOLD_MS, freezing there.
+                delayFraction = Random.nextFloat() * (1f - fall),
                 wobble = 0.02f + Random.nextFloat() * 0.05f,
                 circle = Random.nextFloat() < 0.3f,
             )
