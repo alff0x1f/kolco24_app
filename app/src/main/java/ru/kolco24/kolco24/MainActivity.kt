@@ -489,6 +489,9 @@ private fun Kolco24AppRoot(
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
+    // One-shot celebration hand-off from ScanScreen's completion auto-close to MarksScreen; plain
+    // remember (not rememberSaveable) — a config-change recreate deliberately drops a stale celebration.
+    var pendingCelebration by remember { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showUpload by rememberSaveable { mutableStateOf(false) }
     // Photo-lightbox overlay: the relative path of the tapped frame that anchors the global photo strip,
@@ -844,6 +847,7 @@ private fun Kolco24AppRoot(
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
         photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
         showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+        pendingCelebration = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
             TrackRecordingService.stop(context)
@@ -1200,6 +1204,9 @@ private fun Kolco24AppRoot(
                         onRequestLocation = onRequestMarkLocation,
                         onPhotoClick = onPhotoClick,
                         onOpenPhotoLightbox = { paths -> paths.firstOrNull()?.let { lightboxAnchor = it } },
+                        celebration = pendingCelebration,
+                        onCelebrationDone = { pendingCelebration = false },
+                        onCoinSound = { container.scanFeedback.coin() },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -1414,6 +1421,7 @@ private fun Kolco24AppRoot(
                     event
                 },
                 onClose = closeScanOverlay,
+                onCompleted = { pendingCelebration = true; switchToTab(0) },
                 modifier = Modifier.fillMaxSize(),
             )
         }

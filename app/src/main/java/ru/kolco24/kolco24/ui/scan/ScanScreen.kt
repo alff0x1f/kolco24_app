@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.ui.scan
 
 import android.nfc.Tag
 import android.os.SystemClock
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -58,12 +59,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -84,11 +87,26 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.ui.common.ScanClockBanner
 import ru.kolco24.kolco24.ui.theme.BrandRed
+import ru.kolco24.kolco24.ui.theme.CpColorBlue
+import ru.kolco24.kolco24.ui.theme.CpColorPurple
+import ru.kolco24.kolco24.ui.theme.CpColorRed
+import ru.kolco24.kolco24.ui.theme.CpColorYellow
+import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
+import ru.kolco24.kolco24.ui.theme.Tertiary
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.random.Random
 import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val TIMER_TICK_MS = 250L
-private const val SUCCESS_HOLD_MS = 1_800L
+// The completing tap plays the ordinary scan tick first, then the fanfare.
+private const val COMPLETE_FANFARE_DELAY_MS = 275L
+// Holds the green "Готово!" screen through the final scan tick plus the checkpoint-complete fanfare.
+private const val SUCCESS_HOLD_MS = 3_300L
+// Confetti shower over the "Готово!" beat — a touch shorter than SUCCESS_HOLD_MS so the last pieces
+// settle off-screen before the overlay auto-closes.
+private const val CONFETTI_DURATION_MS = 2_800
 
 data class ScanChip(
     val chipNumber: Int?,
@@ -105,6 +123,7 @@ fun ScanScreen(
     scanFeedback: ScanFeedbackPlayer,
     onScanTag: suspend (ScanInput, TimeSample) -> ScanEvent,
     onClose: () -> Unit,
+    onCompleted: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current as? MainActivity
@@ -119,6 +138,7 @@ fun ScanScreen(
     val scanMutex = remember { Mutex() }
     val currentOnScanTag by rememberUpdatedState(onScanTag)
     val currentOnClose by rememberUpdatedState(onClose)
+    val currentOnCompleted by rememberUpdatedState(onCompleted)
     var session by remember { mutableStateOf<ScanSession?>(null) }
     var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
@@ -140,12 +160,15 @@ fun ScanScreen(
         val now = sample.elapsedMs
         scanMutex.withLock {
             val event = currentOnScanTag(input, sample)
-            // One outcome cue per tap, covering every path incl. idempotent re-taps. Fired here (the
-            // single scan-overlay chokepoint) so the platform beep — suppressed app-wide — is replaced.
-            scanFeedback.play(feedbackFor(event))
             when (event) {
-                ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
-                is ScanEvent.BadKp -> diagnostic = event.reason
+                ScanEvent.UnboundChip -> {
+                    diagnostic = "Чип не привязан к команде"
+                    scanFeedback.play(feedbackFor(event))
+                }
+                is ScanEvent.BadKp -> {
+                    diagnostic = event.reason
+                    scanFeedback.play(feedbackFor(event))
+                }
                 else -> {
                     diagnostic = null
                     // If the 20 s window had already elapsed at tap time, the DB side
@@ -153,10 +176,21 @@ fun ScanScreen(
                     // also starts fresh instead of extending the stale one.
                     val effectiveSession =
                         if (isWindowExpired(session?.lastScanAt, now)) null else session
+                    val wasComplete = isComplete(effectiveSession, roster.size)
                     // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
                     // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
                     // so the ring must keep counting down rather than flash back to full.
                     session = reduce(effectiveSession, event, now)
+                    // The completing tap still gets the ordinary scan feedback first. The fanfare
+                    // follows only on the incomplete to complete transition, including completion
+                    // arriving on a Kp event when pre-КП buffered members drain into present.
+                    if (!wasComplete && isComplete(session, roster.size)) {
+                        scanFeedback.play(feedbackFor(event))
+                        delay(COMPLETE_FANFARE_DELAY_MS)
+                        scanFeedback.checkpointCompleteFanfare()
+                    } else {
+                        scanFeedback.play(feedbackFor(event))
+                    }
                 }
             }
         }
@@ -244,7 +278,10 @@ fun ScanScreen(
                     completed = false
                 }
             }
-            if (shouldClose) currentOnClose()
+            if (shouldClose) {
+                currentOnCompleted()
+                currentOnClose()
+            }
         } else if (!allScanned) {
             // A КП switch during the success hold makes allScanned false and cancels the delay above.
             // Reset completed so the next full-roster scan can trigger the beat again.
@@ -345,8 +382,105 @@ fun ScanScreen(
                 }
             }
         }
+
+        // Confetti burst over the green "Готово!" beat, in step with the completion fanfare. Drawn last
+        // so it layers above the content, but with no pointer input it never intercepts the top-bar close
+        // button below it. `completed` gates it to the success hold only.
+        ConfettiOverlay(running = completed, modifier = Modifier.matchParentSize())
     }
 }
+
+/**
+ * A one-shot confetti shower for the checkpoint-take celebration — a shower of rotating, drifting,
+ * fading pieces that falls across the whole overlay while [running] is true. Pure Compose/Canvas, no
+ * external library; untested by convention like the file's other Canvas drawings ([CheckStamp],
+ * [ContactlessMark]). Pieces are generated once ([remember]) — a single scan completion lives in one
+ * short-lived [ScanScreen] instance, so re-randomizing per replay isn't needed.
+ */
+@Composable
+private fun ConfettiOverlay(running: Boolean, modifier: Modifier = Modifier) {
+    val pieces = remember {
+        List(CONFETTI_PIECE_COUNT) {
+            val fall = 0.55f + Random.nextFloat() * 0.35f
+            ConfettiPiece(
+                xStart = Random.nextFloat(),
+                color = ConfettiColors[Random.nextInt(ConfettiColors.size)],
+                sizeDp = 7f + Random.nextFloat() * 7f,
+                turns = 1f + Random.nextFloat() * 3f,
+                startAngle = Random.nextFloat() * 360f,
+                drift = (Random.nextFloat() - 0.5f) * 0.4f,
+                fallFraction = fall,
+                // Bound the stagger so `delay + fall <= 1`: every piece completes its fall (and leaves
+                // the screen) by the time `progress` reaches 1. Otherwise a late/slow piece is still
+                // mid-screen when `progress` pins at 1 for the rest of SUCCESS_HOLD_MS, freezing there.
+                delayFraction = Random.nextFloat() * (1f - fall),
+                wobble = 0.02f + Random.nextFloat() * 0.05f,
+                circle = Random.nextFloat() < 0.3f,
+            )
+        }
+    }
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(running) {
+        if (running) {
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(durationMillis = CONFETTI_DURATION_MS, easing = LinearEasing))
+        }
+    }
+    if (!running) return
+    Canvas(modifier = modifier) {
+        val p = progress.value
+        val startY = -0.1f * size.height
+        val endY = size.height + 0.1f * size.height
+        pieces.forEach { piece ->
+            // Each piece runs its own fall over [delayFraction, delayFraction + fallFraction] so the
+            // pieces stagger into a shower rather than dropping as one sheet.
+            val local = (p - piece.delayFraction) / piece.fallFraction
+            if (local <= 0f || local >= 1f) return@forEach
+            val y = startY + (endY - startY) * local
+            val sway = sin(local * piece.turns * PI.toFloat() * 2f) * piece.wobble * size.width
+            val x = piece.xStart * size.width + piece.drift * size.width * local + sway
+            val alpha = if (local > 0.8f) 1f - (local - 0.8f) / 0.2f else 1f
+            val sPx = piece.sizeDp.dp.toPx()
+            val angle = piece.startAngle + piece.turns * 360f * local
+            val color = piece.color.copy(alpha = alpha)
+            rotate(degrees = angle, pivot = Offset(x, y)) {
+                if (piece.circle) {
+                    drawCircle(color = color, radius = sPx / 2f, center = Offset(x, y))
+                } else {
+                    drawRect(
+                        color = color,
+                        topLeft = Offset(x - sPx / 2f, y - sPx * 0.35f),
+                        size = Size(sPx, sPx * 0.7f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val CONFETTI_PIECE_COUNT = 90
+
+private val ConfettiColors = listOf(
+    CpColorRed,
+    CpColorBlue,
+    CpColorYellow,
+    CpColorPurple,
+    Tertiary,
+    OrangeCta,
+)
+
+private data class ConfettiPiece(
+    val xStart: Float,        // launch column, fraction of width
+    val color: Color,
+    val sizeDp: Float,        // longest edge, dp
+    val turns: Float,         // full rotations over the fall (also drives the sway period)
+    val startAngle: Float,    // initial rotation, degrees
+    val drift: Float,         // net horizontal travel, fraction of width (± around start)
+    val fallFraction: Float,  // portion of the total progress this piece takes to fall (speed)
+    val delayFraction: Float, // stagger before this piece starts falling
+    val wobble: Float,        // sway amplitude, fraction of width
+    val circle: Boolean,      // circle vs rectangle
+)
 
 @Composable
 private fun ScanTopBar(canFinish: Boolean, onClose: () -> Unit, onFinish: () -> Unit) {

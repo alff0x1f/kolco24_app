@@ -8,9 +8,13 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -61,8 +66,12 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -103,6 +112,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.marks.photoPaths
@@ -115,6 +126,9 @@ import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
+
+private val marksFabListBottomPadding = 128.dp
+private val marksFabScrollClearance = 104.dp
 
 data class Mark(
     val number: String,
@@ -329,6 +343,11 @@ fun MarksScreen(
     // stack so it covers the bottom navigation bar). The tapped take's own frame paths are handed up; the
     // host anchors the global photo strip on the first of them.
     onOpenPhotoLightbox: (List<String>) -> Unit = {},
+    // Checkpoint-take celebration hand-off from the host (fires only on the NFC completion auto-close
+    // path): scroll to bottom + last-tile pop-in + coin sound.
+    celebration: Boolean = false,
+    onCelebrationDone: () -> Unit = {},
+    onCoinSound: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
@@ -343,6 +362,61 @@ fun MarksScreen(
     val hiddenTaken = hiddenTakenTokens(marks, lockedCheckpointIds)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
+    val listState = rememberLazyListState()
+    var celebratingLast by remember { mutableStateOf(false) }
+    val celebrationScale = remember { Animatable(1f) }
+    val celebrationAlpha = remember { Animatable(1f) }
+    val fabScrollClearancePx = with(LocalDensity.current) { marksFabScrollClearance.toPx() }
+
+    LaunchedEffect(celebration) {
+        if (!celebration) return@LaunchedEffect
+        if (tiles.isEmpty()) {
+            onCelebrationDone()
+            return@LaunchedEffect
+        }
+        // `onCelebrationDone` must fire even if this effect is cancelled mid-animation (e.g. the user
+        // taps another bottom-nav tab) — otherwise the host's one-shot flag stays stuck true and the
+        // whole celebration replays next time this screen recomposes.
+        try {
+            // Render the last tile at scale 0 before scrolling so it never flashes at full size while
+            // still off-screen.
+            celebratingLast = true
+            celebrationScale.snapTo(0f)
+            celebrationAlpha.snapTo(0f)
+            // On a fresh composition (e.g. this page wasn't pre-composed by the pager) the LazyColumn
+            // hasn't laid out yet and `totalItemsCount` reads 0 — await the first real measurement
+            // instead of racing it (tiles is non-empty here, so a measurement is guaranteed to land).
+            val totalItemsCount = snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+            val lastItemIndex = totalItemsCount - 1
+            val safeViewportEnd = listState.layoutInfo.viewportEndOffset - fabScrollClearancePx.toInt()
+            // Jump straight to the bottom INSTANTLY (no scroll animation) so the screen opens already at
+            // the last tile. `scrollToItem` top-aligns the one tall `tile_grid` item; a second instant
+            // `scrollBy` then lifts its bottom edge up to the FAB-safe line so the freshly-popped tile
+            // clears the photo FAB. Both moves are non-animated, so there is no visible scroll.
+            listState.scrollToItem(lastItemIndex)
+            val lastItemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastItemIndex }
+            if (lastItemInfo != null) {
+                val delta = (lastItemInfo.offset + lastItemInfo.size - safeViewportEnd)
+                    .coerceAtLeast(0)
+                if (delta > 0) listState.scrollBy(delta.toFloat())
+            }
+            // The coin sound IS the pop — fire both together.
+            onCoinSound()
+            // Join both animations before dropping the graphicsLayer below — the scale spring often
+            // settles before the fixed-duration alpha tween, and celebratingLast=false strips the
+            // graphicsLayer outright (not just the animated values), which would otherwise truncate
+            // an in-flight fade into an abrupt pop to full opacity.
+            coroutineScope {
+                launch { celebrationAlpha.animateTo(1f, tween(durationMillis = 250)) }
+                celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            }
+            celebratingLast = false
+        } finally {
+            celebratingLast = false
+            onCelebrationDone()
+        }
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Отметки") },
@@ -353,8 +427,9 @@ fun MarksScreen(
 
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 80.dp),
+                contentPadding = PaddingValues(bottom = marksFabListBottomPadding),
             ) {
                 item("metrics") {
                     // «ДО КВ» has no real source yet — placeholder until control-time lands.
@@ -407,6 +482,9 @@ fun MarksScreen(
                         TileGrid(
                             marks = tiles,
                             onPhotoTileClick = onOpenPhotoLightbox,
+                            celebrateLastTile = celebratingLast,
+                            celebrationScale = celebrationScale.value,
+                            celebrationAlpha = celebrationAlpha.value,
                         )
                     }
                     // The empty state folds the NFC notice into its own message, so only surface the
@@ -1022,6 +1100,12 @@ private fun MetricItem(
 private fun TileGrid(
     marks: List<Mark>,
     onPhotoTileClick: (List<String>) -> Unit,
+    // Checkpoint-take celebration pop-in: [celebrateLastTile] gates the effect to the single flat
+    // index `marks.lastIndex` (never by `Mark` equality — two identical takes are `==`-equal), so
+    // zero cost is paid by every other tile.
+    celebrateLastTile: Boolean = false,
+    celebrationScale: Float = 1f,
+    celebrationAlpha: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     val rows = marks.chunked(4)
@@ -1029,13 +1113,29 @@ private fun TileGrid(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        rows.forEach { rowMarks ->
+        rows.forEachIndexed { rowIndex, rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                rowMarks.forEach { mark ->
-                    Box(modifier = Modifier.weight(1f)) {
+                rowMarks.forEachIndexed { colIndex, mark ->
+                    val flatIndex = rowIndex * 4 + colIndex
+                    val isCelebrating = celebrateLastTile && flatIndex == marks.lastIndex
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .then(
+                                if (isCelebrating) {
+                                    Modifier.graphicsLayer {
+                                        scaleX = celebrationScale
+                                        scaleY = celebrationScale
+                                        alpha = celebrationAlpha
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
                         ColorTile(mark = mark, onPhotoTileClick = onPhotoTileClick)
                     }
                 }
