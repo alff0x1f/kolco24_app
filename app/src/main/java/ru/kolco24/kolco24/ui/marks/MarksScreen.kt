@@ -106,6 +106,7 @@ import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.marks.thumbPathOf
+import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
@@ -190,6 +191,56 @@ data class LightboxPhoto(val path: String, val mark: Mark)
 fun lightboxPhotos(tiles: List<Mark>): List<LightboxPhoto> =
     tiles.flatMap { m -> m.photoPaths.map { LightboxPhoto(it, m) } }
 
+/**
+ * The photo-take («без чипа») portion of the score awaiting judge review: checkpoint count, their
+ * points, and each checkpoint's display [tokens] («стоимость-номер», the tile-token vocabulary;
+ * a zero-cost КП is a bare zero-padded number, mirroring [tokenAnnotated]) in grid order (oldest-first).
+ */
+internal data class PhotoReviewSummary(val count: Int, val points: Int, val tokens: List<String>)
+
+/**
+ * Pure summary of the **checkpoints** that need judge review — scored (`complete`) only by photo takes
+ * (`method == "photo"`: no КП chip was read, so the photo is the only proof). Checkpoint-level, mirroring
+ * the metrics' `distinctBy { checkpointId }` semantics: a repeat photo take of the same КП counts once,
+ * and a КП that *also* has a complete NFC take is excluded entirely — the chip already proves the visit
+ * (its score comes from the NFC take), so judges have nothing to gate. Likewise an NFC take that merely
+ * *attached* photo evidence never counts. Points go through the same live [costOf] the metrics use, so
+ * an organizer's cost edit (or a legend reveal — a photo take of a still-locked КП snapshots `cost = 0`
+ * and self-corrects on reveal) is reflected. Returns `null` when no checkpoint is photo-only, so the
+ * notice disappears entirely rather than rendering a zero state.
+ */
+internal fun photoReviewSummary(
+    marks: List<MarkEntity>,
+    costOf: (MarkEntity) -> Int = { it.cost },
+): PhotoReviewSummary? {
+    val complete = marks.filter { it.complete }
+    val chipVerified = complete.filterNot { it.method == "photo" }.mapTo(HashSet()) { it.checkpointId }
+    // [marks] arrives newest-first; reverse to oldest-first so the token list follows the tile grid.
+    val photoOnly = complete
+        .filter { it.method == "photo" && it.checkpointId !in chipVerified }
+        .distinctBy { it.checkpointId }
+        .asReversed()
+    if (photoOnly.isEmpty()) return null
+    return PhotoReviewSummary(
+        count = photoOnly.size,
+        points = photoOnly.sumOf(costOf),
+        tokens = photoOnly.map { m ->
+            val cost = costOf(m)
+            val number = m.checkpointNumber.toString().padStart(2, '0')
+            if (cost > 0) "$cost-$number" else number
+        },
+    )
+}
+
+/**
+ * The notice title's parenthesized КП list, capped at [max] tokens — a long photo streak must not
+ * balloon the card into a paragraph (the tiles below carry the full picture). Past the cap the tail
+ * collapses to an ellipsis: «1-02, 2-03, 5-04, …».
+ */
+internal fun tokensLabel(tokens: List<String>, max: Int = 3): String =
+    if (tokens.size <= max) tokens.joinToString(", ")
+    else tokens.take(max).joinToString(", ") + ", …"
+
 // Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
 // light & dark, echoing the physical checkpoint markers.
 private val PhotoTileTop = Color(0xFF1D242D)
@@ -270,6 +321,7 @@ fun MarksScreen(
     // costOf snapshot 0, so it self-corrects once the legend is revealed (see LegendScreen.isScoring).
     val takenKp = takenPointCount(marks, costOf)
     val takenScore = totalScore(marks, costOf)
+    val photoReview = photoReviewSummary(marks, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -294,6 +346,14 @@ fun MarksScreen(
                         totalCost = totalCost,
                         timeToKv = "—",
                     )
+                }
+                if (photoReview != null) {
+                    item("photo_review") {
+                        PhotoReviewNotice(
+                            summary = photoReview,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
+                        )
+                    }
                 }
                 if (tiles.isEmpty()) {
                     // While loading, render neither branch — a blank beat instead of a false empty
@@ -707,6 +767,65 @@ private fun GhostTile(active: Boolean, glyph: ImageVector? = null, alpha: Float 
                 tint = OrangeCta,
                 modifier = Modifier.size(24.dp),
             )
+        }
+    }
+}
+
+/**
+ * The judge-review notice under the metrics card, shown only while at least one photo take exists (an
+ * alert, not a status light — no photo takes, no card). Explains that the photo portion of СУММА is
+ * provisional: a take without a chip scores only after judges verify the photos. The title names the
+ * checkpoints under review by their tile tokens — «3 КП по фото (1-02, 2-03, 5-04) · 8 баллов» — so the
+ * team can match the notice against the grid without hunting for camera chips. Styled in the
+ * [LocationNudge]/[TrackNudge] card vocabulary, but the lead badge is a flat neutral square (the
+ * null-color [tileFill], the tile grid's own «photo» vocabulary) instead of the orange CTA circle —
+ * this card asks for nothing and is not clickable. When the photo points sum to 0 (all photo КП still
+ * locked in the legend, `cost = null → 0`) the «· 0 баллов» part is dropped rather than showing a
+ * misleading zero; the figure self-corrects on reveal.
+ */
+@Composable
+private fun PhotoReviewNotice(summary: PhotoReviewSummary, modifier: Modifier = Modifier) {
+    val badge = tileFill(null, isDarkScheme())
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(badge.fill),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.CameraAlt,
+                    contentDescription = null,
+                    tint = badge.text,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                val points = summary.points
+                val tokens = tokensLabel(summary.tokens)
+                Text(
+                    text = if (points > 0) {
+                        "${summary.count} КП по фото ($tokens) · $points ${pluralRu(points, "балл", "балла", "баллов")}"
+                    } else {
+                        "${summary.count} КП по фото ($tokens)"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Баллы засчитают после проверки судьями",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
