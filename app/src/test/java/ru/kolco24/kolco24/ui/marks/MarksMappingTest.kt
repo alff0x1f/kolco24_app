@@ -165,6 +165,35 @@ class MarksMappingTest {
     }
 
     @Test
+    fun `takenPointCount with a live cost resolver excludes technical checkpoints`() {
+        // Point 1 is a technical checkpoint (cost 0, e.g. test point / transfer zone) — not scoring.
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 0, complete = true),
+            mark("b", point = 2, number = 4, cost = 3, complete = true),
+        )
+        assertEquals(1, takenPointCount(marks) { it.cost })
+    }
+
+    @Test
+    fun `takenPointCount live resolver does not double-count a repeated point`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, complete = true),
+            mark("b", point = 1, number = 1, cost = 2, complete = true), // repeat same point
+            mark("c", point = 2, number = 4, cost = 3, complete = true),
+        )
+        assertEquals(2, takenPointCount(marks) { it.cost })
+    }
+
+    @Test
+    fun `takenPointCount live resolver ignores incomplete takes`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, complete = false),
+            mark("b", point = 2, number = 4, cost = 3, complete = true),
+        )
+        assertEquals(1, takenPointCount(marks) { it.cost })
+    }
+
+    @Test
     fun `totalScore with a live cost resolver scores off current cost not the snapshot`() {
         // Point 1 was taken when its cost was 0 (stale snapshot); the legend now says 5.
         val marks = listOf(

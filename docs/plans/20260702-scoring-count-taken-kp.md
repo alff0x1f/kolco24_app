@@ -98,12 +98,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/MarkRepository.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/marks/MarksMappingTest.kt`
 
-- [ ] добавить `fun takenPointCount(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int = marks.filter { it.complete }.distinctBy { it.checkpointId }.count { costOf(it) > 0 }` с KDoc (технические КП с cost 0 не считаются)
-- [ ] существующий `takenPointCount(marks)` оставить без изменений
-- [ ] тест: КП с `cost = 0` не считается; КП с `cost > 0` считается
-- [ ] тест: повторное взятие того же checkpointId не дублирует (distinct)
-- [ ] тест: incomplete-take не считается
-- [ ] запустить `./gradlew testDebugUnitTest` — должны проходить до следующей задачи
+- [x] добавить `fun takenPointCount(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int = marks.filter { it.complete }.distinctBy { it.checkpointId }.count { costOf(it) > 0 }` с KDoc (технические КП с cost 0 не считаются)
+- [x] существующий `takenPointCount(marks)` оставить без изменений
+- [x] тест: КП с `cost = 0` не считается; КП с `cost > 0` считается
+- [x] тест: повторное взятие того же checkpointId не дублирует (distinct)
+- [x] тест: incomplete-take не считается
+- [x] запустить `./gradlew testDebugUnitTest` — должны проходить до следующей задачи
 
 ### Task 6: Инструментальный тест миграции `MIGRATION_3_4`
 
