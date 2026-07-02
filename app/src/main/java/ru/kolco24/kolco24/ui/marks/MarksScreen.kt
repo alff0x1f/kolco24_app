@@ -14,7 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -388,16 +388,17 @@ fun MarksScreen(
             // instead of racing it (tiles is non-empty here, so a measurement is guaranteed to land).
             val totalItemsCount = snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
             val lastItemIndex = totalItemsCount - 1
-            listState.animateScrollToItem(lastItemIndex)
-            // `animateScrollToItem` only guarantees the item is *visible*, not that its bottom edge
-            // clears the viewport. Overshoot the remainder against a safe bottom edge above the photo
-            // FAB so the freshly-popped tile does not land underneath it.
+            val safeViewportEnd = listState.layoutInfo.viewportEndOffset - fabScrollClearancePx.toInt()
+            // Jump straight to the bottom INSTANTLY (no scroll animation) so the screen opens already at
+            // the last tile. `scrollToItem` top-aligns the one tall `tile_grid` item; a second instant
+            // `scrollBy` then lifts its bottom edge up to the FAB-safe line so the freshly-popped tile
+            // clears the photo FAB. Both moves are non-animated, so there is no visible scroll.
+            listState.scrollToItem(lastItemIndex)
             val lastItemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastItemIndex }
             if (lastItemInfo != null) {
-                val safeViewportEnd = listState.layoutInfo.viewportEndOffset - fabScrollClearancePx.toInt()
-                val overshoot = (lastItemInfo.offset + lastItemInfo.size - safeViewportEnd)
+                val delta = (lastItemInfo.offset + lastItemInfo.size - safeViewportEnd)
                     .coerceAtLeast(0)
-                if (overshoot > 0) listState.animateScrollBy(overshoot.toFloat())
+                if (delta > 0) listState.scrollBy(delta.toFloat())
             }
             // The coin sound IS the pop — fire both together.
             onCoinSound()
