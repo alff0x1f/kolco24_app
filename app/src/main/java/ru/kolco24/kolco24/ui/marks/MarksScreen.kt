@@ -112,6 +112,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
@@ -395,8 +396,14 @@ fun MarksScreen(
             }
             // The coin sound IS the pop — fire both together.
             onCoinSound()
-            launch { celebrationAlpha.animateTo(1f, tween(durationMillis = 250)) }
-            celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            // Join both animations before dropping the graphicsLayer below — the scale spring often
+            // settles before the fixed-duration alpha tween, and celebratingLast=false strips the
+            // graphicsLayer outright (not just the animated values), which would otherwise truncate
+            // an in-flight fade into an abrupt pop to full opacity.
+            coroutineScope {
+                launch { celebrationAlpha.animateTo(1f, tween(durationMillis = 250)) }
+                celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            }
             celebratingLast = false
         } finally {
             celebratingLast = false
