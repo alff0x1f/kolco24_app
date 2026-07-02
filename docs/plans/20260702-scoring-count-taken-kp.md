@@ -132,12 +132,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/legend/LegendScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] добавить `internal fun CheckpointEntity.isScoring(): Boolean = locked || (cost ?: 0) > 0` (в `LegendScreen.kt`)
-- [ ] добавить в `LegendScreen`/`LegendList`/`ScoreCard` параметр `scoringCount: Int = 0` (дефолт `= 0` — идиоматично для публичного composable, как прочие defaulted-параметры `LegendScreen.kt:89-90`; проброс `totalScoring` в ScoreCard); в `MainActivity` передать `scoringCount = legendScoringCount` (рядом со строкой 1144, `totalScore` оставить = `legendTotalCost`)
-- [ ] в `LegendList` разделить переменные: для `ScoreCard` — `takenScoring = checkpoints.count { it.id in takenIds && it.isScoring() }` и `totalScoring = scoringCount`; чипы/список оставить на `totalCount = checkpoints.size` / `takenCount = checkpoints.count { it.id in takenIds }`
-- [ ] `ScoreCard` показывает `«$takenScoring/$totalScoring КП»`; чипы «Все N»/«Не взятые M» и список — без изменений (видят все КП, включая технические)
-- [ ] добавить комментарий про пограничный случай (locked считается зачётным в Легенде, в Отметках — по costOf; самоисправляется)
-- [ ] сборка (`./gradlew assembleDebug`) — без юнит-тестов (Compose-проводка, по конвенции)
+- [x] добавить `internal fun CheckpointEntity.isScoring(): Boolean = locked || (cost ?: 0) > 0` (в `LegendScreen.kt`)
+- [x] добавить в `LegendScreen`/`LegendList`/`ScoreCard` параметр `scoringCount: Int = 0` (дефолт `= 0` — идиоматично для публичного composable, как прочие defaulted-параметры `LegendScreen.kt:89-90`; проброс `totalScoring` в ScoreCard); в `MainActivity` передать `scoringCount = legendScoringCount` (рядом со строкой 1144, `totalScore` оставить = `legendTotalCost`)
+- [x] в `LegendList` разделить переменные: для `ScoreCard` — `takenScoring = checkpoints.count { it.id in takenIds && it.isScoring() }` и `totalScoring = scoringCount`; чипы/список оставить на `totalCount = checkpoints.size` / `takenCount = checkpoints.count { it.id in takenIds }`
+- [x] `ScoreCard` показывает `«$takenScoring/$totalScoring КП»`; чипы «Все N»/«Не взятые M» и список — без изменений (видят все КП, включая технические)
+- [x] добавить комментарий про пограничный случай (locked считается зачётным в Легенде, в Отметках — по costOf; самоисправляется)
+- [x] сборка (`./gradlew assembleDebug`) — без юнит-тестов (Compose-проводка, по конвенции)
 
 ### Task 9: Verify acceptance criteria
 - [ ] «ВЗЯТО» (Отметки) = взятые зачётные / серверный `scoring_count`; технические КП (cost 0) не влияют

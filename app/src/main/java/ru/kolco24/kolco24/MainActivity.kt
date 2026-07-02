@@ -1148,6 +1148,7 @@ private fun Kolco24AppRoot(
                         onChooseTeam = { pickerRaceId = null; teamFlowStep = TeamFlowStep.CompPicker },
                         takenIds = takenIds,
                         totalScore = legendTotalCost,
+                        scoringCount = legendScoringCount,
                         isRefreshing = legendRefreshing,
                         onRefresh = {
                             pullRefresh({ legendRefreshing = it }) { raceId ->

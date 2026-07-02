@@ -88,6 +88,7 @@ fun LegendScreen(
     onChooseTeam: () -> Unit,
     takenIds: Set<Int> = emptySet(),
     totalScore: Int = 0,
+    scoringCount: Int = 0,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -104,20 +105,39 @@ fun LegendScreen(
             // No team → no race to pull, so the gesture isn't offered on this empty state.
             !hasTeam -> LegendNoTeam(onChooseTeam = onChooseTeam)
             else -> RefreshableList(isRefreshing = isRefreshing, onRefresh = onRefresh) {
-                LegendList(checkpoints = checkpoints, takenIds = takenIds, totalScore = totalScore)
+                LegendList(
+                    checkpoints = checkpoints,
+                    takenIds = takenIds,
+                    totalScore = totalScore,
+                    scoringCount = scoringCount,
+                )
             }
         }
     }
 }
 
+/** A checkpoint counts toward the scoring КП counter: open ones need `cost > 0` (technical CPs are
+ * `cost == 0`); a locked CP's cost is hidden from the client, so it counts as scoring — the server's
+ * `scoring_count` already includes it, and the corresponding taken-count credits it immediately (the
+ * asymmetric case is the «Отметки» numerator, which can't see a locked cost until reveal). */
+internal fun CheckpointEntity.isScoring(): Boolean = locked || (cost ?: 0) > 0
+
 @Composable
-private fun LegendList(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>, totalScore: Int) {
+private fun LegendList(
+    checkpoints: List<CheckpointEntity>,
+    takenIds: Set<Int>,
+    totalScore: Int,
+    scoringCount: Int,
+) {
     var showOnlyOpen by rememberSaveable { mutableStateOf(false) }
 
     val visible = if (showOnlyOpen) checkpoints.filter { it.id !in takenIds } else checkpoints
 
+    // Chips/list count ALL checkpoints (incl. technical ones with cost 0) — only the ScoreCard's
+    // «N/M КП» is scoring-only (variant B2).
     val takenCount = checkpoints.count { it.id in takenIds }
     val totalCount = checkpoints.size
+    val takenScoring = checkpoints.count { it.id in takenIds && it.isScoring() }
     // The numerator sums known costs of taken CPs (taking a locked CP reveals its cost). The
     // denominator [totalScore] is the server's `total_cost` — sum of ALL CP costs, incl. locked
     // ones whose individual cost is hidden — so the bar can't fill to 100% before locked CPs are
@@ -139,8 +159,8 @@ private fun LegendList(checkpoints: List<CheckpointEntity>, takenIds: Set<Int>, 
             ScoreCard(
                 takenScore = takenScore,
                 totalScore = totalScore,
-                takenCount = takenCount,
-                totalCount = totalCount,
+                takenCount = takenScoring,
+                totalCount = scoringCount,
             )
         }
 
