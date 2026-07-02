@@ -119,6 +119,18 @@ class SyncCoordinatorTest {
     }
 
     @Test
+    fun enterLocalMode_pinsButFlagsStale_whenLanFanOutFails() = runTest {
+        selectedRaceId = 7
+        manifest = SyncManifestDto(race = 7, dataSource = "local", leaseTtlSeconds = 3600L)
+        now = 1_000L
+        teamsResult = RefreshResult.Offline
+        val outcome = buildCoordinator().enterLocalMode()
+        assertEquals(LocalModeOutcome.PinnedUntil(1_000L + 3600L * 1000L, dataStale = true), outcome)
+        // The pin itself must still land even though the fan-out failed.
+        assertEquals(RaceLease(7, 1_000L + 3600L * 1000L), lease)
+    }
+
+    @Test
     fun enterLocalMode_noPinAndFansOutCloud_onCloudDataSource() = runTest {
         selectedRaceId = 7
         manifest = SyncManifestDto(race = 7, dataSource = "cloud")
@@ -166,9 +178,20 @@ class SyncCoordinatorTest {
     fun enterLocalMode_noRace_whenNothingResolvable() = runTest {
         selectedRaceId = null
         races = emptyList()
-        // Cache stays empty even after the LAN races pull (no `onRefreshRacesLocal` seeding it).
+        // The LAN races pull succeeds (Updated) but genuinely returns nothing.
         val outcome = buildCoordinator().enterLocalMode()
         assertEquals(LocalModeOutcome.NoRace, outcome)
+    }
+
+    @Test
+    fun enterLocalMode_localUnreachable_whenEmptyCacheAndLanRacesPullFails() = runTest {
+        selectedRaceId = null
+        races = emptyList()
+        racesResult = RefreshResult.Offline
+        // Cache stays empty because the LAN races pull itself failed, not because there's
+        // genuinely nothing — must surface as LocalUnreachable, not the generic NoRace.
+        val outcome = buildCoordinator().enterLocalMode()
+        assertEquals(LocalModeOutcome.LocalUnreachable, outcome)
     }
 
     @Test
@@ -180,7 +203,8 @@ class SyncCoordinatorTest {
 
         val outcome = buildCoordinator().enterLocalMode()
 
-        assertTrue("must not be PinnedUntil", outcome !is LocalModeOutcome.PinnedUntil)
+        assertEquals(LocalModeOutcome.LocalNoPin, outcome)
+        assertNull("must actively clear the lease, not merely read as unpinned", lease)
         assertFalse(isPinned(lease, 7, now))
     }
 
@@ -224,6 +248,26 @@ class SyncCoordinatorTest {
         assertTrue(calls.contains("refreshRaces(Cloud)"))
     }
 
+    @Test
+    fun exitLocalMode_httpError_isNotReportedAsCloudUpdated() = runTest {
+        lease = RaceLease(7, 10_000L)
+        selectedRaceId = 7
+        teamsResult = RefreshResult.HttpError(500)
+        val outcome = buildCoordinator().exitLocalMode()
+        assertNull(lease)
+        assertEquals(LocalModeOutcome.Offline, outcome)
+    }
+
+    @Test
+    fun exitLocalMode_forbidden_isNotReportedAsCloudUpdated() = runTest {
+        lease = RaceLease(7, 10_000L)
+        selectedRaceId = 7
+        legendResult = RefreshResult.Forbidden
+        val outcome = buildCoordinator().exitLocalMode()
+        assertNull(lease)
+        assertEquals(LocalModeOutcome.Offline, outcome)
+    }
+
     // endregion
 
     // region refreshAll
@@ -258,6 +302,20 @@ class SyncCoordinatorTest {
         assertTrue(calls.none { it == "refreshTeams(7,Local)" })
     }
 
+    @Test
+    fun refreshAll_pinned_staysLocal_whenProbeUnreachable() = runTest {
+        // Connectivity loss during the mid-pull probe must never release the pin — the fan-out
+        // still routes Local using the (unchanged) stored lease.
+        lease = RaceLease(7, 10_000L)
+        now = 1_000L
+        manifest = null
+        val result = buildCoordinator().refreshAll(7)
+        assertEquals(RefreshResult.Updated, result)
+        assertEquals(RaceLease(7, 10_000L), lease)
+        assertTrue(calls.contains("refreshTeams(7,Local)"))
+        assertTrue(calls.none { it == "refreshTeams(7,Cloud)" })
+    }
+
     // endregion
 
     // region combineRefreshResults
@@ -287,6 +345,11 @@ class SyncCoordinatorTest {
             combineRefreshResults(listOf(RefreshResult.NotModified, RefreshResult.Skipped)),
         )
         assertEquals(RefreshResult.Skipped, combineRefreshResults(listOf(RefreshResult.Skipped)))
+    }
+
+    @Test
+    fun combineRefreshResults_emptyList_isVacuouslySkipped() {
+        assertEquals(RefreshResult.Skipped, combineRefreshResults(emptyList()))
     }
 
     // endregion

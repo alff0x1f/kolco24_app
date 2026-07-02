@@ -3,6 +3,8 @@ package ru.kolco24.kolco24.data.sync
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.data.SyncSource
 import ru.kolco24.kolco24.data.api.dto.SyncManifestDto
@@ -18,8 +20,12 @@ import ru.kolco24.kolco24.data.todayIso
  * Toast-facing outcome of [SyncCoordinator.enterLocalMode]/[SyncCoordinator.exitLocalMode].
  */
 sealed interface LocalModeOutcome {
-    /** Switch-on pinned [expiresAtMs]; the four resources were refreshed from LAN. */
-    data class PinnedUntil(val expiresAtMs: Long) : LocalModeOutcome
+    /**
+     * Switch-on pinned [expiresAtMs]; the four resources were refreshed from LAN. [dataStale] is
+     * true when the pin itself succeeded but the LAN fan-out did not (e.g. a transient Wi-Fi blip
+     * right after a successful sync-manifest probe) — the toast must not claim fresh data landed.
+     */
+    data class PinnedUntil(val expiresAtMs: Long, val dataStale: Boolean = false) : LocalModeOutcome
 
     /** LAN reachable but disclaimed authority (`data_source == "cloud"`) — refreshed from cloud instead. */
     data object LocalNoPin : LocalModeOutcome
@@ -54,6 +60,10 @@ private fun severity(result: RefreshResult): Int = when (result) {
 fun combineRefreshResults(results: List<RefreshResult>): RefreshResult =
     results.maxByOrNull(::severity) ?: RefreshResult.Skipped
 
+/** A fan-out counts as having actually landed data (or a legitimate no-op) at these severities. */
+private val FAN_OUT_SUCCESS_RESULTS =
+    setOf(RefreshResult.Updated, RefreshResult.NotModified, RefreshResult.Skipped)
+
 /**
  * Thin orchestration for the local-mode switch and its pin-aware auto-syncs; the lease-decision
  * logic itself lives in the pure `data/lease/RaceLease.kt` ([applySyncResponse], [isPinned]) — this
@@ -84,6 +94,13 @@ class SyncCoordinator(
     private val refreshMemberTags: suspend (Int, SyncSource) -> RefreshResult,
 ) {
 
+    // Serializes every lease read-decide-write sequence below: `probeLocalAndRenew` (fired from
+    // Launch B on every team switch and from a pinned pull-to-refresh) and the user-driven
+    // `enterLocalMode`/`exitLocalMode` all run on `applicationScope` with no other ordering
+    // guarantee — without this, a probe's stale in-flight `Renew` could land after an explicit
+    // `exitLocalMode()` and silently re-pin a race the user just unpinned (or the symmetric case).
+    private val leaseMutex = Mutex()
+
     /** `Local` when [raceId] is currently pinned, else `Cloud`. */
     fun sourceFor(raceId: Int): SyncSource =
         if (isPinned(readLease(), raceId, nowMs())) SyncSource.Local else SyncSource.Cloud
@@ -93,14 +110,14 @@ class SyncCoordinator(
      * stored lease (renew / clear on handback / keep on error). Used at the three probe points —
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
-    suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
+    suspend fun probeLocalAndRenew(raceId: Int): LeaseAction = leaseMutex.withLock {
         val action = applySyncResponse(fetchSync(raceId), raceId, nowMs())
         when (action) {
             is LeaseAction.Renew -> writeLease(action.lease)
             LeaseAction.Clear -> writeLease(null)
             LeaseAction.Keep -> {}
         }
-        return action
+        action
     }
 
     /**
@@ -109,15 +126,30 @@ class SyncCoordinator(
      * refreshes from LAN, or (manifest reachable but not `local`, incl. an unrecognized
      * `data_source`) refreshes from cloud without pinning, or — LAN unreachable — writes nothing.
      */
-    suspend fun enterLocalMode(): LocalModeOutcome {
-        val raceId = resolveRaceId(refreshFromLocalIfEmpty = true) ?: return LocalModeOutcome.NoRace
+    suspend fun enterLocalMode(): LocalModeOutcome = leaseMutex.withLock {
+        val selected = selectedRaceId()
+        var races = cachedRaces()
+        if (selected == null && races.isEmpty()) {
+            // Fresh install / empty cache: the LAN pull itself failing (not just "no races in it")
+            // must surface as LocalUnreachable, not the generic NoRace — this is the exact
+            // no-internet-fresh-install scenario the feature targets.
+            val racesResult = refreshRaces(SyncSource.Local)
+            races = cachedRaces()
+            if (races.isEmpty() && racesResult != RefreshResult.Updated && racesResult != RefreshResult.NotModified) {
+                return@withLock LocalModeOutcome.LocalUnreachable
+            }
+        }
+        val raceId = selected ?: nearestRaceId(races, todayIso()) ?: return@withLock LocalModeOutcome.NoRace
         val manifest = fetchSync(raceId)
-        return when (val action = applySyncResponse(manifest, raceId, nowMs())) {
+        when (val action = applySyncResponse(manifest, raceId, nowMs())) {
             is LeaseAction.Renew -> {
                 if (isPinned(action.lease, raceId, nowMs())) {
                     writeLease(action.lease)
-                    fanOut(raceId, SyncSource.Local)
-                    LocalModeOutcome.PinnedUntil(action.lease.expiresAtMs)
+                    val results = fanOut(raceId, SyncSource.Local)
+                    // The pin can succeed while the LAN fan-out itself fails (transient blip right
+                    // after a successful manifest probe) — the toast must not claim fresh data.
+                    val dataStale = combineRefreshResults(results) !in FAN_OUT_SUCCESS_RESULTS
+                    LocalModeOutcome.PinnedUntil(action.lease.expiresAtMs, dataStale)
                 } else {
                     // The server's own lease was already expired on arrival — never surface a
                     // "pinned" outcome that isn't actually active; fall back like the no-pin branch.
@@ -144,14 +176,16 @@ class SyncCoordinator(
     }
 
     /** Switch-off flow: clears the lease unconditionally, then refreshes from cloud in the background. */
-    suspend fun exitLocalMode(): LocalModeOutcome {
+    suspend fun exitLocalMode(): LocalModeOutcome = leaseMutex.withLock {
         writeLease(null)
-        val raceId = resolveRaceId(refreshFromLocalIfEmpty = false)
+        val raceId = selectedRaceId() ?: nearestRaceId(cachedRaces(), todayIso())
         val results = if (raceId != null) fanOut(raceId, SyncSource.Cloud) else listOf(refreshRaces(SyncSource.Cloud))
-        return if (combineRefreshResults(results) == RefreshResult.Offline) {
-            LocalModeOutcome.Offline
-        } else {
+        // A 403/5xx must not be reported as success alongside a genuine offline drop — only a
+        // real update/no-change/guard-skip counts as `CloudUpdated`.
+        if (combineRefreshResults(results) in FAN_OUT_SUCCESS_RESULTS) {
             LocalModeOutcome.CloudUpdated
+        } else {
+            LocalModeOutcome.Offline
         }
     }
 
@@ -164,21 +198,6 @@ class SyncCoordinator(
             probeLocalAndRenew(raceId)
         }
         return combineRefreshResults(fanOut(raceId, sourceFor(raceId)))
-    }
-
-    /**
-     * Resolves the race to act on: the selected team's race, else the nearest current race in the
-     * cache. When [refreshFromLocalIfEmpty] and the cache is empty (a fresh install with nothing
-     * synced yet), pulls the race list from LAN once and recomputes before giving up.
-     */
-    private suspend fun resolveRaceId(refreshFromLocalIfEmpty: Boolean): Int? {
-        selectedRaceId()?.let { return it }
-        var races = cachedRaces()
-        if (races.isEmpty() && refreshFromLocalIfEmpty) {
-            refreshRaces(SyncSource.Local)
-            races = cachedRaces()
-        }
-        return nearestRaceId(races, todayIso())
     }
 
     private suspend fun fanOut(raceId: Int, source: SyncSource): List<RefreshResult> = supervisorScope {

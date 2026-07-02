@@ -63,6 +63,15 @@ class RaceRepository(
         val etag = syncMetaDao.getEtag(originKey, RESOURCE_RACES)
         return when (val result = client.fetchRaces(etag)) {
             is FetchResult.Success -> {
+                // The two origins share this table: a stale ETag on the origin not just written
+                // could earn a 304 on the next switch-back and skip re-persisting its own data.
+                // Cleared **before** the replace (not after) so a crash mid-write can't strand a
+                // stale other-origin ETag masking the fact that this write never landed.
+                val otherOriginKey = when (source) {
+                    SyncSource.Cloud -> localOrigin
+                    SyncSource.Local -> origin
+                }
+                syncMetaDao.deleteEtag(otherOriginKey, RESOURCE_RACES)
                 raceDao.replaceAll(result.data.map { it.toEntity() })
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(originKey, RESOURCE_RACES, result.etag))

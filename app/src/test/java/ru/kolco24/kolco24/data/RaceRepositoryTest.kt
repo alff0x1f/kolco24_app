@@ -182,7 +182,7 @@ class RaceRepositoryTest {
 
         repository.refreshRaces()
 
-        assertEquals(listOf("replaceAll", "upsertEtag"), callLog)
+        assertEquals(listOf("deleteEtag", "replaceAll", "upsertEtag"), callLog)
     }
 
     @Test
@@ -200,6 +200,35 @@ class RaceRepositoryTest {
         assertNull("cloud origin must stay untouched", syncMetaDao.getEtag(origin, "races"))
         assertEquals(0, server.requestCount)
         assertEquals(1, localServer.requestCount)
+    }
+
+    @Test
+    fun localSource_invalidatesStaleCloudEtag() = runTest {
+        // A prior cloud fetch left an ETag; switching to Local must drop it so a later
+        // switch-back to Cloud can't earn a 304 against rows this Local fetch just overwrote.
+        syncMetaDao.upsert(SyncMetaEntity(origin, "races", "\"cloud-v1\""))
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"")
+                .setBody(racesJson(8, "Кольцо24 (LAN)")),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces(SyncSource.Local))
+
+        assertNull(syncMetaDao.getEtag(origin, "races"))
+        assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "races"))
+    }
+
+    @Test
+    fun cloudSource_invalidatesStaleLocalEtag() = runTest {
+        syncMetaDao.upsert(SyncMetaEntity(localOrigin, "races", "\"local-v1\""))
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(racesJson(8, "Кольцо24")),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        assertNull(syncMetaDao.getEtag(localOrigin, "races"))
+        assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "races"))
     }
 
     private fun entity(id: Int, name: String) = RaceEntity(
@@ -247,5 +276,10 @@ private class FakeSyncMetaDao(private val callLog: MutableList<String> = mutable
     override suspend fun upsert(meta: SyncMetaEntity) {
         store[meta.origin to meta.resource] = meta.etag
         callLog.add("upsertEtag")
+    }
+
+    override suspend fun deleteEtag(origin: String, resource: String) {
+        store.remove(origin to resource)
+        callLog.add("deleteEtag")
     }
 }

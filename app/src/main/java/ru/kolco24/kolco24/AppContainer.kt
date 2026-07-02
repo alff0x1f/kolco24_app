@@ -171,6 +171,17 @@ class AppContainer(private val context: Context) {
     val raceLease: MutableStateFlow<RaceLease?> = MutableStateFlow(raceLeaseStore.read())
 
     /**
+     * `true` while the Settings local-mode switch's `enterLocalMode`/`exitLocalMode` call is in
+     * flight on [applicationScope]. Lives here (not `rememberSaveable` in the composition) for the
+     * same reason as [provisioningState]: `enterLocalMode`/`exitLocalMode` can take several seconds
+     * (3 s LAN timeouts), and a composition-scoped flag's `MutableState` instance is recreated on
+     * activity rotation — the in-flight coroutine's closure would then write `false` back to the
+     * orphaned old instance, leaving the new composition's switch stuck busy forever. A process
+     * restart naturally resets this flag to `false` since [AppContainer] itself is reconstructed.
+     */
+    val localModeBusy: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+    /**
      * Trusted time when the [TrustedClock] anchor is warm, wall clock otherwise — the time source
      * for all lease math (renew/expiry checks). Worst case (a wall-clock change with no anchor yet)
      * shifts auto-expiry; the heartbeat probe keeps correcting it on every successful LAN contact.
@@ -443,11 +454,14 @@ class AppContainer(private val context: Context) {
      * checkpoints) plus the `sync_meta` ETags, so the next refresh re-fetches everything from
      * scratch. Also deletes every captured photo-mark frame under `filesDir/marks/` (the mark rows
      * are gone, so the frames would otherwise be orphaned on disk — there is no per-mark delete UI).
-     * Blocking; call from a background dispatcher.
+     * Also clears any active local-mode race lease, so the Settings switch doesn't keep pointing at
+     * a race whose data was just wiped. Blocking; call from a background dispatcher.
      */
     fun clearDatabase() {
         database.clearAllTables()
         PhotoStorage.marksRoot(context.filesDir).deleteRecursively()
+        raceLease.value = null
+        raceLeaseStore.clear()
     }
 
     /**

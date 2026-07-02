@@ -39,7 +39,9 @@ private fun legendResource(raceId: Int): String = "race/$raceId/legend"
  * @param localOrigin the LAN client's base URL — the ETag partition key for LAN fetches.
  * @param isRacePinned `true` when [raceId] is currently pinned to LAN — a [SyncSource.Cloud]
  *   refresh for a pinned race must not persist (a stale cloud mirror must not clobber fresher
- *   local rows).
+ *   local rows), and symmetrically a [SyncSource.Local] refresh for a race that is **not**
+ *   pinned must not persist either (a stale LAN response lingering after the switch turned off
+ *   must not clobber a fresher cloud refresh).
  */
 class LegendRepository(
     private val apiClient: ApiClient,
@@ -84,12 +86,15 @@ class LegendRepository(
      * fresh data with a stale ETag, so the next refresh gets another `200` and self-heals.
      *
      * Guarded against clobbering a pinned race: a [SyncSource.Cloud] call for a currently-pinned
-     * [raceId] returns [RefreshResult.Skipped] **before** hitting the network, and the guard is
-     * re-checked before persisting a `200` (an in-flight cloud response that started before the pin
-     * landed must not overwrite fresher local rows).
+     * [raceId], and symmetrically a [SyncSource.Local] call for a [raceId] **not** (or no longer)
+     * pinned, returns [RefreshResult.Skipped] **before** hitting the network, and the guard is
+     * re-checked before persisting a `200` (an in-flight response for the source that just lost
+     * relevance — e.g. the switch flipped mid-flight — must not overwrite fresher rows from the
+     * other source).
      */
     suspend fun refreshLegend(raceId: Int, source: SyncSource = SyncSource.Cloud): RefreshResult {
         if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
+        if (source == SyncSource.Local && !isRacePinned(raceId)) return RefreshResult.Skipped
         val (client, originKey) = when (source) {
             SyncSource.Cloud -> apiClient to origin
             SyncSource.Local -> localApiClient to localOrigin
@@ -99,7 +104,17 @@ class LegendRepository(
         return when (val result = client.fetchLegend(raceId, etag)) {
             is FetchResult.Success -> {
                 if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
+                if (source == SyncSource.Local && !isRacePinned(raceId)) return RefreshResult.Skipped
                 val response = result.data
+                // The two origins share this table: a stale ETag on the origin not just written
+                // could earn a 304 on the next switch-back and skip re-persisting its own data.
+                // Cleared **before** the replace (not after) so a crash mid-write can't strand a
+                // stale other-origin ETag masking the fact that this write never landed.
+                val otherOriginKey = when (source) {
+                    SyncSource.Cloud -> localOrigin
+                    SyncSource.Local -> origin
+                }
+                syncMetaDao.deleteEtag(otherOriginKey, resource)
                 checkpointDao.replaceAllForRace(
                     raceId = raceId,
                     checkpoints = response.checkpoints.map { it.toEntity(raceId) },

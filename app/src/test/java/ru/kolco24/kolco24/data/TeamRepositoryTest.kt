@@ -34,6 +34,7 @@ class TeamRepositoryTest {
     private lateinit var selectedTeamDao: FakeSelectedTeamDao
     private lateinit var syncMetaDao: FakeTeamsSyncMetaDao
     private lateinit var repository: TeamRepository
+    private lateinit var pinnedRepository: TeamRepository
     private lateinit var origin: String
     private lateinit var localOrigin: String
     private lateinit var apiClient: ApiClient
@@ -92,6 +93,12 @@ class TeamRepositoryTest {
             apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
             localApiClient, localOrigin, isRacePinned = { false },
         )
+        // A SyncSource.Local call is only ever legitimately made while pinned (see the
+        // Local-not-pinned guard in refreshTeams) — Local-source tests use this instance.
+        pinnedRepository = TeamRepository(
+            apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { true },
+        )
     }
 
     @After
@@ -138,7 +145,7 @@ class TeamRepositoryTest {
 
         repository.refreshTeams(8)
 
-        assertEquals(listOf("replaceAllForRace", "upsertEtag"), callLog)
+        assertEquals(listOf("deleteEtag", "replaceAllForRace", "upsertEtag"), callLog)
     }
 
     @Test
@@ -149,7 +156,7 @@ class TeamRepositoryTest {
 
         assertEquals(1, repository.teamsForRace(8).first().size)
         assertNull(syncMetaDao.getEtag(origin, "race/8/teams"))
-        assertEquals(listOf("replaceAllForRace"), callLog)
+        assertEquals(listOf("deleteEtag", "replaceAllForRace"), callLog)
     }
 
     @Test
@@ -247,13 +254,41 @@ class TeamRepositoryTest {
             MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"").setBody(teamsJson()),
         )
 
-        assertEquals(RefreshResult.Updated, repository.refreshTeams(8, SyncSource.Local))
+        assertEquals(RefreshResult.Updated, pinnedRepository.refreshTeams(8, SyncSource.Local))
 
-        assertEquals(1, repository.teamsForRace(8).first().size)
+        assertEquals(1, pinnedRepository.teamsForRace(8).first().size)
         assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "race/8/teams"))
         assertNull("cloud origin must stay untouched", syncMetaDao.getEtag(origin, "race/8/teams"))
         assertEquals(0, server.requestCount)
         assertEquals(1, localServer.requestCount)
+    }
+
+    @Test
+    fun localSource_invalidatesStaleCloudEtag() = runTest {
+        // A prior cloud fetch left an ETag; switching to Local must drop it so a later
+        // switch-back to Cloud can't earn a 304 against rows this Local fetch just overwrote.
+        syncMetaDao.upsert(SyncMetaEntity(origin, "race/8/teams", "\"cloud-v1\""))
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"").setBody(teamsJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, pinnedRepository.refreshTeams(8, SyncSource.Local))
+
+        assertNull(syncMetaDao.getEtag(origin, "race/8/teams"))
+        assertEquals("\"local-v1\"", syncMetaDao.getEtag(localOrigin, "race/8/teams"))
+    }
+
+    @Test
+    fun cloudSource_invalidatesStaleLocalEtag() = runTest {
+        syncMetaDao.upsert(SyncMetaEntity(localOrigin, "race/8/teams", "\"local-v1\""))
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(teamsJson()),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshTeams(8))
+
+        assertNull(syncMetaDao.getEtag(localOrigin, "race/8/teams"))
+        assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/teams"))
     }
 
     @Test
@@ -289,6 +324,44 @@ class TeamRepositoryTest {
 
         assertTrue("in-flight response must not persist once pinned", pinnedRepo.teamsForRace(8).first().isEmpty())
         assertNull(syncMetaDao.getEtag(origin, "race/8/teams"))
+    }
+
+    @Test
+    fun localSource_unpinnedRace_skipsWithoutTouchingNetworkOrData() = runTest {
+        teamDao.setTeams(listOf(teamEntity(201, raceId = 8, name = "Cached")))
+        val unpinnedRepo = TeamRepository(
+            apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { false },
+        )
+
+        assertEquals(RefreshResult.Skipped, unpinnedRepo.refreshTeams(8, SyncSource.Local))
+
+        assertEquals(0, localServer.requestCount)
+        val teams = unpinnedRepo.teamsForRace(8).first()
+        assertEquals(1, teams.size)
+        assertEquals("Cached", teams[0].teamname)
+    }
+
+    @Test
+    fun localSource_unpinDisappearingMidFlight_doesNotPersist() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"local-v1\"").setBody(teamsJson()),
+        )
+        var checks = 0
+        // true on the entry guard, false on the pre-persist re-check — simulates the switch
+        // turning local mode off (e.g. via exitLocalMode) while the LAN fetch was in flight.
+        val unpinningRepo = TeamRepository(
+            apiClient, teamDao, selectedTeamDao, syncMetaDao, origin,
+            localApiClient, localOrigin, isRacePinned = { checks++ == 0 },
+        )
+
+        assertEquals(RefreshResult.Skipped, unpinningRepo.refreshTeams(8, SyncSource.Local))
+
+        assertTrue(
+            "in-flight LAN response must not persist once unpinned",
+            unpinningRepo.teamsForRace(8).first().isEmpty(),
+        )
+        assertNull(syncMetaDao.getEtag(localOrigin, "race/8/teams"))
     }
 
     @Test
@@ -388,5 +461,10 @@ private class FakeTeamsSyncMetaDao(private val callLog: MutableList<String>) : S
     override suspend fun upsert(meta: SyncMetaEntity) {
         store[meta.origin to meta.resource] = meta.etag
         callLog.add("upsertEtag")
+    }
+
+    override suspend fun deleteEtag(origin: String, resource: String) {
+        store.remove(origin to resource)
+        callLog.add("deleteEtag")
     }
 }

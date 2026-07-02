@@ -543,9 +543,13 @@ private fun Kolco24AppRoot(
     val localModeNow = container.trustedClock.trusted() ?: System.currentTimeMillis()
     val localMode = localModeRaceId != null && isPinned(raceLease, localModeRaceId, localModeNow)
     val localModeExpiresAtMs = raceLease?.expiresAtMs?.takeIf { localMode }
-    var localModeBusy by remember { mutableStateOf(false) }
+    // App-scoped (not rememberSaveable): enterLocalMode/exitLocalMode run on applicationScope and can
+    // take several seconds (3 s LAN timeouts). A composition-scoped flag's MutableState instance is
+    // recreated on activity rotation, so the in-flight coroutine's closure would write `false` back to
+    // the orphaned old instance, leaving the switch stuck busy forever — see AppContainer.localModeBusy.
+    val localModeBusy by container.localModeBusy.collectAsState()
     val onLocalModeChange: (Boolean) -> Unit = { turnOn ->
-        localModeBusy = true
+        container.localModeBusy.value = true
         container.applicationScope.launch {
             val outcome = if (turnOn) {
                 container.syncCoordinator.enterLocalMode()
@@ -553,11 +557,13 @@ private fun Kolco24AppRoot(
                 container.syncCoordinator.exitLocalMode()
             }
             val message = when (outcome) {
-                is LocalModeOutcome.PinnedUntil ->
-                    "Локальный режим до ${
+                is LocalModeOutcome.PinnedUntil -> {
+                    val until = "Локальный режим до ${
                         java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
                             .format(java.util.Date(outcome.expiresAtMs))
                     }"
+                    if (outcome.dataStale) "$until — данные не обновлены" else until
+                }
                 LocalModeOutcome.LocalNoPin -> "Локальный режим не активен — данные обновлены из интернета"
                 LocalModeOutcome.LocalUnreachable -> "Локальный сервер недоступен"
                 LocalModeOutcome.CloudUpdated -> "Обновлено из интернета"
@@ -565,7 +571,7 @@ private fun Kolco24AppRoot(
                 LocalModeOutcome.NoRace -> "Нет данных о гонках"
             }
             withContext(Dispatchers.Main) {
-                localModeBusy = false
+                container.localModeBusy.value = false
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
         }
@@ -1560,7 +1566,7 @@ private fun Kolco24AppRoot(
                 teamsLoaded = activePickerTeamsLoaded,
                 categories = activePickerCategories,
                 selectedTeamId = selectedTeamId,
-                onRefresh = teamRepo::refreshTeams,
+                onRefresh = { raceId -> teamRepo.refreshTeams(raceId, container.syncCoordinator.sourceFor(raceId)) },
                 onBack = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
                 onChangeRace = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
                 onTeamTapped = { confirmTeamId = it },
@@ -1632,7 +1638,7 @@ private fun Kolco24AppRoot(
                                 // Pool is empty and not yet confirmed in this composition: check the
                                 // durable sync_meta record first (covers activity recreation and cases
                                 // where the startup warm-up synced an empty pool before the sheet opened).
-                                if (memberTagsRepo.hasBeenSynced(activeRaceId)) {
+                                if (memberTagsRepo.hasBeenSynced(activeRaceId, container.syncCoordinator.sourceFor(activeRaceId))) {
                                     // Pool is known-synced but empty; cache the flag and fall through so
                                     // the scan produces NotInPool rather than PoolNotReady.
                                     hasSyncedPool[0] = true
@@ -1642,7 +1648,10 @@ private fun Kolco24AppRoot(
                                     // (a still-empty pool will produce NotInPool on this and all subsequent
                                     // scans).
                                     sheetState = BindSheetState.PoolNotReady
-                                    val refreshResult = memberTagsRepo.refreshMemberTags(activeRaceId)
+                                    val refreshResult = memberTagsRepo.refreshMemberTags(
+                                        activeRaceId,
+                                        container.syncCoordinator.sourceFor(activeRaceId),
+                                    )
                                     if (refreshResult == RefreshResult.Offline ||
                                         refreshResult is RefreshResult.HttpError ||
                                         refreshResult == RefreshResult.Forbidden
