@@ -96,9 +96,9 @@
 - [x] full check: `./gradlew lintDebug testDebugUnitTest` — BUILD SUCCESSFUL
 
 ### Task 5: [Final] Update documentation
-- [ ] CLAUDE.md — MainActivity bullet (Cross-file wiring): add the 5-min `repeatOnLifecycle(STARTED)` retry loop next to the existing 5 s clock-ticker mention, and the `uploadRefreshing` PTR host wiring
-- [ ] CLAUDE.md — `ui/upload/UploadScreen.kt` bullet: note the hoisted `refreshing`/`onRefresh` + `RefreshableList` wrap
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md — MainActivity bullet (Cross-file wiring): add the 5-min `repeatOnLifecycle(STARTED)` retry loop next to the existing 5 s clock-ticker mention, and the `uploadRefreshing` PTR host wiring
+- [x] CLAUDE.md — `ui/upload/UploadScreen.kt` bullet: note the hoisted `refreshing`/`onRefresh` + `RefreshableList` wrap
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual on-device verification:*
