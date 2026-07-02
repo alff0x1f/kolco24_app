@@ -971,6 +971,8 @@ private fun LightboxPage(file: File, mark: Mark?, modifier: Modifier = Modifier)
                     mark = mark,
                     color = tileFill(mark.color, isDarkScheme()).fill,
                     modifier = Modifier.align(Alignment.TopStart),
+                    // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
+                    scale = 1.7f,
                 )
             }
         }
@@ -1114,7 +1116,9 @@ private fun PhotoCameraChip(color: Color, modifier: Modifier = Modifier) {
  * coincides exactly with the tile's corner. White, bold, mono, tight tracking per spec.
  */
 @Composable
-private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier) {
+private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier, scale: Float = 1f) {
+    // [scale] grows the whole chip in proportion (font + tracking + padding + corner) so the fullscreen
+    // lightbox can render it larger than the thumbnail tile without the token looking lost on the photo.
     Text(
         text = tokenAnnotated(mark, Color.White, hyphenAlpha = 0.55f),
         color = Color.White,
@@ -1122,13 +1126,13 @@ private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier)
         style = TextStyle(
             fontFamily = RobotoMono,
             fontWeight = FontWeight.Bold,
-            fontSize = 14.5.sp,
-            letterSpacing = (-0.6).sp,
+            fontSize = 14.5.sp * scale,
+            letterSpacing = (-0.6).sp * scale,
             platformStyle = PlatformTextStyle(includeFontPadding = false),
         ),
         modifier = modifier
-            .background(color, RoundedCornerShape(bottomEnd = 9.dp))
-            .padding(horizontal = 7.dp, vertical = 4.dp),
+            .background(color, RoundedCornerShape(bottomEnd = 9.dp * scale))
+            .padding(horizontal = 7.dp * scale, vertical = 4.dp * scale),
     )
 }
 
