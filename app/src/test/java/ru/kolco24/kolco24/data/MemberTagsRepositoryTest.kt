@@ -4,6 +4,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -238,6 +241,72 @@ class MemberTagsRepositoryTest {
     }
 
     @Test
+    fun observeHasBeenSynced_falseBeforeFirstSync() = runTest {
+        assertFalse(repository.observeHasBeenSynced(8).first())
+    }
+
+    @Test
+    fun observeHasBeenSynced_trueAfterSuccessfulSyncWithEtag() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(memberTagsJson()),
+        )
+        repository.refreshMemberTags(8)
+        assertTrue(repository.observeHasBeenSynced(8).first())
+    }
+
+    @Test
+    fun observeHasBeenSynced_trueAfterSuccessfulSyncWithoutEtag() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(memberTagsJson()))
+        repository.refreshMemberTags(8)
+        assertTrue(repository.observeHasBeenSynced(8).first())
+    }
+
+    @Test
+    fun observeHasBeenSynced_scoped_toRace() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"a\"").setBody(memberTagsJson()),
+        )
+        repository.refreshMemberTags(8)
+        assertTrue(repository.observeHasBeenSynced(8).first())
+        assertFalse(repository.observeHasBeenSynced(9).first())
+    }
+
+    @Test
+    fun observeHasBeenSynced_local_readsLocalOriginNotCloud() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(memberTagsJson()),
+        )
+        pinnedRepository.refreshMemberTags(8, SyncSource.Local)
+
+        assertTrue(repository.observeHasBeenSynced(8, SyncSource.Local).first())
+        assertFalse(
+            "a Local sync must not be visible under the Cloud origin",
+            repository.observeHasBeenSynced(8).first(),
+        )
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun observeHasBeenSynced_emitsOnFetchCompletingAfterSubscriptionStarts() = runTest {
+        // Regression test for the bug this Flow was introduced to fix: a collector that starts
+        // observing before a fetch completes (e.g. JudgeScanScreen mounting while a warm-up sync
+        // is still in flight) must see the flip to `true` on that same subscription, without
+        // re-subscribing.
+        val emissions = mutableListOf<Boolean>()
+        backgroundScope.launch { repository.observeHasBeenSynced(8).toList(emissions) }
+        runCurrent()
+        assertEquals(listOf(false), emissions)
+
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(memberTagsJson()),
+        )
+        repository.refreshMemberTags(8)
+        runCurrent()
+
+        assertEquals(listOf(false, true), emissions)
+    }
+
+    @Test
     fun findByUid_resolvesAgainstThatRacePool() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(memberTagsJson(listOf(101 to "04A2B3C4D5E680"))),
@@ -459,16 +528,24 @@ private class FakeMemberTagDao(private val callLog: MutableList<String>) : Membe
 
 private class FakeMemberTagsSyncMetaDao(private val callLog: MutableList<String>) : SyncMetaDao {
     private val store = mutableMapOf<Pair<String, String>, String>()
+    // Bumped on every write so observeEtagsExist re-evaluates for already-subscribed collectors,
+    // mirroring Room's invalidation-tracking behavior on the real Flow.
+    private val version = MutableStateFlow(0)
 
     override suspend fun getEtag(origin: String, resource: String): String? = store[origin to resource]
+
+    override fun observeEtagsExist(origin: String, resource1: String, resource2: String): Flow<Boolean> =
+        version.map { store.containsKey(origin to resource1) || store.containsKey(origin to resource2) }
 
     override suspend fun upsert(meta: SyncMetaEntity) {
         store[meta.origin to meta.resource] = meta.etag
         callLog.add("upsertEtag")
+        version.value++
     }
 
     override suspend fun deleteEtag(origin: String, resource: String) {
         store.remove(origin to resource)
         callLog.add("deleteEtag")
+        version.value++
     }
 }

@@ -3,21 +3,11 @@ package ru.kolco24.kolco24.data.db
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface JudgeScanDao {
     @Insert
     suspend fun insert(scan: JudgeScanEntity)
-
-    // Recent-list feed for one admin sub-page — scoped by eventType so "Старт" and "Финиш" never
-    // cross-show each other's piks. Ordered newest-first by the same trusted-then-wall precedence
-    // as the upload queries below.
-    @Query(
-        "SELECT * FROM judge_scans WHERE raceId = :raceId AND eventType = :eventType " +
-            "ORDER BY COALESCE(trustedTakenAt, takenAt) DESC, id DESC LIMIT :limit"
-    )
-    fun observeRecent(raceId: Int, eventType: String, limit: Int): Flow<List<JudgeScanEntity>>
 
     // Explicit `= :raceId` — a bare `WHERE raceId` reads the column as a truthy expression and
     // breaks the scope filter.

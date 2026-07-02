@@ -70,6 +70,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.MainActivity
+import ru.kolco24.kolco24.data.SyncSource
+import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.time.ClockStatus
@@ -96,9 +98,16 @@ import ru.kolco24.kolco24.ui.theme.Tertiary
  *
  * `poolReady` gates both the not-in-pool [readChipCode] transceive and the write: it requires **both**
  * the pool Flow's first emission (`dataReady`, mirrors `CheckMemberChipScreen`'s gate) **and** a
- * confirmed [ru.kolco24.kolco24.data.MemberTagsRepository.hasBeenSynced] marker (`everSynced`) — a
- * synced-but-empty pool must not be confused with a never-synced one. `everSynced == false` (confirmed,
- * not merely unresolved) renders a «Синхронизируйте гонку» plate.
+ * confirmed [ru.kolco24.kolco24.data.MemberTagsRepository.observeHasBeenSynced] marker (`everSynced`) —
+ * a synced-but-empty pool must not be confused with a never-synced one. `everSynced == false` (confirmed,
+ * not merely unresolved) renders a «Синхронизируйте гонку» plate. `everSynced` is Flow-backed (not a
+ * one-shot check) so a fetch completing after this overlay opened — or from another screen while it
+ * stays open — flips it without a close/reopen. The origin it watches (`syncSource`, Cloud vs. Local) is
+ * itself re-derived from the live `raceLease` StateFlow every recomposition (not captured once from
+ * `SyncCoordinator.sourceFor` at mount) — the Settings local-mode switch can pin/unpin this race in the
+ * background while this screen stays open (its toggle isn't gated on the admin overlays), and pinning
+ * deletes the other origin's sync_meta markers ([ru.kolco24.kolco24.data.MemberTagsRepository.refreshMemberTags]),
+ * so a stale captured source would watch the wrong (now-cleared) origin and get stuck on the sync plate.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -164,15 +173,22 @@ fun JudgeScanScreen(
         val dataReady = poolState != null
         val pool = poolState ?: emptyList()
 
+        // Which origin (Cloud vs. Local) to watch must itself be reactive: the local-mode switch on
+        // Settings can pin/unpin this race while this screen stays mounted (its toggle isn't gated on
+        // the admin/judge-scan overlays), so re-deriving from the live `raceLease` — not a one-shot
+        // `sourceFor(raceId)` captured at first composition — re-keys the `remember` below and
+        // resubscribes to the newly-relevant origin's sync_meta rows.
+        val raceLease by container.raceLease.collectAsState()
+        val syncSourceNow = container.trustedClock.trusted() ?: System.currentTimeMillis()
+        val syncSource = if (isPinned(raceLease, raceId, syncSourceNow)) SyncSource.Local else SyncSource.Cloud
+
         // Durable sync marker (survives an empty-but-synced pool): null = still checking, false =
-        // confirmed never synced, true = confirmed synced. Checked once per opened race.
-        var everSynced by remember(raceId) { mutableStateOf<Boolean?>(null) }
-        LaunchedEffect(raceId) {
-            everSynced = container.memberTagsRepository.hasBeenSynced(
-                raceId,
-                container.syncCoordinator.sourceFor(raceId),
-            )
-        }
+        // confirmed never synced, true = confirmed synced. Reactive — re-emits on every sync_meta
+        // write, so a fetch completing after this overlay opened (or from another screen) flips it
+        // without requiring a close/reopen.
+        val everSynced by remember(raceId, syncSource) {
+            container.memberTagsRepository.observeHasBeenSynced(raceId, syncSource)
+        }.collectAsState(initial = null)
         val poolReady = dataReady && everSynced == true
 
         var lastResult by remember(raceId) { mutableStateOf<JudgeScanResult?>(null) }

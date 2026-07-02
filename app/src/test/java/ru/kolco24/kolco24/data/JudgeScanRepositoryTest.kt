@@ -1,8 +1,6 @@
 package ru.kolco24.kolco24.data
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -162,13 +160,6 @@ private class FakeJudgeScanDao : JudgeScanDao {
     override suspend fun insert(scan: JudgeScanEntity) {
         rows.value = rows.value + scan
     }
-
-    override fun observeRecent(raceId: Int, eventType: String, limit: Int): Flow<List<JudgeScanEntity>> =
-        rows.map { list ->
-            list.filter { it.raceId == raceId && it.eventType == eventType }
-                .sortedWith(compareByDescending { it.trustedTakenAt ?: it.takenAt })
-                .take(limit)
-        }
 
     override suspend fun unuploadedLocal(raceId: Int, limit: Int): List<JudgeScanEntity> =
         rows.value.filter { it.raceId == raceId && !it.uploadedLocal }

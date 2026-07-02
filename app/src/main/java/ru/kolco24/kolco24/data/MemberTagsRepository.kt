@@ -76,6 +76,23 @@ class MemberTagsRepository(
     }
 
     /**
+     * Reactive twin of [hasBeenSynced] — emits a fresh value on every successful [refreshMemberTags]
+     * fetch (own or from another screen/warm-up), so a UI observing this Flow doesn't get stuck on a
+     * stale `false` read while a fetch is still in flight when it starts observing.
+     */
+    fun observeHasBeenSynced(raceId: Int, source: SyncSource = SyncSource.Cloud): Flow<Boolean> {
+        val originKey = when (source) {
+            SyncSource.Cloud -> origin
+            SyncSource.Local -> localOrigin
+        }
+        return syncMetaDao.observeEtagsExist(
+            originKey,
+            memberTagsResource(raceId),
+            memberTagsSyncedResource(raceId),
+        )
+    }
+
+    /**
      * Fetches `/app/race/<raceId>/member_tags/` with the stored ETag and, on `200`, replaces that
      * race's member-tag rows, then saves the new ETag. Like [LegendRepository.refreshLegend], the
      * data write and the ETag write are separate transactions on purpose: a crash between them leaves
