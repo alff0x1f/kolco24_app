@@ -71,6 +71,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -111,6 +112,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.marks.photoPaths
@@ -338,7 +340,7 @@ fun MarksScreen(
     // host anchors the global photo strip on the first of them.
     onOpenPhotoLightbox: (List<String>) -> Unit = {},
     // Checkpoint-take celebration hand-off from the host (fires only on the NFC completion auto-close
-    // path): scroll to bottom + last-tile pop-in + coin sound. Consumed by the Task 4 LaunchedEffect.
+    // path): scroll to bottom + last-tile pop-in + coin sound.
     celebration: Boolean = false,
     onCelebrationDone: () -> Unit = {},
     onCoinSound: () -> Unit = {},
@@ -367,13 +369,20 @@ fun MarksScreen(
             onCelebrationDone()
             return@LaunchedEffect
         }
-        // Render the last tile at scale 0 before scrolling so it never flashes at full size while
-        // still off-screen.
-        celebratingLast = true
-        celebrationScale.snapTo(0f)
-        celebrationAlpha.snapTo(0f)
-        val lastItemIndex = listState.layoutInfo.totalItemsCount - 1
-        if (lastItemIndex >= 0) {
+        // `onCelebrationDone` must fire even if this effect is cancelled mid-animation (e.g. the user
+        // taps another bottom-nav tab) — otherwise the host's one-shot flag stays stuck true and the
+        // whole celebration replays next time this screen recomposes.
+        try {
+            // Render the last tile at scale 0 before scrolling so it never flashes at full size while
+            // still off-screen.
+            celebratingLast = true
+            celebrationScale.snapTo(0f)
+            celebrationAlpha.snapTo(0f)
+            // On a fresh composition (e.g. this page wasn't pre-composed by the pager) the LazyColumn
+            // hasn't laid out yet and `totalItemsCount` reads 0 — await the first real measurement
+            // instead of racing it (tiles is non-empty here, so a measurement is guaranteed to land).
+            val totalItemsCount = snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+            val lastItemIndex = totalItemsCount - 1
             listState.animateScrollToItem(lastItemIndex)
             // `animateScrollToItem` only guarantees the item is *visible*, not that its bottom edge
             // clears the viewport — overshoot the remainder so a tall trailing item (e.g. the NFC
@@ -384,13 +393,14 @@ fun MarksScreen(
                     .coerceAtLeast(0)
                 if (overshoot > 0) listState.animateScrollBy(overshoot.toFloat())
             }
+            // The coin sound IS the pop — fire both together.
+            onCoinSound()
+            launch { celebrationAlpha.animateTo(1f, tween(durationMillis = 250)) }
+            celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            celebratingLast = false
+        } finally {
+            onCelebrationDone()
         }
-        // The coin sound IS the pop — fire both together.
-        onCoinSound()
-        launch { celebrationAlpha.animateTo(1f, tween(durationMillis = 250)) }
-        celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-        celebratingLast = false
-        onCelebrationDone()
     }
 
     Column(modifier = modifier.fillMaxSize()) {
