@@ -788,6 +788,12 @@ private fun Kolco24AppRoot(
     val checkpointCosts = remember(safeCheckpoints) {
         safeCheckpoints.mapNotNull { cp -> cp.cost?.let { cp.id to it } }.toMap()
     }
+    // Checkpoints still locked in the legend (cost hidden client-side): a complete take of one — a
+    // photo of a «сорвали метку» КП — contributes 0 to СУММА until reveal, which the «Отметки»
+    // hidden-КП notice surfaces.
+    val lockedCheckpointIds = remember(safeCheckpoints) {
+        safeCheckpoints.filter { it.locked }.mapTo(HashSet()) { it.id }
+    }
 
     // Flow overlay state — survives recreation (enum is Serializable; nullable Int saves out of the box).
     var teamFlowStep by rememberSaveable { mutableStateOf(TeamFlowStep.None) }
@@ -1176,6 +1182,7 @@ private fun Kolco24AppRoot(
                         marks = safeMarks,
                         checkpointColors = checkpointColors,
                         checkpointCosts = checkpointCosts,
+                        lockedCheckpointIds = lockedCheckpointIds,
                         totalKp = legendScoringCount,
                         totalCost = legendTotalCost,
                         nfcAvailable = nfcActiveForScan,

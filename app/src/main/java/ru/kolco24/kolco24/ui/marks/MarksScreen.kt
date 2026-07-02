@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -241,6 +242,21 @@ internal fun tokensLabel(tokens: List<String>, max: Int = 3): String =
     if (tokens.size <= max) tokens.joinToString(", ")
     else tokens.take(max).joinToString(", ") + ", …"
 
+/**
+ * Pure tokens of the **taken-but-still-hidden** checkpoints — `complete` takes whose checkpoint is
+ * still locked in the legend ([lockedIds]), so its cost is unknown client-side and the take contributes
+ * 0 to СУММА until reveal (the «сорвали метку» photo take of a locked КП; an NFC take reveals the КП
+ * as part of the scan, so it never lands here). Checkpoint-level (`distinctBy { checkpointId }`, like
+ * the metrics), oldest-first like the grid. The token is «?-NN» — the `?` sits exactly where the cost
+ * digit would in the tile's «стоимость-номер» grammar, saying "points unknown" in one character.
+ * Empty list = no notice.
+ */
+internal fun hiddenTakenTokens(marks: List<MarkEntity>, lockedIds: Set<Int>): List<String> =
+    marks.filter { it.complete && it.checkpointId in lockedIds }
+        .distinctBy { it.checkpointId }
+        .asReversed()
+        .map { "?-${it.checkpointNumber.toString().padStart(2, '0')}" }
+
 // Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
 // light & dark, echoing the physical checkpoint markers.
 private val PhotoTileTop = Color(0xFF1D242D)
@@ -289,6 +305,8 @@ fun MarksScreen(
     marks: List<MarkEntity> = emptyList(),
     checkpointColors: Map<Int, String> = emptyMap(),
     checkpointCosts: Map<Int, Int> = emptyMap(),
+    // Checkpoints still locked in the legend — feeds the hidden-КП notice (points unknown until reveal).
+    lockedCheckpointIds: Set<Int> = emptySet(),
     totalKp: Int = 0,
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
@@ -322,6 +340,7 @@ fun MarksScreen(
     val takenKp = takenPointCount(marks, costOf)
     val takenScore = totalScore(marks, costOf)
     val photoReview = photoReviewSummary(marks, costOf)
+    val hiddenTaken = hiddenTakenTokens(marks, lockedCheckpointIds)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -351,6 +370,14 @@ fun MarksScreen(
                     item("photo_review") {
                         PhotoReviewNotice(
                             summary = photoReview,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
+                        )
+                    }
+                }
+                if (hiddenTaken.isNotEmpty()) {
+                    item("hidden_taken") {
+                        HiddenKpNotice(
+                            tokens = hiddenTaken,
                             modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
                         )
                     }
@@ -826,6 +853,57 @@ private fun PhotoReviewNotice(summary: PhotoReviewSummary, modifier: Modifier = 
                     style = MaterialTheme.typography.bodySmall,
                     // The container's own on-color at reduced alpha keeps the secondary line quieter
                     // than the title while staying in the warning palette (no grey on red-tinted ground).
+                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The taken-but-hidden warning under the metrics (below [PhotoReviewNotice] when both show): the team
+ * scored a КП that is still locked in the legend, so its cost is unknown and СУММА is understating —
+ * «2 скрытых КП (?-04, ?-07) / Баллы засчитают после раскрытия КП». Same warning anatomy and palette
+ * as the photo card («duplicate, don't couple»), told apart by the [Lock][Icons.Filled.Lock] badge —
+ * the legend's own locked-row glyph. A hidden КП taken by photo shows in **both** cards (the photo one
+ * gates the points on judges, this one explains why they read as 0 today); both resolve on reveal, when
+ * the checkpoint leaves [hiddenTakenTokens]' locked set and its live cost lands in СУММА.
+ */
+@Composable
+private fun HiddenKpNotice(tokens: List<String>, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.error),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onError,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                val count = tokens.size
+                Text(
+                    text = "$count ${pluralRu(count, "скрытое", "скрытых", "скрытых")} КП " +
+                        "(${tokensLabel(tokens)})",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(
+                    text = "Баллы засчитают после раскрытия КП",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                 )
             }

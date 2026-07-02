@@ -448,6 +448,30 @@ class MarksMappingTest {
     }
 
     @Test
+    fun `hiddenTakenTokens masks distinct complete takes of locked checkpoints oldest-first`() {
+        // Input is newest-first; tokens come back oldest-first («?-NN» — the ? where the cost digit
+        // would sit). A repeat take of the same locked КП counts once; open КП never show.
+        val marks = listOf(
+            mark("a", point = 3, number = 7, cost = 0, method = "photo", takenAt = 4_000L), // newest
+            mark("b", point = 2, number = 5, cost = 3, method = "nfc", takenAt = 3_000L),   // open
+            mark("c", point = 3, number = 7, cost = 0, method = "photo", takenAt = 2_000L), // repeat
+            mark("d", point = 1, number = 4, cost = 0, method = "photo", takenAt = 1_000L), // oldest
+        )
+        assertEquals(listOf("?-04", "?-07"), hiddenTakenTokens(marks, lockedIds = setOf(1, 3)))
+    }
+
+    @Test
+    fun `hiddenTakenTokens skips incomplete takes and is empty when nothing locked is taken`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 4, cost = 0, method = "photo", complete = false),
+            mark("b", point = 2, number = 5, cost = 3, method = "nfc"),
+        )
+        assertTrue(hiddenTakenTokens(marks, lockedIds = setOf(1)).isEmpty())
+        assertTrue(hiddenTakenTokens(emptyList(), lockedIds = setOf(1)).isEmpty())
+        assertTrue(hiddenTakenTokens(marks, lockedIds = emptySet()).isEmpty())
+    }
+
+    @Test
     fun `tokensLabel joins up to three tokens and collapses a longer tail to an ellipsis`() {
         assertEquals("1-02", tokensLabel(listOf("1-02")))
         assertEquals("1-02, 2-03, 5-04", tokensLabel(listOf("1-02", "2-03", "5-04")))
