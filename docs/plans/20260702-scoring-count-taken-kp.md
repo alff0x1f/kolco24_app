@@ -87,10 +87,10 @@
 **Files:**
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/LegendRepositoryTest.kt`
 
-- [ ] проверить структуру `LegendRepositoryTest` (MockWebServer, как строится тело ответа легенды)
-- [ ] добавить/дополнить тест: ответ легенды с `"scoring_count": N` → после `refreshLegend` `scoringCountForRace(raceId)` эмитит N
-- [ ] тест forward-compat: ответ без поля `scoring_count` → `scoringCount = 0` (парсинг не падает, геттер отдаёт 0)
-- [ ] запустить `./gradlew testDebugUnitTest` — должны проходить до следующей задачи
+- [x] проверить структуру `LegendRepositoryTest` (MockWebServer, как строится тело ответа легенды)
+- [x] добавить/дополнить тест: ответ легенды с `"scoring_count": N` → после `refreshLegend` `scoringCountForRace(raceId)` эмитит N
+- [x] тест forward-compat: ответ без поля `scoring_count` → `scoringCount = 0` (парсинг не падает, геттер отдаёт 0)
+- [x] запустить `./gradlew testDebugUnitTest` — должны проходить до следующей задачи
 
 ### Task 5: Числитель — перегрузка `takenPointCount(marks, costOf)`
 
