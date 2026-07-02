@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -1035,12 +1034,13 @@ private fun tokenAnnotated(
 }
 
 /**
- * A photo take's tile: the captured photo fills the whole square and stays fully uncovered — the КП
- * discipline color no longer washes over it, it now runs as a 3dp inset perimeter [border] plus the
- * top-left [PhotoKpChip] (the `<стоимость>-<номер>` token moved there from its old bottom-leading spot).
- * The take time stays **bottom-end** inside the original bottom scrim (transparent → ~60% black) so it
- * reads as a legible caption over bright imagery. Shared by PHOTO takes and NFC takes that carry photos;
- * [showCameraChip] gates the top-right camera glyph so only a genuine photo take flags it.
+ * A photo take's tile: the captured photo fills the whole square edge-to-edge — the КП discipline color
+ * no longer washes over it or frames it. Tiles are separated purely by the grid grout; the discipline
+ * color survives in the corner chips ([PhotoKpChip] top-left carrying the `<стоимость>-<номер>` token,
+ * plus the top-right camera glyph on photo takes). The take time stays **bottom-end** inside the bottom
+ * scrim (transparent → ~60% black) so it reads as a legible caption over bright imagery. Shared by PHOTO
+ * takes and NFC takes that carry photos; [showCameraChip] gates the top-right glyph so only a genuine
+ * photo take flags it.
  */
 @Composable
 private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean = true) {
@@ -1048,8 +1048,7 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom)))
-            .border(3.dp, stageColor),
+            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
     ) {
         // The first captured frame fills the tile; the charcoal gradient shows through until it loads
         // (and stays as the seat if the file is missing). `filesDir` is resolved here — the pure mapper
