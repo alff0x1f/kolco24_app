@@ -19,7 +19,6 @@ enum class RaceStatusPill(val label: String) {
     Finished("Завершено"),
     Registration("Регистрация"),
     Upcoming("Скоро"),
-    SoldOut("Мест нет"),
 }
 
 /** Races split into current (still relevant) and archive (already finished), preserving Room order. */
@@ -30,15 +29,14 @@ data class SplitRaces(
 
 /**
  * Status pill for a race: finished if its last day is before [today]; otherwise derived from
- * [RaceEntity.regStatus] (`open` → registration, `upcoming` → soon, `sold_out` → no slots).
- * Any unknown status falls back to the neutral [RaceStatusPill.Upcoming] style.
+ * [RaceEntity.regStatus] (`open` → registration, everything else → soon). Registration state is
+ * irrelevant here — this screen is for picking your team, not signing up — so `sold_out` gets no
+ * "Мест нет" badge and simply reads as [RaceStatusPill.Upcoming] like any other current race.
  */
 fun raceStatusPill(race: RaceEntity, today: String): RaceStatusPill {
     if (race.effectiveEnd() < today) return RaceStatusPill.Finished
     return when (race.regStatus) {
         "open" -> RaceStatusPill.Registration
-        "sold_out" -> RaceStatusPill.SoldOut
-        "upcoming" -> RaceStatusPill.Upcoming
         else -> RaceStatusPill.Upcoming
     }
 }

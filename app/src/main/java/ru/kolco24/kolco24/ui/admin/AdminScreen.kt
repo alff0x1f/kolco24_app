@@ -41,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -312,7 +314,11 @@ private fun AdminHome(
     }
 }
 
-/** Admin-home action row — charcoal avatar, title + subtitle, chevron; mirrors the Settings rows. */
+/**
+ * Admin-home action row — neutral avatar, title + subtitle, chevron; mirrors the Settings rows.
+ * The avatar is a charcoal circle in light theme and a subtle elevated grey in dark (rather than a
+ * jarring inverse-bright circle) — see [neutralAvatarContainerColor].
+ */
 @Composable
 private fun AdminActionRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -331,13 +337,13 @@ private fun AdminActionRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, CircleShape),
+                .background(neutralAvatarContainerColor(), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.inverseOnSurface,
+                tint = neutralAvatarContentColor(),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -360,3 +366,21 @@ private fun AdminActionRow(
         )
     }
 }
+
+// Copied from SettingsScreen (duplicate, don't couple) — resolve the *applied* theme so the neutral
+// avatar stays charcoal-on-light / subtle-grey-on-dark instead of inverting to a bright circle.
+@Composable
+private fun neutralAvatarContainerColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    } else {
+        MaterialTheme.colorScheme.inverseSurface
+    }
+
+@Composable
+private fun neutralAvatarContentColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.inverseOnSurface
+    }
