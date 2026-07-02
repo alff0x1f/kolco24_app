@@ -98,11 +98,11 @@ Sequenced by design: fanfare plays out on the green screen, then the coin fires 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `var pendingCelebration by remember { mutableStateOf(false) }` near the overlay flags — plain `remember`, NOT `rememberSaveable` (a recreate mid-celebration deliberately drops it)
-- [ ] pass `onCompleted = { pendingCelebration = true; switchToTab(0) }` to the `ScanScreen` call (existing helper, ~line 1109; its already-on-page early-return is fine — the celebration rides the `celebration` param)
-- [ ] clear `pendingCelebration = false` in the existing `LaunchedEffect(selectedTeamId)` overlay-reset block (team switch cancels a stale celebration)
-- [ ] pass to `MarksScreen`: `celebration = pendingCelebration`, `onCelebrationDone = { pendingCelebration = false }`, `onCoinSound = { container.scanFeedback.coin() }`
-- [ ] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 4
+- [x] add `var pendingCelebration by remember { mutableStateOf(false) }` near the overlay flags — plain `remember`, NOT `rememberSaveable` (a recreate mid-celebration deliberately drops it)
+- [x] pass `onCompleted = { pendingCelebration = true; switchToTab(0) }` to the `ScanScreen` call (existing helper, ~line 1109; its already-on-page early-return is fine — the celebration rides the `celebration` param)
+- [x] clear `pendingCelebration = false` in the existing `LaunchedEffect(selectedTeamId)` overlay-reset block (team switch cancels a stale celebration)
+- [x] pass to `MarksScreen`: `celebration = pendingCelebration`, `onCelebrationDone = { pendingCelebration = false }`, `onCoinSound = { container.scanFeedback.coin() }` — required adding stub `celebration`/`onCelebrationDone`/`onCoinSound` params to `MarksScreen`'s signature (defaulted, not yet consumed) so the call site compiles; Task 4 implements the actual effect
+- [x] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 4
 
 ### Task 4: MarksScreen — celebration effect, scroll-to-bottom, last-tile pop-in
 

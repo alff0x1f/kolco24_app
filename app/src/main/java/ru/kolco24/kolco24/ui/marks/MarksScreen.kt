@@ -329,6 +329,11 @@ fun MarksScreen(
     // stack so it covers the bottom navigation bar). The tapped take's own frame paths are handed up; the
     // host anchors the global photo strip on the first of them.
     onOpenPhotoLightbox: (List<String>) -> Unit = {},
+    // Checkpoint-take celebration hand-off from the host (fires only on the NFC completion auto-close
+    // path): scroll to bottom + last-tile pop-in + coin sound. Consumed by the Task 4 LaunchedEffect.
+    celebration: Boolean = false,
+    onCelebrationDone: () -> Unit = {},
+    onCoinSound: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
