@@ -109,11 +109,11 @@ Sequenced by design: fanfare plays out on the green screen, then the coin fires 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] add params `celebration: Boolean = false`, `onCelebrationDone: () -> Unit = {}`, `onCoinSound: () -> Unit = {}` (defaults keep previews/tests working)
-- [ ] add `rememberLazyListState` and attach it to the `LazyColumn`
-- [ ] add a local `celebratingLast: Boolean` state + the `LaunchedEffect(celebration)` sequence: empty-tiles guard → set `celebratingLast` (tile renders at scale 0 before the scroll — no flash) → animate scroll to the very bottom (`animateScrollToItem(layoutInfo.totalItemsCount - 1)` — LazyColumn **item** index, `"nfc_banner"` may sit below the grid — then overshoot `animateScrollBy` from the last `LazyListItemInfo.size`, clamped ≥ 0) → `onCoinSound()` + start pop animation together → clear `celebratingLast`, `onCelebrationDone()`
-- [ ] convert `TileGrid`'s nested `forEach` loops to indexed iteration (flat index = `rowIndex * 4 + colIndex`) and thread the celebration in (e.g. `celebrateLastTile: Boolean`): apply an `Animatable`-driven `graphicsLayer { scaleX/scaleY/alpha }` (`Spring.DampingRatioMediumBouncy`, 0 → 1 + fade) only at flat index `tiles.lastIndex` — never by `Mark` equality (value class, duplicate tiles possible); zero cost for other tiles; `marksToTiles` and all pure logic untouched
-- [ ] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 5 (`MarksMappingTest`/`TileFillTest` regression gate)
+- [x] add params `celebration: Boolean = false`, `onCelebrationDone: () -> Unit = {}`, `onCoinSound: () -> Unit = {}` (defaults keep previews/tests working)
+- [x] add `rememberLazyListState` and attach it to the `LazyColumn`
+- [x] add a local `celebratingLast: Boolean` state + the `LaunchedEffect(celebration)` sequence: empty-tiles guard → set `celebratingLast` (tile renders at scale 0 before the scroll — no flash) → animate scroll to the very bottom (`animateScrollToItem(layoutInfo.totalItemsCount - 1)` — LazyColumn **item** index, `"nfc_banner"` may sit below the grid — then overshoot `animateScrollBy` from the last `LazyListItemInfo.size`, clamped ≥ 0) → `onCoinSound()` + start pop animation together → clear `celebratingLast`, `onCelebrationDone()`
+- [x] convert `TileGrid`'s nested `forEach` loops to indexed iteration (flat index = `rowIndex * 4 + colIndex`) and thread the celebration in (e.g. `celebrateLastTile: Boolean`): apply an `Animatable`-driven `graphicsLayer { scaleX/scaleY/alpha }` (`Spring.DampingRatioMediumBouncy`, 0 → 1 + fade) only at flat index `tiles.lastIndex` — never by `Mark` equality (value class, duplicate tiles possible); zero cost for other tiles; `marksToTiles` and all pure logic untouched
+- [x] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 5 (`MarksMappingTest`/`TileFillTest` regression gate)
 
 ### Task 5: Verify acceptance criteria
 

@@ -8,9 +8,13 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -61,8 +66,11 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -348,6 +356,43 @@ fun MarksScreen(
     val hiddenTaken = hiddenTakenTokens(marks, lockedCheckpointIds)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
+    val listState = rememberLazyListState()
+    var celebratingLast by remember { mutableStateOf(false) }
+    val celebrationScale = remember { Animatable(1f) }
+    val celebrationAlpha = remember { Animatable(1f) }
+
+    LaunchedEffect(celebration) {
+        if (!celebration) return@LaunchedEffect
+        if (tiles.isEmpty()) {
+            onCelebrationDone()
+            return@LaunchedEffect
+        }
+        // Render the last tile at scale 0 before scrolling so it never flashes at full size while
+        // still off-screen.
+        celebratingLast = true
+        celebrationScale.snapTo(0f)
+        celebrationAlpha.snapTo(0f)
+        val lastItemIndex = listState.layoutInfo.totalItemsCount - 1
+        if (lastItemIndex >= 0) {
+            listState.animateScrollToItem(lastItemIndex)
+            // `animateScrollToItem` only guarantees the item is *visible*, not that its bottom edge
+            // clears the viewport — overshoot the remainder so a tall trailing item (e.g. the NFC
+            // banner sitting below the grid) doesn't clip the freshly-popped tile.
+            val lastItemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastItemIndex }
+            if (lastItemInfo != null) {
+                val overshoot = (lastItemInfo.offset + lastItemInfo.size - listState.layoutInfo.viewportEndOffset)
+                    .coerceAtLeast(0)
+                if (overshoot > 0) listState.animateScrollBy(overshoot.toFloat())
+            }
+        }
+        // The coin sound IS the pop — fire both together.
+        onCoinSound()
+        launch { celebrationAlpha.animateTo(1f, tween(durationMillis = 250)) }
+        celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        celebratingLast = false
+        onCelebrationDone()
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Отметки") },
@@ -358,6 +403,7 @@ fun MarksScreen(
 
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 80.dp),
             ) {
@@ -412,6 +458,9 @@ fun MarksScreen(
                         TileGrid(
                             marks = tiles,
                             onPhotoTileClick = onOpenPhotoLightbox,
+                            celebrateLastTile = celebratingLast,
+                            celebrationScale = celebrationScale.value,
+                            celebrationAlpha = celebrationAlpha.value,
                         )
                     }
                     // The empty state folds the NFC notice into its own message, so only surface the
@@ -1027,6 +1076,12 @@ private fun MetricItem(
 private fun TileGrid(
     marks: List<Mark>,
     onPhotoTileClick: (List<String>) -> Unit,
+    // Checkpoint-take celebration pop-in: [celebrateLastTile] gates the effect to the single flat
+    // index `marks.lastIndex` (never by `Mark` equality — two identical takes are `==`-equal), so
+    // zero cost is paid by every other tile.
+    celebrateLastTile: Boolean = false,
+    celebrationScale: Float = 1f,
+    celebrationAlpha: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     val rows = marks.chunked(4)
@@ -1034,13 +1089,29 @@ private fun TileGrid(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        rows.forEach { rowMarks ->
+        rows.forEachIndexed { rowIndex, rowMarks ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                rowMarks.forEach { mark ->
-                    Box(modifier = Modifier.weight(1f)) {
+                rowMarks.forEachIndexed { colIndex, mark ->
+                    val flatIndex = rowIndex * 4 + colIndex
+                    val isCelebrating = celebrateLastTile && flatIndex == marks.lastIndex
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .then(
+                                if (isCelebrating) {
+                                    Modifier.graphicsLayer {
+                                        scaleX = celebrationScale
+                                        scaleY = celebrationScale
+                                        alpha = celebrationAlpha
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
                         ColorTile(mark = mark, onPhotoTileClick = onPhotoTileClick)
                     }
                 }
