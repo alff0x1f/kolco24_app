@@ -399,6 +399,7 @@ fun MarksScreen(
             celebrationScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
             celebratingLast = false
         } finally {
+            celebratingLast = false
             onCelebrationDone()
         }
     }
