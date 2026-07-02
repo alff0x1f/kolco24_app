@@ -105,6 +105,7 @@ import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.marks.photoPaths
+import ru.kolco24.kolco24.data.marks.thumbPathOf
 import ru.kolco24.kolco24.data.takenPointCount
 import ru.kolco24.kolco24.data.totalScore
 import ru.kolco24.kolco24.ui.legend.CheckpointColor
@@ -242,6 +243,9 @@ fun MarksScreen(
     nfcAvailable: Boolean = true,
     nfcDisabled: Boolean = false,
     hasTeam: Boolean = false,
+    // Room hasn't emitted marks/bindings for the resolved team yet: suppress the empty state so a
+    // cold start doesn't flash a false «Привяжите чипы» for a few frames before the tiles land.
+    loading: Boolean = false,
     memberCount: Int = 0,
     boundCount: Int = 0,
     trackRecording: Boolean = false,
@@ -292,7 +296,9 @@ fun MarksScreen(
                     )
                 }
                 if (tiles.isEmpty()) {
-                    item("empty") {
+                    // While loading, render neither branch — a blank beat instead of a false empty
+                    // state (no skeleton: the window is a few frames, a skeleton would itself flash).
+                    if (!loading) item("empty") {
                         MarksEmpty(
                             hasTeam = hasTeam,
                             nfcAvailable = nfcAvailable,
@@ -1174,8 +1180,16 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean
         // (and stays as the seat if the file is missing). `filesDir` is resolved here — the pure mapper
         // carries only relative paths.
         mark.photoPaths.firstOrNull()?.let { rel ->
+            // Prefer the small `<uuid>.thumb.jpg` written at capture (a fraction of the full frame's
+            // decode cost with ~100 tiles on screen); frames from before thumbs existed fall back to
+            // the full frame — Coil still downsamples that decode to the tile size. One cheap stat
+            // per tile, cached by `remember` across recompositions.
+            val model = remember(rel) {
+                val thumb = File(context.filesDir, thumbPathOf(rel))
+                if (thumb.exists()) thumb else File(context.filesDir, rel)
+            }
             AsyncImage(
-                model = File(context.filesDir, rel),
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

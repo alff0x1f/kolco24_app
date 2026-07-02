@@ -94,6 +94,8 @@ import ru.kolco24.kolco24.data.nfc.chipModelFromVersion
 import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.nfc.readChipVersion
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
+import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.db.MemberChipBindingEntity
 import ru.kolco24.kolco24.data.db.TeamEntity
 import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.nearestRaceId
@@ -650,15 +652,29 @@ private fun Kolco24AppRoot(
     }.collectAsState(initial = 0)
 
     // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
-    val bindingsList by remember(selectedTeamId) {
-        selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList())
-    }.collectAsState(initial = emptyList())
+    // `null` = the Room query for this session hasn't emitted yet (the no-team branch must be
+    // flowOf(null), NOT flowOf(emptyList()): it emits instantly on first composition, and
+    // collectAsState keeps that value across the key change when the team resolves — an
+    // emptyList initial would be indistinguishable from "loaded, nothing bound").
+    val bindingsListOrNull by remember(selectedTeamId) {
+        selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf<List<MemberChipBindingEntity>?>(null)
+    }.collectAsState(initial = null)
+    val bindingsList = bindingsListOrNull ?: emptyList()
     val bindings = remember(bindingsList) { bindingsList.associateBy { it.numberInTeam } }
 
     // Local take events for the selected team, newest first (consumed by «Отметки» and «Легенда»).
-    val marks by remember(selectedTeamId) {
-        selectedTeamId?.let { markRepo.observeMarks(it) } ?: flowOf(emptyList())
-    }.collectAsState(initial = emptyList())
+    // Same null-until-first-emit semantics as bindingsListOrNull above.
+    val marksOrNull by remember(selectedTeamId) {
+        selectedTeamId?.let { markRepo.observeMarks(it) } ?: flowOf<List<MarkEntity>?>(null)
+    }.collectAsState(initial = null)
+    val marks = marksOrNull ?: emptyList()
+    // «Отметки» loading guard, covering BOTH cold-start windows: (1) the team itself still reading
+    // from Room (teamState=Loading counts as hasTeam on the screen, so the ready branch «Здесь
+    // появятся отметки» would flash while selectedTeamId is still null and the marks guard below is
+    // inert); (2) team resolved but marks/bindings still reading (marks=[] + boundCount=0 →
+    // «Привяжите чипы» flashing before the tiles appear).
+    val marksLoading = teamState is SelectedTeamState.Loading ||
+        (selectedTeamId != null && (marksOrNull == null || bindingsListOrNull == null))
     // Guard: collectAsState does not reset on key change — filter stale marks from the prior team
     // during the brief window before the new flow emits (mirrors the scanRoster/scanBindings guard).
     val safeMarks = if (selectedTeamId != null) marks.filter { it.teamId == selectedTeamId } else emptyList()
@@ -1135,6 +1151,7 @@ private fun Kolco24AppRoot(
                         nfcAvailable = nfcActiveForScan,
                         nfcDisabled = nfcState == NfcState.Disabled,
                         hasTeam = teamState !is SelectedTeamState.None,
+                        loading = marksLoading,
                         memberCount = teamForTab?.members?.size ?: 0,
                         boundCount = teamForTab?.members?.count { bindings.containsKey(it.numberInTeam) } ?: 0,
                         trackRecording = (trackState as? TrackState.Recording)?.teamId == selectedTeamId,
