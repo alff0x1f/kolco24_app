@@ -1,5 +1,8 @@
 package ru.kolco24.kolco24.ui.marks
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -86,6 +90,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import java.io.File
@@ -919,12 +924,49 @@ private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Uni
                 modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp),
             )
         }
-        IconButton(
-            onClick = onDismiss,
+        Row(
             modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 8.dp),
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
+            // Share the frame currently in view. The photo already exists at filesDir/marks/<id>/<uuid>.jpg
+            // (immutable downscaled JPEG), so we hand it straight to the chooser via FileProvider — no copy.
+            // FLAG_GRANT_READ_URI_PERMISSION grants only this one URI to the receiver; exposing the marks/
+            // subtree in file_paths.xml doesn't let any app enumerate the folder. The system chooser's
+            // «Сохранить в Фото» target covers the save-to-gallery motivation too.
+            IconButton(
+                onClick = { sharePhoto(context, paths[pagerState.currentPage]) },
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(Icons.Filled.Share, contentDescription = "Поделиться", tint = Color.White)
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
+            }
         }
+    }
+}
+
+/**
+ * Hand a single photo frame to the system share-sheet. The file lives in private internal storage
+ * (`filesDir/marks/<markId>/<uuid>.jpg`) and is exposed read-only per-URI via the existing FileProvider
+ * (authority `${packageName}.fileprovider`, `marks/` declared in `res/xml/file_paths.xml`). Guards a
+ * missing file (orphan sweep / manual wipe) and a chooser with zero targets, both with an RU Toast.
+ */
+private fun sharePhoto(context: android.content.Context, relPath: String) {
+    val file = File(context.filesDir, relPath)
+    if (!file.exists()) {
+        Toast.makeText(context, "Файл фото не найден", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "image/jpeg"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    try {
+        context.startActivity(Intent.createChooser(send, "Поделиться фото"))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "Нет приложений для отправки", Toast.LENGTH_SHORT).show()
     }
 }
 
