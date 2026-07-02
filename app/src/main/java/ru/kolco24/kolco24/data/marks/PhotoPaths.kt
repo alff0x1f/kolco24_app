@@ -58,3 +58,11 @@ internal fun isSafeRelativePhotoPath(path: String): Boolean {
  * stable, unique frame identity used as the idempotency key on the frame-upload endpoint.
  */
 fun frameIdOf(relPath: String): String = relPath.substringAfterLast("/").removeSuffix(".jpg")
+
+/**
+ * The tile-thumbnail path of a frame (`marks/<markId>/<uuid>.jpg` → `marks/<markId>/<uuid>.thumb.jpg`).
+ * Thumbs are a **filename convention, never a `photoPath` entry** — the column holds only real frames
+ * (the upload drain sends every entry to the server), so the thumb is derived at the render/delete
+ * site. Also accepts a bare `<uuid>.jpg` filename (used when writing the thumb next to its frame).
+ */
+fun thumbPathOf(framePath: String): String = framePath.removeSuffix(".jpg") + ".thumb.jpg"

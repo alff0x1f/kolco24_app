@@ -91,6 +91,27 @@ class PhotoPathsTest {
     }
 
     @Test
+    fun thumbPathOfRelativeFramePath() {
+        assertEquals(
+            "marks/m1/550e8400-e29b-41d4-a716-446655440000.thumb.jpg",
+            thumbPathOf("marks/m1/550e8400-e29b-41d4-a716-446655440000.jpg"),
+        )
+    }
+
+    @Test
+    fun thumbPathOfBareFileName() {
+        // The write site passes just the frame's file name (the dir is already resolved).
+        assertEquals("a.thumb.jpg", thumbPathOf("a.jpg"))
+    }
+
+    @Test
+    fun thumbPathOfStaysUnderTheFrameDirectory() {
+        // The derived path only ever rewrites the extension — a validated safe frame path can never
+        // produce a thumb path escaping marks/<markId>/ (deletePhoto relies on this).
+        assertTrue(isSafeRelativePhotoPath(thumbPathOf("marks/m1/a.jpg")))
+    }
+
+    @Test
     fun frameIdOfDefensiveCases() {
         // No extension: only the trailing ".jpg" suffix is stripped, so an extensionless name is
         // returned unchanged rather than throwing.

@@ -25,6 +25,16 @@ object PhotoStorage {
     /** JPEG quality for the downscaled frame (~80%). */
     const val JPEG_QUALITY = 80
 
+    /**
+     * Longest edge of the tile thumbnail written next to each frame (`<uuid>.thumb.jpg`). Sized for
+     * the «Отметки» grid tile (~90dp ≈ 270–330px on 3x screens; a 4:3 frame's short edge lands at
+     * 384px, enough for a [android.widget.ImageView.ScaleType.CENTER_CROP]-style fill without blur).
+     */
+    const val THUMB_MAX_EDGE = 512
+
+    /** JPEG quality for the thumbnail (~30–60KB per file). */
+    const val THUMB_JPEG_QUALITY = 75
+
     private const val TAG = "PhotoStorage"
 
     /** The `marks/` root under `filesDir` (the parent of every per-take photo directory). */
@@ -76,6 +86,9 @@ object PhotoStorage {
             FileOutputStream(file).use { out ->
                 prepared.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
             }
+            // The frame is safely on disk; the thumb is best-effort (its own try/catch) — a failed
+            // thumb never fails the capture, the tile just falls back to decoding the full frame.
+            writeThumb(prepared, dir, fileName)
             relativePath(markId, fileName)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write photo ${file.absolutePath}", e)
@@ -84,6 +97,33 @@ object PhotoStorage {
         } finally {
             if (prepared !== decoded) prepared.recycle()
             decoded.recycle()
+        }
+    }
+
+    /**
+     * Write the `<uuid>.thumb.jpg` tile thumbnail next to its frame: [prepared] downscaled to
+     * [THUMB_MAX_EDGE] at [THUMB_JPEG_QUALITY]. Never throws — a failure is logged and the partial
+     * file deleted (the «Отметки» tile falls back to the full frame when the thumb is missing).
+     */
+    private fun writeThumb(prepared: Bitmap, dir: File, fileName: String) {
+        val file = File(dir, thumbPathOf(fileName))
+        try {
+            val (w, h) = scaledDimensions(prepared.width, prepared.height, THUMB_MAX_EDGE)
+            val thumb = if (w != prepared.width || h != prepared.height) {
+                Bitmap.createScaledBitmap(prepared, w, h, true)
+            } else {
+                prepared
+            }
+            try {
+                FileOutputStream(file).use { out ->
+                    thumb.compress(Bitmap.CompressFormat.JPEG, THUMB_JPEG_QUALITY, out)
+                }
+            } finally {
+                if (thumb !== prepared) thumb.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write thumb ${file.absolutePath}", e)
+            file.delete()
         }
     }
 
@@ -104,10 +144,14 @@ object PhotoStorage {
         }
     }
 
-    /** Physically delete a single relative photo path; missing file is a no-op. Safe to call off the main thread. */
+    /**
+     * Physically delete a single relative photo path **and its derived thumb**; missing files are a
+     * no-op. Safe to call off the main thread.
+     */
     fun deletePhoto(filesDir: File, relativePath: String) {
         if (!isSafeRelativePhotoPath(relativePath)) return
         File(filesDir, relativePath).delete()
+        File(filesDir, thumbPathOf(relativePath)).delete()
     }
 
     /**
