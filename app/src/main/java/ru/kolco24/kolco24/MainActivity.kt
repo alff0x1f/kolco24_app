@@ -119,6 +119,7 @@ import ru.kolco24.kolco24.data.marks.PhotoTarget
 import ru.kolco24.kolco24.data.marks.decidePhotoTarget
 import ru.kolco24.kolco24.ui.legend.LegendScreen
 import ru.kolco24.kolco24.ui.marks.MarksScreen
+import ru.kolco24.kolco24.ui.marks.PhotoLightboxOverlay
 import ru.kolco24.kolco24.ui.photo.PhotoCaptureScreen
 import ru.kolco24.kolco24.ui.photo.PhotoNumberPicker
 import ru.kolco24.kolco24.ui.scan.SCAN_WINDOW_MS
@@ -477,6 +478,10 @@ private fun Kolco24AppRoot(
     var showScan by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showUpload by rememberSaveable { mutableStateOf(false) }
+    // Photo-lightbox overlay: the relative path of the tapped frame that anchors the global photo strip,
+    // or null when closed. Hoisted here (not in MarksScreen) so the overlay covers the Scaffold's bottom
+    // navigation bar. Survives recreation; the strip itself is rebuilt from marks by PhotoLightboxOverlay.
+    var lightboxAnchor by rememberSaveable { mutableStateOf<String?>(null) }
     var showAdmin by rememberSaveable { mutableStateOf(false) }
     // Admin chip-provisioning pager (sub-overlay opened from the admin home, drawn above AdminScreen).
     var showProvisioning by rememberSaveable { mutableStateOf(false) }
@@ -1140,6 +1145,7 @@ private fun Kolco24AppRoot(
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
                         onPhotoClick = onPhotoClick,
+                        onOpenPhotoLightbox = { paths -> paths.firstOrNull()?.let { lightboxAnchor = it } },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     1 -> LegendScreen(
@@ -1972,6 +1978,20 @@ private fun Kolco24AppRoot(
                 },
                 onClose = { photoCaptureMarkId = null; photoCaptureAttach = false; photoCaptureCheckpointId = 0; photoCaptureCpNumber = 0 },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // Photo lightbox — rendered last so it draws over every other overlay and, crucially, over the
+        // Scaffold's bottom navigation bar (the whole reason it lives here and not inside MarksScreen).
+        // Its internal BackHandler (registered last → wins) and tap dismiss both clear the anchor.
+        val activeLightboxAnchor = lightboxAnchor
+        if (activeLightboxAnchor != null) {
+            PhotoLightboxOverlay(
+                marks = safeMarks,
+                checkpointColors = checkpointColors,
+                checkpointCosts = checkpointCosts,
+                anchorPath = activeLightboxAnchor,
+                onDismiss = { lightboxAnchor = null },
             )
         }
     }
