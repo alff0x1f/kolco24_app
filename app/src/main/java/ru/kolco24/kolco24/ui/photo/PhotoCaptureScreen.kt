@@ -82,6 +82,21 @@ import ru.kolco24.kolco24.data.time.TimeSample
 private const val TAG = "PhotoCaptureScreen"
 
 /**
+ * Buckets a raw [OrientationEventListener] reading into one of the four 90°-wide device-tilt buckets
+ * `{0, 90, 180, 270}`. `-1` ([OrientationEventListener.ORIENTATION_UNKNOWN] — device flat / sensor
+ * unreliable) returns [previous] unchanged rather than flipping to a spurious bucket.
+ */
+fun bucketOrientationDegrees(orientationDegrees: Int, previous: Int): Int {
+    if (orientationDegrees < 0) return previous
+    return when (orientationDegrees) {
+        in 45 until 135 -> 270
+        in 135 until 225 -> 180
+        in 225 until 315 -> 90
+        else -> 0
+    }
+}
+
+/**
  * Full-screen CameraX photo-capture overlay (the photo-mark fallback for a КП that can't be NFC-read).
  * Follows the app's overlay convention: a `rememberSaveable` host flag renders this after the `Scaffold`,
  * dismissed via [BackHandler].

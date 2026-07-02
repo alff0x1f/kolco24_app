@@ -119,9 +119,9 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/photo/PhotoCaptureScreen.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/photo/PhotoCaptureScreenTest.kt`
 
-- [ ] Add the top-level `fun bucketOrientationDegrees(orientationDegrees: Int, previous: Int): Int` (as specified in Technical Details) to `PhotoCaptureScreen.kt`, kept free of any Android imports in its own signature/body.
-- [ ] Write `PhotoCaptureScreenTest` covering: each of the four bands (e.g. `10→0`, `90→270`, `180→180`, `270→90`), the exact boundary values (`44`→one bucket, `45`→the next; same for `134/135`, `224/225`, `314/315`), wraparound near `0`/`359` (e.g. `359→0`, `0→0`), and `-1` returning `previous` unchanged (including when `previous` is a non-zero bucket, to prove it's not silently defaulting to `0`).
-- [ ] Run `./gradlew testDebugUnitTest` — must pass before next task.
+- [x] Add the top-level `fun bucketOrientationDegrees(orientationDegrees: Int, previous: Int): Int` (as specified in Technical Details) to `PhotoCaptureScreen.kt`, kept free of any Android imports in its own signature/body.
+- [x] Write `PhotoCaptureScreenTest` covering: each of the four bands (e.g. `10→0`, `90→270`, `180→180`, `270→90`), the exact boundary values (`44`→one bucket, `45`→the next; same for `134/135`, `224/225`, `314/315`), wraparound near `0`/`359` (e.g. `359→0`, `0→0`), and `-1` returning `previous` unchanged (including when `previous` is a non-zero bucket, to prove it's not silently defaulting to `0`).
+- [x] Run `./gradlew testDebugUnitTest` — must pass before next task.
 
 ### Task 4: Wire physical-tilt tracking into the capture screen
 
