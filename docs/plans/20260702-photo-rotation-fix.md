@@ -137,11 +137,11 @@
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] Verify `MainActivity` no longer rotates the window at all (manifest lock in place) and `assembleDebug` succeeds.
-- [ ] Verify the `lastRealTeamId` guard compiles and the overlay-reset effect only fires its body on an actual team-id change (trace through: cold start with a real team already selected → no reset; genuine team switch → reset fires once).
-- [ ] Verify `bucketOrientationDegrees` test coverage from Task 3 passes and covers all boundaries.
-- [ ] Verify `capture()` in `PhotoCaptureScreen.kt` no longer reads `previewView.display?.rotation` directly for `targetRotation`.
-- [ ] Run full unit suite: `./gradlew lintDebug testDebugUnitTest`.
+- [x] Verify `MainActivity` no longer rotates the window at all (manifest lock in place) and `assembleDebug` succeeds.
+- [x] Verify the `lastRealTeamId` guard compiles and the overlay-reset effect only fires its body on an actual team-id change (trace through: cold start with a real team already selected → no reset; genuine team switch → reset fires once).
+- [x] Verify `bucketOrientationDegrees` test coverage from Task 3 passes and covers all boundaries.
+- [x] Verify `capture()` in `PhotoCaptureScreen.kt` no longer reads `previewView.display?.rotation` directly for `targetRotation`.
+- [x] Run full unit suite: `./gradlew lintDebug testDebugUnitTest`.
 
 ### Task 6: [Final] Update documentation
 - [ ] Update `CLAUDE.md`: note the app is now portrait-locked (`android:screenOrientation="portrait"` on `MainActivity`), describe the `lastRealTeamId` guard on the team-switch reset effect and why it exists, and document `PhotoCaptureScreen.kt`'s new `bucketOrientationDegrees` (JVM-tested) + `RotationTracker` (untested adapter) replacing the old `previewView.display?.rotation` read for `imageCapture.targetRotation`.
