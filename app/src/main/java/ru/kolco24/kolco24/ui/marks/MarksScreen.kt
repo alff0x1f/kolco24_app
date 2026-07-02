@@ -1,6 +1,9 @@
 package ru.kolco24.kolco24.ui.marks
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -54,13 +58,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.listSaver
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -78,6 +79,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -91,6 +93,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import java.io.File
@@ -114,6 +118,10 @@ data class Mark(
     val cost: Int,
     val kind: MarkKind,
     val time: String,
+    // Full «дата · время» of the take, shown only in the full-screen lightbox (the grid tiles use the
+    // compact [time]). Same effective take time as [time], just a wider format. Defaulted so the pure
+    // mapper and tests can build a `Mark` without it.
+    val dateTime: String = "",
     val color: CheckpointColor? = null,
     // Relative (`marks/<markId>/<uuid>.jpg`) photo paths captured for this take; `filesDir` is resolved
     // at the `AsyncImage` site, never here. Carried on **any** take (an NFC take can also carry photo
@@ -146,22 +154,40 @@ fun marksToTiles(
     colorOf: (MarkEntity) -> CheckpointColor? = { null },
 ): List<Mark> {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
+    // «02.07.2026 · 14:32» — the middle dot is quoted so SimpleDateFormat treats it as a literal.
+    val fmtDateTime = SimpleDateFormat("dd.MM.yyyy '·' HH:mm", Locale.US)
     // Reverse newest-first → oldest-first so each new take lands at the end of the grid.
     return marks.filter { it.complete }
         .asReversed()
         .map { m ->
+            // Prefer the trusted (clock-skew-proof) take time; fall back to raw wall for
+            // untrusted/legacy rows where no server time was anchored at take.
+            val effectiveTakenAt = m.trustedTakenAt ?: m.takenAt
             Mark(
                 number = m.checkpointNumber.toString().padStart(2, '0'),
                 cost = costOf(m),
                 kind = if (m.method == "photo") MarkKind.PHOTO else MarkKind.NFC,
-                // Prefer the trusted (clock-skew-proof) take time; fall back to raw wall for
-                // untrusted/legacy rows where no server time was anchored at take.
-                time = fmt.format(Date(m.trustedTakenAt ?: m.takenAt)),
+                time = fmt.format(Date(effectiveTakenAt)),
+                dateTime = fmtDateTime.format(Date(effectiveTakenAt)),
                 color = colorOf(m),
                 photoPaths = photoPaths(m.photoPath),
             )
         }
 }
+
+/**
+ * One frame in the global lightbox strip: its relative photo [path] plus the take ([mark]) it belongs
+ * to — the mark feeds that page's top-left [PhotoKpChip]. `filesDir` is resolved at the render site.
+ */
+data class LightboxPhoto(val path: String, val mark: Mark)
+
+/**
+ * Flatten every take's frames into one ordered strip so the lightbox swipes across **all** photos, not
+ * just the tapped take's. Grid order (oldest-first, matching [marksToTiles]/[TileGrid]) so the swipe
+ * follows the visual order of the tiles; only takes that actually carry photos contribute frames.
+ */
+fun lightboxPhotos(tiles: List<Mark>): List<LightboxPhoto> =
+    tiles.flatMap { m -> m.photoPaths.map { LightboxPhoto(it, m) } }
 
 // Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
 // light & dark, echoing the physical checkpoint markers.
@@ -226,6 +252,10 @@ fun MarksScreen(
     onStartTrack: () -> Unit = {},
     onRequestLocation: () -> Unit = {},
     onPhotoClick: () -> Unit = {},
+    // A photo tile was tapped: the host opens the full-screen lightbox (hoisted to MainActivity's overlay
+    // stack so it covers the bottom navigation bar). The tapped take's own frame paths are handed up; the
+    // host anchors the global photo strip on the first of them.
+    onOpenPhotoLightbox: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
@@ -238,14 +268,7 @@ fun MarksScreen(
     val takenScore = totalScore(marks, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
-    // A tapped photo tile opens the view-only lightbox; the paths drive the pager. Local screen state
-    // (not a `MainActivity` overlay flag) — Phase 1 view-only, dismissed by tap/back.
-    var lightboxPaths by rememberSaveable(
-        stateSaver = listSaver(save = { it }, restore = { it }),
-    ) { mutableStateOf(emptyList<String>()) }
-
-    Box(modifier = modifier.fillMaxSize()) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Отметки") },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -290,7 +313,7 @@ fun MarksScreen(
                     item("tile_grid") {
                         TileGrid(
                             marks = tiles,
-                            onPhotoTileClick = { paths -> lightboxPaths = paths },
+                            onPhotoTileClick = onOpenPhotoLightbox,
                         )
                     }
                     // The empty state folds the NFC notice into its own message, so only surface the
@@ -323,20 +346,34 @@ fun MarksScreen(
             }
         }
     }
+}
 
-        // Full-screen view-only lightbox, drawn over the whole screen (incl. the TopAppBar) so the
-        // photos own the frame; tap or back dismisses it.
-        if (lightboxPaths.isNotEmpty()) {
-            // The tile grid always opens the lightbox with one mark's own photo list, so a structural
-            // match against the just-recomputed [tiles] finds the same mark (for its КП chip) without
-            // threading extra saveable state through the click callback.
-            PhotoLightbox(
-                mark = tiles.firstOrNull { it.photoPaths == lightboxPaths },
-                paths = lightboxPaths,
-                onDismiss = { lightboxPaths = emptyList() },
-            )
-        }
+/**
+ * The full-screen, view-only photo lightbox as a host-rendered overlay. The tile grid lives inside the
+ * tab pager (below the Scaffold's bottom navigation bar), so the lightbox is hoisted to MainActivity's
+ * overlay stack — rendered after the `Scaffold` — to cover the whole window, bottom bar included (matching
+ * the project's other full-screen overlays). It rebuilds the global photo strip from the same inputs
+ * [MarksScreen] uses (so the mapping stays a small duplicated join, not a shared coupling), anchors the
+ * initial page on [anchorPath], and closes via [onDismiss]. If the strip empties out from under an open
+ * lightbox (the underlying marks changed), it self-dismisses.
+ */
+@Composable
+internal fun PhotoLightboxOverlay(
+    marks: List<MarkEntity>,
+    checkpointColors: Map<Int, String>,
+    checkpointCosts: Map<Int, Int>,
+    anchorPath: String,
+    onDismiss: () -> Unit,
+) {
+    val costOf: (MarkEntity) -> Int = { checkpointCosts[it.checkpointId] ?: it.cost }
+    val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
+    val photos = lightboxPhotos(tiles)
+    if (photos.isEmpty()) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
     }
+    val initialPage = photos.indexOfFirst { it.path == anchorPath }.coerceAtLeast(0)
+    PhotoLightbox(photos = photos, initialPage = initialPage, onDismiss = onDismiss)
 }
 
 /**
@@ -865,23 +902,37 @@ private fun PhotoCountBadge(extra: Int, color: Color, modifier: Modifier = Modif
 }
 
 /**
- * Full-screen, view-only photo lightbox: a [HorizontalPager] over the take's N captured frames, resolved
- * from `filesDir` at render time (the [Mark] carries only relative paths). A «k/N» counter rides the top
- * when there is more than one frame; a tap anywhere or back dismisses. [mark] (looked up by the caller
- * from the same [Mark] the tile grid tapped) feeds the top-left [PhotoKpChip] — `null` only if the
- * underlying data changed out from under an already-open lightbox, in which case the chip is simply
- * skipped. **Swipe-down-to-dismiss** (the phone gallery's own gesture): dragging vertically translates the
- * current page and fades the black backdrop toward the screen behind it; releasing past
+ * Full-screen, view-only photo lightbox: a [HorizontalPager] over **all** takes' captured frames
+ * ([photos], grid order), resolved from `filesDir` at render time (each [LightboxPhoto] carries only a
+ * relative path plus its owning take). Opens at [initialPage] (the tapped take's first frame). A global
+ * «k/N» counter rides the top when there is more than one frame; the top-left [PhotoKpChip] is resolved
+ * **per page** from that frame's own take, so swiping across takes updates the КП token. A tap anywhere
+ * or back dismisses. **Swipe-down-to-dismiss** (the phone gallery's own gesture): dragging vertically
+ * translates the current page and fades the black backdrop toward the screen behind it; releasing past
  * [dismissThresholdDp] closes, otherwise it springs back to center. Phase 1 has no edit/delete here.
  */
 @Composable
-private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Unit) {
+private fun PhotoLightbox(photos: List<LightboxPhoto>, initialPage: Int, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val pagerState = rememberPagerState(pageCount = { paths.size })
+    val view = LocalView.current
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { photos.size })
     val scope = rememberCoroutineScope()
     val offsetY = remember { Animatable(0f) }
     val dismissThresholdPx = with(LocalDensity.current) { dismissThresholdDp.toPx() }
     BackHandler(onBack = onDismiss)
+
+    // Hide the system navigation bar for an immersive full-screen photo (the app is otherwise edge-to-edge
+    // with the bars visible). Scoped to the lightbox: hidden on open, restored on dismiss via onDispose. A
+    // swipe from the bottom edge brings it back transiently (BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE), so the
+    // gesture pill / back controls stay reachable.
+    DisposableEffect(Unit) {
+        val controller = context.findActivity()?.window?.let { WindowInsetsControllerCompat(it, view) }
+        controller?.apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.navigationBars())
+        }
+        onDispose { controller?.show(WindowInsetsCompat.Type.navigationBars()) }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -912,11 +963,12 @@ private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Uni
                     }
                 },
         ) { page ->
-            LightboxPage(file = File(context.filesDir, paths[page]), mark = mark)
+            val photo = photos[page]
+            LightboxPage(file = File(context.filesDir, photo.path), mark = photo.mark)
         }
-        if (paths.size > 1) {
+        if (photos.size > 1) {
             Text(
-                text = "${pagerState.currentPage + 1}/${paths.size}",
+                text = "${pagerState.currentPage + 1}/${photos.size}",
                 color = Color.White,
                 fontFamily = RobotoMono,
                 fontWeight = FontWeight.Medium,
@@ -933,7 +985,7 @@ private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Uni
             // subtree in file_paths.xml doesn't let any app enumerate the folder. The system chooser's
             // «Сохранить в Фото» target covers the save-to-gallery motivation too.
             IconButton(
-                onClick = { sharePhoto(context, paths[pagerState.currentPage]) },
+                onClick = { sharePhoto(context, photos[pagerState.currentPage].path) },
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(Icons.Filled.Share, contentDescription = "Поделиться", tint = Color.White)
@@ -973,6 +1025,13 @@ private fun sharePhoto(context: android.content.Context, relPath: String) {
 /** Vertical drag distance past which releasing the lightbox closes it instead of springing back. */
 private val dismissThresholdDp = 120.dp
 
+/** Unwrap a (possibly wrapped) Compose [Context] to its hosting [Activity], or `null` if there is none. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 /**
  * One lightbox page: the photo is drawn with [ContentScale.Fit], which letterboxes rather than filling
  * the page whenever the frame's aspect ratio doesn't match the screen's — so the [PhotoKpChip] is pinned
@@ -980,10 +1039,11 @@ private val dismissThresholdDp = 120.dp
  * photo's actual displayed (post-letterbox) dimensions and aligning the chip within that box. Before the
  * frame's intrinsic size is known (first composition / load in flight) the inner box falls back to filling
  * the page so nothing crashes or flashes at 0-size; the chip lands correctly on the very next frame once
- * the size resolves.
+ * the size resolves. [mark] is the frame's own take (resolved per-page by the caller) — its КП token/color
+ * feed the top-left [PhotoKpChip].
  */
 @Composable
-private fun LightboxPage(file: File, mark: Mark?, modifier: Modifier = Modifier) {
+private fun LightboxPage(file: File, mark: Mark, modifier: Modifier = Modifier) {
     val painter = rememberAsyncImagePainter(model = file)
     val intrinsic = painter.intrinsicSize
     BoxWithConstraints(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1008,16 +1068,30 @@ private fun LightboxPage(file: File, mark: Mark?, modifier: Modifier = Modifier)
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
-            if (mark != null) {
-                PhotoKpChip(
-                    mark = mark,
-                    color = tileFill(mark.color, isDarkScheme()).fill,
-                    modifier = Modifier.align(Alignment.TopStart),
-                    // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
-                    scale = 1.7f,
-                )
-            }
+            PhotoKpChip(
+                mark = mark,
+                color = tileFill(mark.color, isDarkScheme()).fill,
+                modifier = Modifier.align(Alignment.TopStart),
+                // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
+                scale = 1.7f,
+            )
         }
+        // The take's «дата · время», echoing the tile's mono time caption but scaled up and pinned to the
+        // black margin at the very bottom of the page — outside the photo (the КП chip owns the photo
+        // itself). Aligned to the page, not the letterboxed photo box, so it sits in the black band below
+        // a portrait frame; it rides the vertical dismiss drag with the rest of the page.
+        Text(
+            text = mark.dateTime,
+            color = Color.White.copy(alpha = 0.85f),
+            fontFamily = RobotoMono,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            letterSpacing = 0.3.sp,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 40.dp),
+        )
     }
 }
 

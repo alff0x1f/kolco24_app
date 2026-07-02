@@ -106,6 +106,25 @@ class MarksMappingTest {
     }
 
     @Test
+    fun `dateTime formats the effective take time as date and time`() {
+        val epoch = 5_000_000L
+        val expected = SimpleDateFormat("dd.MM.yyyy '·' HH:mm", Locale.US).format(Date(epoch))
+        val tiles = marksToTiles(listOf(mark("a", point = 1, number = 1, cost = 1, takenAt = epoch)))
+        assertEquals(expected, tiles.single().dateTime)
+    }
+
+    @Test
+    fun `dateTime prefers trustedTakenAt like time does`() {
+        val wall = 5_000_000L
+        val trusted = wall + 7 * 60_000L
+        val expected = SimpleDateFormat("dd.MM.yyyy '·' HH:mm", Locale.US).format(Date(trusted))
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 1, takenAt = wall, trustedTakenAt = trusted)),
+        )
+        assertEquals(expected, tiles.single().dateTime)
+    }
+
+    @Test
     fun `empty marks yield no tiles`() {
         assertTrue(marksToTiles(emptyList()).isEmpty())
     }
@@ -285,5 +304,36 @@ class MarksMappingTest {
         ).single()
         assertTrue(tile.photoPaths.isEmpty())
         assertEquals(0, tile.photoCount)
+    }
+
+    @Test
+    fun `lightboxPhotos flattens every take's frames in grid order carrying the owning mark`() {
+        // Tiles arrive oldest-first (as marksToTiles delivers); the strip preserves that order and
+        // concatenates each take's own frame list.
+        val a = Mark(number = "01", cost = 2, kind = MarkKind.PHOTO, time = "10:00",
+            photoPaths = listOf("marks/a/1.jpg", "marks/a/2.jpg"))
+        val b = Mark(number = "04", cost = 3, kind = MarkKind.NFC, time = "10:05",
+            photoPaths = listOf("marks/b/1.jpg"))
+        val strip = lightboxPhotos(listOf(a, b))
+        assertEquals(
+            listOf("marks/a/1.jpg", "marks/a/2.jpg", "marks/b/1.jpg"),
+            strip.map { it.path },
+        )
+        // Each frame carries its owning take so the per-page КП chip resolves correctly.
+        assertEquals(listOf(a, a, b), strip.map { it.mark })
+    }
+
+    @Test
+    fun `lightboxPhotos skips takes without photos`() {
+        val withPhoto = Mark(number = "01", cost = 2, kind = MarkKind.PHOTO, time = "10:00",
+            photoPaths = listOf("marks/a/1.jpg"))
+        val noPhoto = Mark(number = "04", cost = 3, kind = MarkKind.NFC, time = "10:05")
+        val strip = lightboxPhotos(listOf(noPhoto, withPhoto, noPhoto))
+        assertEquals(listOf("marks/a/1.jpg"), strip.map { it.path })
+    }
+
+    @Test
+    fun `lightboxPhotos of no tiles is empty`() {
+        assertTrue(lightboxPhotos(emptyList()).isEmpty())
     }
 }
