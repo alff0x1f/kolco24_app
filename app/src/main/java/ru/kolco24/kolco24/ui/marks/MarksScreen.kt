@@ -113,7 +113,7 @@ data class Mark(
     val color: CheckpointColor? = null,
     // Relative (`marks/<markId>/<uuid>.jpg`) photo paths captured for this take; `filesDir` is resolved
     // at the `AsyncImage` site, never here. Carried on **any** take (an NFC take can also carry photo
-    // evidence) so the «📷×N» badge is driven by [photoCount], independent of the tile [kind].
+    // evidence) so the photo-count badge is driven by [photoCount], independent of the tile [kind].
     val photoPaths: List<String> = emptyList(),
 ) {
     val photoCount: Int get() = photoPaths.size
@@ -823,45 +823,39 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
             // tile keeps its current inert behaviour.
             .then(if (hasPhotos) Modifier.clickable { onPhotoTileClick(mark.photoPaths) } else Modifier),
     ) {
-        when (mark.kind) {
-            MarkKind.NFC -> NfcTileBody(mark, tf.text)
-            MarkKind.PHOTO -> PhotoTileBody(mark, tf.fill)
+        // A take that carries photos shows its first frame as the tile background regardless of how it
+        // was marked — a PHOTO take, or an NFC take that also captured evidence. Only a plain NFC take
+        // with no photos keeps the flat color-fill token body. The top-right camera chip stays exclusive
+        // to PHOTO-kind takes (see [PhotoTileBody.showCameraChip]) so an NFC-with-photos tile is still
+        // told apart from a pure photo take.
+        if (hasPhotos) {
+            PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
+        } else {
+            NfcTileBody(mark, tf.text)
         }
-        // The «📷×N» badge rides on **any** tile with photos (NFC takes can carry photo evidence too),
-        // so it is gated on [Mark.photoCount], not the tile [kind].
+        // The photo-count badge rides on any tile with photos. It mirrors the take-time label (bare mono
+        // digits, no chip) but hugs the bottom-LEADING corner; over the photo scrim it stays dimmed white.
         if (hasPhotos) {
             PhotoCountBadge(
                 count = mark.photoCount,
-                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                color = Color.White.copy(alpha = 0.82f),
+                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp, start = 8.dp),
             )
         }
     }
 }
 
-/** Small «📷×N» corner badge over a tile carrying captured photos. */
+/** Photo-count corner label — bare mono digits styled like the take time (no chip). */
 @Composable
-private fun PhotoCountBadge(count: Int, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 5.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Icon(
-            Icons.Filled.CameraAlt,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(11.dp),
-        )
-        Text(
-            text = "×$count",
-            color = Color.White,
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Medium,
-            fontSize = 10.sp,
-        )
-    }
+private fun PhotoCountBadge(count: Int, color: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = "$count",
+        color = color,
+        fontFamily = RobotoMono,
+        fontWeight = FontWeight.Medium,
+        fontSize = 10.5.sp,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -1045,10 +1039,11 @@ private fun tokenAnnotated(
  * discipline color no longer washes over it, it now runs as a 3dp inset perimeter [border] plus the
  * top-left [PhotoKpChip] (the `<стоимость>-<номер>` token moved there from its old bottom-leading spot).
  * The take time stays **bottom-end** inside the original bottom scrim (transparent → ~60% black) so it
- * reads as a legible caption over bright imagery.
+ * reads as a legible caption over bright imagery. Shared by PHOTO takes and NFC takes that carry photos;
+ * [showCameraChip] gates the top-right camera glyph so only a genuine photo take flags it.
  */
 @Composable
-private fun PhotoTileBody(mark: Mark, stageColor: Color) {
+private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean = true) {
     val context = LocalContext.current
     Box(
         modifier = Modifier
@@ -1087,7 +1082,28 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color) {
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
         PhotoKpChip(mark = mark, color = stageColor, modifier = Modifier.align(Alignment.TopStart))
+        if (showCameraChip) {
+            PhotoCameraChip(color = stageColor, modifier = Modifier.align(Alignment.TopEnd))
+        }
     }
+}
+
+/**
+ * The camera glyph pinned to a photo tile's top-RIGHT corner, mirroring [PhotoKpChip]'s backing: solid
+ * discipline [color], only the inner floating corner (bottom-start) rounded to 9dp so the two flush edges
+ * stay square and the top-trailing corner coincides with the tile's. Marks a photo (not NFC) take at a glance.
+ */
+@Composable
+private fun PhotoCameraChip(color: Color, modifier: Modifier = Modifier) {
+    Icon(
+        Icons.Filled.CameraAlt,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = modifier
+            .background(color, RoundedCornerShape(bottomStart = 9.dp))
+            .padding(horizontal = 6.dp, vertical = 5.dp)
+            .size(15.dp),
+    )
 }
 
 /**
