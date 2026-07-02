@@ -294,29 +294,38 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/admin/JudgeScanScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] resolve `raceId` for a **cross-team** station: unlike `CheckMemberChipScreen` (which derives
+- [x] resolve `raceId` for a **cross-team** station: unlike `CheckMemberChipScreen` (which derives
       raceId from the selected team), a judge scans all teams. Use the currently-active race (the same
       race whose `member_tags` pool + teams are loaded). During implementation confirm how MainActivity
       exposes the active raceId (selected-team's race, or a race-level selection); if none is selected,
       show a "select a race" guard and don't arm the hook.
-- [ ] add `@Volatile var onTagForJudgeScan: ((Tag) -> Unit)? = null` + a new branch in `onTagDiscovered`
+      (confirmed: `selectedRaceId` in `MainActivity.kt`, derived from `selectedTeam?.raceId` — the same
+      value `CheckMemberChipScreen` already receives; `JudgeScanScreen(raceId: Int?, ...)` shows the
+      «Сначала выберите команду» hint and does not arm the hook when it's `null`)
+- [x] add `@Volatile var onTagForJudgeScan: ((Tag) -> Unit)? = null` + a new branch in `onTagDiscovered`
       (admin-hook priority band, above `onTagForMark`; hop to main via `mainHandler.post`)
-- [ ] `JudgeScanScreen(session, raceId, eventType, onClose)`: null-sentinel pool collect
+- [x] `JudgeScanScreen(raceId, eventType, onClose)`: null-sentinel pool collect
       (`observeForRace(raceId).collectAsState(initial = null)`, `poolReady = pool != null`), `rememberUpdatedState`
-- [ ] `DisposableEffect(raceId)` arms/clears the hook; `Mutex`-serialized body captures
+      (deviation: no `session` param — no sibling admin screen in this codebase threads `AdminSession`
+      through, e.g. `CheckMemberChipScreen`/`CheckChipScreen`/`ProvisioningScreen` all take just
+      `raceId`/`onClose`; `poolReady` combines the null-sentinel `dataReady` **and** a durable
+      `hasBeenSynced` check so an empty-but-synced pool isn't confused with a never-synced one — see
+      the next two items)
+- [x] `DisposableEffect(raceId)` arms/clears the hook; `Mutex`-serialized body captures
       `trustedClock.sample()` first, `normalizeNfcUid`, pool lookup; gate on `poolReady` **before**
       `readChipCode` (mirror `CheckMemberChipScreen`'s `dataReady` gate — avoids a wasted NfcA transceive
       when the pool isn't loaded), then `readChipCode` only on the not-in-pool branch
-- [ ] `classifyJudgeScan(...)`; on `Recorded` → `applicationScope.launch { judgeScanRepo.record(...) }`,
+- [x] `classifyJudgeScan(...)`; on `Recorded` → `applicationScope.launch { judgeScanRepo.record(...) }`,
       `scanFeedback.play(Success)`; else `play(Failure)`; append to capped `recent` list
       (`removeAt(lastIndex)`, **not** `removeLast()`)
-- [ ] big live clock: `LaunchedEffect` `delay(1000)` reading `trustedClock.sample()` → prefer
+- [x] big live clock: `LaunchedEffect` `delay(1000)` reading `trustedClock.sample()` → prefer
       `trustedMs`, fall back to `wallMs` when `trustedMs == null`; format `SimpleDateFormat("HH:mm:ss", Locale.US)`
       in the **device-default timezone** (do NOT force UTC — the judge compares to a local wristwatch; the
       "UTC where needed" rule is for stored ISO strings, not human-facing local time); prominent large type at top
-- [ ] `ScanClockBanner(clockStatus)` under the clock (derive `ClockStatus` from the clock, same source the
+- [x] `ScanClockBanner(clockStatus)` under the clock (derive `ClockStatus` from the clock, same source the
       scan overlay uses); a «Синхронизируйте гонку» plate when the pool has never synced (treat scans as `PoolNotReady`)
-- [ ] (manual-verification only — Compose host + NFC adapter untested by convention)
+- [x] (manual-verification only — Compose host + NFC adapter untested by convention; project compiles,
+      `testDebugUnitTest` and `lintDebug` pass)
 
 ### Task 10: Admin menu wiring + 60 s ticker
 

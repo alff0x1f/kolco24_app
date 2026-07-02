@@ -219,6 +219,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     @Volatile var onTagForVerify: ((Tag) -> Unit)? = null
 
     /**
+     * Sink for the next raw [Tag] when a judge start/finish pik overlay is active
+     * (`JudgeScanScreen`). When set it yields to [onTagForVerify] but takes priority over
+     * [onTagForMark]/[onTagScanned] — a judge pik is a distinct write path (raceId-scoped, no team)
+     * that must not be shadowed by the «Отметить КП» flow if both were ever open. Reads the chip's
+     * uid (and, on the not-in-pool branch, its code) to resolve/reject the participant. A distinct
+     * hook keeps each `DisposableEffect` owning exactly one hook.
+     */
+    @Volatile var onTagForJudgeScan: ((Tag) -> Unit)? = null
+
+    /**
      * Sink for the next raw [Tag] when the «Отметить КП» scan flow is active (ScanScreen). When set
      * it takes priority over [onTagScanned] in [onTagDiscovered] — marking needs the full Tag to both
      * read the CP chip's code and fall back to the member uid.
@@ -338,9 +348,9 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     /**
      * Reader-mode callback (binder thread). Priority: an armed chip-info flow gets the raw [Tag]; an
      * armed provisioning flow (admin pager) gets the raw [Tag]; an armed verify flow
-     * (CheckChipScreen) gets the raw [Tag]; an armed mark flow (ScanScreen) gets
-     * the raw [Tag]; an armed scan flow (bind sheet) gets the
-     * normalized UID; otherwise — idle foreground — we read the tag's raw code and surface our own
+     * (CheckChipScreen) gets the raw [Tag]; an armed judge-scan flow (JudgeScanScreen) gets the raw
+     * [Tag]; an armed mark flow (ScanScreen) gets the raw [Tag]; an armed scan flow (bind sheet) gets
+     * the normalized UID; otherwise — idle foreground — we read the tag's raw code and surface our own
      * code chips so the host can open the «Отметить КП» overlay.
      * Tag I/O runs here on the binder thread.
      */
@@ -358,6 +368,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val verifyHook = onTagForVerify
         if (verifyHook != null) {
             mainHandler.post { verifyHook(tag) }
+            return
+        }
+        val judgeScanHook = onTagForJudgeScan
+        if (judgeScanHook != null) {
+            mainHandler.post { judgeScanHook(tag) }
             return
         }
         val markHook = onTagForMark
