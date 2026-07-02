@@ -190,16 +190,16 @@ are `raceId`-scoped only):
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/upload/UploadScreen.kt`
 
-- [ ] add param `judge: TrackUploadStatus? = null` to `UploadScreen`
-- [ ] include `judge` in the `hasAny` list gate
-- [ ] render `UploadSection(title = "Судейские отметки", status = judge, nowMs = nowMs)` after GPS-трек
-- [ ] update the KDoc header (currently "up to three UploadSections") to say four
-- [ ] update the other stale "three" strings in the same file: the empty-state KDoc "Nothing recorded
+- [x] add param `judge: TrackUploadStatus? = null` to `UploadScreen`
+- [x] include `judge` in the `hasAny` list gate
+- [x] render `UploadSection(title = "Судейские отметки", status = judge, nowMs = nowMs)` after GPS-трек
+- [x] update the KDoc header (currently "up to three UploadSections") to say four
+- [x] update the other stale "three" strings in the same file: the empty-state KDoc "Nothing recorded
       yet in any of the three scopes" and the user-facing empty-state body "статус загрузки отметок,
       фото и GPS-трека" (extend to include судейские отметки)
-- [ ] no new test — the section reuses `UploadSection`/`ReceiptLine`/`showFinishLine`, already covered
+- [x] no new test — the section reuses `UploadSection`/`ReceiptLine`/`showFinishLine`, already covered
       by `FinishLineVisibilityTest`
-- [ ] build check: `./gradlew assembleDebug` compiles — must pass before Task 6
+- [x] build check: `./gradlew assembleDebug` compiles — must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
 
