@@ -45,6 +45,13 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Kolco24">
+        <!-- targetSdk 36 (Android 16) ignores android:screenOrientation on sw600dp+ displays
+             (tablets/foldables) unless this temporary compat property opts back in — without it
+             the portrait lock below would silently stop applying on large-screen Android 16
+             devices. Not honored once targetSdk reaches 37; revisit then. -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true" />
         <!-- launchMode="singleTop" originally backed onNewIntent NDEF re-delivery; the NDEF
              cold/warm launch path is gone (raw chips have no NDEF), but singleTop is kept as it is
              harmless and avoids a second activity instance on any future foreground intent. -->
