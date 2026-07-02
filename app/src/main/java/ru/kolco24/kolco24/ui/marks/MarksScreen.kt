@@ -832,11 +832,13 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
         } else {
             NfcTileBody(mark, tf.text)
         }
-        // The photo-count badge rides on any tile with photos. It mirrors the take-time label (bare mono
-        // digits, no chip) but hugs the bottom-LEADING corner; over the photo scrim it stays dimmed white.
-        if (hasPhotos) {
+        // The «+N» extra-photo badge. The first frame IS the tile background, so it's never counted —
+        // only the *hidden* remainder shows (2 photos → «+1», N → «+(N-1)»); a single-photo tile shows
+        // nothing. Mirrors the take-time label (bare mono digits, no chip) at the bottom-LEADING corner;
+        // over the photo scrim it stays dimmed white.
+        if (mark.photoCount > 1) {
             PhotoCountBadge(
-                count = mark.photoCount,
+                extra = mark.photoCount - 1,
                 color = Color.White.copy(alpha = 0.82f),
                 modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp, start = 8.dp),
             )
@@ -844,11 +846,11 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
     }
 }
 
-/** Photo-count corner label — bare mono digits styled like the take time (no chip). */
+/** Extra-photo corner label — «+N» hidden-frame count, styled like the take time (no chip). */
 @Composable
-private fun PhotoCountBadge(count: Int, color: Color, modifier: Modifier = Modifier) {
+private fun PhotoCountBadge(extra: Int, color: Color, modifier: Modifier = Modifier) {
     Text(
-        text = "$count",
+        text = "+$extra",
         color = color,
         fontFamily = RobotoMono,
         fontWeight = FontWeight.Medium,
