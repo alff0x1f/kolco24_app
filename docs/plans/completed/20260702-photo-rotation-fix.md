@@ -144,8 +144,8 @@
 - [x] Run full unit suite: `./gradlew lintDebug testDebugUnitTest`.
 
 ### Task 6: [Final] Update documentation
-- [ ] Update `CLAUDE.md`: note the app is now portrait-locked (`android:screenOrientation="portrait"` on `MainActivity`), describe the `lastRealTeamId` guard on the team-switch reset effect and why it exists, and document `PhotoCaptureScreen.kt`'s new `bucketOrientationDegrees` (JVM-tested) + `RotationTracker` (untested adapter) replacing the old `previewView.display?.rotation` read for `imageCapture.targetRotation`.
-- [ ] Move this plan to `docs/plans/completed/`.
+- [x] Update `CLAUDE.md`: note the app is now portrait-locked (`android:screenOrientation="portrait"` on `MainActivity`), describe the `lastRealTeamId` guard on the team-switch reset effect and why it exists, and document `PhotoCaptureScreen.kt`'s new `bucketOrientationDegrees` (JVM-tested) + `RotationTracker` (untested adapter) replacing the old `previewView.display?.rotation` read for `imageCapture.targetRotation`.
+- [x] Move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 *Items requiring manual intervention — no checkboxes, informational only.*
