@@ -602,4 +602,75 @@ class ApiClientTest {
 
         assertEquals(PostResult.Error(404), apiClient.bindTag(8, 999, "04A2B3"))
     }
+
+    // --- fetchSync (SyncManifestDto) ---
+
+    @Test
+    fun fetchSync_fullManifest_parsesBothLeaseFields() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """{"race":8,"data_source":"local","lease_ttl_seconds":43200,"lease_expires_at":1718300000}""",
+                ),
+        )
+
+        val result = apiClient.fetchSync(8)
+
+        assertTrue(result is FetchResult.Success)
+        result as FetchResult.Success
+        assertEquals(8, result.data.race)
+        assertEquals("local", result.data.dataSource)
+        assertEquals(43200L, result.data.leaseTtlSeconds)
+        assertEquals(1718300000L, result.data.leaseExpiresAt)
+
+        val recorded = server.takeRequest()
+        assertEquals("/app/race/8/sync/", recorded.path)
+        assertNull(recorded.getHeader("If-None-Match"))
+    }
+
+    @Test
+    fun fetchSync_stubbedManifest_bothLeaseFieldsNull() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("""{"race":8,"data_source":"cloud"}"""),
+        )
+
+        val result = apiClient.fetchSync(8)
+
+        assertTrue(result is FetchResult.Success)
+        result as FetchResult.Success
+        assertEquals("cloud", result.data.dataSource)
+        assertNull(result.data.leaseTtlSeconds)
+        assertNull(result.data.leaseExpiresAt)
+    }
+
+    @Test
+    fun fetchSync_unknownVersionsKey_isIgnored() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """{"race":8,"data_source":"local","versions":{"teams":"abc123","legend":"def456"}}""",
+                ),
+        )
+
+        val result = apiClient.fetchSync(8)
+
+        assertTrue(result is FetchResult.Success)
+        assertEquals("local", (result as FetchResult.Success).data.dataSource)
+    }
+
+    @Test
+    fun fetchSync_404_returnsErrorWith404() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertEquals(FetchResult.Error(404), apiClient.fetchSync(999))
+    }
+
+    @Test
+    fun fetchSync_connectionDrop_returnsErrorWithNullCode() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertEquals(FetchResult.Error(null), apiClient.fetchSync(8))
+    }
 }

@@ -51,10 +51,11 @@ fun RefreshableList(
 /**
  * Pure mapping of a pull-to-refresh outcome to the snackbar message (RU), or `null` when nothing should
  * be shown. Success ([RefreshResult.Updated]/[RefreshResult.NotModified]) is silent — the list updates
- * itself via Room — so only the failure branches return a message.
+ * itself via Room — so only the failure branches return a message. [RefreshResult.Skipped] (a cloud
+ * fetch skipped because the race is pinned to LAN) is also silent — it is not a failure.
  */
 fun refreshErrorMessage(result: RefreshResult): String? = when (result) {
-    RefreshResult.Updated, RefreshResult.NotModified -> null
+    RefreshResult.Updated, RefreshResult.NotModified, RefreshResult.Skipped -> null
     RefreshResult.Offline -> "Нет сети — не удалось обновить"
     RefreshResult.Forbidden -> "Доступ запрещён"
     is RefreshResult.HttpError -> "Ошибка сервера (${result.code})"

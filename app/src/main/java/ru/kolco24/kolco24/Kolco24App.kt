@@ -6,6 +6,7 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ru.kolco24.kolco24.data.SyncSource
 import ru.kolco24.kolco24.data.nearestRaceId
 import ru.kolco24.kolco24.data.todayIso
 
@@ -36,16 +37,19 @@ class Kolco24App : Application() {
             // keeps this cheap; `nearestRaceId` returns null offline/empty → no-op (return@launch).
             val nearest = nearestRaceId(container.raceRepository.races.first(), todayIso())
                 ?: return@launch
+            // Pin-aware: a race pinned to LAN (e.g. re-entering local mode after a process
+            // restart) prefetches from LAN instead of cloud.
+            val source = container.syncCoordinator.sourceFor(nearest)
             launch {
-                val teams = container.teamRepository.refreshTeams(nearest)
+                val teams = container.teamRepository.refreshTeams(nearest, source)
                 Log.i(TAG, "Prefetch teams for nearest race $nearest: $teams")
             }
             launch {
-                val legend = container.legendRepository.refreshLegend(nearest)
+                val legend = container.legendRepository.refreshLegend(nearest, source)
                 Log.i(TAG, "Prefetch legend for nearest race $nearest: $legend")
             }
             launch {
-                val memberTags = container.memberTagsRepository.refreshMemberTags(nearest)
+                val memberTags = container.memberTagsRepository.refreshMemberTags(nearest, source)
                 Log.i(TAG, "Prefetch member tags for nearest race $nearest: $memberTags")
             }
         }
@@ -59,16 +63,22 @@ class Kolco24App : Application() {
             container.teamRepository.selectedTeam.collectLatest { selected ->
                 val raceId = selected?.raceId ?: return@collectLatest
                 supervisorScope {
+                    // Pinned race: probe the LAN once (heartbeat + immediate handback detection)
+                    // before re-reading the source — the probe may have just unpinned it.
+                    if (container.syncCoordinator.sourceFor(raceId) == SyncSource.Local) {
+                        container.syncCoordinator.probeLocalAndRenew(raceId)
+                    }
+                    val source = container.syncCoordinator.sourceFor(raceId)
                     launch {
-                        val result = container.legendRepository.refreshLegend(raceId)
+                        val result = container.legendRepository.refreshLegend(raceId, source)
                         Log.i(TAG, "Legend refresh for race $raceId: $result")
                     }
                     launch {
-                        val teams = container.teamRepository.refreshTeams(raceId)
+                        val teams = container.teamRepository.refreshTeams(raceId, source)
                         Log.i(TAG, "Teams refresh for selected race $raceId: $teams")
                     }
                     launch {
-                        val memberTags = container.memberTagsRepository.refreshMemberTags(raceId)
+                        val memberTags = container.memberTagsRepository.refreshMemberTags(raceId, source)
                         Log.i(TAG, "Member tags refresh for selected race $raceId: $memberTags")
                     }
                     launch {

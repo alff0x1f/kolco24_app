@@ -18,6 +18,7 @@ import ru.kolco24.kolco24.data.api.dto.MarkUploadResponse
 import ru.kolco24.kolco24.data.api.dto.MemberTagsResponse
 import ru.kolco24.kolco24.data.api.dto.RaceDto
 import ru.kolco24.kolco24.data.api.dto.RacesResponse
+import ru.kolco24.kolco24.data.api.dto.SyncManifestDto
 import ru.kolco24.kolco24.data.api.dto.TagBindRequest
 import ru.kolco24.kolco24.data.api.dto.TagBindResponse
 import ru.kolco24.kolco24.data.api.dto.TeamsResponse
@@ -106,6 +107,17 @@ class ApiClient(
     suspend fun fetchMemberTags(raceId: Int, etag: String?): FetchResult<MemberTagsResponse> =
         conditionalGet("$baseUrl/app/race/$raceId/member_tags/", etag) {
             json.decodeFromString<MemberTagsResponse>(it)
+        }
+
+    /**
+     * `GET /app/race/<raceId>/sync/` — the local-mode lease manifest (`data_source` +
+     * lease fields, see [SyncManifestDto]). The endpoint has no ETag/304 by design, so [etag] is
+     * always passed as `null`; `200` → [FetchResult.Success] with the parsed manifest (the ETag
+     * on the result is always `null`). Works through either `ApiClient` instance (cloud or LAN).
+     */
+    suspend fun fetchSync(raceId: Int): FetchResult<SyncManifestDto> =
+        conditionalGet("$baseUrl/app/race/$raceId/sync/", etag = null) {
+            json.decodeFromString<SyncManifestDto>(it)
         }
 
     /**

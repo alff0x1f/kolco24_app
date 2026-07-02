@@ -21,6 +21,7 @@ import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
 import ru.kolco24.kolco24.data.PhotoFrameReader
 import ru.kolco24.kolco24.data.PhotoFrameUploader
+import kotlinx.coroutines.flow.first
 import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.TeamRepository
@@ -28,10 +29,15 @@ import ru.kolco24.kolco24.data.ThemePreference
 import ru.kolco24.kolco24.data.TrackProfilePreference
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
+import ru.kolco24.kolco24.data.api.FetchResult
 import ru.kolco24.kolco24.data.api.ServerTimeInterceptor
 import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.db.TrackScope
+import ru.kolco24.kolco24.data.lease.RaceLease
+import ru.kolco24.kolco24.data.lease.RaceLeaseStore
+import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.marks.PhotoStorage
+import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
@@ -153,12 +159,46 @@ class AppContainer(private val context: Context) {
 
     private val database: AppDatabase by lazy { AppDatabase.build(context) }
 
+    /** Persisted race-lease store backing [raceLease] (see the local-mode-switch plan). */
+    private val raceLeaseStore: RaceLeaseStore by lazy { RaceLeaseStore.fromSharedPreferences(context) }
+
+    /**
+     * Current LAN-data-source pin, `null` = no race pinned. Seeded synchronously from
+     * [raceLeaseStore] at construction; every mutation (renew/clear) writes through to prefs. A
+     * `MutableStateFlow` (not a plain field) so the Settings switch can collect it and reflect a
+     * handback or expiry live.
+     */
+    val raceLease: MutableStateFlow<RaceLease?> = MutableStateFlow(raceLeaseStore.read())
+
+    /**
+     * `true` while the Settings local-mode switch's `enterLocalMode`/`exitLocalMode` call is in
+     * flight on [applicationScope]. Lives here (not `rememberSaveable` in the composition) for the
+     * same reason as [provisioningState]: `enterLocalMode`/`exitLocalMode` can take several seconds
+     * (3 s LAN timeouts), and a composition-scoped flag's `MutableState` instance is recreated on
+     * activity rotation — the in-flight coroutine's closure would then write `false` back to the
+     * orphaned old instance, leaving the new composition's switch stuck busy forever. A process
+     * restart naturally resets this flag to `false` since [AppContainer] itself is reconstructed.
+     */
+    val localModeBusy: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+    /**
+     * Trusted time when the [TrustedClock] anchor is warm, wall clock otherwise — the time source
+     * for all lease math (renew/expiry checks). Worst case (a wall-clock change with no anchor yet)
+     * shifts auto-expiry; the heartbeat probe keeps correcting it on every successful LAN contact.
+     */
+    private val nowMs: () -> Long = { trustedClock.trusted() ?: System.currentTimeMillis() }
+
+    /** `true` when [raceId] is currently pinned to the LAN data source. Read-at-call-time lambda. */
+    private val isRacePinned: (raceId: Int) -> Boolean = { raceId -> isPinned(raceLease.value, raceId, nowMs()) }
+
     val raceRepository: RaceRepository by lazy {
         RaceRepository(
             apiClient = apiClient,
             raceDao = database.raceDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
         )
     }
 
@@ -169,6 +209,9 @@ class AppContainer(private val context: Context) {
             selectedTeamDao = database.selectedTeamDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
+            isRacePinned = isRacePinned,
         )
     }
 
@@ -181,6 +224,9 @@ class AppContainer(private val context: Context) {
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
             json = json,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
+            isRacePinned = isRacePinned,
         )
     }
 
@@ -190,6 +236,37 @@ class AppContainer(private val context: Context) {
             memberTagDao = database.memberTagDao(),
             syncMetaDao = database.syncMetaDao(),
             origin = baseUrl,
+            localApiClient = localApiClient,
+            localOrigin = BuildConfig.LOCAL_API_BASE_URL,
+            isRacePinned = isRacePinned,
+        )
+    }
+
+    /**
+     * Thin orchestration for the local-mode switch + pin-aware auto-syncs (see the
+     * local-mode-switch plan). Binds [SyncCoordinator]'s lambda seams to the real lease state,
+     * store, and the four repos.
+     */
+    val syncCoordinator: SyncCoordinator by lazy {
+        SyncCoordinator(
+            readLease = { raceLease.value },
+            writeLease = { lease ->
+                raceLease.value = lease
+                if (lease != null) raceLeaseStore.write(lease) else raceLeaseStore.clear()
+            },
+            nowMs = nowMs,
+            fetchSync = { raceId ->
+                when (val result = localApiClient.fetchSync(raceId)) {
+                    is FetchResult.Success -> result.data
+                    else -> null
+                }
+            },
+            selectedRaceId = { teamRepository.selectedTeam.first()?.raceId },
+            cachedRaces = { raceRepository.races.first() },
+            refreshRaces = { source -> raceRepository.refreshRaces(source) },
+            refreshTeams = { raceId, source -> teamRepository.refreshTeams(raceId, source) },
+            refreshLegend = { raceId, source -> legendRepository.refreshLegend(raceId, source) },
+            refreshMemberTags = { raceId, source -> memberTagsRepository.refreshMemberTags(raceId, source) },
         )
     }
 
@@ -377,11 +454,14 @@ class AppContainer(private val context: Context) {
      * checkpoints) plus the `sync_meta` ETags, so the next refresh re-fetches everything from
      * scratch. Also deletes every captured photo-mark frame under `filesDir/marks/` (the mark rows
      * are gone, so the frames would otherwise be orphaned on disk — there is no per-mark delete UI).
-     * Blocking; call from a background dispatcher.
+     * Also clears any active local-mode race lease, so the Settings switch doesn't keep pointing at
+     * a race whose data was just wiped. Blocking; call from a background dispatcher.
      */
     fun clearDatabase() {
         database.clearAllTables()
         PhotoStorage.marksRoot(context.filesDir).deleteRecursively()
+        raceLease.value = null
+        raceLeaseStore.clear()
     }
 
     /**

@@ -24,6 +24,13 @@ private fun teamsResource(raceId: Int): String = "race/$raceId/teams"
  * fully replaces that race's local rows.
  *
  * @param origin base URL the data is associated with — used as the ETag partition key in `sync_meta`.
+ * @param localApiClient LAN client for [SyncSource.Local] fetches (the local race-day server).
+ * @param localOrigin the LAN client's base URL — the ETag partition key for LAN fetches.
+ * @param isRacePinned `true` when [raceId] is currently pinned to LAN — a [SyncSource.Cloud]
+ *   refresh for a pinned race must not persist (a stale cloud mirror must not clobber fresher
+ *   local rows), and symmetrically a [SyncSource.Local] refresh for a race that is **not**
+ *   pinned must not persist either (a stale LAN response lingering after the switch turned off
+ *   must not clobber a fresher cloud refresh).
  */
 class TeamRepository(
     private val apiClient: ApiClient,
@@ -31,6 +38,9 @@ class TeamRepository(
     private val selectedTeamDao: SelectedTeamDao,
     private val syncMetaDao: SyncMetaDao,
     private val origin: String,
+    private val localApiClient: ApiClient,
+    private val localOrigin: String,
+    private val isRacePinned: (raceId: Int) -> Boolean,
 ) {
     /** Offline-readable teams of one race, ordered by start number then id. */
     fun teamsForRace(raceId: Int): Flow<List<TeamEntity>> = teamDao.observeTeamsForRace(raceId)
@@ -50,20 +60,44 @@ class TeamRepository(
      * teams + categories then saves the new ETag. Like [RaceRepository.refreshRaces], the data write
      * and the ETag write are two **separate** transactions on purpose: a crash between them leaves
      * fresh data with a stale ETag, so the next refresh gets another `200` and self-heals.
+     *
+     * Guarded against clobbering a pinned race: a [SyncSource.Cloud] call for a currently-pinned
+     * [raceId], and symmetrically a [SyncSource.Local] call for a [raceId] **not** (or no longer)
+     * pinned, returns [RefreshResult.Skipped] **before** hitting the network, and the guard is
+     * re-checked before persisting a `200` (an in-flight response for the source that just lost
+     * relevance — e.g. the switch flipped mid-flight — must not overwrite fresher rows from the
+     * other source).
      */
-    suspend fun refreshTeams(raceId: Int): RefreshResult {
+    suspend fun refreshTeams(raceId: Int, source: SyncSource = SyncSource.Cloud): RefreshResult {
+        if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
+        if (source == SyncSource.Local && !isRacePinned(raceId)) return RefreshResult.Skipped
+        val (client, originKey) = when (source) {
+            SyncSource.Cloud -> apiClient to origin
+            SyncSource.Local -> localApiClient to localOrigin
+        }
         val resource = teamsResource(raceId)
-        val etag = syncMetaDao.getEtag(origin, resource)
-        return when (val result = apiClient.fetchTeams(raceId, etag)) {
+        val etag = syncMetaDao.getEtag(originKey, resource)
+        return when (val result = client.fetchTeams(raceId, etag)) {
             is FetchResult.Success -> {
+                if (source == SyncSource.Cloud && isRacePinned(raceId)) return RefreshResult.Skipped
+                if (source == SyncSource.Local && !isRacePinned(raceId)) return RefreshResult.Skipped
                 val response = result.data
+                // The two origins share this table: a stale ETag on the origin not just written
+                // could earn a 304 on the next switch-back and skip re-persisting its own data.
+                // Cleared **before** the replace (not after) so a crash mid-write can't strand a
+                // stale other-origin ETag masking the fact that this write never landed.
+                val otherOriginKey = when (source) {
+                    SyncSource.Cloud -> localOrigin
+                    SyncSource.Local -> origin
+                }
+                syncMetaDao.deleteEtag(otherOriginKey, resource)
                 teamDao.replaceAllForRace(
                     raceId = raceId,
                     categories = response.categories.map { it.toEntity(raceId) },
                     teams = response.teams.map { it.toEntity(raceId) },
                 )
                 if (result.etag != null) {
-                    syncMetaDao.upsert(SyncMetaEntity(origin, resource, result.etag))
+                    syncMetaDao.upsert(SyncMetaEntity(originKey, resource, result.etag))
                 }
                 RefreshResult.Updated
             }

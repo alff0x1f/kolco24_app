@@ -95,7 +95,10 @@ import ru.kolco24.kolco24.data.nfc.readChipCode
 import ru.kolco24.kolco24.data.nfc.readChipVersion
 import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.TeamEntity
+import ru.kolco24.kolco24.data.lease.isPinned
+import ru.kolco24.kolco24.data.nearestRaceId
 import ru.kolco24.kolco24.data.normalizeNfcUid
+import ru.kolco24.kolco24.data.sync.LocalModeOutcome
 import ru.kolco24.kolco24.data.takenPoints
 import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
@@ -531,6 +534,48 @@ private fun Kolco24AppRoot(
     val selectedTeam by teamRepo.selectedTeam.collectAsState(initial = null)
     val selectedRaceId = selectedTeam?.raceId
     val selectedTeamId = selectedTeam?.teamId
+
+    // Settings «Данные» local-mode switch: position is derived live from the lease StateFlow (not a
+    // stored preference) so a handback landing from Launch B or a pull flips it off even while
+    // Settings is open. Race resolution mirrors SyncCoordinator.enterLocalMode's own fallback.
+    val raceLease by container.raceLease.collectAsState()
+    val localModeRaceId = selectedRaceId ?: nearestRaceId(races, today)
+    val localModeNow = container.trustedClock.trusted() ?: System.currentTimeMillis()
+    val localMode = localModeRaceId != null && isPinned(raceLease, localModeRaceId, localModeNow)
+    val localModeExpiresAtMs = raceLease?.expiresAtMs?.takeIf { localMode }
+    // App-scoped (not rememberSaveable): enterLocalMode/exitLocalMode run on applicationScope and can
+    // take several seconds (3 s LAN timeouts). A composition-scoped flag's MutableState instance is
+    // recreated on activity rotation, so the in-flight coroutine's closure would write `false` back to
+    // the orphaned old instance, leaving the switch stuck busy forever — see AppContainer.localModeBusy.
+    val localModeBusy by container.localModeBusy.collectAsState()
+    val onLocalModeChange: (Boolean) -> Unit = { turnOn ->
+        container.localModeBusy.value = true
+        container.applicationScope.launch {
+            val outcome = if (turnOn) {
+                container.syncCoordinator.enterLocalMode()
+            } else {
+                container.syncCoordinator.exitLocalMode()
+            }
+            val message = when (outcome) {
+                is LocalModeOutcome.PinnedUntil -> {
+                    val until = "Локальный режим до ${
+                        java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                            .format(java.util.Date(outcome.expiresAtMs))
+                    }"
+                    if (outcome.dataStale) "$until — данные не обновлены" else until
+                }
+                LocalModeOutcome.LocalNoPin -> "Локальный режим не активен — данные обновлены из интернета"
+                LocalModeOutcome.LocalUnreachable -> "Локальный сервер недоступен"
+                LocalModeOutcome.CloudUpdated -> "Обновлено из интернета"
+                LocalModeOutcome.Offline -> "Нет соединения"
+                LocalModeOutcome.NoRace -> "Нет данных о гонках"
+            }
+            withContext(Dispatchers.Main) {
+                container.localModeBusy.value = false
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Pull-to-refresh: toggle the tab's spinner around a suspending refresh, then surface failures only
     // (success is silent — the Room flow updates the list). Composition scope: a foreground gesture,
@@ -1092,7 +1137,11 @@ private fun Kolco24AppRoot(
                         takenIds = takenIds,
                         totalScore = legendTotalCost,
                         isRefreshing = legendRefreshing,
-                        onRefresh = { pullRefresh({ legendRefreshing = it }, legendRepo::refreshLegend) },
+                        onRefresh = {
+                            pullRefresh({ legendRefreshing = it }) { raceId ->
+                                legendRepo.refreshLegend(raceId, container.syncCoordinator.sourceFor(raceId))
+                            }
+                        },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     2 -> TeamScreen(
@@ -1110,7 +1159,7 @@ private fun Kolco24AppRoot(
                         onUnbindMember = { member -> unbindSlot = member.numberInTeam },
                         nfcAvailable = nfcAvailable,
                         isRefreshing = teamRefreshing,
-                        onRefresh = { pullRefresh({ teamRefreshing = it }, teamRepo::refreshTeams) },
+                        onRefresh = { pullRefresh({ teamRefreshing = it }, container.syncCoordinator::refreshAll) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
                         trackSegmentCount = trackSegmentCount,
@@ -1323,6 +1372,10 @@ private fun Kolco24AppRoot(
                 trackClearEnabled = safeTrack.isNotEmpty() &&
                     (trackState as? TrackState.Recording)?.teamId != selectedTeamId,
                 onClearTrack = { showClearTrackDialog = true },
+                localMode = localMode,
+                localModeBusy = localModeBusy,
+                localModeExpiresAtMs = localModeExpiresAtMs,
+                onLocalModeChange = onLocalModeChange,
                 session = adminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
                 onOpenAdmin = { showSettings = false; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
@@ -1479,8 +1532,10 @@ private fun Kolco24AppRoot(
                     // Warm Room ahead of the screen transition so the team list is ready when the
                     // picker opens. Use applicationScope so it outlives the closing comp picker.
                     // A duplicate GET with TeamPickerScreen's own onRefresh is accepted (idempotent).
-                    container.applicationScope.launch { teamRepo.refreshTeams(raceId) }
-                    container.applicationScope.launch { legendRepo.refreshLegend(raceId) }
+                    // Pin-aware: a race pinned to LAN prefetches from LAN instead of cloud.
+                    val source = container.syncCoordinator.sourceFor(raceId)
+                    container.applicationScope.launch { teamRepo.refreshTeams(raceId, source) }
+                    container.applicationScope.launch { legendRepo.refreshLegend(raceId, source) }
                     confirmTeamId = null
                     pickerRaceId = raceId
                     teamFlowStep = TeamFlowStep.TeamPicker
@@ -1511,7 +1566,7 @@ private fun Kolco24AppRoot(
                 teamsLoaded = activePickerTeamsLoaded,
                 categories = activePickerCategories,
                 selectedTeamId = selectedTeamId,
-                onRefresh = teamRepo::refreshTeams,
+                onRefresh = { raceId -> teamRepo.refreshTeams(raceId, container.syncCoordinator.sourceFor(raceId)) },
                 onBack = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
                 onChangeRace = { confirmTeamId = null; teamFlowStep = TeamFlowStep.CompPicker },
                 onTeamTapped = { confirmTeamId = it },
@@ -1583,7 +1638,7 @@ private fun Kolco24AppRoot(
                                 // Pool is empty and not yet confirmed in this composition: check the
                                 // durable sync_meta record first (covers activity recreation and cases
                                 // where the startup warm-up synced an empty pool before the sheet opened).
-                                if (memberTagsRepo.hasBeenSynced(activeRaceId)) {
+                                if (memberTagsRepo.hasBeenSynced(activeRaceId, container.syncCoordinator.sourceFor(activeRaceId))) {
                                     // Pool is known-synced but empty; cache the flag and fall through so
                                     // the scan produces NotInPool rather than PoolNotReady.
                                     hasSyncedPool[0] = true
@@ -1593,7 +1648,10 @@ private fun Kolco24AppRoot(
                                     // (a still-empty pool will produce NotInPool on this and all subsequent
                                     // scans).
                                     sheetState = BindSheetState.PoolNotReady
-                                    val refreshResult = memberTagsRepo.refreshMemberTags(activeRaceId)
+                                    val refreshResult = memberTagsRepo.refreshMemberTags(
+                                        activeRaceId,
+                                        container.syncCoordinator.sourceFor(activeRaceId),
+                                    )
                                     if (refreshResult == RefreshResult.Offline ||
                                         refreshResult is RefreshResult.HttpError ||
                                         refreshResult == RefreshResult.Forbidden
