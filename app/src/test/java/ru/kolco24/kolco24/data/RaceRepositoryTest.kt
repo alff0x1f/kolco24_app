@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.data
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -272,6 +273,9 @@ private class FakeSyncMetaDao(private val callLog: MutableList<String> = mutable
     private val store = mutableMapOf<Pair<String, String>, String>()
 
     override suspend fun getEtag(origin: String, resource: String): String? = store[origin to resource]
+
+    override fun observeEtagsExist(origin: String, resource1: String, resource2: String): Flow<Boolean> =
+        flowOf(store.containsKey(origin to resource1) || store.containsKey(origin to resource2))
 
     override suspend fun upsert(meta: SyncMetaEntity) {
         store[meta.origin to meta.resource] = meta.etag

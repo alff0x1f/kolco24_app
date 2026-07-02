@@ -92,6 +92,11 @@ class Kolco24App : Application() {
                         // old race/team flushes here. Idempotent by client id, tryLock-guarded.
                         container.markRepository.uploadAllPending()
                     }
+                    launch {
+                        // Same opportunistic re-send for judge start/finish piks: raceId-scoped (no
+                        // team dimension), idempotent by client id, tryLock-guarded.
+                        container.judgeScanRepository.uploadAllPending()
+                    }
                 }
             }
         }

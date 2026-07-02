@@ -22,8 +22,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MarkEntity::class,
         LegendMetaEntity::class,
         TrackPointEntity::class,
+        JudgeScanEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(
@@ -43,6 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun markDao(): MarkDao
     abstract fun legendMetaDao(): LegendMetaDao
     abstract fun trackDao(): TrackDao
+    abstract fun judgeScanDao(): JudgeScanDao
 
     companion object {
         // Migrations are LIVE again as of v2. The app is shipped (project memory:
@@ -98,13 +100,44 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v4→v5 (judge start/finish scan): creates `judge_scans` (see [JudgeScanEntity]), a new
+         * table for judge-side start/finish piks, scoped by `raceId` only. Write-once rows, no
+         * `updatedAt` guard. Column types/nullability and the index name must match exactly what Room
+         * generates for the entity, or `runMigrationsAndValidate` fails against the committed schema.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `judge_scans` (
+                        `id` TEXT NOT NULL,
+                        `raceId` INTEGER NOT NULL,
+                        `eventType` TEXT NOT NULL,
+                        `participantNumber` INTEGER NOT NULL,
+                        `nfcUid` TEXT NOT NULL,
+                        `takenAt` INTEGER NOT NULL,
+                        `trustedTakenAt` INTEGER,
+                        `elapsedRealtimeAt` INTEGER NOT NULL,
+                        `bootCount` INTEGER,
+                        `sourceInstallId` TEXT NOT NULL,
+                        `uploadedLocal` INTEGER NOT NULL DEFAULT 0,
+                        `uploadedCloud` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_judge_scans_raceId` ON `judge_scans` (`raceId`)")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }

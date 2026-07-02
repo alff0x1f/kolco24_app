@@ -3,11 +3,21 @@ package ru.kolco24.kolco24.data.db
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SyncMetaDao {
     @Query("SELECT etag FROM sync_meta WHERE origin = :origin AND resource = :resource")
     suspend fun getEtag(origin: String, resource: String): String?
+
+    /**
+     * Reactive twin of [getEtag]'s presence check for two resource keys at once — Room re-emits on
+     * every `sync_meta` write, so a caller observing this Flow sees a fetch complete without polling.
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM sync_meta WHERE origin = :origin AND resource IN (:resource1, :resource2))",
+    )
+    fun observeEtagsExist(origin: String, resource1: String, resource2: String): Flow<Boolean>
 
     @Upsert
     suspend fun upsert(meta: SyncMetaEntity)

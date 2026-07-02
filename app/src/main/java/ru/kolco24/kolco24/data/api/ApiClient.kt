@@ -9,6 +9,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import ru.kolco24.kolco24.data.api.dto.JudgeScanDto
+import ru.kolco24.kolco24.data.api.dto.JudgeScanUploadRequest
+import ru.kolco24.kolco24.data.api.dto.JudgeScanUploadResponse
 import ru.kolco24.kolco24.data.api.dto.LegendResponse
 import ru.kolco24.kolco24.data.api.dto.LoginRequest
 import ru.kolco24.kolco24.data.api.dto.LoginResponse
@@ -227,6 +230,26 @@ class ApiClient(
         val bytes = json.encodeToString(MarkUploadRequest(teamId, sourceInstallId, marks)).toByteArray()
         return post("$baseUrl/app/race/$raceId/marks/", bytes) {
             json.decodeFromString<MarkUploadResponse>(it)
+        }
+    }
+
+    /**
+     * `POST /app/race/<raceId>/judge_scans/` — upload a batch of judge start/finish [scans] for the
+     * race (all teams; no `teamId` param, unlike [uploadMarks]). `200`/`201` → [PostResult.Success]
+     * with the parsed [JudgeScanUploadResponse] (the accepted client `id`s for idempotent upsert);
+     * other statuses map per [post]. The same method serves both upload targets (cloud / local LAN) —
+     * the target is selected by the `ApiClient` instance, not a per-call URL. The server endpoint is
+     * not yet implemented (see the plan's Post-Completion section); until then every call returns a
+     * non-success `PostResult` and rows stay pending.
+     */
+    suspend fun uploadJudgeScans(
+        raceId: Int,
+        sourceInstallId: String,
+        scans: List<JudgeScanDto>,
+    ): PostResult<JudgeScanUploadResponse> {
+        val bytes = json.encodeToString(JudgeScanUploadRequest(sourceInstallId, scans)).toByteArray()
+        return post("$baseUrl/app/race/$raceId/judge_scans/", bytes) {
+            json.decodeFromString<JudgeScanUploadResponse>(it)
         }
     }
 
