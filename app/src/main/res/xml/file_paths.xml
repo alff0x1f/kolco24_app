@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  FileProvider paths. We only ever expose generated GPX exports written to cacheDir/tracks/ — nothing
-  user-private. The authority is ${applicationId}.fileprovider (see AndroidManifest.xml).
+  FileProvider paths. The authority is ${applicationId}.fileprovider (see AndroidManifest.xml).
+  Two entries:
+   - cache/tracks/ — generated GPX exports (share GPX).
+   - files/marks/  — captured КП photo frames, exposed read-only per-URI so the lightbox can share a
+     single frame (FLAG_GRANT_READ_URI_PERMISSION grants only the one shared URI; declaring the subtree
+     here does NOT let a receiving app enumerate the folder — it only makes those files addressable).
 -->
 <paths>
     <cache-path name="tracks" path="tracks/" />
+    <files-path name="marks" path="marks/" />
 </paths>
