@@ -142,18 +142,18 @@ are `raceId`-scoped only):
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/JudgeScanRepository.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/JudgeScanRepositoryTest.kt`
 
-- [ ] add constructor param `onUploadOutcome: (raceId: Int, target: UploadTarget, kind: UploadResultKind) -> Unit = { _, _, _ -> }`
+- [x] add constructor param `onUploadOutcome: (raceId: Int, target: UploadTarget, kind: UploadResultKind) -> Unit = { _, _, _ -> }`
       (import `UploadTarget`); keep it last so existing call sites are unaffected
-- [ ] add `fun uploadCounts(raceId: Int): Flow<UploadCounts> = judgeScanDao.uploadCounts(raceId)` passthrough
-- [ ] update the in-test `FakeJudgeScanDao` (in `JudgeScanRepositoryTest.kt`) to implement the new
+- [x] add `fun uploadCounts(raceId: Int): Flow<UploadCounts> = judgeScanDao.uploadCounts(raceId)` passthrough
+- [x] update the in-test `FakeJudgeScanDao` (in `JudgeScanRepositoryTest.kt`) to implement the new
       `uploadCounts` method, or the test module won't compile
-- [ ] in `flushRace`, capture the local `uploadLoop` return and, when non-null, call
+- [x] in `flushRace`, capture the local `uploadLoop` return and, when non-null, call
       `onUploadOutcome(raceId, UploadTarget.Local, kind)`; same for cloud with `UploadTarget.Cloud`
-- [ ] add KDoc noting the callback fires only when a loop attempted (null → untouched), mirroring `MarkRepository`
-- [ ] write test: successful drain of both targets → callback fires `Ok` for Local and Cloud
-- [ ] write test: an `Offline`/`Error` upload response → callback fires the mapped kind for that target
-- [ ] write test: idle re-flush (no pending rows → `uploadLoop` returns null) → callback **not** invoked
-- [ ] run `./gradlew testDebugUnitTest` (JudgeScanRepositoryTest) — must pass before Task 3
+- [x] add KDoc noting the callback fires only when a loop attempted (null → untouched), mirroring `MarkRepository`
+- [x] write test: successful drain of both targets → callback fires `Ok` for Local and Cloud
+- [x] write test: an `Offline`/`Error` upload response → callback fires the mapped kind for that target
+- [x] write test: idle re-flush (no pending rows → `uploadLoop` returns null) → callback **not** invoked
+- [x] run `./gradlew testDebugUnitTest` (JudgeScanRepositoryTest) — must pass before Task 3
 
 ### Task 3: Add `judgeScanUploadOutcomes` StateFlow + wire the repo in `AppContainer`
 

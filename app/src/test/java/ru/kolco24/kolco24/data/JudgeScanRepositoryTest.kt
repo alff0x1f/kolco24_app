@@ -1,6 +1,8 @@
 package ru.kolco24.kolco24.data
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,7 +14,10 @@ import ru.kolco24.kolco24.data.api.dto.JudgeScanDto
 import ru.kolco24.kolco24.data.api.dto.JudgeScanUploadResponse
 import ru.kolco24.kolco24.data.db.JudgeScanDao
 import ru.kolco24.kolco24.data.db.JudgeScanEntity
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.data.track.UploadResultKind
+import ru.kolco24.kolco24.data.track.UploadTarget
 
 class JudgeScanRepositoryTest {
 
@@ -133,6 +138,56 @@ class JudgeScanRepositoryTest {
         assertTrue(dao.rowsFor(2).all { it.uploadedLocal && it.uploadedCloud })
     }
 
+    @Test
+    fun uploadPending_bothTargetsSucceed_callbackFiresOkForLocalAndCloud() = runTest {
+        repository.record(1, "start", 1, "UID1", sample())
+        val outcomes = mutableMapOf<UploadTarget, UploadResultKind>()
+        repository = JudgeScanRepository(
+            dao,
+            cloudUploader = FakeUploader(),
+            localUploader = FakeUploader(),
+            onUploadOutcome = { _, target, kind -> outcomes[target] = kind },
+        )
+
+        repository.uploadPending(raceId = 1)
+
+        assertEquals(UploadResultKind.Ok, outcomes[UploadTarget.Local])
+        assertEquals(UploadResultKind.Ok, outcomes[UploadTarget.Cloud])
+    }
+
+    @Test
+    fun uploadPending_offlineOrError_callbackFiresMappedKindPerTarget() = runTest {
+        repository.record(1, "start", 1, "UID1", sample())
+        val outcomes = mutableMapOf<UploadTarget, UploadResultKind>()
+        repository = JudgeScanRepository(
+            dao,
+            cloudUploader = FakeUploader { PostResult.Offline },
+            localUploader = FakeUploader { PostResult.Error(500) },
+            onUploadOutcome = { _, target, kind -> outcomes[target] = kind },
+        )
+
+        repository.uploadPending(raceId = 1)
+
+        assertEquals(UploadResultKind.Offline, outcomes[UploadTarget.Cloud])
+        assertEquals(UploadResultKind.Error, outcomes[UploadTarget.Local])
+    }
+
+    @Test
+    fun uploadPending_idleReflushWithNothingPending_callbackNotInvoked() = runTest {
+        // No rows recorded for raceId 1 — uploadLoop's first fetch is empty, returns null.
+        var invoked = false
+        repository = JudgeScanRepository(
+            dao,
+            cloudUploader = FakeUploader(),
+            localUploader = FakeUploader(),
+            onUploadOutcome = { _, _, _ -> invoked = true },
+        )
+
+        repository.uploadPending(raceId = 1)
+
+        assertFalse(invoked)
+    }
+
     private class FakeUploader(
         private val respond: suspend (List<JudgeScanDto>) -> PostResult<JudgeScanUploadResponse> =
             { scans -> PostResult.Success(JudgeScanUploadResponse(scans.map { it.id })) },
@@ -181,4 +236,13 @@ private class FakeJudgeScanDao : JudgeScanDao {
 
     override suspend fun pendingUploadRaces(): List<Int> =
         rows.value.filter { !it.uploadedLocal || !it.uploadedCloud }.map { it.raceId }.distinct()
+
+    override fun uploadCounts(raceId: Int): Flow<UploadCounts> = rows.map { all ->
+        val scoped = all.filter { it.raceId == raceId }
+        UploadCounts(
+            total = scoped.size,
+            local = scoped.count { it.uploadedLocal },
+            cloud = scoped.count { it.uploadedCloud },
+        )
+    }
 }
