@@ -1,10 +1,15 @@
 package ru.kolco24.kolco24.ui.marks
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -49,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -58,13 +64,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -78,10 +88,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.absoluteValue
+import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.takenPointCount
@@ -308,7 +321,14 @@ fun MarksScreen(
         // Full-screen view-only lightbox, drawn over the whole screen (incl. the TopAppBar) so the
         // photos own the frame; tap or back dismisses it.
         if (lightboxPaths.isNotEmpty()) {
-            PhotoLightbox(paths = lightboxPaths, onDismiss = { lightboxPaths = emptyList() })
+            // The tile grid always opens the lightbox with one mark's own photo list, so a structural
+            // match against the just-recomputed [tiles] finds the same mark (for its КП chip) without
+            // threading extra saveable state through the click callback.
+            PhotoLightbox(
+                mark = tiles.firstOrNull { it.photoPaths == lightboxPaths },
+                paths = lightboxPaths,
+                onDismiss = { lightboxPaths = emptyList() },
+            )
         }
     }
 }
@@ -803,7 +823,7 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
     ) {
         when (mark.kind) {
             MarkKind.NFC -> NfcTileBody(mark, tf.text)
-            MarkKind.PHOTO -> PhotoTileBody(mark)
+            MarkKind.PHOTO -> PhotoTileBody(mark, tf.fill)
         }
         // The «📷×N» badge rides on **any** tile with photos (NFC takes can carry photo evidence too),
         // so it is gated on [Mark.photoCount], not the tile [kind].
@@ -845,25 +865,52 @@ private fun PhotoCountBadge(count: Int, modifier: Modifier = Modifier) {
 /**
  * Full-screen, view-only photo lightbox: a [HorizontalPager] over the take's N captured frames, resolved
  * from `filesDir` at render time (the [Mark] carries only relative paths). A «k/N» counter rides the top
- * when there is more than one frame; a tap anywhere or back dismisses. Phase 1 has no edit/delete here.
+ * when there is more than one frame; a tap anywhere or back dismisses. [mark] (looked up by the caller
+ * from the same [Mark] the tile grid tapped) feeds the top-left [PhotoKpChip] — `null` only if the
+ * underlying data changed out from under an already-open lightbox, in which case the chip is simply
+ * skipped. **Swipe-down-to-dismiss** (the phone gallery's own gesture): dragging vertically translates the
+ * current page and fades the black backdrop toward the screen behind it; releasing past
+ * [dismissThresholdDp] closes, otherwise it springs back to center. Phase 1 has no edit/delete here.
  */
 @Composable
-private fun PhotoLightbox(paths: List<String>, onDismiss: () -> Unit) {
+private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val pagerState = rememberPagerState(pageCount = { paths.size })
+    val scope = rememberCoroutineScope()
+    val offsetY = remember { Animatable(0f) }
+    val dismissThresholdPx = with(LocalDensity.current) { dismissThresholdDp.toPx() }
     BackHandler(onBack = onDismiss)
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer {
+                // Fades the backdrop (revealing the screen underneath) as the drag approaches the
+                // dismiss threshold — a preview of the close, not a hard cut.
+                alpha = 1f - (offsetY.value.absoluteValue / dismissThresholdPx).coerceIn(0f, 1f) * 0.7f
+            }
             .background(Color.Black),
     ) {
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-            AsyncImage(
-                model = File(context.filesDir, paths[page]),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
-            )
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { translationY = offsetY.value }
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            scope.launch {
+                                if (offsetY.value.absoluteValue > dismissThresholdPx) onDismiss()
+                                else offsetY.animateTo(0f)
+                            }
+                        },
+                        onDragCancel = { scope.launch { offsetY.animateTo(0f) } },
+                    ) { change, dragAmount ->
+                        change.consume()
+                        scope.launch { offsetY.snapTo(offsetY.value + dragAmount) }
+                    }
+                },
+        ) { page ->
+            LightboxPage(file = File(context.filesDir, paths[page]), mark = mark)
         }
         if (paths.size > 1) {
             Text(
@@ -880,6 +927,55 @@ private fun PhotoLightbox(paths: List<String>, onDismiss: () -> Unit) {
             modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 8.dp),
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White)
+        }
+    }
+}
+
+/** Vertical drag distance past which releasing the lightbox closes it instead of springing back. */
+private val dismissThresholdDp = 120.dp
+
+/**
+ * One lightbox page: the photo is drawn with [ContentScale.Fit], which letterboxes rather than filling
+ * the page whenever the frame's aspect ratio doesn't match the screen's — so the [PhotoKpChip] is pinned
+ * to the *photo's own* rendered top-left corner, not the page's, by first sizing an inner [Box] to the
+ * photo's actual displayed (post-letterbox) dimensions and aligning the chip within that box. Before the
+ * frame's intrinsic size is known (first composition / load in flight) the inner box falls back to filling
+ * the page so nothing crashes or flashes at 0-size; the chip lands correctly on the very next frame once
+ * the size resolves.
+ */
+@Composable
+private fun LightboxPage(file: File, mark: Mark?, modifier: Modifier = Modifier) {
+    val painter = rememberAsyncImagePainter(model = file)
+    val intrinsic = painter.intrinsicSize
+    BoxWithConstraints(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val photoSizeModifier = if (intrinsic.isSpecified && intrinsic.width > 0f && intrinsic.height > 0f) {
+            val scale = minOf(
+                constraints.maxWidth / intrinsic.width,
+                constraints.maxHeight / intrinsic.height,
+            )
+            with(LocalDensity.current) {
+                Modifier.size(
+                    width = (intrinsic.width * scale).toDp(),
+                    height = (intrinsic.height * scale).toDp(),
+                )
+            }
+        } else {
+            Modifier.fillMaxSize()
+        }
+        Box(modifier = photoSizeModifier) {
+            Image(
+                painter = painter,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (mark != null) {
+                PhotoKpChip(
+                    mark = mark,
+                    color = tileFill(mark.color, isDarkScheme()).fill,
+                    modifier = Modifier.align(Alignment.TopStart),
+                )
+            }
         }
     }
 }
@@ -923,34 +1019,40 @@ private fun NfcTileBody(mark: Mark, textColor: Color) {
 }
 
 /**
- * The `<стоимость>-<номер>` token with the hyphen dimmed to 50% alpha (the digits inherit the caller's
+ * The `<стоимость>-<номер>` token with the hyphen dimmed ([hyphenAlpha], the digits inherit the caller's
  * text color), so the cost and number read as two values rather than one run on the color fill.
  * A zero-cost КП (transit/test zone) shows only the bare number — no cost prefix, no hyphen.
  */
-private fun tokenAnnotated(mark: Mark, textColor: Color): AnnotatedString = buildAnnotatedString {
+private fun tokenAnnotated(
+    mark: Mark,
+    textColor: Color,
+    hyphenAlpha: Float = 0.5f,
+): AnnotatedString = buildAnnotatedString {
     if (mark.cost == 0) {
         // Zero-cost КП (transit/test zone): show only the number, no cost prefix.
         append(mark.number)
     } else {
         append("${mark.cost}")
-        withStyle(SpanStyle(color = textColor.copy(alpha = 0.5f))) { append("-") }
+        withStyle(SpanStyle(color = textColor.copy(alpha = hyphenAlpha))) { append("-") }
         append(mark.number)
     }
 }
 
 /**
- * A photo take's tile: the captured photo fills the whole square. The `<стоимость>-<номер>` token sits
- * **bottom-leading** and the take time **bottom-end**, both inside a bottom scrim (transparent → ~60%
- * black) so they read as a legible caption — *not* centered — once a real photo replaces the charcoal
- * placeholder (a centered token would float over the bright middle of a photo with no scrim behind it).
+ * A photo take's tile: the captured photo fills the whole square and stays fully uncovered — the КП
+ * discipline color no longer washes over it, it now runs as a 3dp inset perimeter [border] plus the
+ * top-left [PhotoKpChip] (the `<стоимость>-<номер>` token moved there from its old bottom-leading spot).
+ * The take time stays **bottom-end** inside the original bottom scrim (transparent → ~60% black) so it
+ * reads as a legible caption over bright imagery.
  */
 @Composable
-private fun PhotoTileBody(mark: Mark) {
+private fun PhotoTileBody(mark: Mark, stageColor: Color) {
     val context = LocalContext.current
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
+            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom)))
+            .border(3.dp, stageColor),
     ) {
         // The first captured frame fills the tile; the charcoal gradient shows through until it loads
         // (and stays as the seat if the file is missing). `filesDir` is resolved here — the pure mapper
@@ -963,7 +1065,7 @@ private fun PhotoTileBody(mark: Mark) {
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        // Bottom scrim so the caption stays legible over real imagery (the placeholder is dark already,
+        // Bottom scrim so the take time stays legible over real imagery (the placeholder is dark already,
         // but a photo's lower edge can be bright).
         Box(
             modifier = Modifier
@@ -975,19 +1077,6 @@ private fun PhotoTileBody(mark: Mark) {
                 ),
         )
         Text(
-            text = tokenAnnotated(mark, Color.White),
-            color = Color.White,
-            maxLines = 1,
-            style = TextStyle(
-                fontFamily = RobotoMono,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                letterSpacing = (-0.4).sp,
-                platformStyle = PlatformTextStyle(includeFontPadding = false),
-            ),
-            modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp, start = 8.dp),
-        )
-        Text(
             text = mark.time,
             fontFamily = RobotoMono,
             fontWeight = FontWeight.Medium,
@@ -995,7 +1084,33 @@ private fun PhotoTileBody(mark: Mark) {
             color = Color.White.copy(alpha = 0.82f),
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
+        PhotoKpChip(mark = mark, color = stageColor, modifier = Modifier.align(Alignment.TopStart))
     }
+}
+
+/**
+ * The КП-code anchor pinned to a photo tile/lightbox's top-left corner: solid discipline [color] (the
+ * same shade as the tile's perimeter border), only the corner floating inside the tile (bottom-end)
+ * rounded to 9dp — the two edges flush with the tile's own edges stay square, so the top-leading corner
+ * coincides exactly with the tile's corner. White, bold, mono, tight tracking per spec.
+ */
+@Composable
+private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = tokenAnnotated(mark, Color.White, hyphenAlpha = 0.55f),
+        color = Color.White,
+        maxLines = 1,
+        style = TextStyle(
+            fontFamily = RobotoMono,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.5.sp,
+            letterSpacing = (-0.6).sp,
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+        ),
+        modifier = modifier
+            .background(color, RoundedCornerShape(bottomEnd = 9.dp))
+            .padding(horizontal = 7.dp, vertical = 4.dp),
+    )
 }
 
 /**
