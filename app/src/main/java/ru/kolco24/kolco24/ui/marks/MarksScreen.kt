@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -113,7 +112,7 @@ data class Mark(
     val color: CheckpointColor? = null,
     // Relative (`marks/<markId>/<uuid>.jpg`) photo paths captured for this take; `filesDir` is resolved
     // at the `AsyncImage` site, never here. Carried on **any** take (an NFC take can also carry photo
-    // evidence) so the «📷×N» badge is driven by [photoCount], independent of the tile [kind].
+    // evidence) so the photo-count badge is driven by [photoCount], independent of the tile [kind].
     val photoPaths: List<String> = emptyList(),
 ) {
     val photoCount: Int get() = photoPaths.size
@@ -823,45 +822,41 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
             // tile keeps its current inert behaviour.
             .then(if (hasPhotos) Modifier.clickable { onPhotoTileClick(mark.photoPaths) } else Modifier),
     ) {
-        when (mark.kind) {
-            MarkKind.NFC -> NfcTileBody(mark, tf.text)
-            MarkKind.PHOTO -> PhotoTileBody(mark, tf.fill)
-        }
-        // The «📷×N» badge rides on **any** tile with photos (NFC takes can carry photo evidence too),
-        // so it is gated on [Mark.photoCount], not the tile [kind].
+        // A take that carries photos shows its first frame as the tile background regardless of how it
+        // was marked — a PHOTO take, or an NFC take that also captured evidence. Only a plain NFC take
+        // with no photos keeps the flat color-fill token body. The top-right camera chip stays exclusive
+        // to PHOTO-kind takes (see [PhotoTileBody.showCameraChip]) so an NFC-with-photos tile is still
+        // told apart from a pure photo take.
         if (hasPhotos) {
+            PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
+        } else {
+            NfcTileBody(mark, tf.text)
+        }
+        // The «+N» extra-photo badge. The first frame IS the tile background, so it's never counted —
+        // only the *hidden* remainder shows (2 photos → «+1», N → «+(N-1)»); a single-photo tile shows
+        // nothing. Mirrors the take-time label (bare mono digits, no chip) at the bottom-LEADING corner;
+        // over the photo scrim it stays dimmed white.
+        if (mark.photoCount > 1) {
             PhotoCountBadge(
-                count = mark.photoCount,
-                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                extra = mark.photoCount - 1,
+                color = Color.White.copy(alpha = 0.82f),
+                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp, start = 8.dp),
             )
         }
     }
 }
 
-/** Small «📷×N» corner badge over a tile carrying captured photos. */
+/** Extra-photo corner label — «+N» hidden-frame count, styled like the take time (no chip). */
 @Composable
-private fun PhotoCountBadge(count: Int, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 5.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Icon(
-            Icons.Filled.CameraAlt,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(11.dp),
-        )
-        Text(
-            text = "×$count",
-            color = Color.White,
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Medium,
-            fontSize = 10.sp,
-        )
-    }
+private fun PhotoCountBadge(extra: Int, color: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = "+$extra",
+        color = color,
+        fontFamily = RobotoMono,
+        fontWeight = FontWeight.Medium,
+        fontSize = 10.5.sp,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -976,6 +971,8 @@ private fun LightboxPage(file: File, mark: Mark?, modifier: Modifier = Modifier)
                     mark = mark,
                     color = tileFill(mark.color, isDarkScheme()).fill,
                     modifier = Modifier.align(Alignment.TopStart),
+                    // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
+                    scale = 1.7f,
                 )
             }
         }
@@ -1041,20 +1038,21 @@ private fun tokenAnnotated(
 }
 
 /**
- * A photo take's tile: the captured photo fills the whole square and stays fully uncovered — the КП
- * discipline color no longer washes over it, it now runs as a 3dp inset perimeter [border] plus the
- * top-left [PhotoKpChip] (the `<стоимость>-<номер>` token moved there from its old bottom-leading spot).
- * The take time stays **bottom-end** inside the original bottom scrim (transparent → ~60% black) so it
- * reads as a legible caption over bright imagery.
+ * A photo take's tile: the captured photo fills the whole square edge-to-edge — the КП discipline color
+ * no longer washes over it or frames it. Tiles are separated purely by the grid grout; the discipline
+ * color survives in the corner chips ([PhotoKpChip] top-left carrying the `<стоимость>-<номер>` token,
+ * plus the top-right camera glyph on photo takes). The take time stays **bottom-end** inside the bottom
+ * scrim (transparent → ~60% black) so it reads as a legible caption over bright imagery. Shared by PHOTO
+ * takes and NFC takes that carry photos; [showCameraChip] gates the top-right glyph so only a genuine
+ * photo take flags it.
  */
 @Composable
-private fun PhotoTileBody(mark: Mark, stageColor: Color) {
+private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean = true) {
     val context = LocalContext.current
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom)))
-            .border(3.dp, stageColor),
+            .background(Brush.verticalGradient(listOf(PhotoTileTop, PhotoTileBottom))),
     ) {
         // The first captured frame fills the tile; the charcoal gradient shows through until it loads
         // (and stays as the seat if the file is missing). `filesDir` is resolved here — the pure mapper
@@ -1087,7 +1085,28 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color) {
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
         )
         PhotoKpChip(mark = mark, color = stageColor, modifier = Modifier.align(Alignment.TopStart))
+        if (showCameraChip) {
+            PhotoCameraChip(color = stageColor, modifier = Modifier.align(Alignment.TopEnd))
+        }
     }
+}
+
+/**
+ * The camera glyph pinned to a photo tile's top-RIGHT corner, mirroring [PhotoKpChip]'s backing: solid
+ * discipline [color], only the inner floating corner (bottom-start) rounded to 9dp so the two flush edges
+ * stay square and the top-trailing corner coincides with the tile's. Marks a photo (not NFC) take at a glance.
+ */
+@Composable
+private fun PhotoCameraChip(color: Color, modifier: Modifier = Modifier) {
+    Icon(
+        Icons.Filled.CameraAlt,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = modifier
+            .background(color, RoundedCornerShape(bottomStart = 9.dp))
+            .padding(horizontal = 6.dp, vertical = 5.dp)
+            .size(15.dp),
+    )
 }
 
 /**
@@ -1097,7 +1116,9 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color) {
  * coincides exactly with the tile's corner. White, bold, mono, tight tracking per spec.
  */
 @Composable
-private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier) {
+private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier, scale: Float = 1f) {
+    // [scale] grows the whole chip in proportion (font + tracking + padding + corner) so the fullscreen
+    // lightbox can render it larger than the thumbnail tile without the token looking lost on the photo.
     Text(
         text = tokenAnnotated(mark, Color.White, hyphenAlpha = 0.55f),
         color = Color.White,
@@ -1105,13 +1126,13 @@ private fun PhotoKpChip(mark: Mark, color: Color, modifier: Modifier = Modifier)
         style = TextStyle(
             fontFamily = RobotoMono,
             fontWeight = FontWeight.Bold,
-            fontSize = 14.5.sp,
-            letterSpacing = (-0.6).sp,
+            fontSize = 14.5.sp * scale,
+            letterSpacing = (-0.6).sp * scale,
             platformStyle = PlatformTextStyle(includeFontPadding = false),
         ),
         modifier = modifier
-            .background(color, RoundedCornerShape(bottomEnd = 9.dp))
-            .padding(horizontal = 7.dp, vertical = 4.dp),
+            .background(color, RoundedCornerShape(bottomEnd = 9.dp * scale))
+            .padding(horizontal = 7.dp * scale, vertical = 4.dp * scale),
     )
 }
 
