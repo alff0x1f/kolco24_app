@@ -117,10 +117,10 @@ Sequenced by design: fanfare plays out on the green screen, then the coin fires 
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify all Overview requirements are implemented (fanfare replaces beep on the completing tap only; 3.5 s hold; navigation + scroll + pop + coin only on completion auto-close)
-- [ ] verify edge cases: completion on a **Kp** event (pre-buffered members); idempotent re-tap during the hold (no fanfare restart); manual back during the hold (no celebration); empty-tiles guard consumes the event; team switch clears `pendingCelebration`
-- [ ] `./gradlew assembleDebug` builds clean
-- [ ] run full suite: `./gradlew testDebugUnitTest lintDebug`
+- [x] verify all Overview requirements are implemented (fanfare replaces beep on the completing tap only; 3.5 s hold; navigation + scroll + pop + coin only on completion auto-close)
+- [x] verify edge cases: completion on a **Kp** event (pre-buffered members); idempotent re-tap during the hold (no fanfare restart); manual back during the hold (no celebration); empty-tiles guard consumes the event; team switch clears `pendingCelebration`
+- [x] `./gradlew assembleDebug` builds clean
+- [x] run full suite: `./gradlew testDebugUnitTest lintDebug`
 
 ### Task 6: [Final] Update documentation
 
