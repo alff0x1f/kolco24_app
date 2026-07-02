@@ -151,8 +151,19 @@ private fun CompFilterChip(
     onClick: () -> Unit,
     label: String,
 ) {
-    val backgroundColor = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
-    val contentColor = if (selected) MaterialTheme.colorScheme.inverseOnSurface else MaterialTheme.colorScheme.onSurface
+    // Selected fill is a charcoal pill in light theme; onSurface would invert to a glaring near-white
+    // in dark, so use the neutral elevated grey there instead (mirrors the admin/settings avatars).
+    val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val backgroundColor = when {
+        !selected -> Color.Transparent
+        darkTheme -> MaterialTheme.colorScheme.surfaceContainerHighest
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val contentColor = when {
+        !selected -> MaterialTheme.colorScheme.onSurface
+        darkTheme -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.inverseOnSurface
+    }
     val border = if (selected) null else BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
 
     Surface(
