@@ -127,11 +127,11 @@ Sequenced by design: fanfare plays out on the green screen, then the coin fires 
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] CLAUDE.md `ScanFeedback.kt` bullet: replace «no "complete" flourish» — completion now plays the fanfare via `checkpointComplete()` (transition-guarded, replaces the beep on the completing tap); mapper still 2-way
-- [ ] CLAUDE.md `ScanScreen.kt` / Scan-wiring bullets: «~1 s green Готово beat» → ~3.5 s fanfare-length hold; document `onCompleted` → `pendingCelebration` → MarksScreen consume-on-arrival celebration (coin + last-tile pop) briefly
-- [ ] CLAUDE.md `data/ScanFeedbackPlayer.kt` bullet: update the loaded-clip list (add `checkpoint_mark_completed`/`mark_added_mario`, and the already-missing `shutter`) and the new `checkpointComplete()`/`coin()` outcomes
-- [ ] CLAUDE.md App-assets bullet: add the two new raw clips; note `mark-added.wav` is not shipped
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md `ScanFeedback.kt` bullet: replace «no "complete" flourish» — completion now plays the fanfare via `checkpointComplete()` (transition-guarded, replaces the beep on the completing tap); mapper still 2-way
+- [x] CLAUDE.md `ScanScreen.kt` / Scan-wiring bullets: «~1 s green Готово beat» → ~3.5 s fanfare-length hold; document `onCompleted` → `pendingCelebration` → MarksScreen consume-on-arrival celebration (coin + last-tile pop) briefly
+- [x] CLAUDE.md `data/ScanFeedbackPlayer.kt` bullet: update the loaded-clip list (add `checkpoint_mark_completed`/`mark_added_mario`, and the already-missing `shutter`) and the new `checkpointComplete()`/`coin()` outcomes
+- [x] CLAUDE.md App-assets bullet: add the two new raw clips; note `mark-added.wav` is not shipped
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
