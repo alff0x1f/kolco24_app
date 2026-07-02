@@ -11,9 +11,9 @@ import ru.kolco24.kolco24.R
 import ru.kolco24.kolco24.ui.scan.ScanFeedbackKind
 
 /**
- * Android adapter that plays the three scan outcomes (sound + optional vibration). Owned by
- * `AppContainer` and constructed eagerly during `Application.onCreate` so the asynchronous
- * `SoundPool.load()` of all three clips has time to finish before the first NFC tap is possible.
+ * Android adapter that plays the scan outcomes and celebration cues (sound + optional vibration).
+ * Owned by `AppContainer` and constructed eagerly during `Application.onCreate` so the asynchronous
+ * `SoundPool.load()` of all clips has time to finish before the first NFC tap is possible.
  *
  * Untested by convention (Android adapter, like the location engines / NfcA adapters).
  *
@@ -39,6 +39,8 @@ class ScanFeedbackPlayer(context: Context) {
     private val successSoundId: Int
     private val failureSoundId: Int
     private val shutterSoundId: Int
+    private val checkpointCompleteSoundId: Int
+    private val coinSoundId: Int
 
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         context.getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -51,6 +53,8 @@ class ScanFeedbackPlayer(context: Context) {
         successSoundId = soundPool.load(context, R.raw.beep_ok3, 1)
         failureSoundId = soundPool.load(context, R.raw.beep_err, 1)
         shutterSoundId = soundPool.load(context, R.raw.shutter, 1)
+        checkpointCompleteSoundId = soundPool.load(context, R.raw.checkpoint_mark_completed, 1)
+        coinSoundId = soundPool.load(context, R.raw.mark_added_mario, 1)
     }
 
     /** Recognized chip: crisp tick + a single short pulse. */
@@ -79,6 +83,19 @@ class ScanFeedbackPlayer(context: Context) {
      *  (the audible feedback already happened at [shutter], before the write finished). */
     fun photoCaptureConfirm() {
         vibrate(SUCCESS_VIBRATION_PATTERN)
+    }
+
+    /** КП fully taken (all roster members scanned): fanfare in place of the short [success] beep,
+     *  keeping the same success vibration — the tactile chip confirmation still fires. */
+    fun checkpointComplete() {
+        playSound(checkpointCompleteSoundId)
+        vibrate(SUCCESS_VIBRATION_PATTERN)
+    }
+
+    /** New Отметки tile pop-in flourish — sound only, no vibration (a UI animation cue, not a chip
+     *  confirmation). */
+    fun coin() {
+        playSound(coinSoundId)
     }
 
     /** Dispatch to [success]/[failure]/[neutral] by [kind]. */

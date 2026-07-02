@@ -77,11 +77,11 @@ Sequenced by design: fanfare plays out on the green screen, then the coin fires 
 - Rename: `app/src/main/res/raw/mark-added-mario.mp3` → `mark_added_mario.mp3`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/ScanFeedbackPlayer.kt`
 
-- [ ] rename the two asset files to underscore names (plain `mv` — they're untracked); **remove `mark-added.wav` from `res/raw`** (delete or move outside `app/src` — a hyphenated file in `res/raw` fails aapt2 even when git-untracked) and do not commit it
-- [ ] load `R.raw.checkpoint_mark_completed` and `R.raw.mark_added_mario` in `ScanFeedbackPlayer.init` (same pattern as the existing three)
-- [ ] add `checkpointComplete()`: play fanfare + vibrate `SUCCESS_VIBRATION_PATTERN` (it replaces the success beep on the completing tap, so it keeps the tactile confirmation)
-- [ ] add `coin()`: sound only, no vibration (UI flourish, not a chip confirmation) — KDoc both methods in the file's existing style
-- [ ] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 2
+- [x] rename the two asset files to underscore names (plain `mv` — they're untracked); **remove `mark-added.wav` from `res/raw`** (delete or move outside `app/src` — a hyphenated file in `res/raw` fails aapt2 even when git-untracked) and do not commit it
+- [x] load `R.raw.checkpoint_mark_completed` and `R.raw.mark_added_mario` in `ScanFeedbackPlayer.init` (same pattern as the existing three)
+- [x] add `checkpointComplete()`: play fanfare + vibrate `SUCCESS_VIBRATION_PATTERN` (it replaces the success beep on the completing tap, so it keeps the tactile confirmation)
+- [x] add `coin()`: sound only, no vibration (UI flourish, not a chip confirmation) — KDoc both methods in the file's existing style
+- [x] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 2
 
 ### Task 2: ScanScreen — hold duration, fanfare on completion transition, onCompleted callback
 
