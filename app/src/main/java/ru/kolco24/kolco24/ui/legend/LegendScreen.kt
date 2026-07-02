@@ -235,7 +235,9 @@ private fun ScoreCard(
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "$takenCount/$totalCount КП",
+                    // Hides the "/0" denominator before the server ships `scoring_count` (default 0) —
+                    // mirrors the `totalKp.takeIf { it > 0 }` gate in MarksScreen's «ВЗЯТО» metric.
+                    text = if (totalCount > 0) "$takenCount/$totalCount КП" else "$takenCount КП",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,

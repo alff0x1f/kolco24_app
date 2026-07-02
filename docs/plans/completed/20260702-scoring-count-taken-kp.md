@@ -142,7 +142,7 @@
 ### Task 9: Verify acceptance criteria
 - [x] «ВЗЯТО» (Отметки) = взятые зачётные / серверный `scoring_count`; технические КП (cost 0) не влияют — `MarksScreen.kt:261` вызывает `takenPointCount(marks, costOf)`, `totalKp` из `legendScoringCount` (`MainActivity.kt`)
 - [x] `ScoreCard` (Легенда) = взятые зачётные / `scoring_count`; список и чипы по-прежнему показывают все КП — `LegendScreen.kt:140,163` (`takenScoring`/`scoringCount` в `ScoreCard`), чипы/список используют `totalCount`/`takenCount` по всем КП (строки 138-139,178-183)
-- [x] холодный старт (scoring_count=0) не показывает «/0» (гейтинг `total > 0`) — существующий паттерн `totalKp.takeIf { it > 0 }` в `MarksScreen.kt:691` уже покрывает Отметки; `ScoreCard` (Легенда) не гейтит «/total» — это унаследованное поведение, не изменённое этой задачей (тот же паттерн, что у `totalScore`/«баллов» до этой правки)
+- [x] холодный старт (scoring_count=0) не показывает «/0» (гейтинг `total > 0`) — паттерн `totalKp.takeIf { it > 0 }` покрывает Отметки (`MarksScreen.kt:691`); code review (2026-07-02) нашёл, что `ScoreCard` изначально не гейтил свою «N/$totalCount КП» — из-за `scoring_count`, ещё не задеплоенного на сервере, это давало постоянный «N/0 КП», а не редкий cold-start flash. Исправлено: `ScoreCard` теперь скрывает знаменатель при `totalCount == 0` (`LegendScreen.kt`, "$takenCount КП" без "/0").
 - [x] `./gradlew lintDebug` — проходит
 - [x] `./gradlew testDebugUnitTest` — проходит
 - [x] manual test (skipped - not automatable: `./gradlew connectedDebugAndroidTest` requires an emulator/device; none available in this environment. `adb` is not installed.)

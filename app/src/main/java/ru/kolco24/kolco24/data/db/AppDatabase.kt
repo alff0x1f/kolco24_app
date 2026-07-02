@@ -89,8 +89,8 @@ abstract class AppDatabase : RoomDatabase() {
          * v3→v4 (scoring-count taken-KP): adds `legend_meta.scoringCount` (server-supplied count of
          * checkpoints with `cost > 0`, open + locked — the denominator for the taken-КП counter).
          * Additive only, default 0 — legacy rows read as "unknown" until the next legend refresh
-         * repopulates it; the UI gates the "/total" suffix on `total > 0`, so a 0 is silently hidden
-         * rather than shown as a bogus "/0".
+         * repopulates it; both consumers (MarksScreen's «ВЗЯТО», LegendScreen's `ScoreCard`) gate
+         * the "/total" suffix on `total > 0`, so a 0 is silently hidden rather than shown as "/0".
          */
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
