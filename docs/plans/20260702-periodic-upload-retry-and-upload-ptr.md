@@ -90,10 +90,10 @@
 - [x] run `./gradlew lintDebug` and `./gradlew testDebugUnitTest` — must pass before task 4
 
 ### Task 4: Verify acceptance criteria
-- [ ] loop is lifecycle-gated (block body cancelled when the Activity leaves STARTED; restarts and fires immediately on return)
-- [ ] PTR spinner spins until both `uploadAllPending()` calls complete; a near-instant blip when the mutex skips (another trigger already draining) is expected behavior, not a bug
-- [ ] no data-layer or DB changes crept in (no migration concerns)
-- [ ] full check: `./gradlew lintDebug testDebugUnitTest`
+- [x] loop is lifecycle-gated (block body cancelled when the Activity leaves STARTED; restarts and fires immediately on return) — `MainActivity.kt:559-568` wraps the loop in `lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED)`, attempt-before-delay confirmed
+- [x] PTR spinner spins until both `uploadAllPending()` calls complete; a near-instant blip when the mutex skips (another trigger already draining) is expected behavior, not a bug — `MainActivity.kt:1481-1493` guards on `!uploadRefreshing`, runs both calls in a `coroutineScope`, clears the flag in `finally`
+- [x] no data-layer or DB changes crept in (no migration concerns) — only `MainActivity.kt` and `ui/upload/UploadScreen.kt` touched across Tasks 1-3, no DAO/entity/migration files
+- [x] full check: `./gradlew lintDebug testDebugUnitTest` — BUILD SUCCESSFUL
 
 ### Task 5: [Final] Update documentation
 - [ ] CLAUDE.md — MainActivity bullet (Cross-file wiring): add the 5-min `repeatOnLifecycle(STARTED)` retry loop next to the existing 5 s clock-ticker mention, and the `uploadRefreshing` PTR host wiring
