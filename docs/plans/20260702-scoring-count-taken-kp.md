@@ -64,12 +64,12 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/LegendMetaEntity.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/AppDatabase.kt`
 
-- [ ] в `LegendMetaEntity` добавить `val scoringCount: Int` (**без Kotlin-дефолта** — явный аргумент, компилятор ловит забытый call-site; обновить KDoc: серверный `scoring_count`, число зачётных КП)
-- [ ] в `AppDatabase` бампнуть `version = 4`
-- [ ] добавить `MIGRATION_3_4 = object : Migration(3, 4) { execSQL("ALTER TABLE legend_meta ADD COLUMN scoringCount INTEGER NOT NULL DEFAULT 0") }` с KDoc (additive, default 0, без бэкфилла — догрузится при первом refresh)
-- [ ] добавить `MIGRATION_3_4` в `.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)`
-- [ ] **НЕ собирать здесь**: `scoringCount` без Kotlin-дефолта → единственный call-site `LegendRepository.kt:126` не компилируется, пока не обновлён в Task 3. Схема `4.json` генерируется в конце Task 3.
-- [ ] (инструментальный тест миграции — Task 6)
+- [x] в `LegendMetaEntity` добавить `val scoringCount: Int` (**без Kotlin-дефолта** — явный аргумент, компилятор ловит забытый call-site; обновить KDoc: серверный `scoring_count`, число зачётных КП)
+- [x] в `AppDatabase` бампнуть `version = 4`
+- [x] добавить `MIGRATION_3_4 = object : Migration(3, 4) { execSQL("ALTER TABLE legend_meta ADD COLUMN scoringCount INTEGER NOT NULL DEFAULT 0") }` с KDoc (additive, default 0, без бэкфилла — догрузится при первом refresh)
+- [x] добавить `MIGRATION_3_4` в `.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)`
+- [x] **НЕ собирать здесь**: `scoringCount` без Kotlin-дефолта → единственный call-site `LegendRepository.kt:126` не компилируется, пока не обновлён в Task 3. Схема `4.json` генерируется в конце Task 3.
+- [x] (инструментальный тест миграции — Task 6)
 
 ### Task 3: LegendRepository — писать и отдавать `scoringCount` (+ генерация схемы)
 
