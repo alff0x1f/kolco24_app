@@ -85,11 +85,10 @@ class ScanFeedbackPlayer(context: Context) {
         vibrate(SUCCESS_VIBRATION_PATTERN)
     }
 
-    /** КП fully taken (all roster members scanned): fanfare in place of the short [success] beep,
-     *  keeping the same success vibration — the tactile chip confirmation still fires. */
-    fun checkpointComplete() {
+    /** КП fully taken (all roster members scanned): fanfare cue only.
+     *  The completing scan plays its ordinary [success] feedback before this cue. */
+    fun checkpointCompleteFanfare() {
         playSound(checkpointCompleteSoundId)
-        vibrate(SUCCESS_VIBRATION_PATTERN)
     }
 
     /** New Отметки tile pop-in flourish — sound only, no vibration (a UI animation cue, not a chip

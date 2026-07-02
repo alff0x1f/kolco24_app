@@ -88,9 +88,10 @@ import ru.kolco24.kolco24.ui.theme.RobotoMono
 import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val TIMER_TICK_MS = 250L
-// Matches the checkpoint-mark-completed fanfare length so the green "Готово!" screen holds for the
-// whole clip.
-private const val SUCCESS_HOLD_MS = 3_500L
+// The completing tap plays the ordinary scan tick first, then the fanfare.
+private const val COMPLETE_FANFARE_DELAY_MS = 275L
+// Holds the green "Готово!" screen through the final scan tick plus the checkpoint-complete fanfare.
+private const val SUCCESS_HOLD_MS = 3_850L
 
 data class ScanChip(
     val chipNumber: Int?,
@@ -165,13 +166,13 @@ fun ScanScreen(
                     // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
                     // so the ring must keep counting down rather than flash back to full.
                     session = reduce(effectiveSession, event, now)
-                    // The fanfare replaces the short success beep only on the tap that completes the
-                    // take (incomplete → complete transition) — covers completion arriving on a Kp
-                    // event too (pre-КП buffered members draining into present). An idempotent re-tap
-                    // during the hold stays wasComplete == isComplete(session, ...) == true, so no
-                    // restart.
+                    // The completing tap still gets the ordinary scan feedback first. The fanfare
+                    // follows only on the incomplete to complete transition, including completion
+                    // arriving on a Kp event when pre-КП buffered members drain into present.
                     if (!wasComplete && isComplete(session, roster.size)) {
-                        scanFeedback.checkpointComplete()
+                        scanFeedback.play(feedbackFor(event))
+                        delay(COMPLETE_FANFARE_DELAY_MS)
+                        scanFeedback.checkpointCompleteFanfare()
                     } else {
                         scanFeedback.play(feedbackFor(event))
                     }
