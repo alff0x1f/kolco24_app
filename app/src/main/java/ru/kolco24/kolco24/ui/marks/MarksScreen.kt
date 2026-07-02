@@ -127,6 +127,9 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
 import ru.kolco24.kolco24.ui.theme.Tertiary
 
+private val marksFabListBottomPadding = 128.dp
+private val marksFabScrollClearance = 104.dp
+
 data class Mark(
     val number: String,
     val cost: Int,
@@ -363,6 +366,7 @@ fun MarksScreen(
     var celebratingLast by remember { mutableStateOf(false) }
     val celebrationScale = remember { Animatable(1f) }
     val celebrationAlpha = remember { Animatable(1f) }
+    val fabScrollClearancePx = with(LocalDensity.current) { marksFabScrollClearance.toPx() }
 
     LaunchedEffect(celebration) {
         if (!celebration) return@LaunchedEffect
@@ -386,11 +390,12 @@ fun MarksScreen(
             val lastItemIndex = totalItemsCount - 1
             listState.animateScrollToItem(lastItemIndex)
             // `animateScrollToItem` only guarantees the item is *visible*, not that its bottom edge
-            // clears the viewport — overshoot the remainder so a tall trailing item (e.g. the NFC
-            // banner sitting below the grid) doesn't clip the freshly-popped tile.
+            // clears the viewport. Overshoot the remainder against a safe bottom edge above the photo
+            // FAB so the freshly-popped tile does not land underneath it.
             val lastItemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastItemIndex }
             if (lastItemInfo != null) {
-                val overshoot = (lastItemInfo.offset + lastItemInfo.size - listState.layoutInfo.viewportEndOffset)
+                val safeViewportEnd = listState.layoutInfo.viewportEndOffset - fabScrollClearancePx.toInt()
+                val overshoot = (lastItemInfo.offset + lastItemInfo.size - safeViewportEnd)
                     .coerceAtLeast(0)
                 if (overshoot > 0) listState.animateScrollBy(overshoot.toFloat())
             }
@@ -423,7 +428,7 @@ fun MarksScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 80.dp),
+                contentPadding = PaddingValues(bottom = marksFabListBottomPadding),
             ) {
                 item("metrics") {
                     // «ДО КВ» has no real source yet — placeholder until control-time lands.
