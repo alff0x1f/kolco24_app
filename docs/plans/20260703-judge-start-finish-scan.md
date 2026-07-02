@@ -237,19 +237,19 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/JudgeScanRepository.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/JudgeScanRepositoryTest.kt`
 
-- [ ] `fun interface JudgeScanUploader { suspend fun upload(raceId, sourceInstallId, scans): PostResult<JudgeScanUploadResponse> }`
+- [x] `fun interface JudgeScanUploader { suspend fun upload(raceId, sourceInstallId, scans): PostResult<JudgeScanUploadResponse> }`
       with constructor `cloudUploader`/`localUploader` defaulting to `{ _,_,_ -> PostResult.Offline }`
-- [ ] `suspend fun record(raceId, eventType, participantNumber, nfcUid, sample: TimeSample): String` —
+- [x] `suspend fun record(raceId, eventType, participantNumber, nfcUid, sample: TimeSample): String` —
       mint UUID, insert row (map `sample` → time columns, `installId` → `sourceInstallId`)
-- [ ] `uploadMutex: Mutex`; `uploadPending(raceId)` and `uploadAllPending()` both `if (!tryLock()) return` … `finally unlock`
-- [ ] `flushRace(raceId)`: LAN first then cloud, **independent**; each runs the batch `uploadLoop`
+- [x] `uploadMutex: Mutex`; `uploadPending(raceId)` and `uploadAllPending()` both `if (!tryLock()) return` … `finally unlock`
+- [x] `flushRace(raceId)`: LAN first then cloud, **independent**; each runs the batch `uploadLoop`
       (fetch LIMIT=500 → upload → on non-Success return → mark `accepted ∩ batch` → repeat; stop if none accepted)
-- [ ] `uploadAllPending()` walks `dao.pendingUploadRaces()` and flushes each
-- [ ] write test: accepted-UUID subset marks only those rows uploaded (batch minus rejected stays pending)
-- [ ] write test: `PostResult.Offline`/error leaves rows pending (re-queue next tick)
-- [ ] write test: dual-target independence (LAN error doesn't block cloud drain and vice versa)
-- [ ] write test: `tryLock` — a second concurrent flush is skipped, not double-POSTed
-- [ ] run tests — must pass before next task
+- [x] `uploadAllPending()` walks `dao.pendingUploadRaces()` and flushes each
+- [x] write test: accepted-UUID subset marks only those rows uploaded (batch minus rejected stays pending)
+- [x] write test: `PostResult.Offline`/error leaves rows pending (re-queue next tick)
+- [x] write test: dual-target independence (LAN error doesn't block cloud drain and vice versa)
+- [x] write test: `tryLock` — a second concurrent flush is skipped, not double-POSTed
+- [x] run tests — must pass before next task
 
 ### Task 6: DI wiring in `AppContainer` + startup flush
 
