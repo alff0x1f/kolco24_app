@@ -98,9 +98,9 @@
 **Files:**
 - Modify: `app/src/main/AndroidManifest.xml`
 
-- [ ] Add `android:screenOrientation="portrait"` to the `<activity android:name=".MainActivity">` element (around line 51-56).
-- [ ] Confirm `./gradlew assembleDebug` still builds.
-- [ ] No automated test (manifest attribute; verified manually in Post-Completion).
+- [x] Add `android:screenOrientation="portrait"` to the `<activity android:name=".MainActivity">` element (around line 51-56).
+- [x] Confirm `./gradlew assembleDebug` still builds.
+- [x] No automated test (manifest attribute; verified manually in Post-Completion).
 
 ### Task 2: Guard the team-switch overlay-reset effect against transient recreation
 
