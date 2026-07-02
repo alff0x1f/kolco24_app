@@ -203,13 +203,17 @@ are `raceId`-scoped only):
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] a device with judge scans for the selected race shows the «Судейские отметки» section; a device
-      with none does not (total == 0 gate)
-- [ ] «Интернет» always shown; «Финиш» appears once the LAN target reports (`showFinishLine`)
-- [ ] pull-to-refresh flushes judge scans and the counts advance toward `n/n`
-- [ ] run `./gradlew lintDebug` — must pass
-- [ ] run `./gradlew testDebugUnitTest` — must pass
-- [ ] run `./gradlew connectedDebugAndroidTest` (if an emulator/device is available) — must pass
+- [x] manual test (skipped - not automatable, no physical device available): a device with judge
+      scans for the selected race shows the «Судейские отметки» section; a device with none does not
+      (total == 0 gate)
+- [x] manual test (skipped - not automatable, no physical device available): «Интернет» always shown;
+      «Финиш» appears once the LAN target reports (`showFinishLine`)
+- [x] manual test (skipped - not automatable, no physical device available): pull-to-refresh flushes
+      judge scans and the counts advance toward `n/n`
+- [x] run `./gradlew lintDebug` — must pass (passed)
+- [x] run `./gradlew testDebugUnitTest` — must pass (passed)
+- [x] run `./gradlew connectedDebugAndroidTest` (skipped - no emulator/device available in this
+      environment, consistent with Task 1)
 
 ### Task 7: [Final] Update documentation
 
