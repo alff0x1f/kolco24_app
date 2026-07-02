@@ -336,4 +336,148 @@ class MarksMappingTest {
     fun `lightboxPhotos of no tiles is empty`() {
         assertTrue(lightboxPhotos(emptyList()).isEmpty())
     }
+
+    @Test
+    fun `photoReviewSummary is null when there are no photo takes`() {
+        assertEquals(null, photoReviewSummary(emptyList()))
+        assertEquals(
+            null,
+            photoReviewSummary(listOf(mark("a", point = 1, number = 1, cost = 2, method = "nfc"))),
+        )
+    }
+
+    @Test
+    fun `photoReviewSummary counts complete photo takes and sums their points`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, method = "photo"),
+            mark("b", point = 2, number = 2, cost = 3, method = "photo"),
+            mark("c", point = 3, number = 3, cost = 5, method = "nfc"),
+        )
+        assertEquals(
+            PhotoReviewSummary(count = 2, points = 5, tokens = listOf("3-02", "2-01")),
+            photoReviewSummary(marks),
+        )
+    }
+
+    @Test
+    fun `photoReviewSummary counts a repeat photo take of the same КП once`() {
+        // Checkpoint-level, mirroring the metrics' distinctBy(checkpointId): two photo takes of one КП
+        // are one checkpoint awaiting review, and its points count once.
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, method = "photo", takenAt = 2_000L),
+            mark("b", point = 1, number = 1, cost = 2, method = "photo", takenAt = 1_000L),
+        )
+        assertEquals(
+            PhotoReviewSummary(count = 1, points = 2, tokens = listOf("2-01")),
+            photoReviewSummary(marks),
+        )
+    }
+
+    @Test
+    fun `photoReviewSummary excludes a КП that also has a complete NFC take`() {
+        // The chip already proves the visit (the score comes from the NFC take), so a separate photo
+        // take of the same КП needs no judge review.
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, method = "photo", takenAt = 2_000L),
+            mark("b", point = 1, number = 1, cost = 2, method = "nfc", takenAt = 1_000L),
+            mark("c", point = 2, number = 2, cost = 3, method = "photo", takenAt = 3_000L),
+        )
+        assertEquals(
+            PhotoReviewSummary(count = 1, points = 3, tokens = listOf("3-02")),
+            photoReviewSummary(marks),
+        )
+    }
+
+    @Test
+    fun `photoReviewSummary ignores an incomplete NFC take when excluding chip-verified КП`() {
+        // An incomplete NFC take never scored — the photo take is still the checkpoint's only proof.
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, method = "photo", takenAt = 2_000L),
+            mark("b", point = 1, number = 1, cost = 2, method = "nfc", complete = false, takenAt = 1_000L),
+        )
+        assertEquals(
+            PhotoReviewSummary(count = 1, points = 2, tokens = listOf("2-01")),
+            photoReviewSummary(marks),
+        )
+    }
+
+    @Test
+    fun `photoReviewSummary skips incomplete photo takes`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2, method = "photo"),
+            mark("b", point = 2, number = 2, cost = 3, method = "photo", complete = false),
+        )
+        assertEquals(
+            PhotoReviewSummary(count = 1, points = 2, tokens = listOf("2-01")),
+            photoReviewSummary(marks),
+        )
+    }
+
+    @Test
+    fun `photoReviewSummary ignores an NFC take that merely attached photo evidence`() {
+        // The chip was read — judges have nothing to verify, so it never joins the review notice.
+        val marks = listOf(
+            mark(
+                "a", point = 1, number = 1, cost = 2, method = "nfc",
+                photoPath = encodePhotoPaths(listOf("marks/a/1.jpg")),
+            ),
+        )
+        assertEquals(null, photoReviewSummary(marks))
+    }
+
+    @Test
+    fun `photoReviewSummary scores through the live costOf not the snapshot`() {
+        // A photo take of a still-locked КП snapshots cost=0; the live legend cost wins on reveal.
+        val marks = listOf(mark("a", point = 7, number = 1, cost = 0, method = "photo"))
+        val live = mapOf(7 to 30)
+        val summary = photoReviewSummary(marks) { live[it.checkpointId] ?: it.cost }
+        assertEquals(PhotoReviewSummary(count = 1, points = 30, tokens = listOf("30-01")), summary)
+    }
+
+    @Test
+    fun `photoReviewSummary tokens follow grid order and drop the cost prefix on a zero-cost КП`() {
+        // Input is newest-first (as observeMarks delivers); tokens come back oldest-first, matching the
+        // tile grid. A zero-cost КП (still-locked in the legend) is a bare zero-padded number, mirroring
+        // the tile token.
+        val marks = listOf(
+            mark("a", point = 3, number = 4, cost = 5, method = "photo", takenAt = 3_000L), // newest
+            mark("b", point = 2, number = 3, cost = 0, method = "photo", takenAt = 2_000L),
+            mark("c", point = 1, number = 2, cost = 1, method = "photo", takenAt = 1_000L), // oldest
+        )
+        assertEquals(listOf("1-02", "03", "5-04"), photoReviewSummary(marks)?.tokens)
+    }
+
+    @Test
+    fun `hiddenTakenTokens masks distinct complete takes of locked checkpoints oldest-first`() {
+        // Input is newest-first; tokens come back oldest-first («?-NN» — the ? where the cost digit
+        // would sit). A repeat take of the same locked КП counts once; open КП never show.
+        val marks = listOf(
+            mark("a", point = 3, number = 7, cost = 0, method = "photo", takenAt = 4_000L), // newest
+            mark("b", point = 2, number = 5, cost = 3, method = "nfc", takenAt = 3_000L),   // open
+            mark("c", point = 3, number = 7, cost = 0, method = "photo", takenAt = 2_000L), // repeat
+            mark("d", point = 1, number = 4, cost = 0, method = "photo", takenAt = 1_000L), // oldest
+        )
+        assertEquals(listOf("?-04", "?-07"), hiddenTakenTokens(marks, lockedIds = setOf(1, 3)))
+    }
+
+    @Test
+    fun `hiddenTakenTokens skips incomplete takes and is empty when nothing locked is taken`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 4, cost = 0, method = "photo", complete = false),
+            mark("b", point = 2, number = 5, cost = 3, method = "nfc"),
+        )
+        assertTrue(hiddenTakenTokens(marks, lockedIds = setOf(1)).isEmpty())
+        assertTrue(hiddenTakenTokens(emptyList(), lockedIds = setOf(1)).isEmpty())
+        assertTrue(hiddenTakenTokens(marks, lockedIds = emptySet()).isEmpty())
+    }
+
+    @Test
+    fun `tokensLabel joins up to three tokens and collapses a longer tail to an ellipsis`() {
+        assertEquals("1-02", tokensLabel(listOf("1-02")))
+        assertEquals("1-02, 2-03, 5-04", tokensLabel(listOf("1-02", "2-03", "5-04")))
+        assertEquals(
+            "1-02, 2-03, 5-04, …",
+            tokensLabel(listOf("1-02", "2-03", "5-04", "3-05", "4-06")),
+        )
+    }
 }
