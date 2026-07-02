@@ -638,6 +638,12 @@ private fun Kolco24AppRoot(
         selectedRaceId?.let { legendRepo.totalCostForRace(it) } ?: flowOf(0)
     }.collectAsState(initial = 0)
 
+    // «Отметки» ВЗЯТО denominator: server's `scoring_count` (CPs with cost > 0, incl. locked) — the
+    // only correct source, since a locked CP hides its cost from the client. 0 until first synced.
+    val legendScoringCount by remember(selectedRaceId) {
+        selectedRaceId?.let { legendRepo.scoringCountForRace(it) } ?: flowOf(0)
+    }.collectAsState(initial = 0)
+
     // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
     val bindingsList by remember(selectedTeamId) {
         selectedTeamId?.let { bindingRepo.observeForTeam(it) } ?: flowOf(emptyList())
@@ -1119,7 +1125,7 @@ private fun Kolco24AppRoot(
                         marks = safeMarks,
                         checkpointColors = checkpointColors,
                         checkpointCosts = checkpointCosts,
-                        totalKp = safeCheckpoints.size,
+                        totalKp = legendScoringCount,
                         totalCost = legendTotalCost,
                         nfcAvailable = nfcActiveForScan,
                         nfcDisabled = nfcState == NfcState.Disabled,

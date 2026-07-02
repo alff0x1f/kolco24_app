@@ -120,11 +120,11 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 
-- [ ] в `MainActivity` добавить поток `legendScoringCount` по образцу `legendTotalCost` (`selectedRaceId?.let { legendRepo.scoringCountForRace(it) } ?: flowOf(0)`)
-- [ ] заменить `totalKp = safeCheckpoints.size` на `totalKp = legendScoringCount` (строка ~1122)
-- [ ] в `MarksScreen` заменить `val takenKp = takenPointCount(marks)` на `takenPointCount(marks, costOf)` (`costOf` уже определён ниже — при необходимости поднять его объявление выше строки использования)
-- [ ] обновить комментарий про `«ВЗЯТО»`-метрику при необходимости
-- [ ] сборка (`./gradlew assembleDebug`) — без юнит-тестов (Compose-проводка, по конвенции)
+- [x] в `MainActivity` добавить поток `legendScoringCount` по образцу `legendTotalCost` (`selectedRaceId?.let { legendRepo.scoringCountForRace(it) } ?: flowOf(0)`)
+- [x] заменить `totalKp = safeCheckpoints.size` на `totalKp = legendScoringCount` (строка ~1122)
+- [x] в `MarksScreen` заменить `val takenKp = takenPointCount(marks)` на `takenPointCount(marks, costOf)` (`costOf` уже определён ниже — при необходимости поднять его объявление выше строки использования)
+- [x] обновить комментарий про `«ВЗЯТО»`-метрику при необходимости
+- [x] сборка (`./gradlew assembleDebug`) — без юнит-тестов (Compose-проводка, по конвенции)
 
 ### Task 8: Проводка экрана Легенда (B2)
 
