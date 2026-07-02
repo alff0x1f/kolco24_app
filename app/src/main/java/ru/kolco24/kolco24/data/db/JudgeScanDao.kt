@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.data.db
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface JudgeScanDao {
@@ -34,4 +35,14 @@ interface JudgeScanDao {
         "SELECT DISTINCT raceId FROM judge_scans WHERE uploadedLocal = 0 OR uploadedCloud = 0"
     )
     suspend fun pendingUploadRaces(): List<Int>
+
+    // Mirror of MarkDao.uploadCountsMetadata, teamId dropped (judge scans are raceId-only). Explicit
+    // `= :raceId` for the same truthy-column reason as the queries above.
+    @Query(
+        "SELECT COUNT(*) AS total, " +
+            "COALESCE(SUM(CASE WHEN uploadedLocal THEN 1 ELSE 0 END), 0) AS local, " +
+            "COALESCE(SUM(CASE WHEN uploadedCloud THEN 1 ELSE 0 END), 0) AS cloud " +
+            "FROM judge_scans WHERE raceId = :raceId"
+    )
+    fun uploadCounts(raceId: Int): Flow<UploadCounts>
 }

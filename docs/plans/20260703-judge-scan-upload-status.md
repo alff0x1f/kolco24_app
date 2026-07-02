@@ -123,16 +123,18 @@ are `raceId`-scoped only):
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/JudgeScanDao.kt`
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/JudgeScanDaoTest.kt`
 
-- [ ] add `fun uploadCounts(raceId: Int): Flow<UploadCounts>` with the aggregate query above
+- [x] add `fun uploadCounts(raceId: Int): Flow<UploadCounts>` with the aggregate query above
       (import `androidx.room.*` `Flow`/`UploadCounts` as the other DAOs do); keep the explicit
       `raceId = :raceId` and a short comment matching the existing DAO style
-- [ ] confirm no schema bump is implied (read-only aggregate over existing columns — no `schemas/*.json`
+- [x] confirm no schema bump is implied (read-only aggregate over existing columns — no `schemas/*.json`
       change, no `MIGRATION_*` needed)
-- [ ] write `JudgeScanDaoTest` case: total/local/cloud all reflect inserts (0 uploaded → local=0/cloud=0)
-- [ ] write `JudgeScanDaoTest` case: after `markUploadedLocal`/`markUploadedCloud`, the respective
+- [x] write `JudgeScanDaoTest` case: total/local/cloud all reflect inserts (0 uploaded → local=0/cloud=0)
+- [x] write `JudgeScanDaoTest` case: after `markUploadedLocal`/`markUploadedCloud`, the respective
       counts advance independently
-- [ ] write `JudgeScanDaoTest` case: rows of a **different** raceId are excluded from the scope
-- [ ] run `./gradlew connectedDebugAndroidTest` (or the `JudgeScanDaoTest` subset) — must pass before Task 2
+- [x] write `JudgeScanDaoTest` case: rows of a **different** raceId are excluded from the scope
+- [x] run `./gradlew connectedDebugAndroidTest` (or the `JudgeScanDaoTest` subset) — must pass before Task 2
+      (skipped - no emulator/device available in this environment; verified `assembleDebug` and
+      `compileDebugAndroidTestSources` both build cleanly)
 
 ### Task 2: Add counts passthrough + `onUploadOutcome` to `JudgeScanRepository`
 
