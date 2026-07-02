@@ -33,8 +33,8 @@ that gap using the established upload-status pattern.
   dimension. `showFinishLine` keeps the LAN row silent until it reports.
 - **Dependencies identified:** existing `UploadCounts`, `TargetUploadOutcome`, `UploadTarget`,
   `UploadResultKind`, `TrackUploadStatus`/`TargetLine`, `UploadSection`/`ReceiptLine`/`showFinishLine`.
-  No new pure model. Prior art: `docs/plans/20260703-judge-start-finish-scan.md` (the feature that
-  introduced judge scans).
+  No new pure model. Prior art: `docs/plans/completed/20260703-judge-start-finish-scan.md` (the feature
+  that introduced judge scans).
 
 ## Development Approach
 
@@ -239,4 +239,4 @@ are `raceId`-scoped only):
 
 **External systems:**
 - Relies on the server judge-scan upload endpoint delivered with the judge-start-finish-scan feature
-  (`docs/plans/20260703-judge-start-finish-scan.md`) — no new server contract.
+  (`docs/plans/completed/20260703-judge-start-finish-scan.md`) — no new server contract.
