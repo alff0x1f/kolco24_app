@@ -107,11 +107,11 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] Add `var lastRealTeamId by rememberSaveable { mutableStateOf(selectedTeamId) }` immediately above the existing `LaunchedEffect(selectedTeamId)` (line 725).
-- [ ] Add the early-return guard (`if (selectedTeamId == null || selectedTeamId == lastRealTeamId) return@LaunchedEffect`) and `lastRealTeamId = selectedTeamId` as the first lines of the effect body; drop the now-redundant `selectedTeamId != null` clause from the recording-stop `if` further down (the early return already excludes `null`).
-- [ ] Update the comment above the effect (lines 722-724, and the transient-blip comment at 730-732) to describe the new guard and why it exists (protects against a genuine transient-null recreate, not just the recording-stop case).
-- [ ] Update the inline comment at `MainActivity.kt:1870-1871` ("The camera overlay is normally closed by `LaunchedEffect(selectedTeamId)` before a team deselection reaches this point") — with the new guard, a genuine deselection to `null` no longer auto-closes the overlay either (the effect body only runs on a real team-to-team change), so this branch's reachability reasoning should note that explicitly rather than implying the overlay is always pre-closed.
-- [ ] No new automated test (Compose host wiring in `MainActivity`, untested by convention like the rest of the file); manually verified in Post-Completion by forcing a config change (e.g. a font-scale change in system settings, since orientation itself is now locked) while `photoCaptureMarkId` is set, confirming the overlay stays open.
+- [x] Add `var lastRealTeamId by rememberSaveable { mutableStateOf(selectedTeamId) }` immediately above the existing `LaunchedEffect(selectedTeamId)` (line 725).
+- [x] Add the early-return guard (`if (selectedTeamId == null || selectedTeamId == lastRealTeamId) return@LaunchedEffect`) and `lastRealTeamId = selectedTeamId` as the first lines of the effect body; drop the now-redundant `selectedTeamId != null` clause from the recording-stop `if` further down (the early return already excludes `null`).
+- [x] Update the comment above the effect (lines 722-724, and the transient-blip comment at 730-732) to describe the new guard and why it exists (protects against a genuine transient-null recreate, not just the recording-stop case).
+- [x] Update the inline comment at `MainActivity.kt:1870-1871` ("The camera overlay is normally closed by `LaunchedEffect(selectedTeamId)` before a team deselection reaches this point") — with the new guard, a genuine deselection to `null` no longer auto-closes the overlay either (the effect body only runs on a real team-to-team change), so this branch's reachability reasoning should note that explicitly rather than implying the overlay is always pre-closed.
+- [x] No new automated test (Compose host wiring in `MainActivity`, untested by convention like the rest of the file); manually verified in Post-Completion by forcing a config change (e.g. a font-scale change in system settings, since orientation itself is now locked) while `photoCaptureMarkId` is set, confirming the overlay stays open. (skipped here - not automatable, deferred to Post-Completion manual verification)
 
 ### Task 3: Pure orientation-bucketing function + tests
 

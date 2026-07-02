@@ -767,16 +767,22 @@ private fun Kolco24AppRoot(
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
     // re-open the sheet/dialog for an unrelated member on the newly selected team. A team switch while
     // recording also stops the service — the running track belongs to the team we are leaving.
+    // lastRealTeamId + the early return below guard the whole effect body against a transient
+    // selectedTeamId == null blip: collectAsState's initial value is null on every Activity recreation
+    // (config change — e.g. multi-window resize, font-scale change; orientation itself no longer
+    // recreates the Activity now that the app is portrait-locked) before Room emits the persisted
+    // value. Without this guard the body would fire on that transient null and close open overlays
+    // (e.g. the photo-capture screen) that have nothing to do with a team switch.
+    var lastRealTeamId by rememberSaveable { mutableStateOf(selectedTeamId) }
     LaunchedEffect(selectedTeamId) {
+        if (selectedTeamId == null || selectedTeamId == lastRealTeamId) return@LaunchedEffect
+        lastRealTeamId = selectedTeamId
         bindSlot = null; unbindSlot = null; showAdmin = false; showProvisioning = false; showCheckChip = false
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
         photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
         showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
-        // Only stop recording when a different team is selected. Guard against selectedTeamId == null,
-        // which occurs transiently during activity recreation (collectAsState initial = null) before Room
-        // emits the persisted value — stopping on null would kill an active recording on every rotation.
         val recording = container.trackRecordingState.value as? TrackState.Recording
-        if (recording != null && selectedTeamId != null && recording.teamId != selectedTeamId) {
+        if (recording != null && recording.teamId != selectedTeamId) {
             TrackRecordingService.stop(context)
         }
     }
@@ -1925,8 +1931,10 @@ private fun Kolco24AppRoot(
                             // attachPhotos only needs the markId — proceed even if raceId/teamId is null.
                             markRepo.attachPhotos(activePhotoMarkId, paths, firstSample.wallMs)
                         } else if (raceId == null || teamId == null) {
-                            // The camera overlay is normally closed by LaunchedEffect(selectedTeamId) before
-                            // a team deselection reaches this point, so this branch is nearly unreachable.
+                            // LaunchedEffect(selectedTeamId) only closes the camera overlay on a genuine
+                            // team-to-team switch (see the lastRealTeamId guard) — a deselection to null no
+                            // longer auto-closes it, so this branch is reachable via that path too, not just
+                            // a race condition on the effect firing before commit.
                             // The frames are orphaned here and swept on the next cold start by sweepOrphanPhotoDirs.
                             Log.e("PhotoCapture", "raceId/teamId null at commit for id=$activePhotoMarkId — frames orphaned")
                         } else if (photoCp != null) {
