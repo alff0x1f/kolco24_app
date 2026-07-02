@@ -225,10 +225,10 @@ else `UnknownChip`. Only `Recorded` writes a row.
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/ApiClient.kt`
 
-- [ ] add `suspend fun uploadJudgeScans(raceId, sourceInstallId, scans): PostResult<JudgeScanUploadResponse>`
+- [x] add `suspend fun uploadJudgeScans(raceId, sourceInstallId, scans): PostResult<JudgeScanUploadResponse>`
       mirroring `uploadMarks` (serialize once → `post(".../judge_scans/", bytes) { decode }`)
-- [ ] verify it compiles against both cloud + LAN instance construction (no per-call URL — instance selects target)
-- [ ] (network method is a thin trust-boundary-adjacent wrapper; the repository test in Task 5 exercises
+- [x] verify it compiles against both cloud + LAN instance construction (no per-call URL — instance selects target)
+- [x] (network method is a thin trust-boundary-adjacent wrapper; the repository test in Task 5 exercises
       the loop via the `JudgeScanUploader` seam — no direct ApiClient test, matching `uploadMarks`)
 
 ### Task 5: `JudgeScanRepository` (dual-target upload loop)
