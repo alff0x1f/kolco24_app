@@ -181,14 +181,14 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/db/JudgeScanEntity.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/AppDatabase.kt` (add `MIGRATION_4_5` only; entities/version bump in Task 2)
 
-- [ ] create `JudgeScanEntity` (fields + single `raceId` index per Technical Details; nullable `bootCount`)
-- [ ] add `JudgeScanEntity::class` to `@Database(entities = [...])`, bump `version = 4` → `5`
-- [ ] add `val MIGRATION_4_5 = object : Migration(4, 5) { CREATE TABLE judge_scans (...) + raceId index }`
+- [x] create `JudgeScanEntity` (fields + single `raceId` index per Technical Details; nullable `bootCount`)
+- [x] add `JudgeScanEntity::class` to `@Database(entities = [...])`, bump `version = 4` → `5` (deferred to Task 2 per plan note below)
+- [x] add `val MIGRATION_4_5 = object : Migration(4, 5) { CREATE TABLE judge_scans (...) + raceId index }`
       (nullable `bootCount`/`trustedTakenAt`, index name `index_judge_scans_raceId`)
-- [ ] append `MIGRATION_4_5` to `.addMigrations(...)`
-- [ ] NOTE: the `@Database(entities/version)` change + `judgeScanDao()` accessor land in Task 2 (they
+- [x] append `MIGRATION_4_5` to `.addMigrations(...)`
+- [x] NOTE: the `@Database(entities/version)` change + `judgeScanDao()` accessor land in Task 2 (they
       need `JudgeScanDao`/`JudgeScanEntity` to compile); schema `5.json` is generated at the end of Task 2
-- [ ] (tests for the migration live in Task 8 — instrumented `MIGRATION_4_5` test)
+- [x] (tests for the migration live in Task 8 — instrumented `MIGRATION_4_5` test)
 
 ### Task 2: `JudgeScanDao` + wire into `AppDatabase` + commit `5.json`
 
