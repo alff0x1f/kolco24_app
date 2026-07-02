@@ -77,10 +77,10 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/LegendRepository.kt`
 - Create: `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/4.json` (генерируется сборкой)
 
-- [ ] в `refreshLegend` заменить `upsert(LegendMetaEntity(raceId, response.totalCost))` на `upsert(LegendMetaEntity(raceId, response.totalCost, response.scoringCount))` (чинит call-site из Task 2 → модуль снова компилируется)
-- [ ] добавить `fun scoringCountForRace(raceId: Int): Flow<Int> = legendMetaDao.observeForRace(raceId).map { it?.scoringCount ?: 0 }` (по аналогии с `totalCostForRace`)
-- [ ] собрать (`./gradlew assembleDebug`) — теперь компилируется → KSP генерирует `schemas/4.json`, закоммитить его
-- [ ] (тест upsert `scoringCount` — Task 4)
+- [x] в `refreshLegend` заменить `upsert(LegendMetaEntity(raceId, response.totalCost))` на `upsert(LegendMetaEntity(raceId, response.totalCost, response.scoringCount))` (чинит call-site из Task 2 → модуль снова компилируется)
+- [x] добавить `fun scoringCountForRace(raceId: Int): Flow<Int> = legendMetaDao.observeForRace(raceId).map { it?.scoringCount ?: 0 }` (по аналогии с `totalCostForRace`)
+- [x] собрать (`./gradlew assembleDebug`) — теперь компилируется → KSP генерирует `schemas/4.json`, закоммитить его
+- [x] (тест upsert `scoringCount` — Task 4)
 
 ### Task 4: Тесты слоя данных (DTO parse + repo upsert)
 

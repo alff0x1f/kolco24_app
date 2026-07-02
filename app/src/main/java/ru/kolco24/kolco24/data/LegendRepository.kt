@@ -68,6 +68,14 @@ class LegendRepository(
     fun totalCostForRace(raceId: Int): Flow<Int> =
         legendMetaDao.observeForRace(raceId).map { it?.totalCost ?: 0 }
 
+    /**
+     * Offline-readable count of **scoring** checkpoints (`cost > 0`, open + locked) — the correct
+     * denominator for the taken-КП counter, symmetric to [totalCostForRace]. Emits `0` until the
+     * first `200` populates `legend_meta` (no row yet, or the server hasn't shipped the field yet).
+     */
+    fun scoringCountForRace(raceId: Int): Flow<Int> =
+        legendMetaDao.observeForRace(raceId).map { it?.scoringCount ?: 0 }
+
     /** One-shot snapshot — re-reads after an offline [unlock] to get the just-revealed cost. */
     suspend fun checkpointsSnapshot(raceId: Int): List<CheckpointEntity> =
         checkpointDao.getCheckpointsForRace(raceId)
@@ -123,7 +131,7 @@ class LegendRepository(
                     raceId = raceId,
                     tags = response.tags.map { it.toEntity(raceId) },
                 )
-                legendMetaDao.upsert(LegendMetaEntity(raceId, response.totalCost))
+                legendMetaDao.upsert(LegendMetaEntity(raceId, response.totalCost, response.scoringCount))
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(originKey, resource, result.etag))
                 }
