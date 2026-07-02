@@ -66,6 +66,7 @@
       }
   }
   ```
+  Corrected during implementation: `OrientationEventListener` lives in `android.view`, not `android.hardware` as drafted above — imported as `android.view.OrientationEventListener` (verified against the `android-36.1` `android.jar`).
   Seeded with `Surface.ROTATION_0` (0°) rather than reading `previewView.display?.rotation` — at `remember` time the `PreviewView` isn't attached yet (it's wired up later via `AndroidView`), so that read is almost always `null` anyway, and `display.rotation` uses the inverse sign convention from `OrientationEventListener`'s raw degrees, which is a needless sign-inversion trap for a seed that's overwritten by the first real sensor callback well before the user frames a shot. `0` is a plain, honest "no reading yet" default. Enabled/disabled in a `DisposableEffect(Unit)` guarded by `canDetectOrientation()`, mirroring the existing camera-provider bind/unbind `DisposableEffect` already in this file — on a device with no accelerometer, `degrees` simply stays `0` for the whole session (matches today's fallback behavior in that case).
 - `OrientationEventListener`'s default constructor delivers callbacks on the thread that constructed it — main thread here, same as `capture()` — so no `@Volatile`/synchronization is needed (unlike the NFC binder-thread hooks elsewhere in the app).
 - `capture()` replaces `imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0` with a read of `rotationTracker.degrees` converted to the matching `Surface.ROTATION_*` constant via a trivial local `when` (not unit-tested — Android-constant plumbing, same status as the rest of the file's camera glue).
@@ -128,11 +129,11 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/photo/PhotoCaptureScreen.kt`
 
-- [ ] Add the private `RotationTracker` class (as specified in Technical Details), importing `android.hardware.OrientationEventListener`.
-- [ ] In the composable, `remember` a `RotationTracker` seeded with `0` (see Technical Details for why this is preferred over reading `previewView.display?.rotation` at seed time).
-- [ ] Add a `DisposableEffect(Unit)` that calls `rotationTracker.enable()` only when `rotationTracker.canDetectOrientation()` is true, and `rotationTracker.disable()` in `onDispose` — placed near the existing camera-provider `DisposableEffect(Unit) { onDispose { cameraProvider?.unbindAll() } }`.
-- [ ] In `capture()`, replace `imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0` with a read of `rotationTracker.degrees` converted to the matching `Surface.ROTATION_*` constant via a small local `when`.
-- [ ] No new test for the wiring itself (Android adapter, untested by convention — only `bucketOrientationDegrees` from Task 3 is tested); confirm `./gradlew assembleDebug` builds.
+- [x] Add the private `RotationTracker` class (as specified in Technical Details), importing `android.view.OrientationEventListener` (corrected from the plan's draft `android.hardware` package — see Technical Details note).
+- [x] In the composable, `remember` a `RotationTracker` seeded with `0` (see Technical Details for why this is preferred over reading `previewView.display?.rotation` at seed time).
+- [x] Add a `DisposableEffect(Unit)` that calls `rotationTracker.enable()` only when `rotationTracker.canDetectOrientation()` is true, and `rotationTracker.disable()` in `onDispose` — placed near the existing camera-provider `DisposableEffect(Unit) { onDispose { cameraProvider?.unbindAll() } }`.
+- [x] In `capture()`, replace `imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0` with a read of `rotationTracker.degrees` converted to the matching `Surface.ROTATION_*` constant via a small local `when`.
+- [x] No new test for the wiring itself (Android adapter, untested by convention — only `bucketOrientationDegrees` from Task 3 is tested); confirm `./gradlew assembleDebug` builds.
 
 ### Task 5: Verify acceptance criteria
 
