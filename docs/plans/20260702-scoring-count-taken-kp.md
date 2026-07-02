@@ -110,9 +110,9 @@
 **Files:**
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
 
-- [ ] добавить тест по образцу `MIGRATION_2_3`: создать БД v3, **вставить seed-строку в `legend_meta` (raceId, totalCost)** (в отличие от существующих `MIGRATION_1_2`/`MIGRATION_2_3` тестов, которые сидят `marks` — здесь мигрируется `legend_meta`), затем `runMigrationsAndValidate(testDb, 4, true, AppDatabase.MIGRATION_3_4)`
-- [ ] проверить, что legacy-строка `legend_meta` после миграции имеет `scoringCount = 0` (обязательно — зеркалит `migrate2To3` default-zero assertion, `MigrationTest.kt:114-119`)
-- [ ] запустить при доступном эмуляторе: `./gradlew connectedDebugAndroidTest` (иначе отметить как проверяемое на устройстве)
+- [x] добавить тест по образцу `MIGRATION_2_3`: создать БД v3, **вставить seed-строку в `legend_meta` (raceId, totalCost)** (в отличие от существующих `MIGRATION_1_2`/`MIGRATION_2_3` тестов, которые сидят `marks` — здесь мигрируется `legend_meta`), затем `runMigrationsAndValidate(testDb, 4, true, AppDatabase.MIGRATION_3_4)`
+- [x] проверить, что legacy-строка `legend_meta` после миграции имеет `scoringCount = 0` (обязательно — зеркалит `migrate2To3` default-zero assertion, `MigrationTest.kt:114-119`)
+- [x] manual test (skipped - not automatable: no emulator/adb available in this environment; `./gradlew compileDebugAndroidTestSources` passes, verifying the test compiles against the real schema)
 
 ### Task 7: Проводка экрана Отметки
 
