@@ -214,11 +214,11 @@ else `UnknownChip`. Only `Recorded` writes a row.
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/api/JudgeScanDtos.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/api/JudgeScanDtoTest.kt`
 
-- [ ] define `JudgeScanUploadRequest`, `JudgeScanDto`, `JudgeScanUploadResponse` (snake_case `@SerialName`)
-- [ ] pure `JudgeScanEntity.toDto()` mapping every field
-- [ ] write test: `toDto()` maps all fields incl. null `trustedTakenAt` → `trusted_ms: null`
-- [ ] write test: JSON serialization emits the snake_case keys the contract specifies
-- [ ] run tests — must pass before next task
+- [x] define `JudgeScanUploadRequest`, `JudgeScanDto`, `JudgeScanUploadResponse` (snake_case `@SerialName`)
+- [x] pure `JudgeScanEntity.toDto()` mapping every field
+- [x] write test: `toDto()` maps all fields incl. null `trustedTakenAt` → `trusted_ms: null`
+- [x] write test: JSON serialization emits the snake_case keys the contract specifies
+- [x] run tests — must pass before next task
 
 ### Task 4: `ApiClient.uploadJudgeScans`
 
