@@ -160,12 +160,12 @@ are `raceId`-scoped only):
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] add `val judgeScanUploadOutcomes: MutableStateFlow<Map<Pair<Int, UploadTarget>, TargetUploadOutcome>> = MutableStateFlow(emptyMap())`
+- [x] add `val judgeScanUploadOutcomes: MutableStateFlow<Map<Pair<Int, UploadTarget>, TargetUploadOutcome>> = MutableStateFlow(emptyMap())`
       with KDoc matching `markUploadOutcomes` (transient/in-memory rationale; no `onScopeCleared` since write-once)
-- [ ] wire `onUploadOutcome = { raceId, target, kind -> judgeScanUploadOutcomes.update { it + ((raceId to target) to TargetUploadOutcome(kind, System.currentTimeMillis())) } }`
+- [x] wire `onUploadOutcome = { raceId, target, kind -> judgeScanUploadOutcomes.update { it + ((raceId to target) to TargetUploadOutcome(kind, System.currentTimeMillis())) } }`
       into the `judgeScanRepository` builder
-- [ ] no test (manual DI wiring, untested by convention — the callback contract is covered in Task 2)
-- [ ] build check: `./gradlew assembleDebug` compiles — must pass before Task 4
+- [x] no test (manual DI wiring, untested by convention — the callback contract is covered in Task 2)
+- [x] build check: `./gradlew assembleDebug` compiles — must pass before Task 4
 
 ### Task 4: Derive judge status + pass into `UploadScreen` in `MainActivity`
 
