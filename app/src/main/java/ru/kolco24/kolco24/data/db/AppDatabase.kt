@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LegendMetaEntity::class,
         TrackPointEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(
@@ -85,13 +85,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v3→v4 (scoring-count taken-KP): adds `legend_meta.scoringCount` (server-supplied count of
+         * checkpoints with `cost > 0`, open + locked — the denominator for the taken-КП counter).
+         * Additive only, default 0 — legacy rows read as "unknown" until the next legend refresh
+         * repopulates it; both consumers (MarksScreen's «ВЗЯТО», LegendScreen's `ScoreCard`) gate
+         * the "/total" suffix on `total > 0`, so a 0 is silently hidden rather than shown as "/0".
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE legend_meta ADD COLUMN scoringCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }

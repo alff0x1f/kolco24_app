@@ -120,4 +120,32 @@ class MigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun migrate3To4_addsScoringCountColumnDefaultZeroAndPreservesRows() {
+        // Create the v3 schema and insert one pre-scoring-count legend_meta row (no scoringCount column yet).
+        helper.createDatabase(testDb, 3).use { db ->
+            db.execSQL(
+                "INSERT INTO legend_meta (raceId, totalCost) VALUES (7, 250)",
+            )
+        }
+
+        // Run the migration; MigrationTestHelper validates the result against schemas/4.json.
+        val db = helper.runMigrationsAndValidate(testDb, 4, true, AppDatabase.MIGRATION_3_4)
+
+        // The legacy row survived migration with original data intact.
+        db.query("SELECT COUNT(*), totalCost FROM legend_meta WHERE raceId = 7").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals(250, c.getInt(1))
+        }
+
+        // The new column defaults to 0 (not yet refreshed from the server), not corrupted or NULL.
+        db.query("SELECT scoringCount FROM legend_meta WHERE raceId = 7").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+
+        db.close()
+    }
 }

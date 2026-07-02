@@ -224,11 +224,13 @@ fun MarksScreen(
     onPhotoClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val takenKp = takenPointCount(marks)
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
     // for a checkpoint dropped from the legend — so СУММА tracks the «Легенда» score after an organizer
     // cost edit rather than the stale value baked into the mark row.
     val costOf: (MarkEntity) -> Int = { checkpointCosts[it.checkpointId] ?: it.cost }
+    // «ВЗЯТО» counts only scoring (cost > 0) checkpoints — a locked take by photo has cost=null →
+    // costOf snapshot 0, so it self-corrects once the legend is revealed (see LegendScreen.isScoring).
+    val takenKp = takenPointCount(marks, costOf)
     val takenScore = totalScore(marks, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 

@@ -57,8 +57,11 @@ class LegendRepositoryTest {
         raceId: Int = 8,
         checkpointIds: List<Int> = listOf(101),
         totalCost: Int = 10,
+        scoringCount: Int? = null,
     ) = buildString {
-        append("""{"race":$raceId,"total_cost":$totalCost,"checkpoints":[""")
+        append("""{"race":$raceId,"total_cost":$totalCost,""")
+        if (scoringCount != null) append(""""scoring_count":$scoringCount,""")
+        append(""""checkpoints":[""")
         checkpointIds.forEachIndexed { index, id ->
             if (index > 0) append(",")
             append("""{"id":$id,"number":${index + 1},"cost":10,"type":"kp","description":"КП $id"}""")
@@ -186,6 +189,32 @@ class LegendRepositoryTest {
     @Test
     fun totalCost_defaultsToZeroBeforeSync() = runTest {
         assertEquals(0, repository.totalCostForRace(8).first())
+    }
+
+    @Test
+    fun success_persistsScoringCount() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody(legendJson(checkpointIds = listOf(101, 102), scoringCount = 7)),
+        )
+
+        repository.refreshLegend(8)
+
+        assertEquals(7, repository.scoringCountForRace(8).first())
+    }
+
+    @Test
+    fun scoringCount_missingFromResponse_defaultsToZero() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(legendJson()))
+
+        repository.refreshLegend(8)
+
+        assertEquals(0, repository.scoringCountForRace(8).first())
+    }
+
+    @Test
+    fun scoringCount_defaultsToZeroBeforeSync() = runTest {
+        assertEquals(0, repository.scoringCountForRace(8).first())
     }
 
     @Test

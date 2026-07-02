@@ -537,6 +537,14 @@ fun takenPointCount(marks: List<MarkEntity>): Int =
     marks.filter { it.complete }.map { it.checkpointId }.distinct().size
 
 /**
+ * Distinct checkpoints scored (complete) with a **live** cost resolver, counting only scoring
+ * (`cost > 0`) checkpoints — technical checkpoints (cost 0: test point, transfer zone) don't
+ * count toward the «ВЗЯТО» total. [costOf] mirrors the [totalScore] overload's live-cost resolver.
+ */
+fun takenPointCount(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int =
+    marks.filter { it.complete }.distinctBy { it.checkpointId }.count { costOf(it) > 0 }
+
+/**
  * The set of checkpoint ids (points) scored by these marks — i.e. the team's "взято" checkpoints,
  * derived from its own complete takes. The legend uses this instead of a persisted per-checkpoint flag
  * so that switching teams within a race shows each team's own progress.
