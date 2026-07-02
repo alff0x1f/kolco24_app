@@ -359,12 +359,12 @@ else `UnknownChip`. Only `Recorded` writes a row.
 **Files:**
 - Modify: `docs/design/UPLOAD.md`, `docs/design/DATA-NOTES.md`, `docs/design/UI-NOTES.md`, `CLAUDE.md`
 
-- [ ] `UPLOAD.md`: add the `judge_scans` upload contract (URL, request/response, partial-accept, idempotency)
-- [ ] `DATA-NOTES.md`: `JudgeScanRepository` + `judge_scans` table/DAO notes (raceId-only scope, write-once)
-- [ ] `UI-NOTES.md`: `JudgeScanScreen`/`JudgeScanModel` + the new `onTagForJudgeScan` hook priority
-- [ ] `CLAUDE.md`: module-map lines (ui/admin, data), Room **v4 → v5**, add
+- [x] `UPLOAD.md`: add the `judge_scans` upload contract (URL, request/response, partial-accept, idempotency)
+- [x] `DATA-NOTES.md`: `JudgeScanRepository` + `judge_scans` table/DAO notes (raceId-only scope, write-once)
+- [x] `UI-NOTES.md`: `JudgeScanScreen`/`JudgeScanModel` + the new `onTagForJudgeScan` hook priority
+- [x] `CLAUDE.md`: module-map lines (ui/admin, data), Room **v4 → v5**, add
       `JudgeScanDaoTest`/`MIGRATION_4_5` to the `connectedDebugAndroidTest` guard list
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
