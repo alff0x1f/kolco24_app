@@ -2,12 +2,14 @@ package ru.kolco24.kolco24.ui.marks
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -62,6 +64,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -85,6 +88,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -906,19 +910,7 @@ private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Uni
                     }
                 },
         ) { page ->
-            AsyncImage(
-                model = File(context.filesDir, paths[page]),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        if (mark != null) {
-            PhotoKpChip(
-                mark = mark,
-                color = tileFill(mark.color, isDarkScheme()).fill,
-                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding(),
-            )
+            LightboxPage(file = File(context.filesDir, paths[page]), mark = mark)
         }
         if (paths.size > 1) {
             Text(
@@ -941,6 +933,52 @@ private fun PhotoLightbox(mark: Mark?, paths: List<String>, onDismiss: () -> Uni
 
 /** Vertical drag distance past which releasing the lightbox closes it instead of springing back. */
 private val dismissThresholdDp = 120.dp
+
+/**
+ * One lightbox page: the photo is drawn with [ContentScale.Fit], which letterboxes rather than filling
+ * the page whenever the frame's aspect ratio doesn't match the screen's — so the [PhotoKpChip] is pinned
+ * to the *photo's own* rendered top-left corner, not the page's, by first sizing an inner [Box] to the
+ * photo's actual displayed (post-letterbox) dimensions and aligning the chip within that box. Before the
+ * frame's intrinsic size is known (first composition / load in flight) the inner box falls back to filling
+ * the page so nothing crashes or flashes at 0-size; the chip lands correctly on the very next frame once
+ * the size resolves.
+ */
+@Composable
+private fun LightboxPage(file: File, mark: Mark?, modifier: Modifier = Modifier) {
+    val painter = rememberAsyncImagePainter(model = file)
+    val intrinsic = painter.intrinsicSize
+    BoxWithConstraints(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val photoSizeModifier = if (intrinsic.isSpecified && intrinsic.width > 0f && intrinsic.height > 0f) {
+            val scale = minOf(
+                constraints.maxWidth / intrinsic.width,
+                constraints.maxHeight / intrinsic.height,
+            )
+            with(LocalDensity.current) {
+                Modifier.size(
+                    width = (intrinsic.width * scale).toDp(),
+                    height = (intrinsic.height * scale).toDp(),
+                )
+            }
+        } else {
+            Modifier.fillMaxSize()
+        }
+        Box(modifier = photoSizeModifier) {
+            Image(
+                painter = painter,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (mark != null) {
+                PhotoKpChip(
+                    mark = mark,
+                    color = tileFill(mark.color, isDarkScheme()).fill,
+                    modifier = Modifier.align(Alignment.TopStart),
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun NfcTileBody(mark: Mark, textColor: Color) {
