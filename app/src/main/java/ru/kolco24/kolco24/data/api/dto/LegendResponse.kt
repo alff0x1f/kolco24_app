@@ -9,11 +9,16 @@ import kotlinx.serialization.Serializable
  * [totalCost] is the sum of **every** checkpoint's `cost` — open AND locked — so the legend progress
  * bar has a correct denominator even when locked CPs hide their individual `cost`. Defaulted to `0`
  * for forward-compat (a payload without the field parses safely); persisted per-race in `legend_meta`.
+ *
+ * [scoringCount] is the count of checkpoints with `cost > 0` — open AND locked — the denominator for
+ * the taken-КП counter (technical CPs with `cost = 0` don't count). Symmetric to [totalCost]: defaulted
+ * to `0` for forward-compat, persisted per-race in `legend_meta`.
  */
 @Serializable
 data class LegendResponse(
     val race: Int,
     @SerialName("total_cost") val totalCost: Int = 0,
+    @SerialName("scoring_count") val scoringCount: Int = 0,
     val checkpoints: List<CheckpointDto>,
     val tags: List<TagDto> = emptyList(),
 )

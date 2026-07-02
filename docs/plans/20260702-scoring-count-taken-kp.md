@@ -54,9 +54,9 @@
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/api/dto/LegendResponse.kt`
 
-- [ ] добавить в `LegendResponse` поле `@SerialName("scoring_count") val scoringCount: Int = 0`
-- [ ] обновить KDoc: `scoringCount` — число КП с `cost > 0` (open + locked), для знаменателя счётчика взятых, симметрично `totalCost`; default 0 для forward-compat
-- [ ] (тесты парсинга — в Task 4 вместе с repo/MockWebServer)
+- [x] добавить в `LegendResponse` поле `@SerialName("scoring_count") val scoringCount: Int = 0`
+- [x] обновить KDoc: `scoringCount` — число КП с `cost > 0` (open + locked), для знаменателя счётчика взятых, симметрично `totalCost`; default 0 для forward-compat
+- [x] (тесты парсинга — в Task 4 вместе с repo/MockWebServer)
 
 ### Task 2: Схема БД v4 — колонка `legend_meta.scoringCount` + миграция
 
