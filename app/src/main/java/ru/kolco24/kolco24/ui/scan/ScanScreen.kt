@@ -88,7 +88,9 @@ import ru.kolco24.kolco24.ui.theme.RobotoMono
 import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val TIMER_TICK_MS = 250L
-private const val SUCCESS_HOLD_MS = 1_800L
+// Matches the checkpoint-mark-completed fanfare length so the green "Готово!" screen holds for the
+// whole clip.
+private const val SUCCESS_HOLD_MS = 3_500L
 
 data class ScanChip(
     val chipNumber: Int?,
@@ -105,6 +107,7 @@ fun ScanScreen(
     scanFeedback: ScanFeedbackPlayer,
     onScanTag: suspend (ScanInput, TimeSample) -> ScanEvent,
     onClose: () -> Unit,
+    onCompleted: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current as? MainActivity
@@ -119,6 +122,7 @@ fun ScanScreen(
     val scanMutex = remember { Mutex() }
     val currentOnScanTag by rememberUpdatedState(onScanTag)
     val currentOnClose by rememberUpdatedState(onClose)
+    val currentOnCompleted by rememberUpdatedState(onCompleted)
     var session by remember { mutableStateOf<ScanSession?>(null) }
     var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
@@ -140,12 +144,15 @@ fun ScanScreen(
         val now = sample.elapsedMs
         scanMutex.withLock {
             val event = currentOnScanTag(input, sample)
-            // One outcome cue per tap, covering every path incl. idempotent re-taps. Fired here (the
-            // single scan-overlay chokepoint) so the platform beep — suppressed app-wide — is replaced.
-            scanFeedback.play(feedbackFor(event))
             when (event) {
-                ScanEvent.UnboundChip -> diagnostic = "Чип не привязан к команде"
-                is ScanEvent.BadKp -> diagnostic = event.reason
+                ScanEvent.UnboundChip -> {
+                    diagnostic = "Чип не привязан к команде"
+                    scanFeedback.play(feedbackFor(event))
+                }
+                is ScanEvent.BadKp -> {
+                    diagnostic = event.reason
+                    scanFeedback.play(feedbackFor(event))
+                }
                 else -> {
                     diagnostic = null
                     // If the 20 s window had already elapsed at tap time, the DB side
@@ -153,10 +160,21 @@ fun ScanScreen(
                     // also starts fresh instead of extending the stale one.
                     val effectiveSession =
                         if (isWindowExpired(session?.lastScanAt, now)) null else session
+                    val wasComplete = isComplete(effectiveSession, roster.size)
                     // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
                     // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
                     // so the ring must keep counting down rather than flash back to full.
                     session = reduce(effectiveSession, event, now)
+                    // The fanfare replaces the short success beep only on the tap that completes the
+                    // take (incomplete → complete transition) — covers completion arriving on a Kp
+                    // event too (pre-КП buffered members draining into present). An idempotent re-tap
+                    // during the hold stays wasComplete == isComplete(session, ...) == true, so no
+                    // restart.
+                    if (!wasComplete && isComplete(session, roster.size)) {
+                        scanFeedback.checkpointComplete()
+                    } else {
+                        scanFeedback.play(feedbackFor(event))
+                    }
                 }
             }
         }
@@ -244,7 +262,10 @@ fun ScanScreen(
                     completed = false
                 }
             }
-            if (shouldClose) currentOnClose()
+            if (shouldClose) {
+                currentOnCompleted()
+                currentOnClose()
+            }
         } else if (!allScanned) {
             // A КП switch during the success hold makes allScanned false and cancels the delay above.
             // Reset completed so the next full-roster scan can trigger the beat again.

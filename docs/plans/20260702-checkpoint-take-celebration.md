@@ -88,10 +88,10 @@ Sequenced by design: fanfare plays out on the green screen, then the coin fires 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt`
 
-- [ ] change `SUCCESS_HOLD_MS` from `1_800L` to `3_500L` (comment: matches the fanfare length)
-- [ ] in `process()`: move the feedback call after the session update in the non-error branch — capture the effective session before `reduce()`, and play `scanFeedback.checkpointComplete()` iff the session transitioned incomplete → complete (`!isComplete(before, roster.size) && isComplete(session, roster.size)`), else `scanFeedback.play(feedbackFor(event))`; `UnboundChip`/`BadKp` branches keep today's failure feedback (pure `feedbackFor` mapper untouched)
-- [ ] add `onCompleted: () -> Unit` param (default `{}`), held via `rememberUpdatedState`; in the completion auto-close effect: `if (shouldClose) { currentOnCompleted(); currentOnClose() }` — expiry and manual close never call it
-- [ ] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 3 (`ScanSessionTest`/`ScanFeedbackTest` regression gate)
+- [x] change `SUCCESS_HOLD_MS` from `1_800L` to `3_500L` (comment: matches the fanfare length)
+- [x] in `process()`: move the feedback call after the session update in the non-error branch — capture the effective session before `reduce()`, and play `scanFeedback.checkpointComplete()` iff the session transitioned incomplete → complete (`!isComplete(before, roster.size) && isComplete(session, roster.size)`), else `scanFeedback.play(feedbackFor(event))`; `UnboundChip`/`BadKp` branches keep today's failure feedback (pure `feedbackFor` mapper untouched)
+- [x] add `onCompleted: () -> Unit` param (default `{}`), held via `rememberUpdatedState`; in the completion auto-close effect: `if (shouldClose) { currentOnCompleted(); currentOnClose() }` — expiry and manual close never call it
+- [x] run `./gradlew testDebugUnitTest lintDebug` — must pass before task 3 (`ScanSessionTest`/`ScanFeedbackTest` regression gate)
 
 ### Task 3: MainActivity — pendingCelebration flag, navigation, MarksScreen wiring
 
