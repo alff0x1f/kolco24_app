@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.data
 
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.api.dto.JudgeScanDto
@@ -8,8 +9,10 @@ import ru.kolco24.kolco24.data.api.dto.JudgeScanUploadResponse
 import ru.kolco24.kolco24.data.api.dto.toDto
 import ru.kolco24.kolco24.data.db.JudgeScanDao
 import ru.kolco24.kolco24.data.db.JudgeScanEntity
+import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.UploadResultKind
+import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.uploadResultKind
 
 /**
@@ -39,6 +42,12 @@ class JudgeScanRepository(
     private val sourceInstallId: String = "",
     private val cloudUploader: JudgeScanUploader = JudgeScanUploader { _, _, _ -> PostResult.Offline },
     private val localUploader: JudgeScanUploader = JudgeScanUploader { _, _, _ -> PostResult.Offline },
+    /**
+     * Fires once per target per [flushRace], but only when that target's [uploadLoop] actually
+     * attempted a send (null — nothing pending — leaves the prior outcome untouched), mirroring
+     * [MarkRepository]'s idle-reflush rule.
+     */
+    private val onUploadOutcome: (raceId: Int, target: UploadTarget, kind: UploadResultKind) -> Unit = { _, _, _ -> },
 ) {
     /**
      * Guards [uploadPending]/[uploadAllPending] against concurrent entry (the 60 s ticker firing
@@ -110,13 +119,16 @@ class JudgeScanRepository(
             fetch = { judgeScanDao.unuploadedLocal(raceId, UPLOAD_BATCH) },
             upload = { localUploader.upload(raceId, sourceInstallId, it) },
             mark = { judgeScanDao.markUploadedLocal(it) },
-        )
+        )?.let { onUploadOutcome(raceId, UploadTarget.Local, it) }
         uploadLoop(
             fetch = { judgeScanDao.unuploadedCloud(raceId, UPLOAD_BATCH) },
             upload = { cloudUploader.upload(raceId, sourceInstallId, it) },
             mark = { judgeScanDao.markUploadedCloud(it) },
-        )
+        )?.let { onUploadOutcome(raceId, UploadTarget.Cloud, it) }
     }
+
+    /** Live per-race upload counts (total / uploaded-local / uploaded-cloud) for the status UI. */
+    fun uploadCounts(raceId: Int): Flow<UploadCounts> = judgeScanDao.uploadCounts(raceId)
 
     /**
      * Drain one target in batches until done or stuck, returning the terminal [UploadResultKind] or

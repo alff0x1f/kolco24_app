@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.data.db
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -116,5 +117,45 @@ class JudgeScanDaoTest {
 
         assertEquals(setOf(2, 3), pending.toSet())
         assertTrue(!pending.contains(1))
+    }
+
+    @Test
+    fun uploadCounts_reflectsInsertsWithNoneUploaded() = runBlocking {
+        dao.insert(scan("a", raceId = 1))
+        dao.insert(scan("b", raceId = 1))
+
+        val counts = dao.uploadCounts(raceId = 1).first()
+
+        assertEquals(2, counts.total)
+        assertEquals(0, counts.local)
+        assertEquals(0, counts.cloud)
+    }
+
+    @Test
+    fun uploadCounts_localAndCloudAdvanceIndependently() = runBlocking {
+        dao.insert(scan("a", raceId = 1))
+        dao.insert(scan("b", raceId = 1))
+        dao.insert(scan("c", raceId = 1))
+
+        dao.markUploadedLocal(listOf("a", "b"))
+        dao.markUploadedCloud(listOf("a"))
+
+        val counts = dao.uploadCounts(raceId = 1).first()
+
+        assertEquals(3, counts.total)
+        assertEquals(2, counts.local)
+        assertEquals(1, counts.cloud)
+    }
+
+    @Test
+    fun uploadCounts_excludesOtherRaceIds() = runBlocking {
+        dao.insert(scan("race1-a", raceId = 1))
+        dao.insert(scan("race2-a", raceId = 2, uploadedLocal = true, uploadedCloud = true))
+
+        val counts = dao.uploadCounts(raceId = 1).first()
+
+        assertEquals(1, counts.total)
+        assertEquals(0, counts.local)
+        assertEquals(0, counts.cloud)
     }
 }

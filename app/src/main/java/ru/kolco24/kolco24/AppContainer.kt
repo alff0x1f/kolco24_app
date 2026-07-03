@@ -333,8 +333,23 @@ class AppContainer(private val context: Context) {
             localUploader = JudgeScanUploader { raceId, sourceInstallId, scans ->
                 localApiClient.uploadJudgeScans(raceId, sourceInstallId, scans)
             },
+            onUploadOutcome = { raceId, target, kind ->
+                judgeScanUploadOutcomes.update {
+                    it + ((raceId to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
+                }
+            },
         )
     }
+
+    /**
+     * Transient (in-memory, not persisted) per-target judge-scan upload outcomes, keyed by
+     * `(raceId, target)`. Mirrors [markUploadOutcomes]: refreshed within seconds of a restart by
+     * Launch B's opportunistic flush, so it needs no Room table. Judge scans are write-once with no
+     * "clear" path, so there is no `onScopeCleared` analogue.
+     */
+    val judgeScanUploadOutcomes:
+        MutableStateFlow<Map<Pair<Int, UploadTarget>, TargetUploadOutcome>> =
+        MutableStateFlow(emptyMap())
 
     /**
      * Local-only GPS track store. Owns the [RawFix]→entity mapping; the recording service forwards

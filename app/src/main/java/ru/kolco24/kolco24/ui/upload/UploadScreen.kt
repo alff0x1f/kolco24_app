@@ -43,11 +43,12 @@ import ru.kolco24.kolco24.ui.common.RefreshableList
 
 /**
  * «Загрузка данных» overlay — the single consolidated place to check upload status, reached from
- * Команда → Прочее. Renders up to three [UploadSection]s (Отметки, Фото, GPS-трек), each hidden when
- * its scope has nothing to report. Stateless; the host derives all three [TrackUploadStatus] values
- * and owns [refreshing]/[onRefresh] for the pull-to-refresh gesture on the content branch — the empty
- * state offers no gesture (nothing to upload by construction, mirrors `LegendScreen`). The PTR outcome
- * has no snackbar: the receipt lines themselves are the content that updates.
+ * Команда → Прочее. Renders up to four [UploadSection]s (Отметки, Фото, GPS-трек, Судейские отметки),
+ * each hidden when its scope has nothing to report. Stateless; the host derives all four
+ * [TrackUploadStatus] values and owns [refreshing]/[onRefresh] for the pull-to-refresh gesture on the
+ * content branch — the empty state offers no gesture (nothing to upload by construction, mirrors
+ * `LegendScreen`). The PTR outcome has no snackbar: the receipt lines themselves are the content that
+ * updates.
  * Compose, untested by convention — only [showFinishLine] below is unit-tested.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +57,7 @@ fun UploadScreen(
     marks: TrackUploadStatus?,
     photos: TrackUploadStatus?,
     track: TrackUploadStatus?,
+    judge: TrackUploadStatus? = null,
     refreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     onBack: () -> Unit,
@@ -67,7 +69,7 @@ fun UploadScreen(
             delay(30_000L)
         }
     }
-    val hasAny = listOf(marks, photos, track).any { it != null && it.total > 0 }
+    val hasAny = listOf(marks, photos, track, judge).any { it != null && it.total > 0 }
 
     Column(
         modifier = modifier
@@ -98,6 +100,7 @@ fun UploadScreen(
                     UploadSection(title = "Отметки", status = marks, nowMs = nowMs)
                     UploadSection(title = "Фото", status = photos, nowMs = nowMs)
                     UploadSection(title = "GPS-трек", status = track, nowMs = nowMs)
+                    UploadSection(title = "Судейские отметки", status = judge, nowMs = nowMs)
                 }
             }
         } else {
@@ -221,7 +224,7 @@ private fun outcomeLabelRu(kind: UploadResultKind, offlineLabel: String): String
     UploadResultKind.Error -> "ошибка"
 }
 
-/** Nothing recorded yet in any of the three scopes. */
+/** Nothing recorded yet in any of the four scopes. */
 @Composable
 private fun UploadEmptyState(modifier: Modifier = Modifier) {
     Column(
@@ -244,7 +247,8 @@ private fun UploadEmptyState(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Здесь появится статус загрузки отметок, фото и GPS-трека, когда они будут записаны.",
+            text = "Здесь появится статус загрузки отметок, фото, GPS-трека и судейских отметок, " +
+                "когда они будут записаны.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

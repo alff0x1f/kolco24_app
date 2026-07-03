@@ -795,6 +795,12 @@ private fun Kolco24AppRoot(
     val photoUploadStatus =
         rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::photoFrameCounts)
 
+    // Судейские отметки section — race-only scope (a judge station covers every team), so it uses
+    // rememberJudgeUploadStatus rather than the team+race rememberUploadStatus above.
+    val judgeScanUploadOutcomes by container.judgeScanUploadOutcomes.collectAsState()
+    val judgeUploadStatus =
+        rememberJudgeUploadStatus(selectedRaceId, judgeScanUploadOutcomes, container.judgeScanRepository::uploadCounts)
+
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
     // only seeded with `initial` on first composition). During the brief window after a team switch
@@ -1533,6 +1539,7 @@ private fun Kolco24AppRoot(
                 marks = marksMetadataUploadStatus,
                 photos = photoUploadStatus,
                 track = trackUploadStatus,
+                judge = judgeUploadStatus,
                 onBack = { showUpload = false },
                 refreshing = uploadRefreshing,
                 onRefresh = {
@@ -1545,6 +1552,7 @@ private fun Kolco24AppRoot(
                                 supervisorScope {
                                     launch { trackRepo.uploadAllPending() }
                                     launch { markRepo.uploadAllPending() }
+                                    launch { container.judgeScanRepository.uploadAllPending() }
                                 }
                             } finally {
                                 uploadRefreshing = false
@@ -2182,5 +2190,30 @@ private fun rememberUploadStatus(
         total = c.total,
         local = TargetLine(c.local, outcomes[countScope to UploadTarget.Local]),
         cloud = TargetLine(c.cloud, outcomes[countScope to UploadTarget.Cloud]),
+    )
+}
+
+// Race-only sibling of rememberUploadStatus above — judge scans are raceId-scoped only (a judge
+// station covers every team), so there is no teamId dimension to guard on.
+@Composable
+private fun rememberJudgeUploadStatus(
+    raceId: Int?,
+    outcomes: Map<Pair<Int, UploadTarget>, TargetUploadOutcome>,
+    counts: (raceId: Int) -> Flow<UploadCounts>,
+): TrackUploadStatus? {
+    val scoped by produceState<Pair<Int, UploadCounts>?>(null, raceId) {
+        value = null
+        if (raceId != null) {
+            counts(raceId).collect { value = raceId to it }
+        }
+    }
+    val sc = scoped ?: return null
+    if (raceId == null) return null
+    val (countRaceId, c) = sc
+    if (countRaceId != raceId || c.total == 0) return null
+    return TrackUploadStatus(
+        total = c.total,
+        local = TargetLine(c.local, outcomes[countRaceId to UploadTarget.Local]),
+        cloud = TargetLine(c.cloud, outcomes[countRaceId to UploadTarget.Cloud]),
     )
 }
