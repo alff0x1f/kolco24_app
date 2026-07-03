@@ -77,8 +77,8 @@ android {
         applicationId = "ru.kolco24.kolco24"
         minSdk = 24
         targetSdk = 36
-        versionCode = 19
-        versionName = "2.1.2"
+        versionCode = 20
+        versionName = "2.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
