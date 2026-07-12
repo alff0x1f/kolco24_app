@@ -33,6 +33,20 @@ class TrustedClockTest {
         persisted = persistedAnchor,
     )
 
+    /**
+     * Legacy-shaped convenience wrapper: the pre-uncertainty call sites offered a network `Date`
+     * candidate. Defaults [uncertaintyMs] so same-uncertainty tests keep asserting the "larger
+     * anchorElapsed wins" behaviour (identical uncertainty → the older duplicate has a larger
+     * effective uncertainty and is rejected).
+     */
+    private fun TrustedClock.onServerTime(
+        serverMs: Long,
+        anchorElapsed: Long,
+        wallNow: Long,
+        bootNow: Int?,
+        uncertaintyMs: Long = 500L,
+    ) = onTimeCandidate(TimeCandidate(serverMs, anchorElapsed, uncertaintyMs), wallNow, bootNow)
+
     @Test
     fun trustedFormula_afterSync() {
         val f = Fakes(elapsed = 1_000L, wall = 5_000_000L, boot = 1)
@@ -289,6 +303,83 @@ class TrustedClockTest {
         val c = clock(f)
         // never synced → not verified.
         assertNull(c.trustedAt(elapsedAt = 2_000L, bootAt = 1))
+    }
+
+    @Test
+    fun uncertainty_goodAnchorNotOverwrittenByBadCandidate() {
+        val f = Fakes(elapsed = 1_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        // Good anchor: tiny uncertainty (RTT 50 ms).
+        c.onServerTime(10_000_000L, anchorElapsed = 1_000L, wallNow = 0L, bootNow = 1, uncertaintyMs = 50L)
+        // A poor candidate (RTT 9.9 s) arrives in the same session — must be rejected.
+        f.elapsed = 2_000L
+        c.onTimeCandidate(TimeCandidate(serverMs = 99_999_999L, anchorElapsedMs = 2_000L, uncertaintyMs = 9_900L), 0L, 1)
+        // Still anchored on the good one: 10_000_000 + (2_000 − 1_000).
+        assertEquals(10_001_000L, c.trusted())
+    }
+
+    @Test
+    fun uncertainty_badAnchorOverwrittenByGoodCandidate() {
+        val f = Fakes(elapsed = 1_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        // Poor anchor first.
+        c.onServerTime(5_000_000L, anchorElapsed = 1_000L, wallNow = 0L, bootNow = 1, uncertaintyMs = 9_900L)
+        // A good candidate supersedes it.
+        f.elapsed = 2_000L
+        c.onTimeCandidate(TimeCandidate(serverMs = 10_000_000L, anchorElapsedMs = 2_000L, uncertaintyMs = 50L), 0L, 1)
+        f.elapsed = 3_000L
+        assertEquals(10_000_000L + (3_000L - 2_000L), c.trusted())
+    }
+
+    @Test
+    fun uncertainty_staleGoodAnchorLosesToFreshAverage_afterEnoughDrift() {
+        val f = Fakes(elapsed = 0L, wall = 0L, boot = 1)
+        val c = clock(f)
+        // Ideal old anchor (uncertainty 50) captured at elapsed 0.
+        c.onServerTime(10_000_000L, anchorElapsed = 0L, wallNow = 0L, bootNow = 1, uncertaintyMs = 50L)
+        // ~50 min later: drift penalty on the old anchor = 3_000_000 * 20 / 1e6 = 60 ms → effective 110.
+        // Fresh average candidate (uncertainty 100) at the same elapsed → effective 100 ≤ 110 → wins.
+        f.elapsed = 3_000_000L
+        c.onTimeCandidate(TimeCandidate(serverMs = 20_000_000L, anchorElapsedMs = 3_000_000L, uncertaintyMs = 100L), 0L, 1)
+        assertEquals(20_000_000L, c.trusted())
+    }
+
+    @Test
+    fun uncertainty_staleGoodAnchorStillWins_beforeEnoughDrift() {
+        val f = Fakes(elapsed = 0L, wall = 0L, boot = 1)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 0L, wallNow = 0L, bootNow = 1, uncertaintyMs = 50L)
+        // Only 10 s later: old effective = 50 + 10_000*20/1e6 = 50; fresh (100) > 50 → rejected.
+        f.elapsed = 10_000L
+        c.onTimeCandidate(TimeCandidate(serverMs = 20_000_000L, anchorElapsedMs = 10_000L, uncertaintyMs = 100L), 0L, 1)
+        assertEquals(10_000_000L + (10_000L - 0L), c.trusted())
+    }
+
+    @Test
+    fun uncertainty_pastAnchorElapsedCandidate_acceptedWhenBetterEffective() {
+        // A GPS-style candidate whose anchorElapsed is in the PAST of elapsedNow is allowed and
+        // accepted when its effective uncertainty beats the current anchor's.
+        val f = Fakes(elapsed = 1_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 1_000L, wallNow = 0L, bootNow = 1, uncertaintyMs = 5_000L)
+        f.elapsed = 2_000L
+        // captured at elapsed 500 (before now), tight uncertainty 500.
+        c.onTimeCandidate(TimeCandidate(serverMs = 15_000_000L, anchorElapsedMs = 500L, uncertaintyMs = 500L), 0L, 1)
+        // 15_000_000 + (2_000 − 500).
+        assertEquals(15_001_500L, c.trusted())
+    }
+
+    @Test
+    fun uncertainty_rebootAcceptsWorseCandidateUnconditionally() {
+        val f = Fakes(elapsed = 10_000L, wall = 0L, boot = 5)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 9_000L, wallNow = 0L, bootNow = 5, uncertaintyMs = 50L)
+        // Reboot: monotonic regresses below the anchor. A far worse candidate must still be accepted
+        // (the reboot branch precedes the uncertainty comparison).
+        f.elapsed = 100L
+        c.onTimeCandidate(TimeCandidate(serverMs = 20_000_000L, anchorElapsedMs = 40L, uncertaintyMs = 9_900L), 0L, 5)
+        f.elapsed = 60L
+        assertEquals(20_000_000L + (60L - 40L), c.trusted())
     }
 
     @Test

@@ -30,6 +30,7 @@ class ClockAnchorStoreTest {
             anchorElapsedMs = 123_456L,
             capturedWallMs = 1_700_000_000_500L,
             bootCount = 7,
+            uncertaintyMs = 550L,
         )
 
         s.write(anchor)
@@ -46,11 +47,46 @@ class ClockAnchorStoreTest {
             anchorElapsedMs = 123_456L,
             capturedWallMs = 1_700_000_000_500L,
             bootCount = null,
+            uncertaintyMs = 700L,
         )
 
         s.write(anchor)
 
         assertEquals(anchor, s.read())
+    }
+
+    @Test
+    fun write_storesFiveSegments_withUncertainty() {
+        val store = FakeStore()
+        val s = ClockAnchorStore(store.load, store.save)
+        s.write(ClockAnchor(1_700_000_000_000L, 123_456L, 1_700_000_000_500L, 7, uncertaintyMs = 550L))
+
+        assertEquals("1700000000000|123456|1700000000500|7|550", store.map["anchor"])
+    }
+
+    @Test
+    fun read_preSeeded_fiveSegments_parsesUncertainty() {
+        val store = FakeStore(mapOf("anchor" to "1700000000000|123456|1700000000500|7|550"))
+        assertEquals(
+            ClockAnchor(1_700_000_000_000L, 123_456L, 1_700_000_000_500L, 7, uncertaintyMs = 550L),
+            ClockAnchorStore(store.load, store.save).read(),
+        )
+    }
+
+    @Test
+    fun read_legacyFourSegments_defaultsUncertainty() {
+        // Pre-uncertainty 4-segment format → LEGACY_UNCERTAINTY_MS so a fresh candidate supersedes it.
+        val store = FakeStore(mapOf("anchor" to "1700000000000|123456|1700000000500|7"))
+        assertEquals(
+            ClockAnchor(1_700_000_000_000L, 123_456L, 1_700_000_000_500L, 7, uncertaintyMs = LEGACY_UNCERTAINTY_MS),
+            ClockAnchorStore(store.load, store.save).read(),
+        )
+    }
+
+    @Test
+    fun read_returnsNull_whenNonNumericUncertaintySegment() {
+        val store = FakeStore(mapOf("anchor" to "1700000000000|123456|1700000000500|7|xx"))
+        assertNull(ClockAnchorStore(store.load, store.save).read())
     }
 
     @Test
@@ -101,7 +137,7 @@ class ClockAnchorStoreTest {
 
     @Test
     fun read_returnsNull_whenTooManyFields() {
-        val store = FakeStore(mapOf("anchor" to "1|2|3|4|5"))
+        val store = FakeStore(mapOf("anchor" to "1|2|3|4|5|6"))
         assertNull(ClockAnchorStore(store.load, store.save).read())
     }
 

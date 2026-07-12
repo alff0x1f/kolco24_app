@@ -12,8 +12,10 @@ import android.content.Context
  * otherwise leave a mix of old/new fields that parses but is internally inconsistent. The single key
  * means [write] is one `save` → one `apply()`, so the persisted anchor is always whole or absent.
  *
- * Format: `"$serverEpochMs|$anchorElapsedMs|$capturedWallMs|${bootCount ?: ""}"` — an empty 4th
- * segment encodes `bootCount == null`.
+ * Format (5 segments): `"$serverEpochMs|$anchorElapsedMs|$capturedWallMs|${bootCount ?: ""}|$uncertaintyMs"`
+ * — an empty 4th segment encodes `bootCount == null`. A **legacy** 4-segment string (written before
+ * the uncertainty field existed) is still read, defaulting `uncertaintyMs` to [LEGACY_UNCERTAINTY_MS]
+ * so a fresh candidate supersedes it on the next sync.
  */
 class ClockAnchorStore(
     private val load: (String) -> String?,
@@ -22,24 +24,28 @@ class ClockAnchorStore(
 
     /**
      * Reads the persisted anchor, or `null` if the key is absent or the stored string is malformed
-     * (wrong field count, or a non-numeric segment). A blank 4th segment maps to `bootCount = null`.
+     * (wrong field count, or a non-numeric segment). Accepts both the current 5-segment format and a
+     * legacy 4-segment string (→ `uncertaintyMs = LEGACY_UNCERTAINTY_MS`). A blank 4th segment maps
+     * to `bootCount = null`; a non-numeric 5th segment is malformed → `null`.
      */
     fun read(): ClockAnchor? {
         val raw = load(KEY_ANCHOR) ?: return null
-        // Kotlin's split keeps a trailing empty segment by default (bootCount == null → 4 parts).
+        // Kotlin's split keeps a trailing empty segment by default (bootCount == null → 4/5 parts).
         val parts = raw.split('|')
-        if (parts.size != 4) return null
+        if (parts.size != 4 && parts.size != 5) return null
         val serverEpochMs = parts[0].toLongOrNull() ?: return null
         val anchorElapsedMs = parts[1].toLongOrNull() ?: return null
         val capturedWallMs = parts[2].toLongOrNull() ?: return null
         val bootCount = if (parts[3].isEmpty()) null else (parts[3].toIntOrNull() ?: return null)
-        return ClockAnchor(serverEpochMs, anchorElapsedMs, capturedWallMs, bootCount)
+        val uncertaintyMs =
+            if (parts.size == 4) LEGACY_UNCERTAINTY_MS else (parts[4].toLongOrNull() ?: return null)
+        return ClockAnchor(serverEpochMs, anchorElapsedMs, capturedWallMs, bootCount, uncertaintyMs)
     }
 
-    /** Persists [anchor] as one serialized string under one key (one `apply()`). */
+    /** Persists [anchor] as one serialized 5-segment string under one key (one `apply()`). */
     fun write(anchor: ClockAnchor) {
         val serialized = "${anchor.serverEpochMs}|${anchor.anchorElapsedMs}|" +
-            "${anchor.capturedWallMs}|${anchor.bootCount ?: ""}"
+            "${anchor.capturedWallMs}|${anchor.bootCount ?: ""}|${anchor.uncertaintyMs}"
         save(KEY_ANCHOR, serialized)
     }
 

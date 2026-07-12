@@ -127,7 +127,7 @@ class AppContainer(private val context: Context) {
         // onServerTime as a lambda breaks the construction cycle (like `tokenProvider`): it touches
         // `trustedClock` only at request time, after both `by lazy` blocks have initialized.
         val serverTimeInterceptor = ServerTimeInterceptor(
-            onServerTime = { s, e, w, b -> trustedClock.onServerTime(s, e, w, b) },
+            onServerTime = { candidate, w, b -> trustedClock.onTimeCandidate(candidate, w, b) },
             elapsed = { SystemClock.elapsedRealtime() },
             wall = { System.currentTimeMillis() },
             bootCount = { cachedBootCount },

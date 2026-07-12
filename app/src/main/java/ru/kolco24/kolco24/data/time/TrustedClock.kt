@@ -10,21 +10,60 @@ import kotlinx.coroutines.flow.asStateFlow
 const val SKEW_THRESHOLD_MS = 60_000L
 
 /**
+ * Assumed crystal-oscillator drift used to age an anchor's uncertainty (parts per million).
+ * `20 ppm ≈ 1.7 s/day` — a conservative-but-realistic penalty: an old ideal anchor eventually
+ * loses to a fresh average one via [TrustedClock.onTimeCandidate]'s effective-uncertainty rule.
+ */
+const val DRIFT_PPM = 20L
+
+/**
+ * Uncertainty floor (ms) contributed by the second-granular HTTP `Date` header — the network
+ * candidate's uncertainty is `rtt / 2 + DATE_HEADER_GRANULARITY_MS`.
+ */
+const val DATE_HEADER_GRANULARITY_MS = 500L
+
+/**
+ * Conservative uncertainty assigned to a **legacy** persisted anchor (the pre-uncertainty 4-segment
+ * format) so a fresh network/GPS candidate can supersede it once one arrives.
+ */
+const val LEGACY_UNCERTAINTY_MS = 5_000L
+
+/**
  * A trusted-time anchor: server epoch pinned to a reading of the **monotonic** `elapsedRealtime`
  * timer plus the boot-session identity in which that reading was taken.
  *
- * @param serverEpochMs server time (epoch ms) parsed from a network `Date` header.
+ * @param serverEpochMs server time (epoch ms) parsed from a trusted time source.
  * @param anchorElapsedMs the monotonic `elapsedRealtime()` reading the server time is pinned to
- *   (RTT-corrected midpoint).
+ *   (RTT-corrected midpoint for network, capture-instant for GPS).
  * @param capturedWallMs the device wall-clock at capture (forensics only).
  * @param bootCount `Settings.Global.BOOT_COUNT` at capture — boot-session identity; `null` if it
  *   could not be read (warm start is then disabled and the monotonic-regression heuristic is used).
+ * @param uncertaintyMs one-sigma uncertainty of [serverEpochMs] at [anchorElapsedMs] — the quality
+ *   of the source that produced this anchor (RTT/2 + granularity for network, a constant for GPS).
+ *   The replacement rule ages this by [DRIFT_PPM] so a stale good anchor loses to a fresh one.
  */
 data class ClockAnchor(
     val serverEpochMs: Long,
     val anchorElapsedMs: Long,
     val capturedWallMs: Long,
     val bootCount: Int?,
+    val uncertaintyMs: Long = LEGACY_UNCERTAINTY_MS,
+)
+
+/**
+ * A pure trusted-time candidate produced by a source (network `Date`, GPS fix, LAN time endpoint)
+ * and offered to [TrustedClock.onTimeCandidate]. Carries only the source-derived triple; `wallNow`
+ * and `bootNow` are snapshotted by the impure adapter at the moment of the call (the pure GPS/LAN
+ * mappers never see them).
+ *
+ * @param serverMs the source's epoch-ms reading.
+ * @param anchorElapsedMs the monotonic `elapsedRealtime()` reading [serverMs] is pinned to.
+ * @param uncertaintyMs one-sigma uncertainty of [serverMs] at [anchorElapsedMs].
+ */
+data class TimeCandidate(
+    val serverMs: Long,
+    val anchorElapsedMs: Long,
+    val uncertaintyMs: Long,
 )
 
 /**
@@ -122,6 +161,14 @@ class TrustedClock(
         return anchor.serverEpochMs + (elapsedNow - anchor.anchorElapsedMs)
     }
 
+    /**
+     * Pure: an anchor's uncertainty aged to [elapsedNow] by [DRIFT_PPM]. The oscillator drifts in
+     * both directions, so the penalty is on the **magnitude** of the age delta — a past candidate
+     * (`anchorElapsedMs > elapsedNow`, a pre-anchor GPS fix) is aged the same as a future one.
+     */
+    private fun effectiveUncertainty(uncertaintyMs: Long, anchorElapsedMs: Long, elapsedNow: Long): Long =
+        uncertaintyMs + abs(elapsedNow - anchorElapsedMs) * DRIFT_PPM / 1_000_000
+
     /** Pure: derive [ClockStatus] from an already-captured snapshot. */
     private fun computeStatus(
         state: ClockState,
@@ -187,16 +234,22 @@ class TrustedClock(
     fun signingSeconds(): Long = sample().let { it.trustedMs ?: it.wallMs } / 1000
 
     /**
-     * Re-anchor from a network `Date` header. [anchorElapsed] is the RTT-corrected midpoint reading;
+     * Re-anchor from any trusted-time [candidate] (network `Date`, GPS fix, LAN time endpoint).
      * [wallNow]/[bootNow] are captured by the caller. Serialized under [lock] (P1).
      *
      * Accept rule (P0 + out-of-order + null-safe): accept if (a) no current anchor; (b) current is
      * monotonically invalid (`anchorElapsedMs > elapsedNow`, reboot) — stale dropped, incoming
-     * accepted unconditionally; (c) both boot ids non-null and differ; or (d) (same session)
-     * `anchorElapsed >= current.anchorElapsedMs` (newer by monotonic time). A late out-of-order
-     * sample with a smaller `anchorElapsed` in the same session is rejected by (d).
+     * accepted unconditionally; (c) both boot ids non-null and differ; or (d) (same session) the
+     * candidate's **effective** uncertainty at `elapsedNow` is strictly better than the current
+     * anchor's, **or** they tie on effective uncertainty and the candidate is monotonically fresher
+     * (`anchorElapsedMs >= cur.anchorElapsedMs`). Effective uncertainty ages each anchor by
+     * [DRIFT_PPM] from its own `anchorElapsedMs`, so a fresh average candidate beats a stale ideal
+     * one. At millisecond scale the drift term truncates to zero, so two equal-quality anchors tie
+     * and the monotonic tie-break drops a late out-of-order duplicate (older `anchorElapsedMs`).
+     * A candidate whose `anchorElapsedMs` is in the past of `elapsedNow` (a GPS fix) is allowed —
+     * the effective-uncertainty formula is symmetric in the sign of the age delta.
      */
-    fun onServerTime(serverMs: Long, anchorElapsed: Long, wallNow: Long, bootNow: Int?) {
+    fun onTimeCandidate(candidate: TimeCandidate, wallNow: Long, bootNow: Int?) {
         synchronized(lock) {
             val elapsedNow = elapsedProvider()
             val current = ref.get()
@@ -205,14 +258,19 @@ class TrustedClock(
                 cur == null -> true
                 cur.anchorElapsedMs > elapsedNow -> true // reboot: drop stale, accept unconditionally
                 cur.bootCount != null && bootNow != null && cur.bootCount != bootNow -> true
-                else -> anchorElapsed >= cur.anchorElapsedMs
+                else -> {
+                    val effCand = effectiveUncertainty(candidate.uncertaintyMs, candidate.anchorElapsedMs, elapsedNow)
+                    val effCur = effectiveUncertainty(cur.uncertaintyMs, cur.anchorElapsedMs, elapsedNow)
+                    effCand < effCur || (effCand == effCur && candidate.anchorElapsedMs >= cur.anchorElapsedMs)
+                }
             }
             if (!accept) return
             val newAnchor = ClockAnchor(
-                serverEpochMs = serverMs,
-                anchorElapsedMs = anchorElapsed,
+                serverEpochMs = candidate.serverMs,
+                anchorElapsedMs = candidate.anchorElapsedMs,
                 capturedWallMs = wallNow,
                 bootCount = bootNow,
+                uncertaintyMs = candidate.uncertaintyMs,
             )
             val newState = ClockState(newAnchor, verified = true)
             // Ordered three-step (P1): ref.set → persist (best-effort) → statusFlow.

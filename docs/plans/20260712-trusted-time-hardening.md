@@ -189,15 +189,15 @@ Backfill при выгрузке не мутирует строки (write-once 
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 - Modify: `app/src/test/.../TrustedClockTest.kt`, `ClockAnchorStoreTest.kt`, `ServerTimeInterceptorTest.kt`
 
-- [ ] `ClockAnchor`: добавить `uncertaintyMs: Long`; новый чистый тип `TimeCandidate(serverMs, anchorElapsedMs, uncertaintyMs)` рядом в `TrustedClock.kt`; константы `DRIFT_PPM = 20`, `DATE_HEADER_GRANULARITY_MS = 500`, `LEGACY_UNCERTAINTY_MS = 5_000`
-- [ ] `ClockAnchorStore`: писать 5 сегментов; `read()` принимает и 4 (legacy → `LEGACY_UNCERTAINTY_MS`), и 5 сегментов; битый 5-й сегмент → null
-- [ ] `TrustedClock`: переименовать `onServerTime` → `onTimeCandidate(candidate: TimeCandidate, wallNow, bootNow)`; заменить правило (d) на сравнение эффективных неопределённостей `effective(a) = a.uncertaintyMs + Δelapsed * DRIFT_PPM / 1_000_000` (правила «нет якоря»/«ребут» — без изменений, безусловный accept); разрешить `anchorElapsedMs` в прошлом внутри той же сессии
-- [ ] `ServerTimeInterceptor`: собирать `TimeCandidate(serverMs, midpoint, rtt / 2 + DATE_HEADER_GRANULARITY_MS)`; обновить callback-сигнатуру и проводку в `AppContainer`
-- [ ] механически обновить существующие вызовы: ~26 мест в `TrustedClockTest` + арность лямбды `onServerTime = { s, e, w, b -> ... }` в `ServerTimeInterceptorTest` (единственный production-вызов — `AppContainer`)
-- [ ] тесты `TrustedClockTest`: хороший якорь не затирается плохим кандидатом; плохой затирается хорошим; старый хороший проигрывает свежему среднему при достаточном Δelapsed (штраф за дрейф); кандидат с `anchorElapsed` в прошлом принимается при лучшей effective-неопределённости; ребут-правила остались безусловными
-- [ ] тесты `ClockAnchorStoreTest`: roundtrip 5 сегментов; legacy 4 сегмента → дефолтная неопределённость; битый 5-й сегмент → null
-- [ ] тесты `ServerTimeInterceptorTest`: uncertainty = rtt/2 + 500 у принятого кандидата
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] `ClockAnchor`: добавить `uncertaintyMs: Long` (default `LEGACY_UNCERTAINTY_MS` — legacy warm-start + не-time тесты типа `TrackRepositoryTest` не трогаются); новый чистый тип `TimeCandidate(serverMs, anchorElapsedMs, uncertaintyMs)` рядом в `TrustedClock.kt`; константы `DRIFT_PPM = 20`, `DATE_HEADER_GRANULARITY_MS = 500`, `LEGACY_UNCERTAINTY_MS = 5_000`
+- [x] `ClockAnchorStore`: писать 5 сегментов; `read()` принимает и 4 (legacy → `LEGACY_UNCERTAINTY_MS`), и 5 сегментов; битый 5-й сегмент → null
+- [x] `TrustedClock`: переименовать `onServerTime` → `onTimeCandidate(candidate: TimeCandidate, wallNow, bootNow)`; заменить правило (d) на сравнение эффективных неопределённостей `effective(a) = a.uncertaintyMs + abs(Δelapsed) * DRIFT_PPM / 1_000_000` (правила «нет якоря»/«ребут» — без изменений, безусловный accept); разрешить `anchorElapsedMs` в прошлом внутри той же сессии. ⚠️ Уточнение: на мс-масштабе drift-член усекается в 0, поэтому равные-по-качеству якоря дают tie — добавлен monotonic tie-break (`anchorElapsedMs >=`), чтобы сохранить отброс поздних out-of-order дубликатов (иначе `scrambledOrder`/`outOfOrder` тесты ломались)
+- [x] `ServerTimeInterceptor`: собирать `TimeCandidate(serverMs, midpoint, rtt / 2 + DATE_HEADER_GRANULARITY_MS)`; обновить callback-сигнатуру и проводку в `AppContainer`
+- [x] механически обновить существующие вызовы: ~26 мест в `TrustedClockTest` (через test-локальный `onServerTime`-shim с default uncertainty 500) + арность лямбды `onServerTime = { candidate, w, b -> ... }` в `ServerTimeInterceptorTest` (единственный production-вызов — `AppContainer`)
+- [x] тесты `TrustedClockTest`: хороший якорь не затирается плохим кандидатом; плохой затирается хорошим; старый хороший проигрывает свежему среднему при достаточном Δelapsed (штраф за дрейф) + обратный кейс (мал Δelapsed → старый хороший держится); кандидат с `anchorElapsed` в прошлом принимается при лучшей effective-неопределённости; ребут-правила остались безусловными (хуже-кандидат принят после регрессии)
+- [x] тесты `ClockAnchorStoreTest`: roundtrip 5 сегментов (write→5 сегментов + preseeded); legacy 4 сегмента → дефолтная неопределённость; битый 5-й сегмент → null; `tooManyFields` → 6 сегментов
+- [x] тесты `ServerTimeInterceptorTest`: uncertainty = rtt/2 + 500 у принятого кандидата (два кейса)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 4: GPS-якорь времени
 
