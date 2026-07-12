@@ -26,7 +26,7 @@ const val LAN_TIME_NONCE_BYTES = 16
  * produce `HMAC(APP_SECRET, "<nonce>|<server_ms>")` without the secret, and a replayed old response
  * carries a stale nonce that fails the echo check).
  *
- * Android-free so it is JVM-unit-tested ([ru.kolco24.kolco24.data.time.LanTimeVerifier] mirrors
+ * Android-free so it is JVM-unit-tested (`LanTimeVerifierTest`; mirrors
  * `LegendCrypto`/`GpsTimeCandidate`): the impure adapter (`AppContainer.syncLanTime`) reads the monotonic
  * clock around the network call and offers any accepted candidate to `TrustedClock.onTimeCandidate`, whose
  * replacement rule then keeps it only when it improves the anchor.
