@@ -159,10 +159,10 @@ Backfill при выгрузке не мутирует строки (write-once 
 - Modify: `app/src/main/res/xml/backup_rules.xml`
 - Modify: `app/src/main/res/xml/data_extraction_rules.xml`
 
-- [ ] добавить `<exclude domain="sharedpref" path="kolco24.clock.xml"/>` в `backup_rules.xml` (с комментарием-почему, по образцу соседних)
-- [ ] добавить то же исключение в оба блока (`cloud-backup`, `device-transfer`) `data_extraction_rules.xml`
-- [ ] тесты: не применимо (xml-ресурс, кода нет) — проверка через `./gradlew lintDebug`
-- [ ] run `./gradlew lintDebug` — must pass before next task
+- [x] добавить `<exclude domain="sharedpref" path="kolco24.clock.xml"/>` в `backup_rules.xml` (с комментарием-почему, по образцу соседних)
+- [x] добавить то же исключение в оба блока (`cloud-backup`, `device-transfer`) `data_extraction_rules.xml`
+- [x] тесты: не применимо (xml-ресурс, кода нет) — проверка через `./gradlew lintDebug`
+- [x] run `./gradlew lintDebug` — must pass before next task
 
 ### Task 2: Backfill trusted_ms при выгрузке marks и judge scans
 

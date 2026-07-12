@@ -8,11 +8,15 @@
         <exclude domain="sharedpref" path="kolco24.install.xml"/>
         <!-- Exclude the admin token file so the bearer token is never included in backups. -->
         <exclude domain="sharedpref" path="kolco24.admin.xml"/>
+        <!-- Exclude the trusted-time anchor so a restored anchor can't pass a warm start on a BOOT_COUNT collision. -->
+        <exclude domain="sharedpref" path="kolco24.clock.xml"/>
     </cloud-backup>
     <device-transfer>
         <!-- Exclude the per-install ID so it is never transferred to another device. -->
         <exclude domain="sharedpref" path="kolco24.install.xml"/>
         <!-- Exclude the admin token file so the bearer token is never transferred. -->
         <exclude domain="sharedpref" path="kolco24.admin.xml"/>
+        <!-- Exclude the trusted-time anchor so a restored anchor can't pass a warm start on a BOOT_COUNT collision. -->
+        <exclude domain="sharedpref" path="kolco24.clock.xml"/>
     </device-transfer>
 </data-extraction-rules>
