@@ -263,10 +263,10 @@ Backfill при выгрузке не мутирует строки (write-once 
 
 ### Task 8: [Final] Update documentation
 
-- [ ] обновить `docs/design/DATA-NOTES.md`: `TrustedClock` (onTimeCandidate, uncertainty-модель, DRIFT_PPM), `ClockAnchorStore` (5-сегментный формат + legacy), `ServerTimeInterceptor` (uncertainty), GPS-кандидат, `LanTimeVerifier`, backfill-seam обоих репозиториев, `SyncCoordinator.syncLanTime`
-- [ ] обновить `docs/design/UI-NOTES.md`: NoSync-карточка и действия `JudgeScanScreen`
-- [ ] обновить `CLAUDE.md`: строки module map (`data/time/`, `ServerTimeInterceptor`, репозитории), упоминание backup-исключения
-- [ ] move this plan to `docs/plans/completed/`
+- [x] обновить `docs/design/DATA-NOTES.md`: `TrustedClock` (onTimeCandidate, uncertainty-модель, DRIFT_PPM), `ClockAnchorStore` (5-сегментный формат + legacy), `ServerTimeInterceptor` (uncertainty), GPS-кандидат, `LanTimeVerifier`, backfill-seam обоих репозиториев, `SyncCoordinator.syncLanTime`
+- [x] обновить `docs/design/UI-NOTES.md`: NoSync-карточка и действия `JudgeScanScreen`
+- [x] обновить `CLAUDE.md`: строки module map (`data/time/`, `ServerTimeInterceptor`, репозитории), упоминание backup-исключения
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
