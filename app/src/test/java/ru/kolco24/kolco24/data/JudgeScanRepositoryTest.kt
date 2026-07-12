@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -186,6 +187,59 @@ class JudgeScanRepositoryTest {
         repository.uploadPending(raceId = 1)
 
         assertFalse(invoked)
+    }
+
+    @Test
+    fun backfill_nullTrustedTakenAt_liveAnchor_dtoGetsComputedTrustedMs() = runTest {
+        // Pik logged offline (no trusted time), monotonic elapsed=5_000, boot=42 stored.
+        val id = repository.record(1, "start", 1, "UID1", sample(trusted = null))
+        var sent: JudgeScanDto? = null
+        val cloud = FakeUploader { scans -> sent = scans.single(); PostResult.Success(JudgeScanUploadResponse(scans.map { it.id })) }
+        repository = JudgeScanRepository(
+            dao,
+            cloudUploader = cloud,
+            localUploader = FakeUploader { PostResult.Offline },
+            trustedAt = { e, b -> if (e == 5_000L && b == 42) 111_000L else null },
+        )
+
+        repository.uploadPending(raceId = 1)
+
+        assertEquals(111_000L, sent!!.trustedMs)
+        assertNull(dao.getById(id)!!.trustedTakenAt) // write-once row not mutated
+    }
+
+    @Test
+    fun backfill_storedTrustedTakenAt_takesPrecedenceOverSeam() = runTest {
+        repository.record(1, "start", 1, "UID1", sample(trusted = 99_000L))
+        var sent: JudgeScanDto? = null
+        val cloud = FakeUploader { scans -> sent = scans.single(); PostResult.Success(JudgeScanUploadResponse(scans.map { it.id })) }
+        repository = JudgeScanRepository(
+            dao,
+            cloudUploader = cloud,
+            localUploader = FakeUploader { PostResult.Offline },
+            trustedAt = { _, _ -> 111_000L }, // must be ignored
+        )
+
+        repository.uploadPending(raceId = 1)
+
+        assertEquals(99_000L, sent!!.trustedMs)
+    }
+
+    @Test
+    fun backfill_seamReturnsNull_dtoTrustedMsStaysNull() = runTest {
+        repository.record(1, "start", 1, "UID1", sample(trusted = null))
+        var sent: JudgeScanDto? = null
+        val cloud = FakeUploader { scans -> sent = scans.single(); PostResult.Success(JudgeScanUploadResponse(scans.map { it.id })) }
+        repository = JudgeScanRepository(
+            dao,
+            cloudUploader = cloud,
+            localUploader = FakeUploader { PostResult.Offline },
+            trustedAt = { _, _ -> null }, // no anchor / foreign boot session
+        )
+
+        repository.uploadPending(raceId = 1)
+
+        assertNull(sent!!.trustedMs)
     }
 
     private class FakeUploader(

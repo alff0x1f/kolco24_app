@@ -305,6 +305,9 @@ class AppContainer(private val context: Context) {
                     it + ((scope to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
                 }
             },
+            // Backfill trusted_ms at upload moment for offline takes stored before any clock sync
+            // (trustedTakenAt == null) — the same honest-time-on-first-network the track uploader does.
+            trustedAt = trustedClock::trustedAt,
         )
     }
 
@@ -338,6 +341,9 @@ class AppContainer(private val context: Context) {
                     it + ((raceId to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
                 }
             },
+            // Backfill trusted_ms at upload moment for piks logged before any clock sync
+            // (trustedTakenAt == null) — critical for judge start/finish stations that boot in NoSync.
+            trustedAt = trustedClock::trustedAt,
         )
     }
 

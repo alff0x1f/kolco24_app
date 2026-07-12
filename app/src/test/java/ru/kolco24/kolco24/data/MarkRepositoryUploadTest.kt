@@ -35,6 +35,7 @@ class MarkRepositoryUploadTest {
         localPhoto: PhotoFrameUploader = PhotoFrameUploader { _, _, _, _ -> PostResult.Offline },
         reader: PhotoFrameReader = PhotoFrameReader { null },
         onOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
+        trustedAt: (Long, Int?) -> Long? = { _, _ -> null },
     ) = MarkRepository(
         markDao = dao,
         sourceInstallId = installId,
@@ -44,6 +45,7 @@ class MarkRepositoryUploadTest {
         localPhotoUploader = localPhoto,
         photoFrameReader = reader,
         onUploadOutcome = onOutcome,
+        trustedAt = trustedAt,
     )
 
     /** Records calls and replies with [reply]; defaults to accepting every id in the batch. */
@@ -372,6 +374,66 @@ class MarkRepositoryUploadTest {
 
         assertEquals("device-XYZ", cloud.lastInstallId)
         assertEquals("device-XYZ", local.lastInstallId)
+    }
+
+    @Test
+    fun backfill_nullTrustedTakenAt_liveAnchor_dtoGetsComputedTrustedMs() = runTest {
+        val dao = FakeMarkUploadDao()
+        // Offline take: no trusted time stored, but a monotonic mark + boot session are.
+        dao.seedTimed(raceId = 1, teamId = 7, trustedTakenAt = null, elapsedAt = 5_000L, bootCount = 42)
+        var sent: MarkDto? = null
+        val cloud = FakeUploader { marks -> sent = marks.single(); PostResult.Success(MarkUploadResponse(marks.map { it.id })) }
+        // trustedAt returns 111_000 for this (elapsedAt, bootCount) pair — the anchor came alive.
+        val r = repo(dao, cloud = cloud, trustedAt = { e, b -> if (e == 5_000L && b == 42) 111_000L else null })
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(111_000L, sent!!.trustedMs)
+        // The DB row is not mutated — backfill happens only on the wire (write-once preserved).
+        assertNull(dao.rowById(sent!!.id).trustedTakenAt)
+    }
+
+    @Test
+    fun backfill_storedTrustedTakenAt_takesPrecedenceOverSeam() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seedTimed(raceId = 1, teamId = 7, trustedTakenAt = 99_000L, elapsedAt = 5_000L, bootCount = 42)
+        var sent: MarkDto? = null
+        val cloud = FakeUploader { marks -> sent = marks.single(); PostResult.Success(MarkUploadResponse(marks.map { it.id })) }
+        val r = repo(dao, cloud = cloud, trustedAt = { _, _ -> 111_000L }) // must be ignored
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertEquals(99_000L, sent!!.trustedMs)
+    }
+
+    @Test
+    fun backfill_seamReturnsNull_foreignBootSession_dtoTrustedMsStaysNull() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seedTimed(raceId = 1, teamId = 7, trustedTakenAt = null, elapsedAt = 5_000L, bootCount = 7)
+        var sent: MarkDto? = null
+        val cloud = FakeUploader { marks -> sent = marks.single(); PostResult.Success(MarkUploadResponse(marks.map { it.id })) }
+        // Seam rejects (different boot session / no anchor).
+        val r = repo(dao, cloud = cloud, trustedAt = { _, _ -> null })
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertNull(sent!!.trustedMs)
+    }
+
+    @Test
+    fun backfill_nullElapsedRealtimeAt_seamNotConsulted_dtoTrustedMsStaysNull() = runTest {
+        val dao = FakeMarkUploadDao()
+        // Legacy row: no monotonic mark to anchor.
+        dao.seedTimed(raceId = 1, teamId = 7, trustedTakenAt = null, elapsedAt = null, bootCount = null)
+        var sent: MarkDto? = null
+        var seamCalls = 0
+        val cloud = FakeUploader { marks -> sent = marks.single(); PostResult.Success(MarkUploadResponse(marks.map { it.id })) }
+        val r = repo(dao, cloud = cloud, trustedAt = { _, _ -> seamCalls++; 111_000L })
+
+        r.uploadPending(raceId = 1, teamId = 7)
+
+        assertNull(sent!!.trustedMs)
+        assertEquals(0, seamCalls) // no elapsedRealtimeAt → seam never invoked
     }
 
     @Test
@@ -750,6 +812,30 @@ private class FakeMarkUploadDao : MarkDao {
             )
         }
         rows.value = rows.value + fresh
+    }
+
+    /** Seed one nfc take with explicit time columns — for the upload-time trusted_ms backfill tests. */
+    fun seedTimed(raceId: Int, teamId: Int, trustedTakenAt: Long?, elapsedAt: Long?, bootCount: Int?) {
+        val i = seq++
+        rows.value = rows.value + MarkEntity(
+            id = "mark-$i",
+            raceId = raceId,
+            teamId = teamId,
+            checkpointId = 10,
+            checkpointNumber = 10,
+            cost = 5,
+            method = "nfc",
+            cpUid = "CPUID",
+            cpCode = "CODE",
+            present = listOf(1),
+            expectedCount = 1,
+            complete = true,
+            takenAt = 1_000L + i,
+            updatedAt = 1_000L + i,
+            trustedTakenAt = trustedTakenAt,
+            elapsedRealtimeAt = elapsedAt,
+            bootCount = bootCount,
+        )
     }
 
     /** Seed one local-only photo mark (method="photo", uploaded*=0) — must be excluded from the drain. */

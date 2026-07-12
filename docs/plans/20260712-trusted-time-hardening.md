@@ -173,12 +173,12 @@ Backfill при выгрузке не мутирует строки (write-once 
 - Modify: `docs/design/UPLOAD.md`
 - Modify: `app/src/test/.../MarkRepository*Test.kt`, `app/src/test/.../JudgeScanRepositoryTest.kt`
 
-- [ ] добавить в конструкторы `MarkRepository` и `JudgeScanRepository` seam `trustedAt: (Long, Int?) -> Long?` с default `{ _, _ -> null }`
-- [ ] в upload-loop'ах backfill через **in-memory copy перед zero-arg `toDto()`**: `it.copy(trustedTakenAt = it.trustedTakenAt ?: it.elapsedRealtimeAt?.let { e -> trustedAt(e, it.bootCount) }).toDto()` (judge scans: `elapsedRealtimeAt` non-null, без `let`); НЕ добавлять перегрузку `toDto(trustedMs)` (сломает `MarkDtoMappingTest`/`JudgeScanDtoTest`), строки БД не мутировать
-- [ ] в `AppContainer` прокинуть `trustedAt = trustedClock::trustedAt` в оба репозитория
-- [ ] обновить `docs/design/UPLOAD.md`: `trusted_ms` может стать non-null на повторной отправке того же `id` — сервер обязан применять fill-if-null при upsert'е
-- [ ] тесты: dto получает backfilled `trusted_ms` при null `trustedTakenAt` и живом якоре; сохранённый `trustedTakenAt` имеет приоритет; `trustedAt` вернул null (чужая boot-сессия) → `trusted_ms = null`
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] добавить в конструкторы `MarkRepository` и `JudgeScanRepository` seam `trustedAt: (Long, Int?) -> Long?` с default `{ _, _ -> null }`
+- [x] в upload-loop'ах backfill через **in-memory copy перед zero-arg `toDto()`** (вынесено в `backfillTrustedMs` для читаемости, семантика та же; judge scans: `elapsedRealtimeAt` non-null, без `let`); НЕ добавлять перегрузку `toDto(trustedMs)` (сломало бы `MarkDtoMappingTest`/`JudgeScanDtoTest`), строки БД не мутируются
+- [x] в `AppContainer` прокинуть `trustedAt = trustedClock::trustedAt` в оба репозитория
+- [x] обновить `docs/design/UPLOAD.md`: `trusted_ms` может стать non-null на повторной отправке того же `id` — сервер обязан применять fill-if-null при upsert'е
+- [x] тесты: dto получает backfilled `trusted_ms` при null `trustedTakenAt` и живом якоре; сохранённый `trustedTakenAt` имеет приоритет; `trustedAt` вернул null (чужая boot-сессия) → `trusted_ms = null` (+ marks: null `elapsedRealtimeAt` → seam не вызывается)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 3: Модель неопределённости якоря (uncertaintyMs + правило замены)
 
