@@ -14,9 +14,22 @@ const val GPS_UNCERTAINTY_MS = 500L
 /**
  * Maximum horizontal accuracy (meters) a fix may report and still be trusted as a time source. A very
  * coarse fix (network/cell, far worse than a GPS lock) is likely not a real satellite fix, so its
- * `time` is not a reliable trusted-time source — reject it.
+ * `time` is not a reliable trusted-time source — reject it. This guard is what makes accepting the
+ * `"fused"` provider safe: a fused fix that fell back to WiFi/cell reports coarse accuracy and is
+ * dropped here, so only a satellite-backed high-accuracy fused fix (carrying real GPS time) survives.
  */
 const val GPS_TIME_MAX_ACCURACY_METERS = 100f
+
+/**
+ * Location providers whose `time` we trust as a satellite-derived trusted-time source. `"gps"` is the
+ * legacy `GPS_PROVIDER` (non-GMS devices, `LegacyLocationEngine`). `"fused"` is what
+ * `FusedLocationProviderClient` stamps on every fix on a GMS device — the **majority** configuration
+ * and the one both anchor power points (track recording + the one-shot КП-scan / judge «Время по GPS»
+ * fix) actually use; without it the whole offline GPS anchor would be inert on GMS phones. A
+ * high-accuracy fused fix is sourced from the GPS chip and carries real satellite time; a fused fix
+ * that degraded to WiFi/cell is filtered by [GPS_TIME_MAX_ACCURACY_METERS], not by provider name.
+ */
+private val TRUSTED_GPS_PROVIDERS = setOf("gps", "fused")
 
 /**
  * Pure mapper: turn a [RawFix] into a trusted-time [TimeCandidate], or `null` when the fix is not a
@@ -27,9 +40,10 @@ const val GPS_TIME_MAX_ACCURACY_METERS = 100f
  *
  * Rejects (→ `null`):
  * - [RawFix.isMock] — a mock-location app must not be able to set the trusted clock;
- * - [RawFix.provider] != `"gps"` — only a real satellite fix carries GPS-satellite time; a
- *   network/cell/fused-but-non-gps fix's `time` is just the device wall-clock and would defeat the
- *   whole point (immunity to wall-clock changes);
+ * - [RawFix.provider] not in [TRUSTED_GPS_PROVIDERS] (`"gps"`/`"fused"`) — a pure network/cell fix's
+ *   `time` is just the device wall-clock and would defeat the whole point (immunity to wall-clock
+ *   changes). `"fused"` is accepted because it is the only provider a GMS device ever reports and its
+ *   coarse (WiFi/cell) fixes are already excluded by the accuracy guard below;
  * - [RawFix.gpsTimeMs] `<= 0` — no usable time;
  * - [RawFix.accuracy] worse than [GPS_TIME_MAX_ACCURACY_METERS].
  *
@@ -39,7 +53,7 @@ const val GPS_TIME_MAX_ACCURACY_METERS = 100f
  */
 fun gpsTimeCandidate(fix: RawFix): TimeCandidate? {
     if (fix.isMock) return null
-    if (fix.provider != "gps") return null
+    if (fix.provider !in TRUSTED_GPS_PROVIDERS) return null
     if (fix.gpsTimeMs <= 0L) return null
     if (fix.accuracy > GPS_TIME_MAX_ACCURACY_METERS) return null
     return TimeCandidate(

@@ -49,8 +49,16 @@ class GpsTimeCandidateTest {
     @Test
     fun nonGpsProvider_isRejected() {
         assertNull(gpsTimeCandidate(fix(provider = "network")))
-        assertNull(gpsTimeCandidate(fix(provider = "fused")))
+        assertNull(gpsTimeCandidate(fix(provider = "passive")))
         assertNull(gpsTimeCandidate(fix(provider = null)))
+    }
+
+    @Test
+    fun fusedProvider_isAccepted() {
+        // "fused" is what FusedLocationProviderClient stamps on every fix on a GMS device (the majority
+        // configuration + both anchor power points). A high-accuracy fused fix carries real GPS time;
+        // coarse WiFi/cell fused fixes are excluded by the accuracy guard, not the provider filter.
+        assertNotNull(gpsTimeCandidate(fix(provider = "fused")))
     }
 
     @Test

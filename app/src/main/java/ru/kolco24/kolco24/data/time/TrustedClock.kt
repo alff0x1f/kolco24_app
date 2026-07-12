@@ -103,7 +103,7 @@ private data class ClockState(val anchor: ClockAnchor?, val verified: Boolean)
  * `trusted = serverEpochMs + (elapsedNow − anchorElapsedMs)`.
  *
  * Threading (P1): reads ([sample]/[trusted]/[signingSeconds]) are lock-free — each takes the
- * [AtomicReference] exactly once. All writes ([onServerTime]/[recomputeStatus]) run under a single
+ * [AtomicReference] exactly once. All writes ([onTimeCandidate]/[recomputeStatus]) run under a single
  * `synchronized(lock)` so a late network thread or a UI tick can never overwrite the store/flow with
  * an older value.
  *
@@ -282,7 +282,7 @@ class TrustedClock(
 
     /**
      * Recompute and publish [status] (driven by a local ~5 s tick). Under the same [lock] as
-     * [onServerTime] so a tick can never overwrite a freshly-synced status with a stale read. Equal
+     * [onTimeCandidate] so a tick can never overwrite a freshly-synced status with a stale read. Equal
      * values are deduped by [MutableStateFlow] — no spurious recompositions.
      */
     fun recomputeStatus() {

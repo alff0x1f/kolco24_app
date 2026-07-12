@@ -124,7 +124,14 @@ Backfill при выгрузке не мутирует строки (write-once 
   `isMock: Boolean = false` и `provider: String? = null` (заполняются в обоих
   `Location.toRawFix()`-мапперах движков; дефолты не ломают существующие тесты).
   Чистый маппер `gpsTimeCandidate(fix: RawFix): TimeCandidate?` — отсев: `isMock`,
-  `provider != "gps"`, `gpsTimeMs <= 0`, `accuracy > 100`;
+  `provider ∉ {"gps", "fused"}`, `gpsTimeMs <= 0`, `accuracy > 100`;
+  ⚠️ **Правка после ревью:** первоначальный фильтр `provider != "gps"` делал GPS-якорь
+  мёртвым на GMS-устройствах (большинство телефонов) — `FusedLocationProviderClient`
+  всегда штампует `provider = "fused"`, а обе точки питания (запись трека, one-shot
+  КП-скан/кнопка «Время по GPS») идут через Fused при наличии GMS. Фильтр расширен до
+  allowlist `{"gps", "fused"}`; грубые WiFi/cell-фиксы Fused отсекаются гейтом
+  `accuracy > 100`, а не именем провайдера — так офлайн-лесной сценарий (Task 6) реально
+  работает на GMS-телефоне.
   `anchorElapsedMs = elapsedRealtimeNanos / 1_000_000`. Врезки — у потребителей `RawFix`:
   фикс-путь `TrackRecordingService` и one-shot `CurrentLocationProvider` (КП-скан + Task 6).
 - **Backfill**: в оба репозитория инжектится seam
