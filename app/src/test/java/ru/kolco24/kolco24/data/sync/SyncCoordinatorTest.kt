@@ -190,13 +190,12 @@ class SyncCoordinatorTest {
     }
 
     @Test
-    fun probe_doesNotPin_whenSnapshotWasNull() = runTest {
-        // iter4b: value-equality let `null == null` pass, so a probe whose snapshot was already `null`
-        // (the lease was cleared by a concurrent `exitLocalMode()` before the probe took its snapshot —
-        // a TOCTOU gap between the caller's `sourceFor == Local` gate and the in-probe `readLease()`)
-        // would still write a NEW pin when the manifest said `local`, re-pinning from an UNPINNED state.
-        // The ownership guard requires the snapshot to be an actual active pin for this raceId, so a
-        // null snapshot never renews.
+    fun probe_doesNotPin_whenLeaseIsNull() = runTest {
+        // iter4b: a probe must never re-pin from an UNPINNED state. The lease is `null` under the lock
+        // (cleared by a concurrent `exitLocalMode()` before the probe reached the lock — a TOCTOU gap
+        // vs. the caller's `sourceFor == Local` gate). Even a `local` manifest must NOT create a pin:
+        // the raceId-ownership guard renews only when THIS race is already an active pin (`isPinned`),
+        // and `isPinned(null, …)` is false → Keep.
         lease = null
         now = 1_000L
         manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
@@ -204,7 +203,30 @@ class SyncCoordinatorTest {
         val action = buildCoordinator().probeLocalAndRenew(1)
 
         assertNull("a probe from an unpinned state must not create a pin", lease)
-        assertEquals("a null snapshot must never produce a Renew", LeaseAction.Keep, action)
+        assertEquals("a null lease must never produce a Renew", LeaseAction.Keep, action)
+    }
+
+    @Test
+    fun probe_clearsLease_onSameRaceCloudHandback_evenAfterConcurrentRenewChangedExpiry() = runTest {
+        // iter5a: the pre-probe snapshot + value-equality guard was TOO strict. Probe A renews race 1
+        // (changing the lease's expiry); a same-race probe B then serializes after A and its manifest
+        // says `cloud` — a real handback. Value-equality would see `readLease() != snapshot` and return
+        // Keep, silently dropping a legitimate cloud handback and stranding `refreshAll` on Local. The
+        // raceId-ownership guard clears any lease that still belongs to THIS race, so the handback lands
+        // even though the expiry moved. Model probe A's renew as an expiry change from the pre-lock seam.
+        lease = RaceLease(1, 10_000L)
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "cloud")
+        onSyncLanTime = { lease = RaceLease(1, 99_999L) } // probe A renewed race 1 → new expiry
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertEquals(
+            "a same-race cloud handback must clear even after a concurrent same-race renew moved expiry",
+            LeaseAction.Clear,
+            action,
+        )
+        assertNull("the legitimate handback must release the pin", lease)
     }
 
     // endregion

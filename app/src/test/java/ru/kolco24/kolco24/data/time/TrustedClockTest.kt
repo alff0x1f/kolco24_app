@@ -383,6 +383,58 @@ class TrustedClockTest {
     }
 
     @Test
+    fun unverifiedAnchor_isSupersededByFirstRealCandidate_evenWithLargerUncertainty() {
+        // Warm start whose boot continuity can't be confirmed (persisted anchor with a null bootCount):
+        // UNVERIFIED → NoSync → wall-clock signing, despite a tiny stored uncertainty. That stored
+        // uncertainty must NOT let the anchor reject the first real network/GPS/LAN candidate — the
+        // candidate IS the (re-)verification, even though its own uncertainty is far larger.
+        val f = Fakes(elapsed = 2_000L, wall = 0L, boot = 1)
+        val anchor = ClockAnchor(
+            serverEpochMs = 10_000_000L, anchorElapsedMs = 1_000L, capturedWallMs = 0L,
+            bootCount = null, uncertaintyMs = 50L, // tiny uncertainty, but unverified
+        )
+        val c = clock(f, persistedAnchor = anchor)
+        // Unverified at construction: NoSync, and signing falls back to wall.
+        assertEquals(ClockStatus.NoSync, c.status.value)
+        assertNull(c.trusted())
+        // First real candidate: uncertainty 5 s (much larger than the stored 50 ms) but it must win
+        // because the current anchor is unverified. Capture wall == its trusted so status resolves Ok.
+        c.onTimeCandidate(
+            TimeCandidate(serverMs = 20_000_000L, anchorElapsedMs = 2_000L, uncertaintyMs = 5_000L),
+            wallNow = 20_000_000L,
+            bootNow = 1,
+        )
+        // Clock is now verified and anchored on the candidate.
+        assertEquals(ClockStatus.Ok, c.status.value)
+        f.elapsed = 3_000L
+        assertEquals(20_000_000L + (3_000L - 2_000L), c.trusted())
+    }
+
+    @Test
+    fun verifiedAnchor_isNotOverwrittenByWorseCandidate() {
+        // Counterpart to the unverified case: a legitimately VERIFIED anchor (warm start with matching
+        // boot continuity) still earns the effective-uncertainty comparison — a worse same-session
+        // candidate is rejected, exactly as before. Guards that the fix did not weaken verified anchors.
+        val f = Fakes(elapsed = 2_000L, wall = 0L, boot = 7)
+        val anchor = ClockAnchor(
+            serverEpochMs = 10_000_000L, anchorElapsedMs = 1_000L, capturedWallMs = 0L,
+            bootCount = 7, uncertaintyMs = 50L,
+        )
+        val c = clock(f, persistedAnchor = anchor)
+        // Verified at construction (matching boot 7).
+        assertNotNull(c.trusted())
+        // A far worse candidate in the same session must be rejected.
+        c.onTimeCandidate(
+            TimeCandidate(serverMs = 99_999_999L, anchorElapsedMs = 2_000L, uncertaintyMs = 9_900L),
+            wallNow = 0L,
+            bootNow = 7,
+        )
+        f.elapsed = 3_000L
+        // Still anchored on the verified original: 10_000_000 + (3_000 − 1_000).
+        assertEquals(10_002_000L, c.trusted())
+    }
+
+    @Test
     fun sample_isConsistentSnapshot() {
         val f = Fakes(elapsed = 2_000L, wall = 5_000L, boot = 4)
         val c = clock(f)

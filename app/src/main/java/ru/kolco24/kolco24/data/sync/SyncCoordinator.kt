@@ -115,11 +115,11 @@ class SyncCoordinator(
     // `exitLocalMode()` and silently re-pin a race the user just unpinned (or the symmetric case).
     // Note: serialization alone is no longer sufficient, because `syncLanTime()` suspends *before*
     // this lock is taken (the "anchor first" ordering), so an exit (or a fresh enter for another race)
-    // fired later can grab the lock first — `probeLocalAndRenew` therefore re-checks ownership of its
-    // start-of-probe lease snapshot under the lock before writing *either* a `Renew` or a `Clear` (a
-    // probe may only mutate a pin it still owns). `enterLocalMode`/`exitLocalMode` are mutually
-    // exclusive via `AppContainer.localModeBusy` (the switch is disabled while either is in flight), so
-    // only a probe can be concurrent with a user switch.
+    // fired later can grab the lock first — `probeLocalAndRenew` therefore decides on the raceId-ownership
+    // of the CURRENT lease (re-read under the lock) before writing *either* a `Renew` or a `Clear` (a
+    // probe may only mutate a pin that still belongs to its own race). `enterLocalMode`/`exitLocalMode`
+    // are mutually exclusive via `AppContainer.localModeBusy` (the switch is disabled while either is in
+    // flight), so only a probe can be concurrent with a user switch.
     private val leaseMutex = Mutex()
 
     /** `Local` when [raceId] is currently pinned, else `Cloud`. */
@@ -132,17 +132,6 @@ class SyncCoordinator(
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
     suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
-        // Snapshot the pin this probe set out to refresh BEFORE the pre-lock time probe suspends.
-        // `syncLanTime()` runs off `leaseMutex` (below) and can park for seconds in the `/app/time/`
-        // network call; during that window a concurrent `exitLocalMode()` (or a fresh `enterLocalMode` /
-        // another probe) can acquire `leaseMutex` and clear or replace the lease. Because the "anchor
-        // first" reorder moved the lock acquisition *after* this suspend point, `leaseMutex`'s FIFO
-        // fairness no longer enqueues this probe ahead of a later-fired exit/re-enter — so without an
-        // ownership check under the lock a stale `Renew` (still-`local` manifest) would silently re-pin a
-        // race the user just switched off, and a stale `Clear` (a `cloud` handback for the race this
-        // probe evaluated) would wipe a newer pin a concurrent `enterLocalMode()` just wrote for a
-        // *different* race. This is the exact re-pin/cross-race-wipe `leaseMutex` was introduced to prevent.
-        val leaseAtProbeStart = readLease()
         // Off the lease lock (this is time, not lease state) and FIRST, *before* the freshness-checked
         // `/sync/` manifest fetch: re-anchor the clock from the signed `/app/time/` endpoint. The
         // signature's `X-App-Ts` is stamped from trusted time (`TrustedClock.signingSeconds()`), so a
@@ -157,32 +146,32 @@ class SyncCoordinator(
         return leaseMutex.withLock {
             val manifest = fetchSync(raceId)
             val result = applySyncResponse(manifest, raceId, nowMs())
-            // Ownership guard: a stale probe may write to the lease only if it still *owns* the pin it
-            // set out to refresh. That means the pin it snapshotted at probe start must be (a) an actual
-            // ACTIVE pin for THIS `raceId` — never a `null`, expired, or other-race snapshot — and (b)
-            // still the current lease, unchanged (same `raceId` + expiry) after the off-lock time probe.
-            // Value-equality alone was too coarse and left two holes both closed here:
-            //   * `Renew` from `null == null` — a probe whose snapshot was already `null` (lease cleared
-            //     by a concurrent `exitLocalMode()` before the snapshot) would re-pin from an UNPINNED
-            //     state. `leaseAtProbeStart` failing `isPinned` for `raceId` now blocks that.
-            //   * unconditional `Clear` — a stale cross-race probe (race A → `cloud` handback) resuming
-            //     after a fresh `enterLocalMode()` pinned race B would wipe race B's newer, legitimate
-            //     lease. Requiring the current lease to still equal this probe's own snapshot now spares it.
-            // (No ABA concern from value-equality: the lease is idempotent state, not a reused handle —
-            // re-pinning the same race to the same expiry is indistinguishable from never having changed.)
-            val ownsPin = leaseAtProbeStart != null &&
-                readLease() == leaseAtProbeStart &&
-                isPinned(leaseAtProbeStart, raceId, nowMs())
+            // raceId-ownership guard (decide on the CURRENT lease, re-read under the lock — not on a
+            // pre-probe snapshot). Because `syncLanTime()` suspends *before* this lock (the "anchor
+            // first" ordering), `leaseMutex`'s FIFO fairness no longer enqueues this probe ahead of a
+            // later-fired `exitLocalMode()` / fresh `enterLocalMode()` / another probe — any of them can
+            // clear or REPLACE the lease during the off-lock window. Ownership is therefore the identity
+            // of the lease that exists NOW, matched against THIS probe's `raceId`:
+            //   * `Renew` (`local`): write only if this race is still an ACTIVE pin — a `null` lease
+            //     (exited/cleared) must not re-pin from unpinned, and another race's pin must not be
+            //     touched. Else `Keep`.
+            //   * `Clear` (`cloud` handback): release only if the current lease is for THIS race — even
+            //     if a concurrent SAME-race renew changed its expiry, a real handback must still land.
+            //     A different race's pin (or a `null` lease) is left alone. Else `Keep`.
+            // A pre-probe snapshot with value-equality was too strict here: it dropped a legitimate
+            // `cloud` handback whenever a concurrent same-race renew had changed the lease's expiry
+            // (`readLease() != snapshot`), silently stranding `refreshAll` on Local.
+            val currentLease = readLease()
             when (result) {
                 is LeaseAction.Renew ->
-                    if (ownsPin) {
+                    if (isPinned(currentLease, raceId, nowMs())) {
                         writeLease(result.lease)
                         result
                     } else {
                         LeaseAction.Keep
                     }
                 LeaseAction.Clear ->
-                    if (ownsPin) {
+                    if (currentLease?.raceId == raceId) {
                         writeLease(null)
                         result
                     } else {

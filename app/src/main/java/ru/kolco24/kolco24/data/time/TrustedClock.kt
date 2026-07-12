@@ -237,17 +237,22 @@ class TrustedClock(
      * Re-anchor from any trusted-time [candidate] (network `Date`, GPS fix, LAN time endpoint).
      * [wallNow]/[bootNow] are captured by the caller. Serialized under [lock] (P1).
      *
-     * Accept rule (P0 + out-of-order + null-safe): accept if (a) no current anchor; (b) current is
-     * monotonically invalid (`anchorElapsedMs > elapsedNow`, reboot) — stale dropped, incoming
-     * accepted unconditionally; (c) both boot ids non-null and differ; or (d) (same session) the
-     * candidate's **effective** uncertainty at `elapsedNow` is strictly better than the current
-     * anchor's, **or** they tie on effective uncertainty and the candidate is monotonically fresher
-     * (`anchorElapsedMs >= cur.anchorElapsedMs`). Effective uncertainty ages each anchor by
-     * [DRIFT_PPM] from its own `anchorElapsedMs`, so a fresh average candidate beats a stale ideal
-     * one. At millisecond scale the drift term truncates to zero, so two equal-quality anchors tie
-     * and the monotonic tie-break drops a late out-of-order duplicate (older `anchorElapsedMs`).
-     * A candidate whose `anchorElapsedMs` is in the past of `elapsedNow` (a GPS fix) is allowed —
-     * the effective-uncertainty formula is symmetric in the sign of the age delta.
+     * Accept rule (P0 + out-of-order + null-safe): accept if (a) no current anchor; (b) the current
+     * anchor is **unverified** — a warm-start anchor whose boot continuity could not be confirmed
+     * (null boot id at persist or at read) yields [ClockStatus.NoSync] and forces wall-clock signing,
+     * so it must **never** cause a fresh real candidate to be rejected: that candidate is the
+     * (re-)verification; (c) current is monotonically invalid (`anchorElapsedMs > elapsedNow`, reboot)
+     * — stale dropped, incoming accepted unconditionally; (d) both boot ids non-null and differ; or
+     * (e) (same session, **verified** current) the candidate's **effective** uncertainty at
+     * `elapsedNow` is strictly better than the current anchor's, **or** they tie on effective
+     * uncertainty and the candidate is monotonically fresher (`anchorElapsedMs >= cur.anchorElapsedMs`).
+     * Effective uncertainty ages each anchor by [DRIFT_PPM] from its own `anchorElapsedMs`, so a fresh
+     * average candidate beats a stale ideal one. At millisecond scale the drift term truncates to zero,
+     * so two equal-quality anchors tie and the monotonic tie-break drops a late out-of-order duplicate
+     * (older `anchorElapsedMs`). A candidate whose `anchorElapsedMs` is in the past of `elapsedNow`
+     * (a GPS fix) is allowed — the effective-uncertainty formula is symmetric in the sign of the age
+     * delta. The uncertainty comparison (e) is the **only** rule that can *reject*, and it applies
+     * solely between a verified current anchor and a candidate in the same boot session.
      */
     fun onTimeCandidate(candidate: TimeCandidate, wallNow: Long, bootNow: Int?) {
         synchronized(lock) {
@@ -256,6 +261,10 @@ class TrustedClock(
             val cur = current.anchor
             val accept = when {
                 cur == null -> true
+                // An unverified anchor produces NoSync (wall-clock signing); it has stored uncertainty
+                // but no trust. The uncertainty comparison must not let it reject the first real
+                // candidate — accept unconditionally so this candidate becomes the verified anchor.
+                !current.verified -> true
                 cur.anchorElapsedMs > elapsedNow -> true // reboot: drop stale, accept unconditionally
                 cur.bootCount != null && bootNow != null && cur.bootCount != bootNow -> true
                 else -> {
