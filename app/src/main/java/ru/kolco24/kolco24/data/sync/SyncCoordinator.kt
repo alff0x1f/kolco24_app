@@ -80,6 +80,9 @@ private val FAN_OUT_SUCCESS_RESULTS =
  * @param selectedRaceId the currently-selected team's race, if any.
  * @param cachedRaces the offline-readable race list (for [nearestRaceId] when nothing is selected).
  * @param refreshRaces/[refreshTeams]/[refreshLegend]/[refreshMemberTags] the four per-source refresh calls.
+ * @param syncLanTime one signed LAN time probe (`GET /app/time/` → verify → re-anchor `TrustedClock`);
+ *   fired after a **reachable** LAN heartbeat in [probeLocalAndRenew] so local mode gets a trusted-time
+ *   source. Default no-op keeps every existing call site (and the tests) unchanged.
  */
 class SyncCoordinator(
     private val readLease: () -> RaceLease?,
@@ -92,6 +95,7 @@ class SyncCoordinator(
     private val refreshTeams: suspend (Int, SyncSource) -> RefreshResult,
     private val refreshLegend: suspend (Int, SyncSource) -> RefreshResult,
     private val refreshMemberTags: suspend (Int, SyncSource) -> RefreshResult,
+    private val syncLanTime: suspend () -> Unit = {},
 ) {
 
     // Serializes every lease read-decide-write sequence below: `probeLocalAndRenew` (fired from
@@ -110,14 +114,24 @@ class SyncCoordinator(
      * stored lease (renew / clear on handback / keep on error). Used at the three probe points —
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
-    suspend fun probeLocalAndRenew(raceId: Int): LeaseAction = leaseMutex.withLock {
-        val action = applySyncResponse(fetchSync(raceId), raceId, nowMs())
-        when (action) {
-            is LeaseAction.Renew -> writeLease(action.lease)
-            LeaseAction.Clear -> writeLease(null)
-            LeaseAction.Keep -> {}
+    suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
+        var reachable = false
+        val action = leaseMutex.withLock {
+            val manifest = fetchSync(raceId)
+            val result = applySyncResponse(manifest, raceId, nowMs())
+            when (result) {
+                is LeaseAction.Renew -> writeLease(result.lease)
+                LeaseAction.Clear -> writeLease(null)
+                LeaseAction.Keep -> {}
+            }
+            // A non-null manifest means the LAN server answered — reachable, regardless of the action.
+            reachable = manifest != null
+            result
         }
-        action
+        // Off the lease lock (this is time, not lease state): a reachable LAN is also a signed
+        // trusted-time source, so re-anchor the clock from `/app/time/`. No-op by default.
+        if (reachable) syncLanTime()
+        return action
     }
 
     /**

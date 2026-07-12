@@ -41,6 +41,7 @@ import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
+import ru.kolco24.kolco24.data.time.LanTimeVerifier
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.time.gpsTimeCandidate
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
@@ -161,6 +162,30 @@ class AppContainer(private val context: Context) {
         )
     }
 
+    /**
+     * Pure verifier for the signed LAN time endpoint (`GET /app/time/`). In local mode the LAN server's
+     * `Date` header can't be trusted (cleartext MITM), but its HMAC-signed body with a fresh client nonce
+     * can — this makes the LAN a legitimate trusted-time anchor. Shares the same `APP_SECRET` as signing.
+     */
+    private val lanTimeVerifier: LanTimeVerifier by lazy { LanTimeVerifier(secret = BuildConfig.APP_SECRET) }
+
+    /**
+     * One signed LAN time probe: fresh nonce → `GET /app/time/` (LAN client) → verify (nonce echo + HMAC)
+     * → re-anchor [trustedClock]. The monotonic clock is read tightly around the network call for the RTT
+     * correction (the LAN client carries no [ServerTimeInterceptor], so this is the LAN anchor point). A
+     * `404`/unreachable/bad-signature response is a silent no-op. Fired from [SyncCoordinator] after a
+     * reachable LAN heartbeat.
+     */
+    private suspend fun syncLanTime() {
+        val nonce = lanTimeVerifier.newNonce()
+        val elapsedBefore = SystemClock.elapsedRealtime()
+        val response = localApiClient.fetchLanTime(nonce)
+        val elapsedAfter = SystemClock.elapsedRealtime()
+        lanTimeVerifier.verify(nonce, response?.dto, response?.signature, elapsedBefore, elapsedAfter)?.let {
+            trustedClock.onTimeCandidate(it, System.currentTimeMillis(), cachedBootCount)
+        }
+    }
+
     private val database: AppDatabase by lazy { AppDatabase.build(context) }
 
     /** Persisted race-lease store backing [raceLease] (see the local-mode-switch plan). */
@@ -271,6 +296,8 @@ class AppContainer(private val context: Context) {
             refreshTeams = { raceId, source -> teamRepository.refreshTeams(raceId, source) },
             refreshLegend = { raceId, source -> legendRepository.refreshLegend(raceId, source) },
             refreshMemberTags = { raceId, source -> memberTagsRepository.refreshMemberTags(raceId, source) },
+            // A reachable LAN is also a signed trusted-time source — re-anchor the clock from `/app/time/`.
+            syncLanTime = { syncLanTime() },
         )
     }
 

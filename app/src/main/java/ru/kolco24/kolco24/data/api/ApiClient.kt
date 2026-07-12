@@ -12,6 +12,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import ru.kolco24.kolco24.data.api.dto.JudgeScanDto
 import ru.kolco24.kolco24.data.api.dto.JudgeScanUploadRequest
 import ru.kolco24.kolco24.data.api.dto.JudgeScanUploadResponse
+import ru.kolco24.kolco24.data.api.dto.LanTimeDto
 import ru.kolco24.kolco24.data.api.dto.LegendResponse
 import ru.kolco24.kolco24.data.api.dto.LoginRequest
 import ru.kolco24.kolco24.data.api.dto.LoginResponse
@@ -61,6 +62,13 @@ sealed interface PostResult<out T> {
     data object Offline : PostResult<Nothing>
     data class Error(val code: Int?) : PostResult<Nothing>
 }
+
+/**
+ * Raw result of [ApiClient.fetchLanTime]: the parsed [LanTimeDto] body plus the server's
+ * `X-App-Signature` header (`null` when absent). Verification (nonce echo + HMAC) and RTT correction
+ * are the pure [ru.kolco24.kolco24.data.time.LanTimeVerifier]'s job — this only transports the bytes.
+ */
+data class LanTimeResponse(val dto: LanTimeDto, val signature: String?)
 
 /**
  * Network access to the `/app/` API. Signing is handled by [AppSignatureInterceptor] inside
@@ -122,6 +130,33 @@ class ApiClient(
         conditionalGet("$baseUrl/app/race/$raceId/sync/", etag = null) {
             json.decodeFromString<SyncManifestDto>(it)
         }
+
+    /**
+     * `GET /app/time/?nonce=<32-hex>` — the signed LAN time endpoint (see `docs/design/UPLOAD.md`). Unlike
+     * the other GETs this returns the raw `200` body (parsed into [LanTimeDto]) **and** the server's
+     * `X-App-Signature` header, so the pure [ru.kolco24.kolco24.data.time.LanTimeVerifier] can check the
+     * nonce echo + HMAC. Any non-`200` (incl. `404` when the endpoint isn't deployed), a missing/garbled
+     * body, or a network failure → `null` (silent no-op; the trusted clock simply isn't re-anchored). Runs
+     * on [Dispatchers.IO]. Meant for the LAN client; the endpoint's `Date` header is not trusted, only its
+     * signed body is. [nonce] is echoed back and covered by the signature — pass a fresh random value.
+     */
+    suspend fun fetchLanTime(nonce: String): LanTimeResponse? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/app/time/?nonce=$nonce")
+            .get()
+            .build()
+        try {
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code != 200) return@use null
+                val body = response.body?.string().orEmpty()
+                LanTimeResponse(json.decodeFromString<LanTimeDto>(body), response.header("X-App-Signature"))
+            }
+        } catch (_: IOException) {
+            null
+        } catch (_: SerializationException) {
+            null
+        }
+    }
 
     /**
      * Shared conditional `GET`: signs/sends the request (signing via [okHttpClient]'s interceptor),

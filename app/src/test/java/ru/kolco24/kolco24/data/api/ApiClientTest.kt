@@ -673,4 +673,61 @@ class ApiClientTest {
 
         assertEquals(FetchResult.Error(null), apiClient.fetchSync(8))
     }
+
+    // --- fetchLanTime (signed LAN time endpoint) ---
+
+    @Test
+    fun fetchLanTime_success_parsesBodyAndSignatureHeader_andSendsNonceQuery() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("X-App-Signature", "deadbeef")
+                .setBody("""{"server_ms":1718900000123,"nonce":"abc123"}"""),
+        )
+
+        val result = apiClient.fetchLanTime("abc123")
+
+        assertNotNull(result)
+        assertEquals(1718900000123L, result!!.dto.serverMs)
+        assertEquals("abc123", result.dto.nonce)
+        assertEquals("deadbeef", result.signature)
+
+        val recorded = server.takeRequest()
+        assertEquals("/app/time/?nonce=abc123", recorded.path)
+        // Signed like every other GET — the query is part of the canonical path.
+        assertNotNull(recorded.getHeader("X-App-Sig"))
+    }
+
+    @Test
+    fun fetchLanTime_missingSignatureHeader_returnsResponseWithNullSignature() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("""{"server_ms":42,"nonce":"n"}"""),
+        )
+
+        val result = apiClient.fetchLanTime("n")
+
+        assertNotNull(result)
+        assertNull(result!!.signature)
+    }
+
+    @Test
+    fun fetchLanTime_404_returnsNull() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertNull(apiClient.fetchLanTime("abc123"))
+    }
+
+    @Test
+    fun fetchLanTime_invalidJson_returnsNull() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{ not json"))
+
+        assertNull(apiClient.fetchLanTime("abc123"))
+    }
+
+    @Test
+    fun fetchLanTime_connectionDrop_returnsNull() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertNull(apiClient.fetchLanTime("abc123"))
+    }
 }

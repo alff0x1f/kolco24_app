@@ -229,13 +229,13 @@ Backfill при выгрузке не мутирует строки (write-once 
 - Modify: `docs/design/UPLOAD.md` (контракт эндпоинта)
 - Modify: `app/src/test/.../SyncCoordinatorTest.kt`, `app/src/test/.../ApiClient*Test.kt`
 
-- [ ] задокументировать контракт в `docs/design/UPLOAD.md`: `GET /app/time/?nonce=<32-hex>` → `{"server_ms", "nonce"}` + `X-App-Signature = hex(HMAC_SHA256(APP_SECRET, "<nonce>|<server_ms>"))`; требования к серверу (эхо nonce, ms-точность)
-- [ ] чистый `LanTimeVerifier`: генерация nonce (инжектируемый RNG), проверка эха и HMAC constant-time-сравнением (по образцу `AppSignatureInterceptor`/`LegendCrypto`), маппинг в кандидата `uncertaintyMs = rtt/2 + 50`; никогда не бросает
-- [ ] `ApiClient.fetchLanTime(nonce)`: сырой ответ (body + заголовок подписи) через существующий `conditionalGet`/`post`-каркас; `404`/сеть → null
-- [ ] `SyncCoordinator`: seam `syncLanTime: suspend () -> Unit` (default no-op), вызывается после успешного LAN-пробинга в `probeLocalAndRenew`; проводка в `AppContainer`: `localApiClient.fetchLanTime` → verifier → `trustedClock.onTimeCandidate`
-- [ ] тесты `LanTimeVerifierTest`: валидная подпись → кандидат; подделанный `server_ms` / чужой nonce / неверный ключ → null; RTT-коррекция и uncertainty
-- [ ] тесты `SyncCoordinatorTest`: `syncLanTime` вызывается после успешного пробинга и не вызывается при недоступном LAN
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] задокументировать контракт в `docs/design/UPLOAD.md`: `GET /app/time/?nonce=<32-hex>` → `{"server_ms", "nonce"}` + `X-App-Signature = hex(HMAC_SHA256(APP_SECRET, "<nonce>|<server_ms>"))`; требования к серверу (эхо nonce, ms-точность)
+- [x] чистый `LanTimeVerifier`: генерация nonce (инжектируемый RNG), проверка эха и HMAC constant-time-сравнением (`MessageDigest.isEqual`, переиспользует `sign()` из `AppSignatureInterceptor`), маппинг в кандидата `uncertaintyMs = rtt/2 + 50` (`LAN_TIME_GRANULARITY_MS`); никогда не бросает (RTT-гейт `0..maxRttMs` как у `ServerTimeInterceptor`)
+- [x] `ApiClient.fetchLanTime(nonce)`: сырой ответ (`LanTimeResponse` = body `LanTimeDto` + заголовок `X-App-Signature`); `404`/сеть/битый JSON → null
+- [x] `SyncCoordinator`: seam `syncLanTime: suspend () -> Unit` (default no-op), вызывается **вне leaseMutex** после reachable LAN-пробинга (`manifest != null`) в `probeLocalAndRenew`; проводка в `AppContainer`: elapsed-замер вокруг `localApiClient.fetchLanTime` → `verifier.verify` → `trustedClock.onTimeCandidate`
+- [x] тесты `LanTimeVerifierTest`: валидная подпись → кандидат; подделанный `server_ms` / чужой nonce / неверный ключ / null dto / null sig → null; RTT-коррекция и uncertainty (rtt/2+50), граница RTT, upper-case подпись принимается, nonce = 32-hex
+- [x] тесты `SyncCoordinatorTest`: `syncLanTime` вызывается после reachable пробинга (в т.ч. cloud-handback) и после применения lease, не вызывается при недоступном LAN; тесты `ApiClientTest`: `fetchLanTime` 200/подпись/nonce-query, missing header, 404, битый JSON, обрыв → null
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 6: Усиленный NoSync на судейском экране + действия синхронизации
 

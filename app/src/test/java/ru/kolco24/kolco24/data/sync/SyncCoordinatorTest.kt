@@ -31,6 +31,9 @@ class SyncCoordinatorTest {
     /** Fires on `refreshRaces(Local)` so the empty-cache-fallback test can seed the cache. */
     private var onRefreshRacesLocal: (() -> Unit)? = null
 
+    /** Counts `syncLanTime` invocations so the LAN-time-anchor probe can be asserted. */
+    private var lanTimeSyncs = 0
+
     // Far-future date so `nearestRaceId`'s `effectiveEnd >= today` check (real wall-clock `todayIso()`
     // inside SyncCoordinator, not injectable) never goes stale regardless of when this test runs.
     private fun race(id: Int) = RaceEntity(
@@ -53,6 +56,7 @@ class SyncCoordinatorTest {
         refreshTeams = { raceId, source -> calls.add("refreshTeams($raceId,$source)"); teamsResult },
         refreshLegend = { raceId, source -> calls.add("refreshLegend($raceId,$source)"); legendResult },
         refreshMemberTags = { raceId, source -> calls.add("refreshMemberTags($raceId,$source)"); memberTagsResult },
+        syncLanTime = { calls.add("syncLanTime"); lanTimeSyncs++ },
     )
 
     // region sourceFor
@@ -98,6 +102,35 @@ class SyncCoordinatorTest {
         val action = buildCoordinator().probeLocalAndRenew(1)
         assertEquals(LeaseAction.Keep, action)
         assertEquals(RaceLease(1, 10_000L), lease)
+    }
+
+    @Test
+    fun probe_syncsLanTime_afterReachableProbe() = runTest {
+        // Any non-null manifest means the LAN answered — a reachable LAN is also a signed time source.
+        manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
+        now = 1_000L
+        buildCoordinator().probeLocalAndRenew(1)
+        assertEquals(1, lanTimeSyncs)
+        // The time probe fires only after the lease heartbeat has been applied.
+        assertTrue(calls.indexOf("fetchSync(1)") < calls.indexOf("syncLanTime"))
+    }
+
+    @Test
+    fun probe_syncsLanTime_evenOnCloudHandback_whenReachable() = runTest {
+        // Reachable (manifest present) but disclaimed authority — still a valid time source.
+        lease = RaceLease(1, 10_000L)
+        manifest = SyncManifestDto(race = 1, dataSource = "cloud")
+        buildCoordinator().probeLocalAndRenew(1)
+        assertEquals(1, lanTimeSyncs)
+    }
+
+    @Test
+    fun probe_doesNotSyncLanTime_whenUnreachable() = runTest {
+        lease = RaceLease(1, 10_000L)
+        manifest = null
+        buildCoordinator().probeLocalAndRenew(1)
+        assertEquals(0, lanTimeSyncs)
+        assertFalse(calls.contains("syncLanTime"))
     }
 
     // endregion
