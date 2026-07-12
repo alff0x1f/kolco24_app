@@ -238,6 +238,10 @@ class TrackRecordingService : Service() {
                 val doUpload = engine === e && shouldLiveUpload(now, lastLiveUploadElapsed, LIVE_UPLOAD_MIN_INTERVAL_MS)
                 if (doUpload) lastLiveUploadElapsed = now
                 container.applicationScope.launch {
+                    // Offline trusted-time anchor: each GPS fix during recording offers itself as a
+                    // time candidate (the replacement rule discards all but the best). Keeps the clock
+                    // anchored in the forest / local mode / after a reboot with no network.
+                    fixes.forEach { container.anchorTrustedTimeFromGps(it) }
                     container.trackRepository.insertAll(fixes, r, t, s)
                     // uploadPending is mutex-guarded (tryLock), dual-target, offline-tolerant — a stop /
                     // team-switch upload in flight just makes this a no-op; a failure leaves points pending.

@@ -80,7 +80,13 @@ class FusedLocationEngine(context: Context, private val profile: TrackProfile) :
     }
 }
 
-/** Map a platform [Location] to a pure [RawFix] (`time` → `gpsTimeMs`, monotonic nanos preserved). */
+/**
+ * Map a platform [Location] to a pure [RawFix] (`time` → `gpsTimeMs`, monotonic nanos preserved).
+ * Shared by both engines (Legacy calls this same extension). [RawFix.isMock]/[RawFix.provider] are
+ * filled for the trusted-time GPS-anchor filter only: `isMock` reads `Location.isMock` on API 31+ and
+ * the deprecated `isFromMockProvider` below it.
+ */
+@Suppress("DEPRECATION")
 internal fun Location.toRawFix(): RawFix = RawFix(
     lat = latitude,
     lon = longitude,
@@ -94,4 +100,6 @@ internal fun Location.toRawFix(): RawFix = RawFix(
         },
     gpsTimeMs = time,
     elapsedRealtimeNanos = elapsedRealtimeNanos,
+    isMock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) isMock else isFromMockProvider,
+    provider = provider,
 )

@@ -42,8 +42,10 @@ import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
 import ru.kolco24.kolco24.data.time.TrustedClock
+import ru.kolco24.kolco24.data.time.gpsTimeCandidate
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
+import ru.kolco24.kolco24.data.track.RawFix
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackRepository
 import ru.kolco24.kolco24.data.track.TrackState
@@ -397,11 +399,31 @@ class AppContainer(private val context: Context) {
         MutableStateFlow(emptyMap())
 
     /**
+     * Offer a GPS [fix] to [trustedClock] as an offline trusted-time candidate (forest / local mode /
+     * post-reboot with no network). No-op when [gpsTimeCandidate] rejects the fix (mock / non-`gps` /
+     * coarse / no time). Snapshots wall + boot here so the impure callers (the track-recording fix path
+     * and the one-shot КП-scan provider) stay clear of time plumbing; [trustedClock]'s replacement rule
+     * then keeps the candidate only when it improves the anchor.
+     */
+    fun anchorTrustedTimeFromGps(fix: RawFix) {
+        gpsTimeCandidate(fix)?.let {
+            trustedClock.onTimeCandidate(it, System.currentTimeMillis(), cachedBootCount)
+        }
+    }
+
+    /**
      * One-shot GPS provider for the anti-fraud checkpoint-take coordinate: fires a fresh fix the
      * moment a КП is scanned (Fused/Legacy chosen by GMS availability), independent of track recording.
+     * Wrapped so every fresh fix is also offered to [trustedClock] via [anchorTrustedTimeFromGps] — this
+     * is the one-shot GPS-anchor point (КП-scan take + the judge screen's «Время по GPS» action, both of
+     * which go through this provider).
      */
     val currentLocationProvider: CurrentLocationProvider by lazy {
-        LocationEngineFactory.createCurrentLocationProvider(context)
+        val delegate = LocationEngineFactory.createCurrentLocationProvider(context)
+        object : CurrentLocationProvider {
+            override suspend fun current(timeoutMs: Long): RawFix? =
+                delegate.current(timeoutMs)?.also { anchorTrustedTimeFromGps(it) }
+        }
     }
 
     /** GPS-track recording state: written by `TrackRecordingService`, read by the UI. */

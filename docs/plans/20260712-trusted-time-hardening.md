@@ -211,12 +211,12 @@ Backfill при выгрузке не мутирует строки (write-once 
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt` (врезка в one-shot путь КП-скана)
 - Modify: `app/src/test/.../TrackModels*Test.kt` (если затронут `RawFix`-фикстуры)
 
-- [ ] `RawFix`: добавить `isMock: Boolean = false`, `provider: String? = null` (дефолты — существующие тесты и call sites не ломаются); заполнить оба поля в `Location.toRawFix()` обоих движков (`isMock`: API 31+ `location.isMock`, ниже — `isFromMockProvider`)
-- [ ] чистый маппер `gpsTimeCandidate(fix: RawFix): TimeCandidate?` в `GpsTimeCandidate.kt` — отсев `isMock`, `provider != "gps"`, `gpsTimeMs <= 0`, `accuracy > 100`; `anchorElapsedMs = elapsedRealtimeNanos / 1_000_000`; `GPS_UNCERTAINTY_MS = 500`
-- [ ] врезка 1 (запись трека): в фикс-пути `TrackRecordingService` для каждого `RawFix` вызывать `gpsTimeCandidate(fix)?.let { trustedClock.onTimeCandidate(it, ...) }` — правило замены само отбросит худшие
-- [ ] врезка 2 (one-shot фикс КП-скана): в проводке `CurrentLocationProvider`-потребителя (AppContainer/attachLocation-путь) — тот же вызов; этим же путём пойдёт кнопка Task 6
-- [ ] тесты `GpsTimeCandidateTest` (JVM, чистый маппер): валидный фикс → кандидат с верными ms; mock / плохая accuracy / нулевое время / не-gps provider → null
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] `RawFix`: добавить `isMock: Boolean = false`, `provider: String? = null` (дефолты — существующие тесты и call sites не ломаются); заполнить оба поля в `Location.toRawFix()` (единый shared-маппер в `FusedLocationEngine.kt`, `LegacyLocationEngine` вызывает его же — второй копии нет) (`isMock`: API 31+ `location.isMock`, ниже — `isFromMockProvider`)
+- [x] чистый маппер `gpsTimeCandidate(fix: RawFix): TimeCandidate?` в `GpsTimeCandidate.kt` — отсев `isMock`, `provider != "gps"`, `gpsTimeMs <= 0`, `accuracy > 100`; `anchorElapsedMs = elapsedRealtimeNanos / 1_000_000`; `GPS_UNCERTAINTY_MS = 500`
+- [x] врезка 1 (запись трека): в фикс-пути `TrackRecordingService` (в `applicationScope.launch` перед `insertAll`) `fixes.forEach { container.anchorTrustedTimeFromGps(it) }` — правило замены само отбросит худшие
+- [x] врезка 2 (one-shot фикс КП-скана): `currentLocationProvider` в `AppContainer` обёрнут декоратором, вызывающим `anchorTrustedTimeFromGps` на каждом свежем фиксе (общий seam `anchorTrustedTimeFromGps` снимает wall+boot); этим же путём пойдёт кнопка Task 6 — потребители в `MainActivity` не трогаются
+- [x] тесты `GpsTimeCandidateTest` (JVM, чистый маппер): валидный фикс → кандидат с верными ms; mock / плохая accuracy / нулевое время / не-gps provider → null (+ граница accuracy принимается)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 5: Подписанный LAN time-эндпоинт (клиент + контракт)
 
