@@ -1,5 +1,9 @@
 package ru.kolco24.kolco24.ui.admin
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -28,10 +32,14 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -58,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -196,6 +205,71 @@ fun JudgeScanScreen(
         val mutex = remember(raceId) { Mutex() }
         val scope = rememberCoroutineScope()
 
+        // NoSync-card actions (Task 6): a cloud probe and a one-shot GPS fix, either of which can
+        // re-anchor the trusted clock while the judge waits at the start/finish. `noSyncRunning` gates
+        // a duplicate tap; `noSyncOutcome` is the transient status line under the buttons. Both are
+        // keyed on raceId so they reset when the race changes.
+        var noSyncRunning by remember(raceId) { mutableStateOf(false) }
+        var noSyncOutcome by remember(raceId) { mutableStateOf<NoSyncActionOutcome?>(null) }
+
+        // One-shot GPS fix → the container's currentLocationProvider already offers every accepted fix
+        // to trustedClock via anchorTrustedTimeFromGps (Task 4 seam 2), so this just triggers it and
+        // reports whether an anchor appeared. Runs on the composition scope (short-lived; the overlay
+        // stays open during the ~8 s fix window).
+        val runGpsAnchor: () -> Unit = {
+            scope.launch {
+                noSyncRunning = true
+                noSyncOutcome = null
+                container.currentLocationProvider.current()
+                noSyncOutcome = if (clockAnchored(container.trustedClock.status.value)) {
+                    NoSyncActionOutcome.Anchored
+                } else {
+                    NoSyncActionOutcome.NoGpsFix
+                }
+                noSyncRunning = false
+            }
+        }
+        val locationPermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { result ->
+            val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+            if (granted) runGpsAnchor() else noSyncOutcome = NoSyncActionOutcome.LocationDenied
+        }
+        val onCheckNetwork: () -> Unit = {
+            scope.launch {
+                noSyncRunning = true
+                noSyncOutcome = null
+                // Any signed cloud response re-anchors trusted time through ServerTimeInterceptor; the
+                // lightweight sync manifest GET is enough (its payload is ignored here).
+                container.apiClient.fetchSync(raceId)
+                noSyncOutcome = if (clockAnchored(container.trustedClock.status.value)) {
+                    NoSyncActionOutcome.Anchored
+                } else {
+                    NoSyncActionOutcome.NetworkUnreachable
+                }
+                noSyncRunning = false
+            }
+        }
+        val onGpsTime: () -> Unit = {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_COARSE_LOCATION,
+                ) == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                runGpsAnchor()
+            } else {
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                    ),
+                )
+            }
+        }
+
         // Long-lived hook reads the latest collected pool/readiness without re-arming on every
         // recomposition.
         val poolReadyLatest = rememberUpdatedState(poolReady)
@@ -255,12 +329,27 @@ fun JudgeScanScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
-        if (clockStatus !is ClockStatus.Ok) {
-            ScanClockBanner(
-                status = clockStatus,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(8.dp))
+        // Skewed keeps the shared accent banner; NoSync gets the prominent judge-only error card with
+        // the two re-anchor actions (Task 6). Ok renders nothing.
+        when (clockStatus) {
+            is ClockStatus.Skewed -> {
+                ScanClockBanner(
+                    status = clockStatus,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            ClockStatus.NoSync -> {
+                JudgeScanNoSyncCard(
+                    running = noSyncRunning,
+                    outcome = noSyncOutcome,
+                    onCheckNetwork = onCheckNetwork,
+                    onGpsTime = onGpsTime,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            ClockStatus.Ok -> Unit
         }
         if (everSynced == false) {
             JudgeScanSyncPlate(modifier = Modifier.padding(horizontal = 16.dp))
@@ -345,6 +434,101 @@ private fun JudgeScanSyncPlate(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
+        }
+    }
+}
+
+/**
+ * Prominent [ClockStatus.NoSync] error card for the judge screen (Task 6) — shown above the scan zone
+ * when the trusted clock has no anchor at the start/finish station. Does **not** block scanning (the
+ * race matters more than a perfect timestamp; the row is backfilled with trusted time on upload once an
+ * anchor appears). Offers two re-anchor actions: [onCheckNetwork] (a signed cloud probe → re-anchor via
+ * the `Date` header) and [onGpsTime] (a one-shot GPS fix → offline anchor). While [running] the buttons
+ * are disabled and a spinner shows; [outcome], once set, renders a one-line status via
+ * [noSyncActionMessage].
+ */
+@Composable
+private fun JudgeScanNoSyncCard(
+    running: Boolean,
+    outcome: NoSyncActionOutcome?,
+    onCheckNetwork: () -> Unit,
+    onGpsTime: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(24.dp),
+                )
+                Text(
+                    text = "Время не подтверждено — синхронизируйте до начала работы",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = onCheckNetwork,
+                    enabled = !running,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Проверить сеть")
+                }
+                OutlinedButton(
+                    onClick = onGpsTime,
+                    enabled = !running,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Время по GPS")
+                }
+            }
+            if (running) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Text(
+                        text = "Синхронизация…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            } else if (outcome != null) {
+                Text(
+                    text = noSyncActionMessage(outcome),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
         }
     }
 }

@@ -244,12 +244,12 @@ Backfill при выгрузке не мутирует строки (write-once 
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/admin/JudgeScanModel.kt` (чистая часть, если появляется решение-логика)
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (проводка действий)
 
-- [ ] при `ClockStatus.NoSync` показывать крупную error-карточку (M3 `errorContainer`) над зоной сканирования: «Время не подтверждено — синхронизируйте до начала работы»; сканирование НЕ блокировать
-- [ ] действие «Проверить сеть»: лёгкий signed GET к облаку (любой сетевой ответ ре-якорит через `Date`); показать результат (якорь появился / сети нет)
-- [ ] действие «Время по GPS»: one-shot `CurrentLocationProvider.current()` → `RawFix` → `gpsTimeCandidate(fix)` → `onTimeCandidate` (переиспользует врезку 2 из Task 4); проверка runtime-разрешения на локацию, показ результата
-- [ ] `Skewed` оставить текущему `ClockWarningBanner`; карточка — только для `NoSync`
-- [ ] тесты: чистая решение-логика (если вынесена в `JudgeScanModel`) — JVM-тест; Compose-обвязка без тестов (конвенция)
-- [ ] run `./gradlew testDebugUnitTest` — must pass before next task
+- [x] при `ClockStatus.NoSync` показывать крупную error-карточку (M3 `errorContainer`) над зоной сканирования: «Время не подтверждено — синхронизируйте до начала работы»; сканирование НЕ блокировать (`JudgeScanNoSyncCard`)
+- [x] действие «Проверить сеть»: лёгкий signed GET к облаку (`apiClient.fetchSync(raceId)` — любой ответ ре-якорит через `Date`); показать результат (якорь появился / сети нет) через `clockAnchored(status)` → `NoSyncActionOutcome`
+- [x] действие «Время по GPS»: one-shot `container.currentLocationProvider.current()` (декоратор из Task 4 seam 2 сам ре-якорит через `anchorTrustedTimeFromGps`); проверка runtime-разрешения на локацию (`rememberLauncherForActivityResult` + `ContextCompat.checkSelfPermission`), показ результата
+- [x] `Skewed` оставить текущему `ScanClockBanner`; карточка — только для `NoSync` (перешёл на `when (clockStatus)`)
+- [x] тесты: чистая решение-логика вынесена в `JudgeScanModel` (`clockAnchored`, `noSyncActionMessage`, `NoSyncActionOutcome`) — JVM-тест в `JudgeScanModelTest`; Compose-обвязка без тестов (конвенция)
+- [x] run `./gradlew testDebugUnitTest` — must pass before next task
 
 ### Task 7: Verify acceptance criteria
 
