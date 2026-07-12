@@ -31,6 +31,12 @@ class SyncCoordinatorTest {
     /** Fires on `refreshRaces(Local)` so the empty-cache-fallback test can seed the cache. */
     private var onRefreshRacesLocal: (() -> Unit)? = null
 
+    /**
+     * Fires on `syncLanTime` so the skewed-clock test can model the freshness-checked `/sync/` manifest
+     * unblocking *after* the clock has been re-anchored (the exact reason `syncLanTime` runs first).
+     */
+    private var onSyncLanTime: (() -> Unit)? = null
+
     /** Counts `syncLanTime` invocations so the LAN-time-anchor probe can be asserted. */
     private var lanTimeSyncs = 0
 
@@ -56,7 +62,7 @@ class SyncCoordinatorTest {
         refreshTeams = { raceId, source -> calls.add("refreshTeams($raceId,$source)"); teamsResult },
         refreshLegend = { raceId, source -> calls.add("refreshLegend($raceId,$source)"); legendResult },
         refreshMemberTags = { raceId, source -> calls.add("refreshMemberTags($raceId,$source)"); memberTagsResult },
-        syncLanTime = { calls.add("syncLanTime"); lanTimeSyncs++ },
+        syncLanTime = { calls.add("syncLanTime"); lanTimeSyncs++; onSyncLanTime?.invoke() },
     )
 
     // region sourceFor
@@ -105,14 +111,15 @@ class SyncCoordinatorTest {
     }
 
     @Test
-    fun probe_syncsLanTime_afterReachableProbe() = runTest {
+    fun probe_syncsLanTime_beforeManifestFetch() = runTest {
         // Any non-null manifest means the LAN answered — a reachable LAN is also a signed time source.
         manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
         now = 1_000L
         buildCoordinator().probeLocalAndRenew(1)
         assertEquals(1, lanTimeSyncs)
-        // The time probe fires only after the lease heartbeat has been applied.
-        assertTrue(calls.indexOf("fetchSync(1)") < calls.indexOf("syncLanTime"))
+        // The time probe fires FIRST — before the freshness-checked manifest fetch — so a skewed clock
+        // is anchored before the manifest signature is stamped from trusted time.
+        assertTrue(calls.indexOf("syncLanTime") < calls.indexOf("fetchSync(1)"))
     }
 
     @Test
@@ -240,7 +247,29 @@ class SyncCoordinatorTest {
         now = 1_000L
         buildCoordinator().enterLocalMode()
         assertEquals(1, lanTimeSyncs)
-        assertTrue(calls.indexOf("fetchSync(7)") < calls.indexOf("syncLanTime"))
+        assertTrue(calls.indexOf("syncLanTime") < calls.indexOf("fetchSync(7)"))
+    }
+
+    @Test
+    fun enterLocalMode_skewedClock_pinsOnFirstSwitchOn_afterAnchor() = runTest {
+        // The bootstrap payoff: a skewed `NoSync` device stamps its `X-App-Ts` from wall time, so the
+        // freshness-checked `/sync/` manifest `403`s (→ `null`) UNTIL the freshness-exempt `/app/time/`
+        // probe re-anchors the clock. Because `syncLanTime` now runs BEFORE the manifest fetch, the very
+        // first switch-on anchors, then the re-signed manifest passes and pins — no LocalUnreachable +
+        // manual-retry dance. Model that by flipping `manifest` from `null` to `local` inside the anchor.
+        selectedRaceId = 7
+        now = 1_000L
+        manifest = null
+        onSyncLanTime = {
+            manifest = SyncManifestDto(race = 7, dataSource = "local", leaseTtlSeconds = 3600L)
+        }
+
+        val outcome = buildCoordinator().enterLocalMode()
+
+        assertEquals(LocalModeOutcome.PinnedUntil(1_000L + 3600L * 1000L), outcome)
+        assertEquals(RaceLease(7, 1_000L + 3600L * 1000L), lease)
+        // The anchor must precede the manifest fetch, or the first switch would still see the 403 → null.
+        assertTrue(calls.indexOf("syncLanTime") < calls.indexOf("fetchSync(7)"))
     }
 
     @Test

@@ -81,11 +81,18 @@ private val FAN_OUT_SUCCESS_RESULTS =
  * @param cachedRaces the offline-readable race list (for [nearestRaceId] when nothing is selected).
  * @param refreshRaces/[refreshTeams]/[refreshLegend]/[refreshMemberTags] the four per-source refresh calls.
  * @param syncLanTime one signed LAN time probe (`GET /app/time/` → verify → re-anchor `TrustedClock`);
- *   fired **unconditionally** (off the lease lock) on every [probeLocalAndRenew] and every
- *   [enterLocalMode] switch-on — *not* gated on a reachable `/sync/` manifest, because that manifest is
- *   freshness-checked (`403` on a skewed `NoSync` clock) while `/app/time/` is exempt, so gating would
- *   starve the bootstrap of the very device that needs it. Default no-op keeps every existing call site
- *   (and the tests) unchanged.
+ *   fired **unconditionally and FIRST** (off the lease lock, *before* the freshness-checked `/sync/`
+ *   manifest fetch) on every [probeLocalAndRenew] and every [enterLocalMode] switch-on. Ordering is
+ *   load-bearing: the request signature's `X-App-Ts` is stamped from trusted time
+ *   (`TrustedClock.signingSeconds()`), so a skewed `NoSync` clock makes every freshness-checked signed
+ *   request `403` against the server's ±300 s window — including the manifest probe — while `/app/time/`
+ *   is the one endpoint the server exempts (fresh nonce + response HMAC defeat replay/forgery instead).
+ *   Anchoring the clock *before* the manifest lets the manifest be re-signed with corrected trusted time
+ *   and pass on the **first** attempt; probing time after the manifest would leave the first switch-on
+ *   `403`ing → `null` manifest → `LocalUnreachable`, anchoring only in time for a later retry. A
+ *   genuinely unreachable LAN is a `null` no-op inside `syncLanTime`, so the manifest still fails and the
+ *   flow yields Keep/LocalUnreachable as before. Default no-op keeps every existing call site (and the
+ *   tests) unchanged.
  */
 class SyncCoordinator(
     private val readLease: () -> RaceLease?,
@@ -118,7 +125,18 @@ class SyncCoordinator(
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
     suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
-        val action = leaseMutex.withLock {
+        // Off the lease lock (this is time, not lease state) and FIRST, *before* the freshness-checked
+        // `/sync/` manifest fetch: re-anchor the clock from the signed `/app/time/` endpoint. The
+        // signature's `X-App-Ts` is stamped from trusted time (`TrustedClock.signingSeconds()`), so a
+        // skewed `NoSync` clock makes every freshness-checked signed request (the manifest probe
+        // included) `403` against the ±300 s window, while `/app/time/` is the one endpoint the server
+        // exempts (fresh nonce + response HMAC defeat replay/forgery instead — see `docs/design/UPLOAD.md`).
+        // Anchoring first lets the manifest be re-signed with corrected trusted time and pass on the FIRST
+        // attempt; probing after the manifest would leave a skewed device `403`ing → `null` → Keep,
+        // anchoring only in time for the next probe. A genuinely unreachable LAN is a cheap fast-fail
+        // `null` no-op inside `syncLanTime`, so the manifest still fails → Keep (correct).
+        syncLanTime()
+        return leaseMutex.withLock {
             val manifest = fetchSync(raceId)
             val result = applySyncResponse(manifest, raceId, nowMs())
             when (result) {
@@ -128,16 +146,6 @@ class SyncCoordinator(
             }
             result
         }
-        // Off the lease lock (this is time, not lease state): re-anchor the clock from the signed
-        // `/app/time/` endpoint. Fired **unconditionally** — deliberately NOT gated on a reachable
-        // `/sync/` manifest — because a skewed `NoSync` clock makes every freshness-checked signed
-        // request (the manifest probe included) `403` against the ±300 s `X-App-Ts` window, while
-        // `/app/time/` is the one endpoint the server exempts from that window (fresh nonce + response
-        // HMAC defeat replay/forgery instead — see `docs/design/UPLOAD.md`). Gating on the manifest
-        // would deny the anchor to the very device that most needs it (post-reboot mid-race skew).
-        // A genuinely unreachable LAN is a cheap fast-fail `null` no-op inside `syncLanTime`.
-        syncLanTime()
-        return action
     }
 
     /**
@@ -147,14 +155,16 @@ class SyncCoordinator(
      * `data_source`) refreshes from cloud without pinning, or — LAN unreachable — writes nothing.
      */
     suspend fun enterLocalMode(): LocalModeOutcome {
-        val outcome = leaseMutex.withLock { enterLocalModeLocked() }
-        // Off the lease lock, mirroring [probeLocalAndRenew]: fire the signed LAN time probe on every
-        // switch-on, **even when the manifest failed**. A skewed `NoSync` device can only bootstrap
-        // trusted time through the freshness-exempt `/app/time/` (the freshness-checked manifest above
-        // `403`s while skewed) — without this, the first switch into local mode leaves the clock
-        // `NoSync` until some later probe, and a device that never gets pinned never probes at all.
+        // Off the lease lock, mirroring [probeLocalAndRenew], and FIRST — *before* the freshness-checked
+        // LAN requests inside the lock (manifest + fan-out): fire the signed LAN time probe on every
+        // switch-on. Ordering is load-bearing: a skewed `NoSync` device can only bootstrap trusted time
+        // through the freshness-exempt `/app/time/`, and anchoring it *before* the manifest lets the
+        // manifest be re-signed with corrected trusted time and pin on the FIRST switch-on. Probing after
+        // the manifest would leave the first switch `403`ing the manifest → `null` → `LocalUnreachable`,
+        // anchoring only in time for a later retry. A genuinely unreachable LAN is a `null` no-op, so the
+        // manifest still fails → `LocalUnreachable` (correct), and the anchor still lands for next time.
         syncLanTime()
-        return outcome
+        return leaseMutex.withLock { enterLocalModeLocked() }
     }
 
     private suspend fun enterLocalModeLocked(): LocalModeOutcome {
