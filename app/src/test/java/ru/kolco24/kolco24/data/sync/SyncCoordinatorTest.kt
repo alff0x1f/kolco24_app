@@ -125,12 +125,15 @@ class SyncCoordinatorTest {
     }
 
     @Test
-    fun probe_doesNotSyncLanTime_whenUnreachable() = runTest {
+    fun probe_syncsLanTime_evenWhenManifestUnreachable() = runTest {
+        // `/app/time/` is exempt from the `X-App-Ts` freshness window, so it must be probed even when
+        // the freshness-checked `/sync/` manifest `403`s on a skewed `NoSync` clock (the manifest
+        // collapses to `null` — indistinguishable from a genuinely down LAN, and both must still try
+        // the freshness-exempt time endpoint). This closes the LAN-time bootstrap chicken-and-egg.
         lease = RaceLease(1, 10_000L)
         manifest = null
         buildCoordinator().probeLocalAndRenew(1)
-        assertEquals(0, lanTimeSyncs)
-        assertFalse(calls.contains("syncLanTime"))
+        assertEquals(1, lanTimeSyncs)
     }
 
     // endregion
@@ -225,6 +228,31 @@ class SyncCoordinatorTest {
         // genuinely nothing — must surface as LocalUnreachable, not the generic NoRace.
         val outcome = buildCoordinator().enterLocalMode()
         assertEquals(LocalModeOutcome.LocalUnreachable, outcome)
+    }
+
+    @Test
+    fun enterLocalMode_syncsLanTime_onSuccessfulPin() = runTest {
+        // Switch-on that reaches a `local` LAN must re-anchor trusted time (the wiring gap: the switch
+        // used to pin + fan out but never probe `/app/time/`, leaving the clock `NoSync` until a later
+        // heartbeat). Fired off the lease lock, after the pin has landed.
+        selectedRaceId = 7
+        manifest = SyncManifestDto(race = 7, dataSource = "local", leaseTtlSeconds = 3600L)
+        now = 1_000L
+        buildCoordinator().enterLocalMode()
+        assertEquals(1, lanTimeSyncs)
+        assertTrue(calls.indexOf("fetchSync(7)") < calls.indexOf("syncLanTime"))
+    }
+
+    @Test
+    fun enterLocalMode_syncsLanTime_evenWhenUnreachable() = runTest {
+        // The bootstrap case: a skewed `NoSync` device `403`s the freshness-checked manifest (→ `null`
+        // → LocalUnreachable), but must still probe the freshness-exempt `/app/time/` so the clock can
+        // be anchored and the *next* switch-on succeed — otherwise a device that never pins never probes.
+        selectedRaceId = 7
+        manifest = null
+        val outcome = buildCoordinator().enterLocalMode()
+        assertEquals(LocalModeOutcome.LocalUnreachable, outcome)
+        assertEquals(1, lanTimeSyncs)
     }
 
     @Test

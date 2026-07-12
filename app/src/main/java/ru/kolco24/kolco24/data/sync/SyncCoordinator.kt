@@ -81,8 +81,11 @@ private val FAN_OUT_SUCCESS_RESULTS =
  * @param cachedRaces the offline-readable race list (for [nearestRaceId] when nothing is selected).
  * @param refreshRaces/[refreshTeams]/[refreshLegend]/[refreshMemberTags] the four per-source refresh calls.
  * @param syncLanTime one signed LAN time probe (`GET /app/time/` → verify → re-anchor `TrustedClock`);
- *   fired after a **reachable** LAN heartbeat in [probeLocalAndRenew] so local mode gets a trusted-time
- *   source. Default no-op keeps every existing call site (and the tests) unchanged.
+ *   fired **unconditionally** (off the lease lock) on every [probeLocalAndRenew] and every
+ *   [enterLocalMode] switch-on — *not* gated on a reachable `/sync/` manifest, because that manifest is
+ *   freshness-checked (`403` on a skewed `NoSync` clock) while `/app/time/` is exempt, so gating would
+ *   starve the bootstrap of the very device that needs it. Default no-op keeps every existing call site
+ *   (and the tests) unchanged.
  */
 class SyncCoordinator(
     private val readLease: () -> RaceLease?,
@@ -115,7 +118,6 @@ class SyncCoordinator(
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
     suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
-        var reachable = false
         val action = leaseMutex.withLock {
             val manifest = fetchSync(raceId)
             val result = applySyncResponse(manifest, raceId, nowMs())
@@ -124,13 +126,17 @@ class SyncCoordinator(
                 LeaseAction.Clear -> writeLease(null)
                 LeaseAction.Keep -> {}
             }
-            // A non-null manifest means the LAN server answered — reachable, regardless of the action.
-            reachable = manifest != null
             result
         }
-        // Off the lease lock (this is time, not lease state): a reachable LAN is also a signed
-        // trusted-time source, so re-anchor the clock from `/app/time/`. No-op by default.
-        if (reachable) syncLanTime()
+        // Off the lease lock (this is time, not lease state): re-anchor the clock from the signed
+        // `/app/time/` endpoint. Fired **unconditionally** — deliberately NOT gated on a reachable
+        // `/sync/` manifest — because a skewed `NoSync` clock makes every freshness-checked signed
+        // request (the manifest probe included) `403` against the ±300 s `X-App-Ts` window, while
+        // `/app/time/` is the one endpoint the server exempts from that window (fresh nonce + response
+        // HMAC defeat replay/forgery instead — see `docs/design/UPLOAD.md`). Gating on the manifest
+        // would deny the anchor to the very device that most needs it (post-reboot mid-race skew).
+        // A genuinely unreachable LAN is a cheap fast-fail `null` no-op inside `syncLanTime`.
+        syncLanTime()
         return action
     }
 
@@ -140,7 +146,18 @@ class SyncCoordinator(
      * refreshes from LAN, or (manifest reachable but not `local`, incl. an unrecognized
      * `data_source`) refreshes from cloud without pinning, or — LAN unreachable — writes nothing.
      */
-    suspend fun enterLocalMode(): LocalModeOutcome = leaseMutex.withLock {
+    suspend fun enterLocalMode(): LocalModeOutcome {
+        val outcome = leaseMutex.withLock { enterLocalModeLocked() }
+        // Off the lease lock, mirroring [probeLocalAndRenew]: fire the signed LAN time probe on every
+        // switch-on, **even when the manifest failed**. A skewed `NoSync` device can only bootstrap
+        // trusted time through the freshness-exempt `/app/time/` (the freshness-checked manifest above
+        // `403`s while skewed) — without this, the first switch into local mode leaves the clock
+        // `NoSync` until some later probe, and a device that never gets pinned never probes at all.
+        syncLanTime()
+        return outcome
+    }
+
+    private suspend fun enterLocalModeLocked(): LocalModeOutcome {
         val selected = selectedRaceId()
         var races = cachedRaces()
         if (selected == null && races.isEmpty()) {
@@ -150,12 +167,12 @@ class SyncCoordinator(
             val racesResult = refreshRaces(SyncSource.Local)
             races = cachedRaces()
             if (races.isEmpty() && racesResult != RefreshResult.Updated && racesResult != RefreshResult.NotModified) {
-                return@withLock LocalModeOutcome.LocalUnreachable
+                return LocalModeOutcome.LocalUnreachable
             }
         }
-        val raceId = selected ?: nearestRaceId(races, todayIso()) ?: return@withLock LocalModeOutcome.NoRace
+        val raceId = selected ?: nearestRaceId(races, todayIso()) ?: return LocalModeOutcome.NoRace
         val manifest = fetchSync(raceId)
-        when (val action = applySyncResponse(manifest, raceId, nowMs())) {
+        return when (val action = applySyncResponse(manifest, raceId, nowMs())) {
             is LeaseAction.Renew -> {
                 if (isPinned(action.lease, raceId, nowMs())) {
                     writeLease(action.lease)
