@@ -85,6 +85,10 @@ class SyncCoordinatorTest {
 
     @Test
     fun probe_renewsLease_onLocal() = runTest {
+        // Heartbeat renewal of an ALREADY-ACTIVE pin (the only state a probe is fired from — both
+        // callers gate on `sourceFor(raceId) == Local`): the probe owns the live pin, so a `local`
+        // manifest extends its expiry.
+        lease = RaceLease(1, 10_000L)
         manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
         now = 1_000L
         val action = buildCoordinator().probeLocalAndRenew(1)
@@ -160,6 +164,47 @@ class SyncCoordinatorTest {
 
         assertNull("must not resurrect a pin the user just switched off", lease)
         assertEquals("a stale probe must not re-pin after an explicit exit", LeaseAction.Keep, action)
+    }
+
+    @Test
+    fun probe_doesNotClearNewerPin_whenStaleCrossRaceProbeReturnsCloud() = runTest {
+        // iter4a: `Clear` used to be UNCONDITIONAL. A stale probe for race 1 parks in the pre-lock
+        // `/app/time/` call; meanwhile the user switches off and re-enters local mode for a DIFFERENT
+        // race 2, so the single global lease now holds race 2's newer pin. When the stale probe resumes,
+        // its race-1 manifest says `cloud` (handback) → LeaseAction.Clear — which, unguarded, would wipe
+        // race 2's legitimate pin. The ownership guard clears only the lease this probe still owns, so
+        // the cross-race pin survives. Inject the concurrent exit+re-enter via the pre-lock time seam.
+        lease = RaceLease(1, 10_000L)
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "cloud")
+        onSyncLanTime = { lease = RaceLease(2, 20_000L) } // exitLocalMode() + enterLocalMode(race 2)
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertEquals(
+            "a newer pin for another race must survive a stale cross-race handback",
+            RaceLease(2, 20_000L),
+            lease,
+        )
+        assertEquals("a stale probe must not clear a lease it no longer owns", LeaseAction.Keep, action)
+    }
+
+    @Test
+    fun probe_doesNotPin_whenSnapshotWasNull() = runTest {
+        // iter4b: value-equality let `null == null` pass, so a probe whose snapshot was already `null`
+        // (the lease was cleared by a concurrent `exitLocalMode()` before the probe took its snapshot —
+        // a TOCTOU gap between the caller's `sourceFor == Local` gate and the in-probe `readLease()`)
+        // would still write a NEW pin when the manifest said `local`, re-pinning from an UNPINNED state.
+        // The ownership guard requires the snapshot to be an actual active pin for this raceId, so a
+        // null snapshot never renews.
+        lease = null
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertNull("a probe from an unpinned state must not create a pin", lease)
+        assertEquals("a null snapshot must never produce a Renew", LeaseAction.Keep, action)
     }
 
     // endregion
