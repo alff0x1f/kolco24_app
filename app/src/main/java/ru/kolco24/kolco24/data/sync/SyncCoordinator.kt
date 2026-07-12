@@ -113,6 +113,12 @@ class SyncCoordinator(
     // `enterLocalMode`/`exitLocalMode` all run on `applicationScope` with no other ordering
     // guarantee — without this, a probe's stale in-flight `Renew` could land after an explicit
     // `exitLocalMode()` and silently re-pin a race the user just unpinned (or the symmetric case).
+    // Note: serialization alone is no longer sufficient, because `syncLanTime()` suspends *before*
+    // this lock is taken (the "anchor first" ordering), so an exit fired later can still grab the lock
+    // first — `probeLocalAndRenew` therefore also re-checks its start-of-probe lease snapshot under the
+    // lock before writing a `Renew`. `enterLocalMode`/`exitLocalMode` are mutually exclusive via
+    // `AppContainer.localModeBusy` (the switch is disabled while either is in flight), so only a probe
+    // can be concurrent with a user switch-off.
     private val leaseMutex = Mutex()
 
     /** `Local` when [raceId] is currently pinned, else `Cloud`. */
@@ -125,6 +131,15 @@ class SyncCoordinator(
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
     suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
+        // Snapshot the pin this probe set out to refresh BEFORE the pre-lock time probe suspends.
+        // `syncLanTime()` runs off `leaseMutex` (below) and can park for seconds in the `/app/time/`
+        // network call; during that window a concurrent `exitLocalMode()` (or a fresh `enterLocalMode` /
+        // another probe) can acquire `leaseMutex` and clear or replace the lease. Because the "anchor
+        // first" reorder moved the lock acquisition *after* this suspend point, `leaseMutex`'s FIFO
+        // fairness no longer enqueues this probe ahead of a later-fired exit — so without a check under
+        // the lock a stale `Renew` (computed from a still-`local` manifest) would silently re-pin a race
+        // the user just switched off. This is the exact re-pin `leaseMutex` was introduced to prevent.
+        val leaseAtProbeStart = readLease()
         // Off the lease lock (this is time, not lease state) and FIRST, *before* the freshness-checked
         // `/sync/` manifest fetch: re-anchor the clock from the signed `/app/time/` endpoint. The
         // signature's `X-App-Ts` is stamped from trusted time (`TrustedClock.signingSeconds()`), so a
@@ -140,11 +155,25 @@ class SyncCoordinator(
             val manifest = fetchSync(raceId)
             val result = applySyncResponse(manifest, raceId, nowMs())
             when (result) {
-                is LeaseAction.Renew -> writeLease(result.lease)
-                LeaseAction.Clear -> writeLease(null)
-                LeaseAction.Keep -> {}
+                is LeaseAction.Renew ->
+                    // Only renew if the pin we snapshotted is still the active one. If the lease was
+                    // cleared or replaced under the lock while we were off anchoring time, skip the
+                    // write and report `Keep` (this probe changed nothing) — resurrecting it here would
+                    // override an explicit `exitLocalMode()` or a fresher pin. `Clear`/`Keep` are
+                    // unconditional: clearing an already-cleared lease is idempotent, and `Keep` is a
+                    // no-op either way.
+                    if (readLease() == leaseAtProbeStart) {
+                        writeLease(result.lease)
+                        result
+                    } else {
+                        LeaseAction.Keep
+                    }
+                LeaseAction.Clear -> {
+                    writeLease(null)
+                    result
+                }
+                LeaseAction.Keep -> result
             }
-            result
         }
     }
 

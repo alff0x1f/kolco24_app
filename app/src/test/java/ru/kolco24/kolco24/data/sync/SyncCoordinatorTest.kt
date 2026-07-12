@@ -143,6 +143,25 @@ class SyncCoordinatorTest {
         assertEquals(1, lanTimeSyncs)
     }
 
+    @Test
+    fun probe_doesNotRepin_whenLeaseClearedDuringTimeProbe() = runTest {
+        // Regression for the "anchor first" reorder (syncLanTime now suspends BEFORE leaseMutex is
+        // acquired): a pinned probe parks in the pre-lock `/app/time/` call while a concurrent
+        // `exitLocalMode()` acquires the lock and clears the lease. When the probe resumes, its
+        // still-`local` manifest must NOT re-pin (LeaseAction.Renew) over the user's explicit
+        // switch-off. Model the concurrent exit as a lease-clear fired from the pre-lock syncLanTime
+        // seam — the natural injection point for "something happened during the time probe".
+        lease = RaceLease(1, 10_000L)
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
+        onSyncLanTime = { lease = null } // exitLocalMode() cleared the lease mid-probe
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertNull("must not resurrect a pin the user just switched off", lease)
+        assertEquals("a stale probe must not re-pin after an explicit exit", LeaseAction.Keep, action)
+    }
+
     // endregion
 
     // region enterLocalMode
