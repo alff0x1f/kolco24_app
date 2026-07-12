@@ -253,13 +253,13 @@ Backfill при выгрузке не мутирует строки (write-once 
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify: офлайн-сценарий (запись без якоря → якорь появился → выгрузка) даёт non-null `trusted_ms` в DTO обоих репозиториев
-- [ ] verify: плохой RTT-кандидат не затирает хороший якорь; GPS-кандидат принимается при NoSync
-- [ ] verify: legacy-якорь (4 сегмента) читается после «обновления» формата
-- [ ] verify: LAN time с битой подписью игнорируется; `404` — тихий no-op
-- [ ] run full test suite: `./gradlew testDebugUnitTest`
-- [ ] run `./gradlew lintDebug`
-- [ ] run `./gradlew connectedDebugAndroidTest` (регрессия — схема не менялась, должен пройти как есть)
+- [x] verify: офлайн-сценарий (запись без якоря → якорь появился → выгрузка) даёт non-null `trusted_ms` в DTO обоих репозиториев — `MarkRepositoryUploadTest.backfill_nullTrustedTakenAt_liveAnchor_dtoGetsComputedTrustedMs` + `JudgeScanRepositoryTest.backfill_nullTrustedTakenAt_liveAnchor_dtoGetsComputedTrustedMs` (плюс seam-null/precedence кейсы в обоих)
+- [x] verify: плохой RTT-кандидат не затирает хороший якорь; GPS-кандидат принимается при NoSync — `TrustedClockTest.uncertainty_goodAnchorNotOverwrittenByBadCandidate` (bad RTT rejected) + `GpsTimeCandidateTest.validGpsFix_mapsToCandidate` (GPS-фикс → кандидат) + `TrustedClockTest.uncertainty_pastAnchorElapsedCandidate_acceptedWhenBetterEffective` / `persist_calledOnAccept` (кандидат принят при пустом/худшем якоре = NoSync)
+- [x] verify: legacy-якорь (4 сегмента) читается после «обновления» формата — `ClockAnchorStoreTest.read_legacyFourSegments_defaultsUncertainty` + `read_reflectsPreSeededStore` (4 сегмента → `LEGACY_UNCERTAINTY_MS`)
+- [x] verify: LAN time с битой подписью игнорируется; `404` — тихий no-op — `LanTimeVerifierTest.tamperedServerMs_isRejected`/`wrongKey_isRejected`/`mismatchedNonce_isRejected`/`nullSignature_isRejected` (битая подпись → null кандидат) + `ApiClientTest.fetchLanTime_404_returnsNull`/`fetchLanTime_connectionDrop_returnsNull`/`fetchLanTime_invalidJson_returnsNull` (тихий no-op)
+- [x] run full test suite: `./gradlew testDebugUnitTest` — passed (BUILD SUCCESSFUL)
+- [x] run `./gradlew lintDebug` — passed (BUILD SUCCESSFUL)
+- [x] connectedDebugAndroidTest (skipped - no emulator/device available; Room schema unchanged so no migration regression risk)
 
 ### Task 8: [Final] Update documentation
 
