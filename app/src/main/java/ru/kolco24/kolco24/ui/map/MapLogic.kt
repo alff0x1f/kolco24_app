@@ -1,6 +1,11 @@
 package ru.kolco24.kolco24.ui.map
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonArray
 import kotlinx.serialization.json.addJsonObject
@@ -9,6 +14,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.map.Bounds
 import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.data.track.TrackPointLike
 import java.text.SimpleDateFormat
@@ -112,6 +118,47 @@ private fun pinFeature(pin: MapPin): JsonObject = buildJsonObject {
             add(pin.lat)
         }
     }
+}
+
+/**
+ * Bounding box of every `coordinates` position (`[lon, lat, ...]`) found in the given GeoJSON
+ * documents — the online-mode camera fit over track + pins. `null` when there is no position at
+ * all; malformed JSON is skipped, never thrown. A single position yields a zero-extent box.
+ */
+fun geoJsonBounds(vararg geoJson: String): Bounds? {
+    var west = Double.POSITIVE_INFINITY
+    var south = Double.POSITIVE_INFINITY
+    var east = Double.NEGATIVE_INFINITY
+    var north = Double.NEGATIVE_INFINITY
+    var found = false
+
+    fun visitCoordinates(element: JsonElement) {
+        val array = element as? JsonArray ?: return
+        val lon = (array.getOrNull(0) as? JsonPrimitive)?.doubleOrNull
+        val lat = (array.getOrNull(1) as? JsonPrimitive)?.doubleOrNull
+        if (lon != null && lat != null) {
+            west = minOf(west, lon); east = maxOf(east, lon)
+            south = minOf(south, lat); north = maxOf(north, lat)
+            found = true
+        } else {
+            array.forEach(::visitCoordinates)
+        }
+    }
+
+    fun visit(element: JsonElement) {
+        when (element) {
+            is JsonObject -> element.forEach { (key, value) ->
+                if (key == "coordinates") visitCoordinates(value) else visit(value)
+            }
+            is JsonArray -> element.forEach(::visit)
+            else -> Unit
+        }
+    }
+
+    geoJson.forEach { json ->
+        runCatching { Json.parseToJsonElement(json) }.getOrNull()?.let(::visit)
+    }
+    return if (found) Bounds(west, south, east, north) else null
 }
 
 /** «КП 32 · 4 балла · 14:07» — the take time rendered in [timeZone] (device TZ in prod). */

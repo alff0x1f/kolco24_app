@@ -7,9 +7,11 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.map.Bounds
 import ru.kolco24.kolco24.data.track.TrackPointLike
 import java.util.TimeZone
 
@@ -206,5 +208,32 @@ class MapLogicTest {
         assertEquals("1 МБ", formatMapSize(1024L * 1024))
         assertEquals("34 МБ", formatMapSize(34L * 1024 * 1024))
         assertEquals("35 МБ", formatMapSize(34L * 1024 * 1024 + 600L * 1024))
+    }
+
+    // ---- geoJsonBounds ----
+
+    @Test
+    fun geoJsonBoundsCoversTrackAndPins() {
+        val track = trackGeoJson(listOf(Pt(55.0, 37.0), Pt(55.2, 36.8)))
+        val pins = pinsGeoJson(listOf(MapPin(1, 31, 3, 0L, lat = 54.9, lon = 37.3)))
+        assertEquals(Bounds(west = 36.8, south = 54.9, east = 37.3, north = 55.2), geoJsonBounds(track, pins))
+    }
+
+    @Test
+    fun geoJsonBoundsEmptyCollectionsAreNull() {
+        assertNull(geoJsonBounds(trackGeoJson(emptyList()), pinsGeoJson(emptyList())))
+    }
+
+    @Test
+    fun geoJsonBoundsSinglePointIsZeroExtent() {
+        val pins = pinsGeoJson(listOf(MapPin(1, 31, 3, 0L, lat = 55.0, lon = 37.0)))
+        assertEquals(Bounds(37.0, 55.0, 37.0, 55.0), geoJsonBounds(pins))
+    }
+
+    @Test
+    fun geoJsonBoundsSkipsMalformedJson() {
+        val pins = pinsGeoJson(listOf(MapPin(1, 31, 3, 0L, lat = 55.0, lon = 37.0)))
+        assertEquals(Bounds(37.0, 55.0, 37.0, 55.0), geoJsonBounds("not json", pins))
+        assertNull(geoJsonBounds("{"))
     }
 }
