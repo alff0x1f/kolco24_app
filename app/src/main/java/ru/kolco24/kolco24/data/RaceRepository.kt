@@ -95,4 +95,5 @@ private fun RaceDto.toEntity(): RaceEntity = RaceEntity(
     dateEnd = dateEnd,
     place = place,
     regStatus = regStatus,
+    mapUrl = mapUrl,
 )

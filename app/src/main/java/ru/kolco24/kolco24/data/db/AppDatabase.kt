@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrackPointEntity::class,
         JudgeScanEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(
@@ -131,13 +131,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5→v6 (map tab): adds the nullable `races.mapUrl` column (offline MBTiles basemap URL).
+         * Also drops every cached `races` ETag (all origins): a pre-v6 client may have stored the
+         * ETag of a body that already carried `map_url` but persisted rows without it — a 304 on
+         * that ETag would then keep `mapUrl = NULL` forever. Dropping it forces one full re-fetch;
+         * other resources' ETags are untouched.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE races ADD COLUMN mapUrl TEXT")
+                db.execSQL("DELETE FROM sync_meta WHERE resource = 'races'")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }

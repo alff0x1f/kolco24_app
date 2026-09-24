@@ -139,4 +139,43 @@ class RacesResponseTest {
             json.decodeFromString<RacesResponse>(payload)
         }
     }
+
+    private fun raceWithMapUrl(mapUrlField: String) = """
+        {
+          "races": [
+            {
+              "id": 8,
+              "name": "Кольцо24 2026",
+              "slug": "kolco24-2026",
+              "date": "2026-06-20",
+              "date_end": "2026-06-21",
+              "place": "Сосновый бор",
+              "reg_status": "open"$mapUrlField
+            }
+          ]
+        }
+    """.trimIndent()
+
+    @Test
+    fun mapUrlParsesWhenPresent() {
+        val response = json.decodeFromString<RacesResponse>(
+            raceWithMapUrl(",\n\"map_url\": \"https://kolco24.ru/media/maps/8.mbtiles\""),
+        )
+
+        assertEquals("https://kolco24.ru/media/maps/8.mbtiles", response.races[0].mapUrl)
+    }
+
+    @Test
+    fun mapUrlDefaultsToNullWhenAbsent() {
+        val response = json.decodeFromString<RacesResponse>(raceWithMapUrl(""))
+
+        assertNull(response.races[0].mapUrl)
+    }
+
+    @Test
+    fun mapUrlExplicitNullParsesToNull() {
+        val response = json.decodeFromString<RacesResponse>(raceWithMapUrl(",\n\"map_url\": null"))
+
+        assertNull(response.races[0].mapUrl)
+    }
 }
