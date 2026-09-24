@@ -11,4 +11,6 @@
     <exclude domain="sharedpref" path="kolco24.admin.xml"/>
     <!-- Exclude the trusted-time anchor so a restored anchor can't pass a warm start on a BOOT_COUNT collision. -->
     <exclude domain="sharedpref" path="kolco24.clock.xml"/>
+    <!-- Exclude the MapLibre tile/resource cache (regenerable; online OSM tiles can grow it large). -->
+    <exclude domain="file" path="mbgl-offline.db"/>
 </full-backup-content>

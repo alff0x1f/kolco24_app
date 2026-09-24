@@ -38,6 +38,7 @@ import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.lease.RaceLease
 import ru.kolco24.kolco24.data.lease.RaceLeaseStore
 import ru.kolco24.kolco24.data.lease.isPinned
+import ru.kolco24.kolco24.data.map.MapFileStorage
 import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
@@ -562,4 +563,10 @@ class AppContainer(private val context: Context) {
     suspend fun sweepOrphanPhotoDirs() {
         PhotoStorage.sweepOrphanDirs(context.filesDir, database.markDao().allIds().toHashSet())
     }
+
+    /**
+     * Per-race MBTiles basemaps under `noBackupFilesDir/maps/` (outside Auto Backup). Not touched by
+     * [clearDatabase] — a downloaded map is not DB state.
+     */
+    val mapFileStorage: MapFileStorage = MapFileStorage(File(context.noBackupFilesDir, "maps"))
 }
