@@ -31,6 +31,15 @@ class SyncCoordinatorTest {
     /** Fires on `refreshRaces(Local)` so the empty-cache-fallback test can seed the cache. */
     private var onRefreshRacesLocal: (() -> Unit)? = null
 
+    /**
+     * Fires on `syncLanTime` so the skewed-clock test can model the freshness-checked `/sync/` manifest
+     * unblocking *after* the clock has been re-anchored (the exact reason `syncLanTime` runs first).
+     */
+    private var onSyncLanTime: (() -> Unit)? = null
+
+    /** Counts `syncLanTime` invocations so the LAN-time-anchor probe can be asserted. */
+    private var lanTimeSyncs = 0
+
     // Far-future date so `nearestRaceId`'s `effectiveEnd >= today` check (real wall-clock `todayIso()`
     // inside SyncCoordinator, not injectable) never goes stale regardless of when this test runs.
     private fun race(id: Int) = RaceEntity(
@@ -53,6 +62,7 @@ class SyncCoordinatorTest {
         refreshTeams = { raceId, source -> calls.add("refreshTeams($raceId,$source)"); teamsResult },
         refreshLegend = { raceId, source -> calls.add("refreshLegend($raceId,$source)"); legendResult },
         refreshMemberTags = { raceId, source -> calls.add("refreshMemberTags($raceId,$source)"); memberTagsResult },
+        syncLanTime = { calls.add("syncLanTime"); lanTimeSyncs++; onSyncLanTime?.invoke() },
     )
 
     // region sourceFor
@@ -75,6 +85,10 @@ class SyncCoordinatorTest {
 
     @Test
     fun probe_renewsLease_onLocal() = runTest {
+        // Heartbeat renewal of an ALREADY-ACTIVE pin (the only state a probe is fired from — both
+        // callers gate on `sourceFor(raceId) == Local`): the probe owns the live pin, so a `local`
+        // manifest extends its expiry.
+        lease = RaceLease(1, 10_000L)
         manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
         now = 1_000L
         val action = buildCoordinator().probeLocalAndRenew(1)
@@ -98,6 +112,121 @@ class SyncCoordinatorTest {
         val action = buildCoordinator().probeLocalAndRenew(1)
         assertEquals(LeaseAction.Keep, action)
         assertEquals(RaceLease(1, 10_000L), lease)
+    }
+
+    @Test
+    fun probe_syncsLanTime_beforeManifestFetch() = runTest {
+        // Any non-null manifest means the LAN answered — a reachable LAN is also a signed time source.
+        manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
+        now = 1_000L
+        buildCoordinator().probeLocalAndRenew(1)
+        assertEquals(1, lanTimeSyncs)
+        // The time probe fires FIRST — before the freshness-checked manifest fetch — so a skewed clock
+        // is anchored before the manifest signature is stamped from trusted time.
+        assertTrue(calls.indexOf("syncLanTime") < calls.indexOf("fetchSync(1)"))
+    }
+
+    @Test
+    fun probe_syncsLanTime_evenOnCloudHandback_whenReachable() = runTest {
+        // Reachable (manifest present) but disclaimed authority — still a valid time source.
+        lease = RaceLease(1, 10_000L)
+        manifest = SyncManifestDto(race = 1, dataSource = "cloud")
+        buildCoordinator().probeLocalAndRenew(1)
+        assertEquals(1, lanTimeSyncs)
+    }
+
+    @Test
+    fun probe_syncsLanTime_evenWhenManifestUnreachable() = runTest {
+        // `/app/time/` is exempt from the `X-App-Ts` freshness window, so it must be probed even when
+        // the freshness-checked `/sync/` manifest `403`s on a skewed `NoSync` clock (the manifest
+        // collapses to `null` — indistinguishable from a genuinely down LAN, and both must still try
+        // the freshness-exempt time endpoint). This closes the LAN-time bootstrap chicken-and-egg.
+        lease = RaceLease(1, 10_000L)
+        manifest = null
+        buildCoordinator().probeLocalAndRenew(1)
+        assertEquals(1, lanTimeSyncs)
+    }
+
+    @Test
+    fun probe_doesNotRepin_whenLeaseClearedDuringTimeProbe() = runTest {
+        // Regression for the "anchor first" reorder (syncLanTime now suspends BEFORE leaseMutex is
+        // acquired): a pinned probe parks in the pre-lock `/app/time/` call while a concurrent
+        // `exitLocalMode()` acquires the lock and clears the lease. When the probe resumes, its
+        // still-`local` manifest must NOT re-pin (LeaseAction.Renew) over the user's explicit
+        // switch-off. Model the concurrent exit as a lease-clear fired from the pre-lock syncLanTime
+        // seam — the natural injection point for "something happened during the time probe".
+        lease = RaceLease(1, 10_000L)
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
+        onSyncLanTime = { lease = null } // exitLocalMode() cleared the lease mid-probe
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertNull("must not resurrect a pin the user just switched off", lease)
+        assertEquals("a stale probe must not re-pin after an explicit exit", LeaseAction.Keep, action)
+    }
+
+    @Test
+    fun probe_doesNotClearNewerPin_whenStaleCrossRaceProbeReturnsCloud() = runTest {
+        // iter4a: `Clear` used to be UNCONDITIONAL. A stale probe for race 1 parks in the pre-lock
+        // `/app/time/` call; meanwhile the user switches off and re-enters local mode for a DIFFERENT
+        // race 2, so the single global lease now holds race 2's newer pin. When the stale probe resumes,
+        // its race-1 manifest says `cloud` (handback) → LeaseAction.Clear — which, unguarded, would wipe
+        // race 2's legitimate pin. The ownership guard clears only the lease this probe still owns, so
+        // the cross-race pin survives. Inject the concurrent exit+re-enter via the pre-lock time seam.
+        lease = RaceLease(1, 10_000L)
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "cloud")
+        onSyncLanTime = { lease = RaceLease(2, 20_000L) } // exitLocalMode() + enterLocalMode(race 2)
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertEquals(
+            "a newer pin for another race must survive a stale cross-race handback",
+            RaceLease(2, 20_000L),
+            lease,
+        )
+        assertEquals("a stale probe must not clear a lease it no longer owns", LeaseAction.Keep, action)
+    }
+
+    @Test
+    fun probe_doesNotPin_whenLeaseIsNull() = runTest {
+        // iter4b: a probe must never re-pin from an UNPINNED state. The lease is `null` under the lock
+        // (cleared by a concurrent `exitLocalMode()` before the probe reached the lock — a TOCTOU gap
+        // vs. the caller's `sourceFor == Local` gate). Even a `local` manifest must NOT create a pin:
+        // the raceId-ownership guard renews only when THIS race is already an active pin (`isPinned`),
+        // and `isPinned(null, …)` is false → Keep.
+        lease = null
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "local", leaseTtlSeconds = 3600L)
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertNull("a probe from an unpinned state must not create a pin", lease)
+        assertEquals("a null lease must never produce a Renew", LeaseAction.Keep, action)
+    }
+
+    @Test
+    fun probe_clearsLease_onSameRaceCloudHandback_evenAfterConcurrentRenewChangedExpiry() = runTest {
+        // iter5a: the pre-probe snapshot + value-equality guard was TOO strict. Probe A renews race 1
+        // (changing the lease's expiry); a same-race probe B then serializes after A and its manifest
+        // says `cloud` — a real handback. Value-equality would see `readLease() != snapshot` and return
+        // Keep, silently dropping a legitimate cloud handback and stranding `refreshAll` on Local. The
+        // raceId-ownership guard clears any lease that still belongs to THIS race, so the handback lands
+        // even though the expiry moved. Model probe A's renew as an expiry change from the pre-lock seam.
+        lease = RaceLease(1, 10_000L)
+        now = 1_000L
+        manifest = SyncManifestDto(race = 1, dataSource = "cloud")
+        onSyncLanTime = { lease = RaceLease(1, 99_999L) } // probe A renewed race 1 → new expiry
+
+        val action = buildCoordinator().probeLocalAndRenew(1)
+
+        assertEquals(
+            "a same-race cloud handback must clear even after a concurrent same-race renew moved expiry",
+            LeaseAction.Clear,
+            action,
+        )
+        assertNull("the legitimate handback must release the pin", lease)
     }
 
     // endregion
@@ -192,6 +321,53 @@ class SyncCoordinatorTest {
         // genuinely nothing — must surface as LocalUnreachable, not the generic NoRace.
         val outcome = buildCoordinator().enterLocalMode()
         assertEquals(LocalModeOutcome.LocalUnreachable, outcome)
+    }
+
+    @Test
+    fun enterLocalMode_syncsLanTime_onSuccessfulPin() = runTest {
+        // Switch-on that reaches a `local` LAN must re-anchor trusted time (the wiring gap: the switch
+        // used to pin + fan out but never probe `/app/time/`, leaving the clock `NoSync` until a later
+        // heartbeat). Fired off the lease lock, after the pin has landed.
+        selectedRaceId = 7
+        manifest = SyncManifestDto(race = 7, dataSource = "local", leaseTtlSeconds = 3600L)
+        now = 1_000L
+        buildCoordinator().enterLocalMode()
+        assertEquals(1, lanTimeSyncs)
+        assertTrue(calls.indexOf("syncLanTime") < calls.indexOf("fetchSync(7)"))
+    }
+
+    @Test
+    fun enterLocalMode_skewedClock_pinsOnFirstSwitchOn_afterAnchor() = runTest {
+        // The bootstrap payoff: a skewed `NoSync` device stamps its `X-App-Ts` from wall time, so the
+        // freshness-checked `/sync/` manifest `403`s (→ `null`) UNTIL the freshness-exempt `/app/time/`
+        // probe re-anchors the clock. Because `syncLanTime` now runs BEFORE the manifest fetch, the very
+        // first switch-on anchors, then the re-signed manifest passes and pins — no LocalUnreachable +
+        // manual-retry dance. Model that by flipping `manifest` from `null` to `local` inside the anchor.
+        selectedRaceId = 7
+        now = 1_000L
+        manifest = null
+        onSyncLanTime = {
+            manifest = SyncManifestDto(race = 7, dataSource = "local", leaseTtlSeconds = 3600L)
+        }
+
+        val outcome = buildCoordinator().enterLocalMode()
+
+        assertEquals(LocalModeOutcome.PinnedUntil(1_000L + 3600L * 1000L), outcome)
+        assertEquals(RaceLease(7, 1_000L + 3600L * 1000L), lease)
+        // The anchor must precede the manifest fetch, or the first switch would still see the 403 → null.
+        assertTrue(calls.indexOf("syncLanTime") < calls.indexOf("fetchSync(7)"))
+    }
+
+    @Test
+    fun enterLocalMode_syncsLanTime_evenWhenUnreachable() = runTest {
+        // The bootstrap case: a skewed `NoSync` device `403`s the freshness-checked manifest (→ `null`
+        // → LocalUnreachable), but must still probe the freshness-exempt `/app/time/` so the clock can
+        // be anchored and the *next* switch-on succeed — otherwise a device that never pins never probes.
+        selectedRaceId = 7
+        manifest = null
+        val outcome = buildCoordinator().enterLocalMode()
+        assertEquals(LocalModeOutcome.LocalUnreachable, outcome)
+        assertEquals(1, lanTimeSyncs)
     }
 
     @Test

@@ -1,8 +1,11 @@
 package ru.kolco24.kolco24.ui.admin
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MemberTagEntity
+import ru.kolco24.kolco24.data.time.ClockStatus
 
 class JudgeScanModelTest {
 
@@ -73,5 +76,33 @@ class JudgeScanModelTest {
             poolReady = true,
         )
         assertEquals(JudgeScanResult.UnknownChip("DEADBEEF"), result)
+    }
+
+    @Test
+    fun clockAnchored_noSync_isFalse() {
+        assertFalse(clockAnchored(ClockStatus.NoSync))
+    }
+
+    @Test
+    fun clockAnchored_ok_isTrue() {
+        assertTrue(clockAnchored(ClockStatus.Ok))
+    }
+
+    @Test
+    fun clockAnchored_skewed_isTrue() {
+        // A skewed-but-anchored clock still counts as anchored: the NoSync action succeeded (an anchor
+        // now exists), even though the wall-clock disagrees with it.
+        assertTrue(clockAnchored(ClockStatus.Skewed(skewMs = 120_000)))
+    }
+
+    @Test
+    fun noSyncActionMessage_mapsEveryOutcome() {
+        assertEquals("Время подтверждено", noSyncActionMessage(NoSyncActionOutcome.Anchored))
+        assertEquals(
+            "Сеть недоступна — попробуйте ещё раз",
+            noSyncActionMessage(NoSyncActionOutcome.NetworkUnreachable),
+        )
+        assertEquals("Нет доступа к геолокации", noSyncActionMessage(NoSyncActionOutcome.LocationDenied))
+        assertEquals("Не удалось получить сигнал GPS", noSyncActionMessage(NoSyncActionOutcome.NoGpsFix))
     }
 }

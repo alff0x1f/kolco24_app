@@ -41,9 +41,12 @@ import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
+import ru.kolco24.kolco24.data.time.LanTimeVerifier
 import ru.kolco24.kolco24.data.time.TrustedClock
+import ru.kolco24.kolco24.data.time.gpsTimeCandidate
 import ru.kolco24.kolco24.data.track.CurrentLocationProvider
 import ru.kolco24.kolco24.data.track.LocationEngineFactory
+import ru.kolco24.kolco24.data.track.RawFix
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackRepository
 import ru.kolco24.kolco24.data.track.TrackState
@@ -127,7 +130,7 @@ class AppContainer(private val context: Context) {
         // onServerTime as a lambda breaks the construction cycle (like `tokenProvider`): it touches
         // `trustedClock` only at request time, after both `by lazy` blocks have initialized.
         val serverTimeInterceptor = ServerTimeInterceptor(
-            onServerTime = { s, e, w, b -> trustedClock.onServerTime(s, e, w, b) },
+            onServerTime = { candidate, w, b -> trustedClock.onTimeCandidate(candidate, w, b) },
             elapsed = { SystemClock.elapsedRealtime() },
             wall = { System.currentTimeMillis() },
             bootCount = { cachedBootCount },
@@ -157,6 +160,30 @@ class AppContainer(private val context: Context) {
             ),
             json = json,
         )
+    }
+
+    /**
+     * Pure verifier for the signed LAN time endpoint (`GET /app/time/`). In local mode the LAN server's
+     * `Date` header can't be trusted (cleartext MITM), but its HMAC-signed body with a fresh client nonce
+     * can — this makes the LAN a legitimate trusted-time anchor. Shares the same `APP_SECRET` as signing.
+     */
+    private val lanTimeVerifier: LanTimeVerifier by lazy { LanTimeVerifier(secret = BuildConfig.APP_SECRET) }
+
+    /**
+     * One signed LAN time probe: fresh nonce → `GET /app/time/` (LAN client) → verify (nonce echo + HMAC)
+     * → re-anchor [trustedClock]. The monotonic clock is read tightly around the network call for the RTT
+     * correction (the LAN client carries no [ServerTimeInterceptor], so this is the LAN anchor point). A
+     * `404`/unreachable/bad-signature response is a silent no-op. Fired from [SyncCoordinator] after a
+     * reachable LAN heartbeat.
+     */
+    private suspend fun syncLanTime() {
+        val nonce = lanTimeVerifier.newNonce()
+        val elapsedBefore = SystemClock.elapsedRealtime()
+        val response = localApiClient.fetchLanTime(nonce)
+        val elapsedAfter = SystemClock.elapsedRealtime()
+        lanTimeVerifier.verify(nonce, response?.dto, response?.signature, elapsedBefore, elapsedAfter)?.let {
+            trustedClock.onTimeCandidate(it, System.currentTimeMillis(), cachedBootCount)
+        }
     }
 
     private val database: AppDatabase by lazy { AppDatabase.build(context) }
@@ -269,6 +296,8 @@ class AppContainer(private val context: Context) {
             refreshTeams = { raceId, source -> teamRepository.refreshTeams(raceId, source) },
             refreshLegend = { raceId, source -> legendRepository.refreshLegend(raceId, source) },
             refreshMemberTags = { raceId, source -> memberTagsRepository.refreshMemberTags(raceId, source) },
+            // A reachable LAN is also a signed trusted-time source — re-anchor the clock from `/app/time/`.
+            syncLanTime = { syncLanTime() },
         )
     }
 
@@ -305,6 +334,9 @@ class AppContainer(private val context: Context) {
                     it + ((scope to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
                 }
             },
+            // Backfill trusted_ms at upload moment for offline takes stored before any clock sync
+            // (trustedTakenAt == null) — the same honest-time-on-first-network the track uploader does.
+            trustedAt = trustedClock::trustedAt,
         )
     }
 
@@ -338,6 +370,9 @@ class AppContainer(private val context: Context) {
                     it + ((raceId to target) to TargetUploadOutcome(kind, System.currentTimeMillis()))
                 }
             },
+            // Backfill trusted_ms at upload moment for piks logged before any clock sync
+            // (trustedTakenAt == null) — critical for judge start/finish stations that boot in NoSync.
+            trustedAt = trustedClock::trustedAt,
         )
     }
 
@@ -391,11 +426,31 @@ class AppContainer(private val context: Context) {
         MutableStateFlow(emptyMap())
 
     /**
+     * Offer a GPS [fix] to [trustedClock] as an offline trusted-time candidate (forest / local mode /
+     * post-reboot with no network). No-op when [gpsTimeCandidate] rejects the fix (mock / non-`gps` /
+     * coarse / no time). Snapshots wall + boot here so the impure callers (the track-recording fix path
+     * and the one-shot КП-scan provider) stay clear of time plumbing; [trustedClock]'s replacement rule
+     * then keeps the candidate only when it improves the anchor.
+     */
+    fun anchorTrustedTimeFromGps(fix: RawFix) {
+        gpsTimeCandidate(fix)?.let {
+            trustedClock.onTimeCandidate(it, System.currentTimeMillis(), cachedBootCount)
+        }
+    }
+
+    /**
      * One-shot GPS provider for the anti-fraud checkpoint-take coordinate: fires a fresh fix the
      * moment a КП is scanned (Fused/Legacy chosen by GMS availability), independent of track recording.
+     * Wrapped so every fresh fix is also offered to [trustedClock] via [anchorTrustedTimeFromGps] — this
+     * is the one-shot GPS-anchor point (КП-scan take + the judge screen's «Время по GPS» action, both of
+     * which go through this provider).
      */
     val currentLocationProvider: CurrentLocationProvider by lazy {
-        LocationEngineFactory.createCurrentLocationProvider(context)
+        val delegate = LocationEngineFactory.createCurrentLocationProvider(context)
+        object : CurrentLocationProvider {
+            override suspend fun current(timeoutMs: Long): RawFix? =
+                delegate.current(timeoutMs)?.also { anchorTrustedTimeFromGps(it) }
+        }
     }
 
     /** GPS-track recording state: written by `TrackRecordingService`, read by the UI. */

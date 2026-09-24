@@ -80,6 +80,19 @@ private val FAN_OUT_SUCCESS_RESULTS =
  * @param selectedRaceId the currently-selected team's race, if any.
  * @param cachedRaces the offline-readable race list (for [nearestRaceId] when nothing is selected).
  * @param refreshRaces/[refreshTeams]/[refreshLegend]/[refreshMemberTags] the four per-source refresh calls.
+ * @param syncLanTime one signed LAN time probe (`GET /app/time/` → verify → re-anchor `TrustedClock`);
+ *   fired **unconditionally and FIRST** (off the lease lock, *before* the freshness-checked `/sync/`
+ *   manifest fetch) on every [probeLocalAndRenew] and every [enterLocalMode] switch-on. Ordering is
+ *   load-bearing: the request signature's `X-App-Ts` is stamped from trusted time
+ *   (`TrustedClock.signingSeconds()`), so a skewed `NoSync` clock makes every freshness-checked signed
+ *   request `403` against the server's ±300 s window — including the manifest probe — while `/app/time/`
+ *   is the one endpoint the server exempts (fresh nonce + response HMAC defeat replay/forgery instead).
+ *   Anchoring the clock *before* the manifest lets the manifest be re-signed with corrected trusted time
+ *   and pass on the **first** attempt; probing time after the manifest would leave the first switch-on
+ *   `403`ing → `null` manifest → `LocalUnreachable`, anchoring only in time for a later retry. A
+ *   genuinely unreachable LAN is a `null` no-op inside `syncLanTime`, so the manifest still fails and the
+ *   flow yields Keep/LocalUnreachable as before. Default no-op keeps every existing call site (and the
+ *   tests) unchanged.
  */
 class SyncCoordinator(
     private val readLease: () -> RaceLease?,
@@ -92,6 +105,7 @@ class SyncCoordinator(
     private val refreshTeams: suspend (Int, SyncSource) -> RefreshResult,
     private val refreshLegend: suspend (Int, SyncSource) -> RefreshResult,
     private val refreshMemberTags: suspend (Int, SyncSource) -> RefreshResult,
+    private val syncLanTime: suspend () -> Unit = {},
 ) {
 
     // Serializes every lease read-decide-write sequence below: `probeLocalAndRenew` (fired from
@@ -99,6 +113,13 @@ class SyncCoordinator(
     // `enterLocalMode`/`exitLocalMode` all run on `applicationScope` with no other ordering
     // guarantee — without this, a probe's stale in-flight `Renew` could land after an explicit
     // `exitLocalMode()` and silently re-pin a race the user just unpinned (or the symmetric case).
+    // Note: serialization alone is no longer sufficient, because `syncLanTime()` suspends *before*
+    // this lock is taken (the "anchor first" ordering), so an exit (or a fresh enter for another race)
+    // fired later can grab the lock first — `probeLocalAndRenew` therefore decides on the raceId-ownership
+    // of the CURRENT lease (re-read under the lock) before writing *either* a `Renew` or a `Clear` (a
+    // probe may only mutate a pin that still belongs to its own race). `enterLocalMode`/`exitLocalMode`
+    // are mutually exclusive via `AppContainer.localModeBusy` (the switch is disabled while either is in
+    // flight), so only a probe can be concurrent with a user switch.
     private val leaseMutex = Mutex()
 
     /** `Local` when [raceId] is currently pinned, else `Cloud`. */
@@ -110,14 +131,55 @@ class SyncCoordinator(
      * stored lease (renew / clear on handback / keep on error). Used at the three probe points —
      * switch-on, Launch B while pinned, and a pinned pull-to-refresh.
      */
-    suspend fun probeLocalAndRenew(raceId: Int): LeaseAction = leaseMutex.withLock {
-        val action = applySyncResponse(fetchSync(raceId), raceId, nowMs())
-        when (action) {
-            is LeaseAction.Renew -> writeLease(action.lease)
-            LeaseAction.Clear -> writeLease(null)
-            LeaseAction.Keep -> {}
+    suspend fun probeLocalAndRenew(raceId: Int): LeaseAction {
+        // Off the lease lock (this is time, not lease state) and FIRST, *before* the freshness-checked
+        // `/sync/` manifest fetch: re-anchor the clock from the signed `/app/time/` endpoint. The
+        // signature's `X-App-Ts` is stamped from trusted time (`TrustedClock.signingSeconds()`), so a
+        // skewed `NoSync` clock makes every freshness-checked signed request (the manifest probe
+        // included) `403` against the ±300 s window, while `/app/time/` is the one endpoint the server
+        // exempts (fresh nonce + response HMAC defeat replay/forgery instead — see `docs/design/UPLOAD.md`).
+        // Anchoring first lets the manifest be re-signed with corrected trusted time and pass on the FIRST
+        // attempt; probing after the manifest would leave a skewed device `403`ing → `null` → Keep,
+        // anchoring only in time for the next probe. A genuinely unreachable LAN is a cheap fast-fail
+        // `null` no-op inside `syncLanTime`, so the manifest still fails → Keep (correct).
+        syncLanTime()
+        return leaseMutex.withLock {
+            val manifest = fetchSync(raceId)
+            val result = applySyncResponse(manifest, raceId, nowMs())
+            // raceId-ownership guard (decide on the CURRENT lease, re-read under the lock — not on a
+            // pre-probe snapshot). Because `syncLanTime()` suspends *before* this lock (the "anchor
+            // first" ordering), `leaseMutex`'s FIFO fairness no longer enqueues this probe ahead of a
+            // later-fired `exitLocalMode()` / fresh `enterLocalMode()` / another probe — any of them can
+            // clear or REPLACE the lease during the off-lock window. Ownership is therefore the identity
+            // of the lease that exists NOW, matched against THIS probe's `raceId`:
+            //   * `Renew` (`local`): write only if this race is still an ACTIVE pin — a `null` lease
+            //     (exited/cleared) must not re-pin from unpinned, and another race's pin must not be
+            //     touched. Else `Keep`.
+            //   * `Clear` (`cloud` handback): release only if the current lease is for THIS race — even
+            //     if a concurrent SAME-race renew changed its expiry, a real handback must still land.
+            //     A different race's pin (or a `null` lease) is left alone. Else `Keep`.
+            // A pre-probe snapshot with value-equality was too strict here: it dropped a legitimate
+            // `cloud` handback whenever a concurrent same-race renew had changed the lease's expiry
+            // (`readLease() != snapshot`), silently stranding `refreshAll` on Local.
+            val currentLease = readLease()
+            when (result) {
+                is LeaseAction.Renew ->
+                    if (isPinned(currentLease, raceId, nowMs())) {
+                        writeLease(result.lease)
+                        result
+                    } else {
+                        LeaseAction.Keep
+                    }
+                LeaseAction.Clear ->
+                    if (currentLease?.raceId == raceId) {
+                        writeLease(null)
+                        result
+                    } else {
+                        LeaseAction.Keep
+                    }
+                LeaseAction.Keep -> result
+            }
         }
-        action
     }
 
     /**
@@ -126,7 +188,20 @@ class SyncCoordinator(
      * refreshes from LAN, or (manifest reachable but not `local`, incl. an unrecognized
      * `data_source`) refreshes from cloud without pinning, or — LAN unreachable — writes nothing.
      */
-    suspend fun enterLocalMode(): LocalModeOutcome = leaseMutex.withLock {
+    suspend fun enterLocalMode(): LocalModeOutcome {
+        // Off the lease lock, mirroring [probeLocalAndRenew], and FIRST — *before* the freshness-checked
+        // LAN requests inside the lock (manifest + fan-out): fire the signed LAN time probe on every
+        // switch-on. Ordering is load-bearing: a skewed `NoSync` device can only bootstrap trusted time
+        // through the freshness-exempt `/app/time/`, and anchoring it *before* the manifest lets the
+        // manifest be re-signed with corrected trusted time and pin on the FIRST switch-on. Probing after
+        // the manifest would leave the first switch `403`ing the manifest → `null` → `LocalUnreachable`,
+        // anchoring only in time for a later retry. A genuinely unreachable LAN is a `null` no-op, so the
+        // manifest still fails → `LocalUnreachable` (correct), and the anchor still lands for next time.
+        syncLanTime()
+        return leaseMutex.withLock { enterLocalModeLocked() }
+    }
+
+    private suspend fun enterLocalModeLocked(): LocalModeOutcome {
         val selected = selectedRaceId()
         var races = cachedRaces()
         if (selected == null && races.isEmpty()) {
@@ -136,12 +211,12 @@ class SyncCoordinator(
             val racesResult = refreshRaces(SyncSource.Local)
             races = cachedRaces()
             if (races.isEmpty() && racesResult != RefreshResult.Updated && racesResult != RefreshResult.NotModified) {
-                return@withLock LocalModeOutcome.LocalUnreachable
+                return LocalModeOutcome.LocalUnreachable
             }
         }
-        val raceId = selected ?: nearestRaceId(races, todayIso()) ?: return@withLock LocalModeOutcome.NoRace
+        val raceId = selected ?: nearestRaceId(races, todayIso()) ?: return LocalModeOutcome.NoRace
         val manifest = fetchSync(raceId)
-        when (val action = applySyncResponse(manifest, raceId, nowMs())) {
+        return when (val action = applySyncResponse(manifest, raceId, nowMs())) {
             is LeaseAction.Renew -> {
                 if (isPinned(action.lease, raceId, nowMs())) {
                     writeLease(action.lease)

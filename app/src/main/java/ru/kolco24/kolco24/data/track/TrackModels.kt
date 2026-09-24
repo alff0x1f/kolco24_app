@@ -20,6 +20,11 @@ import ru.kolco24.kolco24.data.db.TrackPointEntity
  * [altitude] is meters above the WGS84 ellipsoid (`Location.altitude`) and [verticalAccuracyMeters]
  * its 1-sigma estimate (`Location.verticalAccuracyMeters`, API 26+); both are nullable because
  * `hasAltitude()`/`hasVerticalAccuracy()` can be false and a network-provider fix often has neither.
+ *
+ * [isMock] (`Location.isMock`/`isFromMockProvider`) and [provider] (`Location.provider`) are carried
+ * **only** for the trusted-time GPS-anchor filter (`gpsTimeCandidate`) — a mock fix or a non-`"gps"`
+ * provider must not be allowed to set the trusted clock. They default so existing fixtures/call sites
+ * are unaffected and play no part in track persistence.
  */
 data class RawFix(
     val lat: Double,
@@ -29,6 +34,8 @@ data class RawFix(
     val verticalAccuracyMeters: Float?,
     val gpsTimeMs: Long,
     val elapsedRealtimeNanos: Long,
+    val isMock: Boolean = false,
+    val provider: String? = null,
 )
 
 /**

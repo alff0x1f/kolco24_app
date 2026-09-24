@@ -19,6 +19,7 @@ class ServerTimeInterceptorTest {
         val anchorElapsed: Long,
         val wallNow: Long,
         val bootNow: Int?,
+        val uncertaintyMs: Long,
     )
 
     // "Thu, 01 Jan 1970 00:00:10 GMT" parses to exactly 10_000 ms — unambiguous, tz-free.
@@ -41,6 +42,18 @@ class ServerTimeInterceptorTest {
         assertEquals(1_200L, a.anchorElapsed) // 1000 + 400/2
         assertEquals(999_000L, a.wallNow)
         assertEquals(7, a.bootNow)
+        assertEquals(700L, a.uncertaintyMs) // rtt/2 + 500 = 200 + 500
+    }
+
+    @Test
+    fun uncertainty_isRttHalfPlusDateGranularity() {
+        val captured = run(
+            elapsedReadings = listOf(0L, 10_000L), // rtt = 10_000
+            headers = headersOf("Date", dateHeader),
+            network = true,
+        )
+        assertEquals(1, captured.size)
+        assertEquals(5_500L, captured.single().uncertaintyMs) // 10_000/2 + 500
     }
 
     @Test
@@ -156,7 +169,11 @@ class ServerTimeInterceptorTest {
     ): ServerTimeInterceptor {
         val readings = ArrayDeque(elapsedReadings)
         return ServerTimeInterceptor(
-            onServerTime = { s, e, w, b -> captured.add(Anchored(s, e, w, b)) },
+            onServerTime = { candidate, w, b ->
+                captured.add(
+                    Anchored(candidate.serverMs, candidate.anchorElapsedMs, w, b, candidate.uncertaintyMs),
+                )
+            },
             elapsed = { readings.removeFirst() },
             wall = { wall },
             bootCount = { boot },

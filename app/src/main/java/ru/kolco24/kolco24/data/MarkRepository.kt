@@ -85,6 +85,14 @@ class MarkRepository(
     private val localPhotoUploader: PhotoFrameUploader = PhotoFrameUploader { _, _, _, _ -> PostResult.Offline },
     private val photoFrameReader: PhotoFrameReader = PhotoFrameReader { null },
     private val onUploadOutcome: (TrackScope, UploadTarget, UploadResultKind) -> Unit = { _, _, _ -> },
+    /**
+     * Trusted-time backfill seam (wired in `AppContainer` to `TrustedClock::trustedAt`). Given a
+     * mark's monotonic `elapsedRealtimeAt` and its `bootCount`, returns the trusted epoch ms for that
+     * moment, or `null` when there is no verified anchor / the mark belongs to a different boot
+     * session. Default `{ _, _ -> null }` — no backfill — so existing tests and call sites are
+     * untouched. See [backfillTrustedMs].
+     */
+    private val trustedAt: (elapsedAt: Long, bootAt: Int?) -> Long? = { _, _ -> null },
 ) {
     /**
      * Guards [uploadPending]/[uploadAllPending] against concurrent entry (a take-complete flush and a
@@ -396,7 +404,7 @@ class MarkRepository(
         while (true) {
             val batch = fetch()
             if (batch.isEmpty()) return if (progressed) UploadResultKind.Ok else null
-            val result = upload(batch.map { it.toDto() })
+            val result = upload(batch.map { backfillTrustedMs(it).toDto() })
             if (result !is PostResult.Success) return uploadResultKind(result) // Offline / Error
             val batchIds = batch.mapTo(HashSet()) { it.id }
             val toMark = result.data.accepted.filter { it in batchIds }
@@ -476,6 +484,21 @@ class MarkRepository(
         }
         return FrameMarkResult.Flipped
     }
+
+    /**
+     * Fill in `trustedTakenAt` for the wire DTO **without mutating the DB row** (write-once is
+     * preserved): an offline take stored before any clock sync (`trustedTakenAt == null`) gets an
+     * honest trusted time computed at upload moment via [trustedAt], exactly as the track uploader
+     * already backfills `trustedAt`. A stored `trustedTakenAt` always wins. `elapsedRealtimeAt` is
+     * nullable — a legacy row without it (`null`) has no monotonic mark to anchor, so no backfill.
+     * The server must apply fill-if-null on its idempotent upsert (see `docs/design/UPLOAD.md`).
+     */
+    private fun backfillTrustedMs(mark: MarkEntity): MarkEntity =
+        if (mark.trustedTakenAt != null) {
+            mark
+        } else {
+            mark.copy(trustedTakenAt = mark.elapsedRealtimeAt?.let { trustedAt(it, mark.bootCount) })
+        }
 
     private companion object {
         /** Max marks per upload request; the scoped `unuploaded*`/`framePending*` queries `LIMIT` to this. */

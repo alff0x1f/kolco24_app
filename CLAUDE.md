@@ -56,18 +56,18 @@ One line per area — full per-file notes in the two docs files above.
 ### Data (`data/**` + app entry → `docs/design/DATA-NOTES.md`)
 
 - `Kolco24App.kt` / `AppContainer.kt` — Application launch sequences A/B; manual DI (no Hilt), construction cycles broken via lambda seams.
-- `data/api/` — HMAC `AppSignatureInterceptor` (GET-only 403 retry-once), `ApiClient` (cloud + LAN instances share the upload methods), `ServerTimeInterceptor` (trusted-time anchor), snake_case DTOs.
+- `data/api/` — HMAC `AppSignatureInterceptor` (GET-only 403 retry-once), `ApiClient` (cloud + LAN instances share the upload methods; `fetchLanTime` = signed LAN time endpoint), `ServerTimeInterceptor` (trusted-time anchor, `TimeCandidate` with `rtt/2 + 500` uncertainty), snake_case DTOs.
 - `data/db/` — Room **v5**, migrations 1→5 with committed schemas; local-only marks/track/bindings/judge-scan tables; DAO gotchas: preserve-on-resync, column-scoped updates, version-guarded flag flips, frame-drain queries.
 - `data/lease/` + `data/SyncSource.kt` + `data/sync/SyncCoordinator.kt` — local-mode pin/lease subsystem (race-day LAN switch).
 - `data/{Race,Team,Legend,MemberTags}Repository.kt` — the four sync repos (repo refresh pattern + SyncSource routing); `LegendRepository` also owns the offline `unlock` reveal path and legend aggregates.
-- `data/MarkRepository.kt` — two-phase takes, dual-target upload loop, photo-mark creation + frame drain, pure metric helpers.
-- `data/JudgeScanRepository.kt` — judge start/finish pik log, write-once rows scoped by `raceId` only (no team dimension), dual-target upload loop.
+- `data/MarkRepository.kt` — two-phase takes, dual-target upload loop, photo-mark creation + frame drain, pure metric helpers; `trustedAt` seam backfills `trusted_ms` on upload for offline takes.
+- `data/JudgeScanRepository.kt` — judge start/finish pik log, write-once rows scoped by `raceId` only (no team dimension), dual-target upload loop; `trustedAt` seam backfills `trusted_ms` on upload for piks logged in NoSync.
 - `data/MemberChipBindingRepository.kt` — local-only member↔chip bindings, atomic reassign; keyed by `(teamId, numberInTeam)`.
 - `data/marks/` — pure `PhotoPaths` codec (path-traversal guard, thumb convention), pure `PhotoTarget` router, `PhotoStorage` frame I/O adapter.
 - `data/track/` — GPS subsystem: pure models/GPX/profiles, `TrackRepository`, location engines + one-shot `CurrentLocationProvider`.
 - `data/nfc/MifareUltralightWriter.kt` — raw `K24` on-chip format; header written **last** (commit marker), `NfcA` direct.
 - `data/crypto/LegendCrypto.kt` — pure offline legend crypto (bid / HKDF / AES-GCM), never throws.
-- `data/time/TrustedClock.kt` + `ClockAnchorStore` — monotonic+server trusted time, reboot detection.
+- `data/time/` — `TrustedClock` (`onTimeCandidate` + effective-uncertainty replacement rule, `DRIFT_PPM`) + `ClockAnchorStore` (5-segment format, legacy 4-segment fallback) — monotonic+server trusted time, reboot detection; `GpsTimeCandidate` (offline GPS anchor), `LanTimeVerifier` (signed LAN time in local mode). `kolco24.clock.xml` excluded from backup rules (a restored anchor could pass a warm start on a `BOOT_COUNT` collision).
 - `data/ScanFeedbackPlayer.kt` — SoundPool/vibration adapter for scan outcomes + celebration cues (eager-constructed).
 - `data/AdminAuthRepository.kt`/`AdminTokenStore.kt`, `ThemePreference`/`TrackProfilePreference`/`InstallId`, pure `NfcUid`, `DateUtils`.
 - `TrackRecordingService.kt` — foreground GPS service; lossless «Стоп» flush, live profile switch, 10-min throttled live upload.

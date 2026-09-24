@@ -9,4 +9,6 @@
     <exclude domain="sharedpref" path="kolco24.install.xml"/>
     <!-- Exclude the admin token file so the bearer token is never included in backups. -->
     <exclude domain="sharedpref" path="kolco24.admin.xml"/>
+    <!-- Exclude the trusted-time anchor so a restored anchor can't pass a warm start on a BOOT_COUNT collision. -->
+    <exclude domain="sharedpref" path="kolco24.clock.xml"/>
 </full-backup-content>

@@ -48,6 +48,14 @@ class JudgeScanRepository(
      * [MarkRepository]'s idle-reflush rule.
      */
     private val onUploadOutcome: (raceId: Int, target: UploadTarget, kind: UploadResultKind) -> Unit = { _, _, _ -> },
+    /**
+     * Trusted-time backfill seam (wired in `AppContainer` to `TrustedClock::trustedAt`). Given a
+     * scan's monotonic `elapsedRealtimeAt` (non-null here) and its `bootCount`, returns the trusted
+     * epoch ms for that moment, or `null` when there is no verified anchor / the scan belongs to a
+     * different boot session. Default `{ _, _ -> null }` — no backfill — so existing tests are
+     * untouched. See [backfillTrustedMs].
+     */
+    private val trustedAt: (elapsedAt: Long, bootAt: Int?) -> Long? = { _, _ -> null },
 ) {
     /**
      * Guards [uploadPending]/[uploadAllPending] against concurrent entry (the 60 s ticker firing
@@ -147,7 +155,7 @@ class JudgeScanRepository(
         while (true) {
             val batch = fetch()
             if (batch.isEmpty()) return if (progressed) UploadResultKind.Ok else null
-            val result = upload(batch.map { it.toDto() })
+            val result = upload(batch.map { backfillTrustedMs(it).toDto() })
             if (result !is PostResult.Success) return uploadResultKind(result) // Offline / Error
             val batchIds = batch.mapTo(HashSet()) { it.id }
             val toMark = result.data.accepted.filter { it in batchIds }
@@ -156,6 +164,20 @@ class JudgeScanRepository(
             progressed = true
         }
     }
+
+    /**
+     * Fill in `trustedTakenAt` for the wire DTO **without mutating the write-once row**: a pik logged
+     * before any clock sync (`trustedTakenAt == null`) gets an honest trusted time computed at upload
+     * moment via [trustedAt]. A stored `trustedTakenAt` always wins. `elapsedRealtimeAt` is non-null
+     * here (always available at record time), so — unlike [MarkRepository] — no null-guard is needed.
+     * The server must apply fill-if-null on its idempotent upsert (see `docs/design/UPLOAD.md`).
+     */
+    private fun backfillTrustedMs(scan: JudgeScanEntity): JudgeScanEntity =
+        if (scan.trustedTakenAt != null) {
+            scan
+        } else {
+            scan.copy(trustedTakenAt = trustedAt(scan.elapsedRealtimeAt, scan.bootCount))
+        }
 
     private companion object {
         /** Max scans per upload request; the scoped `unuploaded*` queries `LIMIT` to this. */
