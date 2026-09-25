@@ -171,9 +171,9 @@ Integration in `MainActivity`:
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] collect `trackFilterPreference.showAllPoints` next to `trackProfile` (line ~389) and pass value + setter into `Kolco24AppRoot`
-- [ ] pass `filter = !showAllPoints` to `trackLines` in `trackLinesNow` (line ~915) and `onShareTrack` (line ~1183); compute `hiddenCount`; new toast text
-- [ ] run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` — must pass
+- [x] collect `trackFilterPreference.showAllPoints` next to `trackProfile` (line ~389) and pass value + setter into `Kolco24AppRoot`
+- [x] pass `filter = !showAllPoints` to `trackLines` in `trackLinesNow` (line ~915) and `onShareTrack` (line ~1183); compute `hiddenCount`; new toast text
+- [x] run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` — must pass
 
 ### Task 5: Settings switch
 

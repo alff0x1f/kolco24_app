@@ -387,6 +387,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             val container = remember { (applicationContext as Kolco24App).container }
             val mode by container.themePreference.mode.collectAsState()
             val trackProfile by container.trackProfilePreference.profile.collectAsState()
+            val showAllTrackPoints by container.trackFilterPreference.showAllPoints.collectAsState()
             Kolco24Theme(darkTheme = mode.isDark(isSystemInDarkTheme())) {
                 Kolco24AppRoot(
                     themeMode = mode,
@@ -397,6 +398,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                             if (it) TrackProfile.Economy else TrackProfile.Precise,
                         )
                     },
+                    showAllTrackPoints = showAllTrackPoints,
+                    onShowAllTrackPointsChange = { container.trackFilterPreference.setShowAllPoints(it) },
                 )
             }
         }
@@ -624,6 +627,8 @@ private fun Kolco24AppRoot(
     onThemeModeChange: (ThemeMode) -> Unit,
     economyMode: Boolean,
     onEconomyModeChange: (Boolean) -> Unit,
+    showAllTrackPoints: Boolean,
+    onShowAllTrackPointsChange: (Boolean) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
     val scope = rememberCoroutineScope()
@@ -912,9 +917,15 @@ private fun Kolco24AppRoot(
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
     // Spike-filtered lines (trackLines) over reboot-safe ordered points: the map draws them as separate
-    // parts; the time span uses their flattened points (raw count stays full).
-    val trackLinesNow = remember(safeTrack) { trackLines(sortedTrackPoints(safeTrack), filter = true) }
+    // parts; the time span uses their flattened points (raw count stays full). «Все точки»
+    // (showAllTrackPoints) disables the filter — lines are then just the recording segments.
+    val trackLinesNow = remember(safeTrack, showAllTrackPoints) {
+        trackLines(sortedTrackPoints(safeTrack), filter = !showAllTrackPoints)
+    }
     val trackUsable = remember(trackLinesNow) { trackLinesNow.flatten() }
+    // Points the filter hid from the map/GPX (always 0 with «Все точки» on — the selected map chip
+    // then shows no count, by design).
+    val trackHiddenCount = safeTrack.size - trackUsable.size
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
@@ -1184,11 +1195,11 @@ private fun Kolco24AppRoot(
             container.applicationScope.launch {
                 val lines = trackLines(
                     sortedTrackPoints(trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid }),
-                    filter = true,
+                    filter = !showAllTrackPoints,
                 )
                 if (lines.isEmpty()) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Нет точных точек для экспорта", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Нет точек для экспорта", Toast.LENGTH_SHORT).show()
                     }
                     return@launch
                 }
