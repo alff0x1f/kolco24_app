@@ -195,16 +195,16 @@ fun controlTimeState(
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/marks/ControlTime.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/marks/ControlTimeTest.kt`
 
-- [ ] `ControlTimeState` и `controlTimeState(...)` по алгоритму из Technical Details
-- [ ] `resolveMarkTime`, `formatHoursMinutes`, `msUntilNextChange`, `ControlTimeLabel` + `controlTimeLabel`
-- [ ] тесты `resolveMarkTime`: `trustedTakenAt` побеждает; без него — `trustedAt(elapsed, boot)`; `trustedAt == null` или `elapsedRealtimeAt == null` → `takenAt`
-- [ ] тесты состояний: `Unknown` (`controlMinutes == 0`), `NotStarted`, `Running`, `Overtime`, `Finished` с опозданием и без
-- [ ] тесты правил: две отметки старта → ранняя; финиш раньше старта игнорируется; финиш без старта → `NotStarted`; фото-отметка на `start` не старт; `timeOf == 0` игнорируется; без легенды → `NotStarted` / `Unknown`
-- [ ] тесты округления: опоздание 59 с на финише → `overMs == null`; 60 с → не `null`; `Finished` при `controlMinutes == 0` → `overMs == null`
-- [ ] тесты `formatHoursMinutes`: `0` → `0:00`, `59_999` → `0:00`, 8 ч → `8:00`, 3 ч 27 мин 59 с → `3:27`
-- [ ] тесты `msUntilNextChange`: `Running(60_000)` → `1`, `Running(90_000)` → `30_001`, `Overtime(0)` → `60_000`, `Overtime(61_000)` → `59_000`, прочие → `null`
-- [ ] тесты `controlTimeLabel` — все строки таблицы
-- [ ] run `./gradlew testDebugUnitTest` — must pass before task 3
+- [x] `ControlTimeState` и `controlTimeState(...)` по алгоритму из Technical Details
+- [x] `resolveMarkTime`, `formatHoursMinutes`, `msUntilNextChange`, `ControlTimeLabel` + `controlTimeLabel`
+- [x] тесты `resolveMarkTime`: `trustedTakenAt` побеждает; без него — `trustedAt(elapsed, boot)`; `trustedAt == null` или `elapsedRealtimeAt == null` → `takenAt`
+- [x] тесты состояний: `Unknown` (`controlMinutes == 0`), `NotStarted`, `Running`, `Overtime`, `Finished` с опозданием и без
+- [x] тесты правил: две отметки старта → ранняя; финиш раньше старта игнорируется; финиш без старта → `NotStarted`; фото-отметка на `start` не старт; `timeOf == 0` игнорируется; без легенды → `NotStarted` / `Unknown`
+- [x] тесты округления: опоздание 59 с на финише → `overMs == null`; 60 с → не `null`; `Finished` при `controlMinutes == 0` → `overMs == null`
+- [x] тесты `formatHoursMinutes`: `0` → `0:00`, `59_999` → `0:00`, 8 ч → `8:00`, 3 ч 27 мин 59 с → `3:27`
+- [x] тесты `msUntilNextChange`: `Running(60_000)` → `1`, `Running(90_000)` → `30_001`, `Overtime(0)` → `60_000`, `Overtime(61_000)` → `59_000`, прочие → `null`
+- [x] тесты `controlTimeLabel` — все строки таблицы
+- [x] run `./gradlew testDebugUnitTest` — must pass before task 3
 
 ### Task 3: Ячейка КВ в `MarksScreen` и связка в `MainActivity`
 
