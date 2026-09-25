@@ -19,6 +19,8 @@ data class CategoryDto(
     @SerialName("short_name") val shortName: String,
     val name: String,
     val order: Int,
+    /** Control time (КВ) in minutes; `0` = not set. Nullable+default: absent on older servers. */
+    @SerialName("control_time") val controlTime: Int? = null,
 )
 
 /**

@@ -179,15 +179,15 @@ fun controlTimeState(
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/TeamRepositoryTest.kt`
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MigrationTest.kt`
 
-- [ ] `CategoryDto`: `@SerialName("control_time") val controlTime: Int? = null`
-- [ ] `CategoryEntity`: `@ColumnInfo(defaultValue = "0") val controlTime: Int = 0` + KDoc (минуты, `0` = не задано)
-- [ ] `TeamRepository.toEntity`: `controlTime = controlTime ?: 0`
-- [ ] `AppDatabase`: `version = 7`, `MIGRATION_6_7` (колонка + сброс ETag `race/%/teams`) с KDoc по образцу `MIGRATION_5_6`; добавить в `.addMigrations(...)`. В KDoc отметить: default и в DDL, и в `@ColumnInfo` (в отличие от v3/v4) — fresh install и апгрейд дают одинаковую схему
-- [ ] собрать, закоммитить сгенерированный `schemas/.../7.json` (проверить путь по существующим 1–6)
-- [ ] `TeamsResponseTest`: `control_time: 480` → `480`; без ключа → `null`
-- [ ] `TeamRepositoryTest`: `control_time` → `CategoryEntity.controlTime`; без ключа → `0`
-- [ ] `MigrationTest.migrate6To7_...` (по образцу `migrate5To6_...`): категория из v6 выживает с `controlTime == 0`; ETag `race/1/teams` и `race/2/teams` (оба origin) удалены; `races`, `race/1/legend`, `race/1/member_tags`, `race/1/member_tags/synced` на месте
-- [ ] run `./gradlew testDebugUnitTest` — must pass before task 2 (`connectedDebugAndroidTest`, если есть устройство)
+- [x] `CategoryDto`: `@SerialName("control_time") val controlTime: Int? = null`
+- [x] `CategoryEntity`: `@ColumnInfo(defaultValue = "0") val controlTime: Int = 0` + KDoc (минуты, `0` = не задано)
+- [x] `TeamRepository.toEntity`: `controlTime = controlTime ?: 0`
+- [x] `AppDatabase`: `version = 7`, `MIGRATION_6_7` (колонка + сброс ETag `race/%/teams`) с KDoc по образцу `MIGRATION_5_6`; добавить в `.addMigrations(...)`. В KDoc отметить: default и в DDL, и в `@ColumnInfo` (в отличие от v3/v4) — fresh install и апгрейд дают одинаковую схему
+- [x] собрать, закоммитить сгенерированный `schemas/.../7.json` (проверить путь по существующим 1–6)
+- [x] `TeamsResponseTest`: `control_time: 480` → `480`; без ключа → `null`
+- [x] `TeamRepositoryTest`: `control_time` → `CategoryEntity.controlTime`; без ключа → `0`
+- [x] `MigrationTest.migrate6To7_...` (по образцу `migrate5To6_...`): категория из v6 выживает с `controlTime == 0`; ETag `race/1/teams` и `race/2/teams` (оба origin) удалены; `races`, `race/1/legend`, `race/1/member_tags`, `race/1/member_tags/synced` на месте
+- [x] run `./gradlew testDebugUnitTest` — must pass before task 2 (`connectedDebugAndroidTest`, если есть устройство) — unit tests pass; ⚠️ `connectedDebugAndroidTest` skipped (no device/emulator attached; androidTest compiles)
 
 ### Task 2: Чистая логика `ControlTime.kt`
 

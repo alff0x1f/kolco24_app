@@ -134,8 +134,22 @@ class TeamRepositoryTest {
         assertEquals(1, categories.size)
         assertEquals("Муж", categories[0].shortName)
         assertEquals(2, categories[0].sortOrder)
+        // No control_time key in the payload → 0 ("not set").
+        assertEquals(0, categories[0].controlTime)
 
         assertEquals("\"v1\"", syncMetaDao.getEtag(origin, "race/8/teams"))
+    }
+
+    @Test
+    fun success_mapsControlTimeToCategoryEntity() = runTest {
+        val body = teamsJson().replace("\"order\": 2 }", "\"order\": 2, \"control_time\": 480 }")
+        check(body.contains("control_time"))
+        server.enqueue(MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(body))
+
+        assertEquals(RefreshResult.Updated, repository.refreshTeams(8))
+
+        val categories = repository.categoriesForRace(8).first()
+        assertEquals(480, categories[0].controlTime)
     }
 
     @Test
