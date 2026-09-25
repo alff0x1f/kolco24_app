@@ -63,7 +63,7 @@ fun MapScreen(
     isActive: Boolean,
     availability: MapAvailability?,
     base: MapStyleSource?,
-    track: List<TrackPointLike>,
+    trackLines: List<List<TrackPointLike>>,
     pins: List<MapPin>,
     frameKey: Any?,
     locationPermitted: Boolean,
@@ -95,7 +95,7 @@ fun MapScreen(
 
             TrackMapView(
                 styleSource = base,
-                track = track,
+                trackLines = trackLines,
                 pins = pins,
                 frameKey = frameKey,
                 locationPermitted = locationPermitted,

@@ -911,8 +911,10 @@ private fun Kolco24AppRoot(
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
-    // Time span uses the spike-filtered (trackLines), reboot-safe ordered points (raw count stays full).
-    val trackUsable = remember(safeTrack) { trackLines(sortedTrackPoints(safeTrack), filter = true).flatten() }
+    // Spike-filtered lines (trackLines) over reboot-safe ordered points: the map draws them as separate
+    // parts; the time span uses their flattened points (raw count stays full).
+    val trackLinesNow = remember(safeTrack) { trackLines(sortedTrackPoints(safeTrack), filter = true) }
+    val trackUsable = remember(trackLinesNow) { trackLinesNow.flatten() }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
@@ -1180,17 +1182,17 @@ private fun Kolco24AppRoot(
             val label = teamForTab?.startNumber?.takeIf { it.isNotBlank() } ?: tid.toString()
             val fileName = gpxFileName(label, today)
             container.applicationScope.launch {
-                val points = trackLines(
+                val lines = trackLines(
                     sortedTrackPoints(trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid }),
                     filter = true,
-                ).flatten()
-                if (points.isEmpty()) {
+                )
+                if (lines.isEmpty()) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Нет точных точек для экспорта", Toast.LENGTH_SHORT).show()
                     }
                     return@launch
                 }
-                val gpx = buildGpx(points, teamForTab?.teamname ?: "Команда $label")
+                val gpx = buildGpx(lines, teamForTab?.teamname ?: "Команда $label")
                 val dir = File(context.cacheDir, "tracks").apply { mkdirs() }
                 val file = File(dir, fileName)
                 withContext(Dispatchers.IO) { file.writeText(gpx) }
@@ -1674,7 +1676,7 @@ private fun Kolco24AppRoot(
                         availability = mapAvailabilityNow,
                         base = mapBase,
                         // The track GeoJSON is built off-main inside the map view, only while it is shown.
-                        track = trackUsable,
+                        trackLines = trackLinesNow,
                         pins = mapPinsNow,
                         frameKey = selectedTeamId,
                         locationPermitted = activity?.locationGranted ?: false,

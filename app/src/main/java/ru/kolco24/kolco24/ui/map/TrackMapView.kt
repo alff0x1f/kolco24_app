@@ -88,7 +88,7 @@ private object MapLibreInit {
 }
 
 /**
- * MapLibre map with the team's [track] and taken-КП [pins] over [styleSource]. Must only be composed
+ * MapLibre map with the team's [trackLines] (one drawn part per line) and taken-КП [pins] over [styleSource]. Must only be composed
  * while the map tab is the settled pager page — each composition owns a native `MapView`
  * (+ a GPS client via the location component when [locationPermitted]).
  *
@@ -103,7 +103,7 @@ private object MapLibreInit {
 @Composable
 fun TrackMapView(
     styleSource: MapStyleSource,
-    track: List<TrackPointLike>,
+    trackLines: List<List<TrackPointLike>>,
     pins: List<MapPin>,
     frameKey: Any?,
     locationPermitted: Boolean,
@@ -120,13 +120,13 @@ fun TrackMapView(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
 
-    val trackJson by produceState(trackGeoJson(emptyList()), track) {
-        value = withContext(Dispatchers.Default) { trackGeoJson(track) }
+    val trackJson by produceState(trackGeoJson(emptyList()), trackLines) {
+        value = withContext(Dispatchers.Default) { trackGeoJson(trackLines) }
     }
     val pinsJson = remember(pins) { pinsGeoJson(pins) }
     val pinNumbers = remember(pins) { pins.mapTo(HashSet()) { it.number } }
 
-    val latestTrack by rememberUpdatedState(track)
+    val latestTrackLines by rememberUpdatedState(trackLines)
     val latestPins by rememberUpdatedState(pins)
     val latestTrackGeoJson by rememberUpdatedState(trackJson)
     val latestPinsGeoJson by rememberUpdatedState(pinsJson)
@@ -234,12 +234,12 @@ fun TrackMapView(
     // Camera: on every style load, on a team switch, and (without file bounds) when the first track
     // point / pin arrives after a no-data frame. With file bounds the data never moves the camera.
     val metadata = (styleSource as? MapStyleSource.Offline)?.metadata
-    val hasData = track.isNotEmpty() || pins.isNotEmpty()
+    val hasData = trackLines.isNotEmpty() || pins.isNotEmpty()
     val dataKey = if (metadata?.bounds == null) hasData else null
     LaunchedEffect(loadedStyle, frameKey, dataKey) {
         val m = map ?: return@LaunchedEffect
         if (loadedStyle == null) return@LaunchedEffect
-        applyCamera(context, m, metadata, dataBounds(latestTrack, latestPins))
+        applyCamera(context, m, metadata, dataBounds(latestTrackLines.flatten(), latestPins))
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)

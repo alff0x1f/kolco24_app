@@ -55,19 +55,27 @@ fun mapPins(marks: List<MarkEntity>, checkpointCosts: Map<Int, Int>): List<MapPi
         .sortedBy { it.timeMs }
 
 /**
- * GeoJSON `FeatureCollection` of the track: a single `LineString` feature in the given (already
- * filtered + sorted) order, coordinates `[lon, lat]`. Fewer than 2 points → an empty collection
- * (a `LineString` needs at least two positions). Built with a plain [StringBuilder] — a day-long
- * track is ~17k points and is rebuilt on every GPS fix (the map view calls this off the main thread).
+ * GeoJSON `FeatureCollection` of the track: a single `MultiLineString` feature with one part per
+ * [lines] entry (the output of `trackLines` — nothing is drawn between parts, so a stop→start gap or
+ * an unreachable jump never renders as a straight line), coordinates `[lon, lat]`. A line with fewer
+ * than 2 points is not drawable and is skipped; no drawable line → an empty collection. Built with a
+ * plain [StringBuilder] — a day-long track is ~17k points and is rebuilt on every GPS fix (the map
+ * view calls this off the main thread).
  */
-fun trackGeoJson(points: List<TrackPointLike>): String {
-    if (points.size < 2) return EMPTY_FEATURE_COLLECTION
-    val sb = StringBuilder(points.size * 40 + 128)
+fun trackGeoJson(lines: List<List<TrackPointLike>>): String {
+    val drawable = lines.filter { it.size >= 2 }
+    if (drawable.isEmpty()) return EMPTY_FEATURE_COLLECTION
+    val sb = StringBuilder(drawable.sumOf { it.size } * 40 + 128)
     sb.append("""{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},""")
-    sb.append(""""geometry":{"type":"LineString","coordinates":[""")
-    points.forEachIndexed { i, p ->
-        if (i > 0) sb.append(',')
-        sb.append('[').append(p.lon).append(',').append(p.lat).append(']')
+    sb.append(""""geometry":{"type":"MultiLineString","coordinates":[""")
+    drawable.forEachIndexed { li, line ->
+        if (li > 0) sb.append(',')
+        sb.append('[')
+        line.forEachIndexed { i, p ->
+            if (i > 0) sb.append(',')
+            sb.append('[').append(p.lon).append(',').append(p.lat).append(']')
+        }
+        sb.append(']')
     }
     sb.append("]}}]}")
     return sb.toString()

@@ -146,13 +146,13 @@ Integration in `MainActivity`:
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/map/MapLogicTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/GpxExportTest.kt`
 
-- [ ] write `trackGeoJson(lines)` tests: two lines → one `MultiLineString` feature with two parts, `[lon, lat]` order kept; one line → one part; a 1-point line is skipped; no drawable line → empty collection
-- [ ] write `buildGpx(lines, name)` tests: one `<trkseg>` per line; empty list → valid empty track; replace the `segmentId`-grouping tests (lines 50–75) with line-based ones
-- [ ] change `trackGeoJson` to take `List<List<TrackPointLike>>` and emit `MultiLineString` (keep the `StringBuilder` approach); update KDoc
-- [ ] change `buildGpx` to take lines and write one `<trkseg>` each; drop its `segmentId` grouping; update KDoc
-- [ ] change `MapScreen`/`TrackMapView` `track` param to `trackLines: List<List<TrackPointLike>>`; `dataBounds` gets `trackLines.flatten()`
-- [ ] in `MainActivity` keep `trackLinesNow` (lines) for the map and GPX, `trackUsable = trackLinesNow.flatten()` for the time span
-- [ ] run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` — must pass
+- [x] write `trackGeoJson(lines)` tests: two lines → one `MultiLineString` feature with two parts, `[lon, lat]` order kept; one line → one part; a 1-point line is skipped; no drawable line → empty collection
+- [x] write `buildGpx(lines, name)` tests: one `<trkseg>` per line; empty list → valid empty track; replace the `segmentId`-grouping tests (lines 50–75) with line-based ones
+- [x] change `trackGeoJson` to take `List<List<TrackPointLike>>` and emit `MultiLineString` (keep the `StringBuilder` approach); update KDoc
+- [x] change `buildGpx` to take lines and write one `<trkseg>` each; drop its `segmentId` grouping; update KDoc
+- [x] change `MapScreen`/`TrackMapView` `track` param to `trackLines: List<List<TrackPointLike>>`; `dataBounds` gets `trackLines.flatten()`
+- [x] in `MainActivity` keep `trackLinesNow` (lines) for the map and GPX, `trackUsable = trackLinesNow.flatten()` for the time span
+- [x] run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` — must pass
 
 ### Task 3: `TrackFilterPreference`
 

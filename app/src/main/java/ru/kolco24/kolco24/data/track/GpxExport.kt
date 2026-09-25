@@ -7,13 +7,13 @@ import java.util.TimeZone
 
 /**
  * Pure, Android-free GPX serialization (mirrors `ScanSession.kt`/`TrackModels.kt` — JVM-unit-testable,
- * no Android imports). The caller passes [trackLines]-filtered, reboot-safe ordered points; this
- * serializer stays dumb and total.
+ * no Android imports). The caller passes the lines of [trackLines] over reboot-safe ordered points;
+ * this serializer stays dumb and total.
  *
- * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per consecutive
- * run of [TrackPointEntity.segmentId]**. Correctly ordered input keeps each recording session
- * contiguous, so a stop→start gap renders as separate segments instead of a teleport line (matching
- * how the server groups by `segment_id`). Each point's `<time>` uses `trustedMs ?: wallMs` formatted
+ * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per line**.
+ * Lines never cross a recording session ([TrackPointEntity.segmentId]) or an unreachable jump, so a
+ * stop→start gap or a spike-filter break renders as separate segments instead of a teleport line; no
+ * own `segmentId` grouping is done here. Empty lines are skipped. Each point's `<time>` uses `trustedMs ?: wallMs` formatted
  * as ISO-8601 UTC; `<ele>` is omitted when altitude is null. Numbers use [Locale.US] so the decimal
  * separator is always `.` regardless of device locale.
  */
@@ -22,8 +22,8 @@ private const val GPX_HEADER =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
         "<gpx version=\"1.1\" creator=\"Kolco24\" xmlns=\"http://www.topografix.com/GPX/1/1\">"
 
-/** Build the GPX document for [points] (assumed pre-filtered and ordered) under a single named track. */
-fun buildGpx(points: List<TrackPointEntity>, trackName: String): String {
+/** Build the GPX document for [lines] (assumed filtered and ordered) under a single named track. */
+fun buildGpx(lines: List<List<TrackPointEntity>>, trackName: String): String {
     val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
@@ -32,26 +32,21 @@ fun buildGpx(points: List<TrackPointEntity>, trackName: String): String {
     sb.append("  <trk>\n")
     sb.append("    <name>").append(xmlEscape(trackName)).append("</name>\n")
 
-    // Group consecutive runs into <trkseg>s by segmentId; callers own global ordering.
-    var currentSegment: String? = null
-    var segmentOpen = false
-    for (p in points) {
-        if (!segmentOpen || p.segmentId != currentSegment) {
-            if (segmentOpen) sb.append("    </trkseg>\n")
-            sb.append("    <trkseg>\n")
-            segmentOpen = true
-            currentSegment = p.segmentId
+    for (line in lines) {
+        if (line.isEmpty()) continue
+        sb.append("    <trkseg>\n")
+        for (p in line) {
+            sb.append("      <trkpt lat=\"")
+                .append(num(p.lat)).append("\" lon=\"").append(num(p.lon)).append("\">\n")
+            if (p.altitude != null) {
+                sb.append("        <ele>").append(num(p.altitude)).append("</ele>\n")
+            }
+            sb.append("        <time>").append(iso.format(java.util.Date(p.trustedMs ?: p.wallMs)))
+                .append("</time>\n")
+            sb.append("      </trkpt>\n")
         }
-        sb.append("      <trkpt lat=\"")
-            .append(num(p.lat)).append("\" lon=\"").append(num(p.lon)).append("\">\n")
-        if (p.altitude != null) {
-            sb.append("        <ele>").append(num(p.altitude)).append("</ele>\n")
-        }
-        sb.append("        <time>").append(iso.format(java.util.Date(p.trustedMs ?: p.wallMs)))
-            .append("</time>\n")
-        sb.append("      </trkpt>\n")
+        sb.append("    </trkseg>\n")
     }
-    if (segmentOpen) sb.append("    </trkseg>\n")
 
     sb.append("  </trk>\n")
     sb.append("</gpx>\n")
