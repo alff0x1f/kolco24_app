@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.track.pointsLabel
+import ru.kolco24.kolco24.ui.map.formatMapSize
 import ru.kolco24.kolco24.ui.theme.ThemeMode
 
 /**
@@ -79,6 +80,9 @@ fun SettingsScreen(
     trackPointCount: Int = 0,
     trackClearEnabled: Boolean = false,
     onClearTrack: () -> Unit = {},
+    mapSizeBytes: Long? = null,
+    mapDeleteEnabled: Boolean = false,
+    onDeleteMap: () -> Unit = {},
     localMode: Boolean = false,
     localModeBusy: Boolean = false,
     localModeExpiresAtMs: Long? = null,
@@ -189,12 +193,19 @@ fun SettingsScreen(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
-            LocalModeRow(
-                checked = localMode,
-                busy = localModeBusy,
-                expiresAtMs = localModeExpiresAtMs,
-                onCheckedChange = onLocalModeChange,
-            )
+            Column {
+                LocalModeRow(
+                    checked = localMode,
+                    busy = localModeBusy,
+                    expiresAtMs = localModeExpiresAtMs,
+                    onCheckedChange = onLocalModeChange,
+                )
+                DeleteMapRow(
+                    sizeBytes = mapSizeBytes,
+                    enabled = mapDeleteEnabled,
+                    onClick = onDeleteMap,
+                )
+            }
         }
 
         Text(
@@ -604,6 +615,56 @@ private fun ClearTrackRow(pointCount: Int, enabled: Boolean, onClick: () -> Unit
             )
             Text(
                 text = pointsLabel(pointCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
+            )
+        }
+    }
+}
+
+/**
+ * «Удалить карту гонки» row — copy of [ClearTrackRow]'s style (Duplicate, don't couple): red delete
+ * avatar, size subtitle ([formatMapSize]), no chevron. [sizeBytes] is `null` when the current race has
+ * no downloaded map. [enabled] is host policy (a map file exists and this race is not downloading);
+ * the host confirms via an `AlertDialog`.
+ */
+@Composable
+private fun DeleteMapRow(sizeBytes: Long?, enabled: Boolean, onClick: () -> Unit) {
+    val contentColor =
+        if (enabled) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val avatarColor =
+        if (enabled) MaterialTheme.colorScheme.errorContainer
+        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.38f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(avatarColor, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DeleteOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = if (enabled) 1f else 0.38f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Удалить карту гонки",
+                style = MaterialTheme.typography.bodyMedium,
+                color = contentColor,
+            )
+            Text(
+                text = sizeBytes?.let { formatMapSize(it) } ?: "Карта не скачана",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
             )

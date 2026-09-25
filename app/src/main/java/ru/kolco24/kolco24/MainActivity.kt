@@ -875,6 +875,8 @@ private fun Kolco24AppRoot(
     // Track-recording UI state: confirmation dialogs for clearing the track, a disabled-location
     // notice, and a permanently-denied-permission notice (deep-links to settings).
     var showClearTrackDialog by rememberSaveable { mutableStateOf(false) }
+    // «Удалить карту гонки» confirmation (Settings).
+    var showDeleteMapDialog by rememberSaveable { mutableStateOf(false) }
     var showLocationDisabledDialog by rememberSaveable { mutableStateOf(false) }
     var showLocationDeniedDialog by rememberSaveable { mutableStateOf(false) }
     // Tracks whether we have already launched a location permission request at least once this
@@ -900,7 +902,7 @@ private fun Kolco24AppRoot(
         showJudgeScan = null
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
         photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
-        showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+        showClearTrackDialog = false; showDeleteMapDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
         pendingCelebration = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
@@ -1123,7 +1125,7 @@ private fun Kolco24AppRoot(
                 showJudgeScan = null
                 bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
                 showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
-                showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+                showClearTrackDialog = false; showDeleteMapDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
                 act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
@@ -1168,6 +1170,20 @@ private fun Kolco24AppRoot(
         mapAvailability(it, selectedMapUrl, mapDownloaded, mapDownloadState)
     }
     val mapFileReady = selectedRaceId != null && selectedRaceId in mapDownloaded
+    // Settings «Удалить карту гонки» subtitle: file size read off-main (disk stat), re-read when the
+    // race or the downloaded set changes. Only computed while Settings is open.
+    val mapSizeBytes by produceState<Long?>(null, selectedRaceId, mapFileReady, mapDownloaded, showSettings) {
+        val rid = selectedRaceId
+        value = if (rid != null && mapFileReady && showSettings) {
+            withContext(Dispatchers.IO) { mapRepo.size(rid) }
+        } else {
+            null
+        }
+    }
+    val mapDeleteEnabled = mapFileReady && !(
+        mapDownloadState is MapDownloadState.Downloading &&
+            (mapDownloadState as MapDownloadState.Downloading).raceId == selectedRaceId
+        )
     // Base layer + MBTiles metadata, read off-main (SQLite). The previous value is kept while a new
     // one loads (no reset to null) so a finished download swaps the base without tearing the view down.
     val mapBase by produceState<MapBase?>(initialValue = null, selectedRaceId, mapFileReady) {
@@ -1576,6 +1592,9 @@ private fun Kolco24AppRoot(
                 trackClearEnabled = safeTrack.isNotEmpty() &&
                     (trackState as? TrackState.Recording)?.teamId != selectedTeamId,
                 onClearTrack = { showClearTrackDialog = true },
+                mapSizeBytes = mapSizeBytes,
+                mapDeleteEnabled = mapDeleteEnabled,
+                onDeleteMap = { showDeleteMapDialog = true },
                 localMode = localMode,
                 localModeBusy = localModeBusy,
                 localModeExpiresAtMs = localModeExpiresAtMs,
@@ -2080,6 +2099,33 @@ private fun Kolco24AppRoot(
                 },
                 dismissButton = {
                     TextButton(onClick = { showClearTrackDialog = false }) { Text("Отмена") }
+                },
+            )
+        }
+
+        // Confirm deleting the current race's offline map. delete() is blocking file I/O and a no-op
+        // while this race downloads; applicationScope + IO so it outlives the closing dialog. The
+        // «Карта» tab updates itself via mapRepository.downloaded.
+        if (showDeleteMapDialog) {
+            val deleteRaceId = selectedRaceId
+            AlertDialog(
+                onDismissRequest = { showDeleteMapDialog = false },
+                title = { Text("Удалить карту гонки?") },
+                text = { Text("Офлайн-карта этой гонки будет удалена с устройства. Её можно будет скачать заново.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (deleteRaceId != null) {
+                                container.applicationScope.launch(Dispatchers.IO) { mapRepo.delete(deleteRaceId) }
+                            }
+                            showDeleteMapDialog = false
+                        },
+                    ) {
+                        Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteMapDialog = false }) { Text("Отмена") }
                 },
             )
         }
