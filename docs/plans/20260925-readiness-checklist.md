@@ -289,16 +289,16 @@ var powerSaveMode by mutableStateOf(false)
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/marks/ReadinessChecklist.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/marks/ReadinessChecklistTest.kt`
 
-- [ ] создать типы `ReadinessStatus`, `ReadinessItemId`, `ReadinessAction`, `LocationAccess`, `TeamReadiness`,
+- [x] создать типы `ReadinessStatus`, `ReadinessItemId`, `ReadinessAction`, `LocationAccess`, `TeamReadiness`,
       `ReadinessItem`, `ReadinessInput`, `ReadinessSummary` (без Android-импортов; `NfcState` импортируется из `MainActivity.kt`)
-- [ ] реализовать `readinessItems(input)` по таблице правил: фиксированный порядок, скрытие Map / Notifications / Power
-- [ ] реализовать `readinessSummary(items)` и `readinessVisible(marksLoading, legendLoaded, mapResolved)`
-- [ ] тесты team/chips: `None` → оба `Blocked`, у chips нет действия; `Missing` → Team «Команда не найдена» + `ChooseTeam`, chips без действия; 3 из 4 → «3 из 4» + `BindChips`; все → `Done`; пустой ростер → `Blocked` + `Refresh`
-- [ ] тесты nfc/location: `Disabled` → `Blocked` + `OpenNfcSettings`; `NoHardware` → `Warning` без действия; `None`/`Approximate` → `Warning` + `RequestLocation` с разными detail; `Precise` → `Done`
-- [ ] тесты legend/map: `legendCount == 0` → `Warning` + `Refresh`; без команды → без действия; `NoMapForRace` → нет пункта; `NotDownloaded`/`BusyOtherRace` → `Warning` + `OpenMap`; `Downloading(0.42f)` → «42%»; `Downloading(null)` → без процента; `Ready` → `Done`
-- [ ] тесты clock/notifications/power: `NoSync`/`Skewed` → разные detail; `notificationsGranted == null` → нет пункта, `false` → `Warning` + `RequestNotifications`; `powerSaveMode == false` → нет пункта, `true` → `Warning` + `OpenBatterySaverSettings`
-- [ ] тесты инвариантов: порядок стабилен при любых статусах; `Blocked` только у Team/Chips/Nfc; summary (`total == items.size`, worst, allDone); гейт `readinessVisible` (каждый из трёх сигналов закрывает)
-- [ ] `./gradlew testDebugUnitTest` — зелено до Task 2
+- [x] реализовать `readinessItems(input)` по таблице правил: фиксированный порядок, скрытие Map / Notifications / Power
+- [x] реализовать `readinessSummary(items)` и `readinessVisible(marksLoading, legendLoaded, mapResolved)`
+- [x] тесты team/chips: `None` → оба `Blocked`, у chips нет действия; `Missing` → Team «Команда не найдена» + `ChooseTeam`, chips без действия; 3 из 4 → «3 из 4» + `BindChips`; все → `Done`; пустой ростер → `Blocked` + `Refresh`
+- [x] тесты nfc/location: `Disabled` → `Blocked` + `OpenNfcSettings`; `NoHardware` → `Warning` без действия; `None`/`Approximate` → `Warning` + `RequestLocation` с разными detail; `Precise` → `Done`
+- [x] тесты legend/map: `legendCount == 0` → `Warning` + `Refresh`; без команды → без действия; `NoMapForRace` → нет пункта; `NotDownloaded`/`BusyOtherRace` → `Warning` + `OpenMap`; `Downloading(0.42f)` → «42%»; `Downloading(null)` → без процента; `Ready` → `Done`
+- [x] тесты clock/notifications/power: `NoSync`/`Skewed` → разные detail; `notificationsGranted == null` → нет пункта, `false` → `Warning` + `RequestNotifications`; `powerSaveMode == false` → нет пункта, `true` → `Warning` + `OpenBatterySaverSettings`
+- [x] тесты инвариантов: порядок стабилен при любых статусах; `Blocked` только у Team/Chips/Nfc; summary (`total == items.size`, worst, allDone); гейт `readinessVisible` (каждый из трёх сигналов закрывает)
+- [x] `./gradlew testDebugUnitTest` — зелено до Task 2
 
 ### Task 2: Сигналы устройства и действия в `MainActivity`
 
