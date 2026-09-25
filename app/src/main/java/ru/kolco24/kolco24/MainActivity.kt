@@ -1,7 +1,11 @@
 package ru.kolco24.kolco24
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
@@ -12,6 +16,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
@@ -127,11 +132,18 @@ import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.data.marks.PhotoTarget
 import ru.kolco24.kolco24.data.marks.decidePhotoTarget
 import ru.kolco24.kolco24.ui.legend.LegendScreen
+import ru.kolco24.kolco24.ui.map.MapAvailability
 import ru.kolco24.kolco24.ui.map.MapScreen
 import ru.kolco24.kolco24.ui.map.MapStyleSource
 import ru.kolco24.kolco24.ui.map.mapAvailability
 import ru.kolco24.kolco24.ui.map.mapPins
+import ru.kolco24.kolco24.ui.marks.LocationAccess
 import ru.kolco24.kolco24.ui.marks.MarksScreen
+import ru.kolco24.kolco24.ui.marks.ReadinessAction
+import ru.kolco24.kolco24.ui.marks.ReadinessInput
+import ru.kolco24.kolco24.ui.marks.TeamReadiness
+import ru.kolco24.kolco24.ui.marks.readinessItems
+import ru.kolco24.kolco24.ui.marks.readinessVisible
 import ru.kolco24.kolco24.ui.marks.PhotoLightboxOverlay
 import ru.kolco24.kolco24.ui.photo.PhotoCaptureScreen
 import ru.kolco24.kolco24.ui.photo.PhotoNumberPicker
@@ -273,12 +285,40 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         private set
 
     /**
-     * Foreground location-permission state, recomputed on every resume so a grant made from system
-     * settings (returning to the app) updates the mark-coordinate nudge. Composables observe it to
-     * decide whether to show the «разрешите геолокацию» nudge in the Отметки empty state.
+     * Foreground location-permission state (FINE or COARSE), derived from [locationAccess] in
+     * [pollDeviceState]. Read by the track/scan paths and `MapScreen`.
      */
     var locationGranted by mutableStateOf(false)
         private set
+
+    /** FINE → Precise, only COARSE → Approximate, else None; feeds the «Отметки» readiness checklist. */
+    var locationAccess by mutableStateOf(LocationAccess.None)
+        private set
+
+    /** `POST_NOTIFICATIONS` grant; `null` on API < 33 (no runtime permission → checklist row hidden). */
+    var notificationsGranted by mutableStateOf<Boolean?>(null)
+        private set
+
+    /** System battery saver; polled on resume and live-updated by [deviceStateReceiver]. */
+    var powerSaveMode by mutableStateOf(false)
+        private set
+
+    /**
+     * Power-save and NFC toggles both flip from the quick-settings shade, which does not pause the
+     * activity — so `onResume` polling alone would miss them. Registered in [onStart], unregistered in
+     * [onStop]. Permissions only change in system dialogs/settings, which do pause, so they stay in
+     * [pollDeviceState].
+     */
+    private val deviceStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                PowerManager.ACTION_POWER_SAVE_MODE_CHANGED ->
+                    powerSaveMode = getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
+                NfcAdapter.ACTION_ADAPTER_STATE_CHANGED ->
+                    refreshNfcState(enableReader = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -314,6 +354,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 detectDarkMode = { resolvedDark },
             ),
         )
+        // Poll before the first frame so the readiness checklist never renders placeholder values.
+        pollDeviceState()
         setContent {
             // Single subscription point for the persisted theme preference: collect once here,
             // apply via Kolco24Theme, and thread the mode + setter down as params (no second
@@ -336,19 +378,60 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED)
+        }
+        // NOT_EXPORTED still receives protected system broadcasts.
+        ContextCompat.registerReceiver(this, deviceStateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterReceiver(deviceStateReceiver)
+    }
+
     override fun onResume() {
         super.onResume()
+        refreshNfcState(enableReader = true)
+        pollDeviceState()
+    }
+
+    /**
+     * Recomputes [nfcState] and (when [enableReader], i.e. the activity is resumed) re-arms reader
+     * mode. Called from [onResume] and from [deviceStateReceiver] when NFC is toggled from the shade.
+     * The lifecycle is still `STARTED` inside `onResume`, hence the explicit flag.
+     */
+    private fun refreshNfcState(enableReader: Boolean) {
         val adapter = nfcAdapter
         nfcState = when {
             adapter == null -> NfcState.NoHardware
             !adapter.isEnabled -> NfcState.Disabled
             else -> NfcState.Available
         }
-        if (nfcState == NfcState.Available) {
+        if (enableReader && nfcState == NfcState.Available) {
             adapter!!.enableReaderMode(this, this, READER_FLAGS, null)
         }
-        locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /** Location / notification permissions + battery saver. Called from [onCreate] and [onResume]. */
+    private fun pollDeviceState() {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        locationAccess = when {
+            fine -> LocationAccess.Precise
+            coarse -> LocationAccess.Approximate
+            else -> LocationAccess.None
+        }
+        locationGranted = locationAccess != LocationAccess.None
+        notificationsGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            null
+        }
+        powerSaveMode = getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
     }
 
     override fun onPause() {
@@ -725,9 +808,14 @@ private fun Kolco24AppRoot(
 
     // «Отметки» ВЗЯТО denominator: server's `scoring_count` (CPs with cost > 0, incl. locked) — the
     // only correct source, since a locked CP hides its cost from the client. 0 until first synced.
-    val legendScoringCount by remember(selectedRaceId) {
-        selectedRaceId?.let { legendRepo.scoringCountForRace(it) } ?: flowOf(0)
-    }.collectAsState(initial = 0)
+    // `null` = this race's Room query hasn't emitted yet (the readiness gate waits on it, so a cold
+    // start doesn't flash «Легенда не загружена»). The no-race branch must be flowOf(null): collectAsState
+    // keeps its value across a key change, so a non-null there would leak through the gate.
+    val legendScoringCountOrNull by remember(selectedRaceId) {
+        selectedRaceId?.let { legendRepo.scoringCountForRace(it) } ?: flowOf<Int?>(null)
+    }.collectAsState(initial = null)
+    val legendScoringCount = legendScoringCountOrNull ?: 0
+    val legendLoaded = selectedRaceId == null || legendScoringCountOrNull != null
 
     // Local NFC chip bindings for the selected team, keyed by member slot (numberInTeam).
     // `null` = the Room query for this session hasn't emitted yet (the no-team branch must be
@@ -883,6 +971,14 @@ private fun Kolco24AppRoot(
     // "go to settings" dialog on the very first denial. Guard: only treat a no-rationale result
     // as permanent when we know a prior request was already attempted.
     var hasRequestedLocation by rememberSaveable { mutableStateOf(false) }
+    // COARSE granted but FINE permanently denied: only app settings can upgrade to precise location.
+    var showPreciseLocationDialog by rememberSaveable { mutableStateOf(false) }
+    // Same first-ask vs permanent-denial guard as hasRequestedLocation, for POST_NOTIFICATIONS. Also
+    // set by trackPermissionLauncher (it requests POST_NOTIFICATIONS too on 13+), so the first
+    // checklist tap after a denial via «Начать запись» routes to settings instead of a silent no-op.
+    var hasRequestedNotifications by rememberSaveable { mutableStateOf(false) }
+    // Readiness-checklist «Обновить» spinner/busy guard — transient.
+    var readinessRefreshing by remember { mutableStateOf(false) }
     // Clear both slots on team change so a stale slot from a previous team cannot accidentally
     // re-open the sheet/dialog for an unrelated member on the newly selected team. A team switch while
     // recording also stops the service — the running track belongs to the team we are leaving.
@@ -901,7 +997,7 @@ private fun Kolco24AppRoot(
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
         photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
         showClearTrackDialog = false; showDeleteMapDialog = false
-        showLocationDisabledDialog = false; showLocationDeniedDialog = false
+        showLocationDisabledDialog = false; showLocationDeniedDialog = false; showPreciseLocationDialog = false
         pendingCelebration = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
@@ -922,6 +1018,7 @@ private fun Kolco24AppRoot(
         // "first ever denial" (alreadyRequested == false) from a subsequent denial.
         val alreadyRequested = hasRequestedLocation
         hasRequestedLocation = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasRequestedNotifications = true
         if (locationGranted) {
             val raceId = selectedRaceId
             val teamId = selectedTeamId
@@ -1016,6 +1113,13 @@ private fun Kolco24AppRoot(
                 !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
                 !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
             if (permanent) showLocationDeniedDialog = true
+        } else if (result[Manifest.permission.ACCESS_FINE_LOCATION] != true) {
+            // COARSE only (the Android 12+ «Примерная» choice). A repeat FINE+COARSE request normally
+            // shows the upgrade-to-precise dialog; once FINE is permanently denied the system answers
+            // instantly with no UI, so route to app settings instead of leaving the tap empty.
+            val finePermanent = alreadyRequested && activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
+            if (finePermanent) showPreciseLocationDialog = true
         }
     }
     // On the first scan-overlay open this session, proactively request foreground location so the
@@ -1038,7 +1142,11 @@ private fun Kolco24AppRoot(
     // scanPermissionLauncher as the first-scan fallback (never starts track recording) and the existing
     // showLocationDeniedDialog → ACTION_APPLICATION_DETAILS_SETTINGS deep-link for the permanent case.
     val onRequestMarkLocation: () -> Unit = {
-        val permanent = hasRequestedLocation && activity != null &&
+        // With COARSE already granted the both-rationales check below would misread the FINE-only
+        // denial as a full denial (and show the track-text dialog); skip it and let the launcher
+        // callback decide between the upgrade dialog and the precise-location settings dialog.
+        val coarseOnly = activity?.locationAccess == LocationAccess.Approximate
+        val permanent = !coarseOnly && hasRequestedLocation && activity != null &&
             !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
             !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (permanent) {
@@ -1050,6 +1158,26 @@ private fun Kolco24AppRoot(
                     Manifest.permission.ACCESS_COARSE_LOCATION,
                 ),
             )
+        }
+    }
+
+    // POST_NOTIFICATIONS (API 33+) for the readiness checklist. The grant itself is re-read by
+    // MainActivity.pollDeviceState on resume (the system dialog pauses the activity), so the callback
+    // only records that a request happened.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { hasRequestedNotifications = true }
+    val onRequestNotifications: () -> Unit = request@{
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@request
+        val permanent = hasRequestedNotifications && activity != null &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)
+        if (permanent) {
+            context.startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+            )
+        } else {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -1203,6 +1331,55 @@ private fun Kolco24AppRoot(
     val mapPinsNow = remember(safeMarks, checkpointCosts, mapActive) {
         if (mapActive) mapPins(safeMarks, checkpointCosts) else emptyList()
     }
+    // Readiness checklist («Отметки», shown while no КП is taken). mapResolved waits for BOTH the map
+    // files seed and the races catalog (selectedMapUrl comes from `races`, initial emptyList) — else a
+    // cold start would briefly show a collapsed «Всё готово» that then expands with «Карта не скачана».
+    val mapResolved = selectedRaceId == null ||
+        (mapDownloaded != null && races.any { it.id == selectedRaceId })
+    val readinessInput = ReadinessInput(
+        team = when (teamState) {
+            is SelectedTeamState.Present -> TeamReadiness.Present
+            SelectedTeamState.Missing -> TeamReadiness.Missing
+            else -> TeamReadiness.None
+        },
+        teamTitle = teamForTab?.let { t ->
+            t.startNumber?.takeIf { it.isNotBlank() }?.let { "${t.teamname} · №$it" } ?: t.teamname
+        } ?: "",
+        memberCount = teamForTab?.members?.size ?: 0,
+        boundCount = teamForTab?.members?.count { bindings.containsKey(it.numberInTeam) } ?: 0,
+        nfc = nfcState,
+        location = activity?.locationAccess ?: LocationAccess.None,
+        legendCount = legendScoringCount,
+        map = mapAvailabilityNow ?: MapAvailability.NoMapForRace,
+        clock = clockStatus,
+        notificationsGranted = activity?.notificationsGranted,
+        powerSaveMode = activity?.powerSaveMode ?: false,
+    )
+    val readiness = if (readinessVisible(marksLoading, legendLoaded, mapResolved)) {
+        readinessItems(readinessInput)
+    } else {
+        null
+    }
+    val onReadinessAction: (ReadinessAction) -> Unit = { action ->
+        when (action) {
+            ReadinessAction.ChooseTeam -> { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker }
+            ReadinessAction.BindChips -> scope.launch { pagerState.animateScrollToPage(3) }
+            ReadinessAction.OpenNfcSettings -> context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+            ReadinessAction.RequestLocation -> onRequestMarkLocation()
+            ReadinessAction.RequestNotifications -> onRequestNotifications()
+            // Same path as the «Команда» PTR (snackbar on failure); taps ignored while one is in flight.
+            ReadinessAction.Refresh -> if (!readinessRefreshing) {
+                pullRefresh({ readinessRefreshing = it }, container.syncCoordinator::refreshAll)
+            }
+            ReadinessAction.OpenMap -> scope.launch { pagerState.animateScrollToPage(2) }
+            ReadinessAction.OpenBatterySaverSettings -> try {
+                context.startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
+            } catch (_: ActivityNotFoundException) {
+                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
+    }
+
     // A failed download surfaces once as a snackbar (on any tab). Consume first; the snackbar runs on
     // the composition scope so the state change (which restarts this effect) doesn't cancel it.
     LaunchedEffect(mapDownloadState) {
@@ -2173,6 +2350,31 @@ private fun Kolco24AppRoot(
                 },
                 dismissButton = {
                     TextButton(onClick = { showLocationDeniedDialog = false }) { Text("Закрыть") }
+                },
+            )
+        }
+
+        // FINE permanently denied while COARSE is granted: only app settings can switch to precise.
+        if (showPreciseLocationDialog) {
+            AlertDialog(
+                onDismissRequest = { showPreciseLocationDialog = false },
+                title = { Text("Нужна точная геопозиция") },
+                text = { Text("Включите «Точное местоположение» в настройках приложения, чтобы у отметок КП была точная координата.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null),
+                                ),
+                            )
+                            showPreciseLocationDialog = false
+                        },
+                    ) { Text("Настройки") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPreciseLocationDialog = false }) { Text("Закрыть") }
                 },
             )
         }

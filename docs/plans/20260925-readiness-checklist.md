@@ -305,15 +305,15 @@ var powerSaveMode by mutableStateOf(false)
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] добавить поля `locationAccess`, `notificationsGranted`, `powerSaveMode` и `pollDeviceState()`; звать из `onCreate` (до `setContent`) и `onResume`; `locationGranted` выводить из того же опроса
-- [ ] вынести NFC-ветку `onResume` в `refreshNfcState()`; один `BroadcastReceiver` на `ACTION_POWER_SAVE_MODE_CHANGED` + `NfcAdapter.ACTION_ADAPTER_STATE_CHANGED` в `onStart`/`onStop`
-- [ ] доработать `scanPermissionLauncher`: COARSE есть, FINE нет, постоянный отказ в FINE → диалог-переход в настройки с текстом про точную геопозицию
-- [ ] добавить launcher `POST_NOTIFICATIONS` (API 33+) с guard «отказ навсегда» → `ACTION_APP_NOTIFICATION_SETTINGS`; флаг `hasRequestedNotifications` ставить и в `trackPermissionLauncher`
-- [ ] заменить `legendScoringCount` на `legendScoringCountOrNull` (`flowOf<Int?>(null)`, `initial = null`) + `legendLoaded`; добавить `mapResolved` (seed файлов **и** каталог гонок)
-- [ ] собрать `ReadinessInput` в composable хоста (маппинг `SelectedTeamState` → `TeamReadiness`), вычислить `readiness = if (readinessVisible(...)) readinessItems(input) else null`
-- [ ] реализовать обработчик `onReadinessAction` для всех восьми действий (`Refresh` — через `pullRefresh` с busy-guard; battery saver — с фоллбэком на `ACTION_SETTINGS`)
-- [ ] тестов нет (конвенция: `MainActivity` и Android-адаптеры не тестируются); логика покрыта Task 1
-- [ ] `./gradlew assembleDebug` — зелено (новые значения пока не используются `MarksScreen`, сборка проходит сама по себе)
+- [x] добавить поля `locationAccess`, `notificationsGranted`, `powerSaveMode` и `pollDeviceState()`; звать из `onCreate` (до `setContent`) и `onResume`; `locationGranted` выводить из того же опроса
+- [x] вынести NFC-ветку `onResume` в `refreshNfcState()`; один `BroadcastReceiver` на `ACTION_POWER_SAVE_MODE_CHANGED` + `NfcAdapter.ACTION_ADAPTER_STATE_CHANGED` в `onStart`/`onStop`
+- [x] доработать `scanPermissionLauncher`: COARSE есть, FINE нет, постоянный отказ в FINE → диалог-переход в настройки с текстом про точную геопозицию
+- [x] добавить launcher `POST_NOTIFICATIONS` (API 33+) с guard «отказ навсегда» → `ACTION_APP_NOTIFICATION_SETTINGS`; флаг `hasRequestedNotifications` ставить и в `trackPermissionLauncher`
+- [x] заменить `legendScoringCount` на `legendScoringCountOrNull` (`flowOf<Int?>(null)`, `initial = null`) + `legendLoaded`; добавить `mapResolved` (seed файлов **и** каталог гонок)
+- [x] собрать `ReadinessInput` в composable хоста (маппинг `SelectedTeamState` → `TeamReadiness`), вычислить `readiness = if (readinessVisible(...)) readinessItems(input) else null`
+- [x] реализовать обработчик `onReadinessAction` для всех восьми действий (`Refresh` — через `pullRefresh` с busy-guard; battery saver — с фоллбэком на `ACTION_SETTINGS`)
+- [x] тестов нет (конвенция: `MainActivity` и Android-адаптеры не тестируются); логика покрыта Task 1
+- [x] `./gradlew assembleDebug` — зелено (новые значения пока не используются `MarksScreen`, сборка проходит сама по себе)
 
 ### Task 3: `ReadinessCard` в `MarksScreen`, удаление `MarksEmpty`
 
