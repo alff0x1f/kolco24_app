@@ -55,6 +55,43 @@ class MbtilesMetadataTest {
     }
 
     @Test
+    fun outOfRangeLatitudeBoundsIsNull() {
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "37,-91,38,55")).bounds)
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "37,55,38,90.5")).bounds)
+    }
+
+    @Test
+    fun outOfRangeLongitudeBoundsIsNull() {
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "-180.1,55,38,56")).bounds)
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "37,55,181,56")).bounds)
+    }
+
+    @Test
+    fun swappedSouthNorthBoundsIsNull() {
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "37.5,55.9,37.8,55.6")).bounds)
+    }
+
+    @Test
+    fun antimeridianCrossingBoundsIsNull() {
+        // west > east — MapLibre's LatLngBounds.from would throw.
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "179,60,-179,61")).bounds)
+    }
+
+    @Test
+    fun zeroExtentBoundsIsNull() {
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "37,55,37,56")).bounds)
+        assertNull(parseMbtilesMetadata(mapOf("bounds" to "37,55,38,55")).bounds)
+    }
+
+    @Test
+    fun worldBoundsAreAccepted() {
+        assertEquals(
+            Bounds(-180.0, -85.0511, 180.0, 85.0511),
+            parseMbtilesMetadata(mapOf("bounds" to "-180,-85.0511,180,85.0511")).bounds,
+        )
+    }
+
+    @Test
     fun commaDecimalBoundsIsNull() {
         // Five parts after split — the spec is dot-decimal only.
         assertNull(parseMbtilesMetadata(mapOf("bounds" to "37,5,55.6,37.8,55.9")).bounds)

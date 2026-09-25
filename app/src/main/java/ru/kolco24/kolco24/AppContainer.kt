@@ -581,6 +581,8 @@ class AppContainer(private val context: Context) {
      * client — no [signatureInterceptor] / [ServerTimeInterceptor]: `map_url` is a static file,
      * possibly on another host, and must never anchor trusted time. Long read timeout for a
      * multi-MB body on a slow link. Downloads run on [applicationScope] (outlive the Map tab).
+     * Lazy only to skip building the client in processes that never show the UI; construction does no
+     * disk I/O — the `.part` sweep + `downloaded` seed run on [applicationScope] (see [MapRepository]).
      */
     val mapRepository: MapRepository by lazy {
         val client = OkHttpClient.Builder()

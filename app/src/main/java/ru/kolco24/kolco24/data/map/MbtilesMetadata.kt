@@ -21,6 +21,10 @@ data class MbtilesMetadata(
 /**
  * Parses the MBTiles `metadata` name→value table. Never throws: a malformed or missing
  * field becomes `null` independently of the others.
+ *
+ * `bounds` must also be a geographically valid, non-antimeridian box with a non-zero extent
+ * (`-90 <= S < N <= 90`, `-180 <= W < E <= 180`) — MapLibre's `LatLngBounds.from` throws on
+ * anything else, and a crashing camera would make the map tab unopenable until the file is deleted.
  */
 fun parseMbtilesMetadata(values: Map<String, String>): MbtilesMetadata = MbtilesMetadata(
     bounds = values["bounds"]?.let(::parseBounds),
@@ -34,5 +38,8 @@ private fun parseBounds(raw: String): Bounds? {
     val nums = parts.map { part ->
         part.trim().toDoubleOrNull()?.takeIf { it.isFinite() } ?: return null
     }
-    return Bounds(west = nums[0], south = nums[1], east = nums[2], north = nums[3])
+    val (west, south, east, north) = nums
+    if (south < -90.0 || north > 90.0 || south >= north) return null
+    if (west < -180.0 || east > 180.0 || west >= east) return null
+    return Bounds(west = west, south = south, east = east, north = north)
 }

@@ -3,10 +3,8 @@ package ru.kolco24.kolco24.data.map
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 
-/**
- * Android adapters over an MBTiles file (an SQLite database), opened READONLY. Untested by
- * convention; the parsing half lives in the pure [parseMbtilesMetadata].
- */
+// Android adapters over an MBTiles file (an SQLite database), opened READONLY. Untested by
+// convention; the parsing half lives in the pure `parseMbtilesMetadata`.
 
 /**
  * Reads the `metadata` table and parses it. Any failure (missing file, not SQLite, no `metadata`

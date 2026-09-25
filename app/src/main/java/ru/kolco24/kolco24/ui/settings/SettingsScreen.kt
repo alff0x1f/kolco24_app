@@ -625,8 +625,9 @@ private fun ClearTrackRow(pointCount: Int, enabled: Boolean, onClick: () -> Unit
 /**
  * «Удалить карту гонки» row — copy of [ClearTrackRow]'s style (Duplicate, don't couple): red delete
  * avatar, size subtitle ([formatMapSize]), no chevron. [sizeBytes] is `null` when the current race has
- * no downloaded map. [enabled] is host policy (a map file exists and this race is not downloading);
- * the host confirms via an `AlertDialog`.
+ * no downloaded map **or** while the host is still reading the size (then an enabled row says
+ * «Карта скачана», a disabled one «Карта не скачана»). [enabled] is host policy (a map file exists and
+ * this race is not downloading); the host confirms via an `AlertDialog`.
  */
 @Composable
 private fun DeleteMapRow(sizeBytes: Long?, enabled: Boolean, onClick: () -> Unit) {
@@ -664,7 +665,12 @@ private fun DeleteMapRow(sizeBytes: Long?, enabled: Boolean, onClick: () -> Unit
                 color = contentColor,
             )
             Text(
-                text = sizeBytes?.let { formatMapSize(it) } ?: "Карта не скачана",
+                text = when {
+                    sizeBytes != null -> formatMapSize(sizeBytes)
+                    // The size is still being read off-main — don't claim there is no map.
+                    enabled -> "Карта скачана"
+                    else -> "Карта не скачана"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
             )

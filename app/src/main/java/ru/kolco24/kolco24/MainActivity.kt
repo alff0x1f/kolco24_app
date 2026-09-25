@@ -123,17 +123,14 @@ import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
 import java.io.File
+import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.data.marks.PhotoTarget
 import ru.kolco24.kolco24.data.marks.decidePhotoTarget
 import ru.kolco24.kolco24.ui.legend.LegendScreen
-import ru.kolco24.kolco24.ui.map.MapBase
 import ru.kolco24.kolco24.ui.map.MapScreen
 import ru.kolco24.kolco24.ui.map.MapStyleSource
 import ru.kolco24.kolco24.ui.map.mapAvailability
 import ru.kolco24.kolco24.ui.map.mapPins
-import ru.kolco24.kolco24.ui.map.pinsGeoJson
-import ru.kolco24.kolco24.ui.map.trackGeoJson
-import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.marks.PhotoLightboxOverlay
 import ru.kolco24.kolco24.ui.photo.PhotoCaptureScreen
@@ -561,6 +558,7 @@ private fun Kolco24AppRoot(
     val bindingRepo = container.memberChipBindingRepository
     val markRepo = container.markRepository
     val trackRepo = container.trackRepository
+    val mapRepo = container.mapRepository
     val today = todayIso()
 
     // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
@@ -902,7 +900,8 @@ private fun Kolco24AppRoot(
         showJudgeScan = null
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
         photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
-        showClearTrackDialog = false; showDeleteMapDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+        showClearTrackDialog = false; showDeleteMapDialog = false
+        showLocationDisabledDialog = false; showLocationDeniedDialog = false
         pendingCelebration = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
@@ -1125,7 +1124,8 @@ private fun Kolco24AppRoot(
                 showJudgeScan = null
                 bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
                 showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
-                showClearTrackDialog = false; showDeleteMapDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+                showClearTrackDialog = false; showDeleteMapDialog = false
+                showLocationDisabledDialog = false; showLocationDeniedDialog = false
                 act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
@@ -1161,18 +1161,20 @@ private fun Kolco24AppRoot(
         pickerRaceId?.let { teamRepo.categoriesForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
 
-    // «Карта» tab. mapRepository is lazy (first access lists the maps dir) — touch it once.
-    val mapRepo = remember { container.mapRepository }
+    // «Карта» tab. `downloaded` is null until the repository's startup disk listing lands (off-main).
     val mapDownloadState by mapRepo.state.collectAsState()
     val mapDownloaded by mapRepo.downloaded.collectAsState()
     val selectedMapUrl = races.firstOrNull { it.id == selectedRaceId }?.mapUrl
-    val mapAvailabilityNow = selectedRaceId?.let {
-        mapAvailability(it, selectedMapUrl, mapDownloaded, mapDownloadState)
+    val mapAvailabilityNow = selectedRaceId?.let { rid ->
+        mapDownloaded?.let { mapAvailability(rid, selectedMapUrl, it.keys, mapDownloadState) }
     }
-    val mapFileReady = selectedRaceId != null && selectedRaceId in mapDownloaded
+    // Current map file of the selected race. A fresh path per download (MapLibre caches SQLite handles
+    // by path for the process), so a re-download over an existing map re-keys the base below.
+    val mapPath = selectedRaceId?.let { mapDownloaded?.get(it) }
+    val mapFileReady = mapPath != null
     // Settings «Удалить карту гонки» subtitle: file size read off-main (disk stat), re-read when the
     // race or the downloaded set changes. Only computed while Settings is open.
-    val mapSizeBytes by produceState<Long?>(null, selectedRaceId, mapFileReady, mapDownloaded, showSettings) {
+    val mapSizeBytes by produceState<Long?>(null, selectedRaceId, mapDownloaded, showSettings) {
         val rid = selectedRaceId
         value = if (rid != null && mapFileReady && showSettings) {
             withContext(Dispatchers.IO) { mapRepo.size(rid) }
@@ -1180,29 +1182,27 @@ private fun Kolco24AppRoot(
             null
         }
     }
-    val mapDeleteEnabled = mapFileReady && !(
-        mapDownloadState is MapDownloadState.Downloading &&
-            (mapDownloadState as MapDownloadState.Downloading).raceId == selectedRaceId
-        )
-    // Base layer + MBTiles metadata, read off-main (SQLite). The previous value is kept while a new
+    val mapDeleteEnabled = mapFileReady &&
+        (mapDownloadState as? MapDownloadState.Downloading)?.raceId != selectedRaceId
+    // Base layer (+ MBTiles metadata), read off-main (SQLite). The previous value is kept while a new
     // one loads (no reset to null) so a finished download swaps the base without tearing the view down.
-    val mapBase by produceState<MapBase?>(initialValue = null, selectedRaceId, mapFileReady) {
-        val rid = selectedRaceId
-        value = if (rid != null && mapFileReady) {
-            val (path, metadata) = withContext(Dispatchers.IO) { mapRepo.path(rid) to mapRepo.metadata(rid) }
-            MapBase(MapStyleSource.Offline(path), metadata)
+    // Stays null until the disk listing is known (no Online → Offline style flip on a cold start).
+    val mapListingKnown = mapDownloaded != null
+    val mapBase by produceState<MapStyleSource?>(initialValue = null, mapPath, mapListingKnown) {
+        if (!mapListingKnown) return@produceState
+        val path = mapPath
+        value = if (path != null) {
+            val metadata = withContext(Dispatchers.IO) { mapRepo.metadata(path) }
+            MapStyleSource.Offline(path, metadata)
         } else {
-            MapBase(MapStyleSource.Online, null)
+            MapStyleSource.Online
         }
     }
     // The MapView lives only on the settled «Карта» page (never off-screen / mid-animation).
     val mapActive = pagerState.settledPage == 2
-    // GeoJSON is rebuilt only while the tab is shown — the track grows every GPS fix.
-    val mapTrackGeoJson = remember(trackUsable, mapActive) { if (mapActive) trackGeoJson(trackUsable) else "" }
     val mapPinsNow = remember(safeMarks, checkpointCosts, mapActive) {
         if (mapActive) mapPins(safeMarks, checkpointCosts) else emptyList()
     }
-    val mapPinsGeoJson = remember(mapPinsNow) { pinsGeoJson(mapPinsNow) }
     // A failed download surfaces once as a snackbar (on any tab). Consume first; the snackbar runs on
     // the composition scope so the state change (which restarts this effect) doesn't cancel it.
     LaunchedEffect(mapDownloadState) {
@@ -1350,9 +1350,10 @@ private fun Kolco24AppRoot(
                         isActive = mapActive,
                         availability = mapAvailabilityNow,
                         base = mapBase,
-                        trackGeoJson = mapTrackGeoJson,
+                        // The track GeoJSON is built off-main inside the map view, only while it is shown.
+                        track = trackUsable,
                         pins = mapPinsNow,
-                        pinsGeoJson = mapPinsGeoJson,
+                        frameKey = selectedTeamId,
                         locationPermitted = activity?.locationGranted ?: false,
                         onDownload = {
                             val rid = selectedRaceId

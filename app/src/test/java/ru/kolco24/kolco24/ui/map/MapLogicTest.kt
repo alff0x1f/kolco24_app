@@ -120,6 +120,19 @@ class MapLogicTest {
     }
 
     @Test
+    fun pinsAreSortedByTakeTime() {
+        val pins = mapPins(
+            listOf(
+                mark(id = "a", checkpointId = 1, number = 31, takenAt = 5_000L),
+                mark(id = "b", checkpointId = 2, number = 32, takenAt = 2_000L, trustedTakenAt = 9_000L),
+                mark(id = "c", checkpointId = 3, number = 33, takenAt = 1_000L),
+            ),
+            emptyMap(),
+        )
+        assertEquals(listOf(33, 31, 32), pins.map { it.number })
+    }
+
+    @Test
     fun pinCarriesNumberAndCoordinates() {
         val pin = mapPins(listOf(mark(checkpointId = 4, number = 42, lat = 55.5, lon = 37.5)), emptyMap()).single()
         assertEquals(MapPin(4, 42, 3, 1_000L, 55.5, 37.5), pin)
@@ -210,30 +223,76 @@ class MapLogicTest {
         assertEquals("35 МБ", formatMapSize(34L * 1024 * 1024 + 600L * 1024))
     }
 
-    // ---- geoJsonBounds ----
+    // ---- dataBounds ----
 
     @Test
-    fun geoJsonBoundsCoversTrackAndPins() {
-        val track = trackGeoJson(listOf(Pt(55.0, 37.0), Pt(55.2, 36.8)))
-        val pins = pinsGeoJson(listOf(MapPin(1, 31, 3, 0L, lat = 54.9, lon = 37.3)))
-        assertEquals(Bounds(west = 36.8, south = 54.9, east = 37.3, north = 55.2), geoJsonBounds(track, pins))
+    fun dataBoundsCoversTrackAndPins() {
+        val track = listOf(Pt(55.0, 37.0), Pt(55.2, 36.8))
+        val pins = listOf(MapPin(1, 31, 3, 0L, lat = 54.9, lon = 37.3))
+        assertEquals(Bounds(west = 36.8, south = 54.9, east = 37.3, north = 55.2), dataBounds(track, pins))
     }
 
     @Test
-    fun geoJsonBoundsEmptyCollectionsAreNull() {
-        assertNull(geoJsonBounds(trackGeoJson(emptyList()), pinsGeoJson(emptyList())))
+    fun dataBoundsEmptyIsNull() {
+        assertNull(dataBounds(emptyList(), emptyList()))
     }
 
     @Test
-    fun geoJsonBoundsSinglePointIsZeroExtent() {
-        val pins = pinsGeoJson(listOf(MapPin(1, 31, 3, 0L, lat = 55.0, lon = 37.0)))
-        assertEquals(Bounds(37.0, 55.0, 37.0, 55.0), geoJsonBounds(pins))
+    fun dataBoundsSinglePointIsZeroExtent() {
+        assertEquals(Bounds(37.0, 55.0, 37.0, 55.0), dataBounds(emptyList(), listOf(MapPin(1, 31, 3, 0L, 55.0, 37.0))))
+        assertEquals(Bounds(37.0, 55.0, 37.0, 55.0), dataBounds(listOf(Pt(55.0, 37.0)), emptyList()))
+    }
+
+    // ---- cameraFrame ----
+
+    @Test
+    fun cameraFrameFileBoundsWinOverData() {
+        val file = Bounds(37.0, 55.0, 38.0, 56.0)
+        assertEquals(CameraFrame.FileBounds(file), cameraFrame(file, Bounds(1.0, 2.0, 3.0, 4.0)))
+        assertEquals(CameraFrame.FileBounds(file), cameraFrame(file, null))
     }
 
     @Test
-    fun geoJsonBoundsSkipsMalformedJson() {
-        val pins = pinsGeoJson(listOf(MapPin(1, 31, 3, 0L, lat = 55.0, lon = 37.0)))
-        assertEquals(Bounds(37.0, 55.0, 37.0, 55.0), geoJsonBounds("not json", pins))
-        assertNull(geoJsonBounds("{"))
+    fun cameraFrameSinglePointZeroExtent() {
+        assertEquals(CameraFrame.SinglePoint(lat = 55.0, lon = 37.0), cameraFrame(null, Bounds(37.0, 55.0, 37.0, 55.0)))
+    }
+
+    @Test
+    fun cameraFrameFitsDataOrFallsBackToNoData() {
+        val data = Bounds(37.0, 55.0, 37.5, 55.0)
+        assertEquals(CameraFrame.FitData(data), cameraFrame(null, data))
+        assertEquals(CameraFrame.NoData, cameraFrame(null, null))
+    }
+
+    // ---- styleJson ----
+
+    private fun baseSource(source: MapStyleSource) =
+        Json.parseToJsonElement(styleJson(source)).jsonObject["sources"]!!.jsonObject["base"]!!.jsonObject
+
+    @Test
+    fun styleJsonOfflineUsesMbtilesUrlWithAbsolutePath() {
+        val json = Json.parseToJsonElement(styleJson(MapStyleSource.Offline("/data/maps/8.mbtiles", null))).jsonObject
+        assertEquals(8, json["version"]!!.jsonPrimitive.int)
+        val base = baseSource(MapStyleSource.Offline("/data/maps/8.mbtiles", null))
+        assertEquals("raster", base["type"]!!.jsonPrimitive.content)
+        assertEquals("mbtiles:///data/maps/8.mbtiles", base["url"]!!.jsonPrimitive.content)
+        assertEquals(256, base["tileSize"]!!.jsonPrimitive.int)
+        assertNull(base["tiles"])
+        val layer = json["layers"]!!.jsonArray.single().jsonObject
+        assertEquals("raster", layer["type"]!!.jsonPrimitive.content)
+        assertEquals("base", layer["source"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun styleJsonOnlineUsesOsmTilesWithAttribution() {
+        val base = baseSource(MapStyleSource.Online)
+        assertEquals(
+            listOf("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            base["tiles"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(19, base["maxzoom"]!!.jsonPrimitive.int)
+        assertEquals("© OpenStreetMap contributors", base["attribution"]!!.jsonPrimitive.content)
+        assertEquals(256, base["tileSize"]!!.jsonPrimitive.int)
+        assertNull(base["url"])
     }
 }

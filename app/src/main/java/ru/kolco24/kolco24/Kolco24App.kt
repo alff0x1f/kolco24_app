@@ -29,10 +29,6 @@ class Kolco24App : Application() {
             // written). Best-effort; failures are swallowed by the supervisor scope.
             runCatching { container.sweepOrphanPhotoDirs() }
                 .onFailure { Log.w(TAG, "Orphan photo sweep failed", it) }
-            // Delete `*.mbtiles.part` left by a process killed mid-map-download (a download always
-            // restarts from scratch, so a partial file is never resumed).
-            runCatching { container.mapFileStorage.sweepParts() }
-                .onFailure { Log.w(TAG, "Map .part sweep failed", it) }
         }
         container.applicationScope.launch {
             val result = container.raceRepository.refreshRaces()

@@ -34,7 +34,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,14 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import ru.kolco24.kolco24.data.map.MbtilesMetadata
+import ru.kolco24.kolco24.data.track.TrackPointLike
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import java.util.TimeZone
-
-/** The resolved base layer: [source] plus the offline file's [metadata] (read off-main by the host). */
-data class MapBase(val source: MapStyleSource, val metadata: MbtilesMetadata?)
-
-private const val OSM_ATTRIBUTION_TEXT = "© OpenStreetMap contributors"
 
 /**
  * «Карта» tab: the team's GPS track and taken КП over the race's offline MBTiles base (or online OSM).
@@ -58,7 +52,8 @@ private const val OSM_ATTRIBUTION_TEXT = "© OpenStreetMap contributors"
  * - [hasTeam] `false` → «Выберите команду» empty state (no map at all).
  * - [isActive] (`pagerState.settledPage == 2`) gates the [TrackMapView] — the MapView (and its GPS
  *   LocationComponent) never lives off-screen or during a tab animation through this page.
- * - [availability]/[base] `null` → still resolving (team/race/metadata) → plain background.
+ * - [availability]/[base] `null` → still resolving (team/race/disk listing/metadata) → plain background.
+ * - [frameKey] (the selected team) re-frames the camera when it changes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,10 +62,10 @@ fun MapScreen(
     onChooseTeam: () -> Unit,
     isActive: Boolean,
     availability: MapAvailability?,
-    base: MapBase?,
-    trackGeoJson: String,
+    base: MapStyleSource?,
+    track: List<TrackPointLike>,
     pins: List<MapPin>,
-    pinsGeoJson: String,
+    frameKey: Any?,
     locationPermitted: Boolean,
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
@@ -95,16 +90,14 @@ fun MapScreen(
             if (!isActive || availability == null || base == null) return@Box
 
             var selectedPinId by rememberSaveable { mutableStateOf<Int?>(null) }
-            val pinNumbers = remember(pins) { pins.mapTo(HashSet()) { it.number } }
             // A pin that vanished (team switch, mark deleted) hides its card.
             val selectedPin = selectedPinId?.let { id -> pins.firstOrNull { it.checkpointId == id } }
 
             TrackMapView(
-                styleSource = base.source,
-                metadata = base.metadata,
-                trackGeoJson = trackGeoJson,
-                pinsGeoJson = pinsGeoJson,
-                pinNumbers = pinNumbers,
+                styleSource = base,
+                track = track,
+                pins = pins,
+                frameKey = frameKey,
                 locationPermitted = locationPermitted,
                 onPinClick = { selectedPinId = it },
                 modifier = Modifier.fillMaxSize(),
@@ -137,9 +130,9 @@ fun MapScreen(
                     MapAvailability.NoMapForRace, MapAvailability.Ready -> Unit
                 }
                 // Visible attribution whenever the online OSM base is on screen (not just MapLibre's (i)).
-                if (base.source is MapStyleSource.Online) {
+                if (base is MapStyleSource.Online) {
                     Text(
-                        text = OSM_ATTRIBUTION_TEXT,
+                        text = OSM_ATTRIBUTION,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF333333),
                         modifier = Modifier

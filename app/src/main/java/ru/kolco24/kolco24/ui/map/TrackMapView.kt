@@ -11,6 +11,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -22,12 +23,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.addJsonObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -50,25 +47,17 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import ru.kolco24.kolco24.BuildConfig
 import ru.kolco24.kolco24.data.map.Bounds
 import ru.kolco24.kolco24.data.map.MbtilesMetadata
+import ru.kolco24.kolco24.data.track.TrackPointLike
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 
-/** Base layer of the map: the race's downloaded MBTiles file, or online OSM tiles. */
-sealed interface MapStyleSource {
-    /** Absolute path of a downloaded `<raceId>.mbtiles`. */
-    data class Offline(val path: String) : MapStyleSource
-    data object Online : MapStyleSource
-}
-
-private const val BASE_SOURCE = "base"
 private const val TRACK_SOURCE = "track"
 private const val TRACK_LAYER = "track-layer"
 private const val PINS_SOURCE = "pins"
 private const val PINS_LAYER = "pins-layer"
-private const val OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-private const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
 private const val FIT_PADDING_DP = 48
-private const val SINGLE_POINT_ZOOM = 15.0
 private const val LAST_LOCATION_ZOOM = 14.0
+private const val SINGLE_POINT_ZOOM = 15.0
+private const val TRACK_LINE_WIDTH_DP = 3f
 
 /** Nothing to frame at all: Moscow region at a regional zoom. */
 private val DEFAULT_CENTER = LatLng(55.75, 37.62)
@@ -98,51 +87,25 @@ private object MapLibreInit {
     }
 }
 
-/** Style JSON with a single raster base layer (see «Итоги spike (Task 1)» in the map-tab plan). */
-private fun styleJson(source: MapStyleSource): String = buildJsonObject {
-    put("version", 8)
-    putJsonObject("sources") {
-        putJsonObject(BASE_SOURCE) {
-            put("type", "raster")
-            when (source) {
-                is MapStyleSource.Offline -> put("url", "mbtiles://" + source.path)
-                MapStyleSource.Online -> {
-                    putJsonArray("tiles") { add(OSM_TILES) }
-                    put("maxzoom", 19)
-                    put("attribution", OSM_ATTRIBUTION)
-                }
-            }
-            // MapLibre's raster default is 512 — both OSM and our MBTiles are 256 px tiles.
-            put("tileSize", 256)
-        }
-    }
-    putJsonArray("layers") {
-        addJsonObject {
-            put("id", BASE_SOURCE)
-            put("type", "raster")
-            put("source", BASE_SOURCE)
-        }
-    }
-}.toString()
-
 /**
- * MapLibre map with the team's track and taken-КП pins over [styleSource]. Must only be composed
+ * MapLibre map with the team's [track] and taken-КП [pins] over [styleSource]. Must only be composed
  * while the map tab is the settled pager page — each composition owns a native `MapView`
  * (+ a GPS client via the location component when [locationPermitted]).
  *
  * Every style (re)load — first show and each `Offline ↔ Online` switch — re-adds the pin icons,
- * track/pin sources and layers, re-activates the location component and re-frames the camera.
- * Later [trackGeoJson]/[pinsGeoJson] changes only `setGeoJson` the existing sources.
+ * track/pin sources and layers and re-activates the location component. Later data changes only
+ * `setGeoJson` the existing sources; the track GeoJSON is built off the main thread (it grows every
+ * GPS fix). The camera is (re)framed ([cameraFrame]) on every style load, when [frameKey] (the
+ * selected team) changes, and — without file bounds — when the data goes from empty to non-empty.
  *
  * [onPinClick] gets the tapped pin's `checkpointId`, or `null` for a tap that missed every pin.
  */
 @Composable
 fun TrackMapView(
     styleSource: MapStyleSource,
-    metadata: MbtilesMetadata?,
-    trackGeoJson: String,
-    pinsGeoJson: String,
-    pinNumbers: Set<Int>,
+    track: List<TrackPointLike>,
+    pins: List<MapPin>,
+    frameKey: Any?,
     locationPermitted: Boolean,
     onPinClick: (Int?) -> Unit,
     modifier: Modifier = Modifier,
@@ -156,10 +119,17 @@ fun TrackMapView(
     }
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
-    val styleGeneration = remember { intArrayOf(0) }
 
-    val latestTrack by rememberUpdatedState(trackGeoJson)
-    val latestPins by rememberUpdatedState(pinsGeoJson)
+    val trackJson by produceState(trackGeoJson(emptyList()), track) {
+        value = withContext(Dispatchers.Default) { trackGeoJson(track) }
+    }
+    val pinsJson = remember(pins) { pinsGeoJson(pins) }
+    val pinNumbers = remember(pins) { pins.mapTo(HashSet()) { it.number } }
+
+    val latestTrack by rememberUpdatedState(track)
+    val latestPins by rememberUpdatedState(pins)
+    val latestTrackGeoJson by rememberUpdatedState(trackJson)
+    val latestPinsGeoJson by rememberUpdatedState(pinsJson)
     val latestPinNumbers by rememberUpdatedState(pinNumbers)
     val latestLocationPermitted by rememberUpdatedState(locationPermitted)
     val latestOnPinClick by rememberUpdatedState(onPinClick)
@@ -178,6 +148,7 @@ fun TrackMapView(
                 else -> Unit
             }
         }
+        // Kept deliberately: MapLibre asks hosts to forward onLowMemory (it drops its tile caches).
         val memoryCallbacks = object : ComponentCallbacks2 {
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
             @Deprecated("Deprecated in Java")
@@ -212,25 +183,23 @@ fun TrackMapView(
         }
     }
 
-    // (Re)load the style when the base layer or its metadata changes, then rebuild everything on it.
-    LaunchedEffect(map, styleSource, metadata) {
+    // (Re)load the style when the base layer (or its metadata) changes, then rebuild everything on it.
+    // MapLibre keeps a single pending style callback — a superseded setStyle's callback never fires.
+    LaunchedEffect(map, styleSource) {
         val m = map ?: return@LaunchedEffect
-        val generation = ++styleGeneration[0]
         loadedStyle = null
         m.setStyle(Style.Builder().fromJson(styleJson(styleSource))) { style ->
-            // A newer setStyle superseded this one — its own callback does the work.
-            if (generation != styleGeneration[0]) return@setStyle
             latestPinNumbers.forEach { addPinImage(context, style, it) }
-            style.addSource(GeoJsonSource(TRACK_SOURCE, latestTrack))
+            style.addSource(GeoJsonSource(TRACK_SOURCE, latestTrackGeoJson))
             style.addLayer(
                 LineLayer(TRACK_LAYER, TRACK_SOURCE).withProperties(
                     PropertyFactory.lineColor(OrangeCta.toArgb()),
-                    PropertyFactory.lineWidth(3f),
+                    PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 ),
             )
-            style.addSource(GeoJsonSource(PINS_SOURCE, latestPins))
+            style.addSource(GeoJsonSource(PINS_SOURCE, latestPinsGeoJson))
             style.addLayer(
                 SymbolLayer(PINS_LAYER, PINS_SOURCE).withProperties(
                     PropertyFactory.iconImage(Expression.get("icon")),
@@ -239,26 +208,38 @@ fun TrackMapView(
                 ),
             )
             applyLocation(context, m, style, latestLocationPermitted, newStyle = true)
-            applyCamera(context, m, metadata, latestTrack, latestPins)
             loadedStyle = style
         }
     }
 
-    LaunchedEffect(loadedStyle, trackGeoJson) {
-        val style = loadedStyle?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
-        style.getSourceAs<GeoJsonSource>(TRACK_SOURCE)?.setGeoJson(trackGeoJson)
+    // `loadedStyle` is only set from the style-loaded callback (and cleared before every setStyle /
+    // on dispose), so a non-null value is always a fully loaded style.
+    LaunchedEffect(loadedStyle, trackJson) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        style.getSourceAs<GeoJsonSource>(TRACK_SOURCE)?.setGeoJson(trackJson)
     }
 
-    LaunchedEffect(loadedStyle, pinNumbers, pinsGeoJson) {
-        val style = loadedStyle?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+    LaunchedEffect(loadedStyle, pinNumbers, pinsJson) {
+        val style = loadedStyle ?: return@LaunchedEffect
         pinNumbers.forEach { addPinImage(context, style, it) }
-        style.getSourceAs<GeoJsonSource>(PINS_SOURCE)?.setGeoJson(pinsGeoJson)
+        style.getSourceAs<GeoJsonSource>(PINS_SOURCE)?.setGeoJson(pinsJson)
     }
 
     LaunchedEffect(loadedStyle, locationPermitted) {
         val m = map ?: return@LaunchedEffect
-        val style = loadedStyle?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        val style = loadedStyle ?: return@LaunchedEffect
         applyLocation(context, m, style, locationPermitted, newStyle = false)
+    }
+
+    // Camera: on every style load, on a team switch, and (without file bounds) when the first track
+    // point / pin arrives after a no-data frame. With file bounds the data never moves the camera.
+    val metadata = (styleSource as? MapStyleSource.Offline)?.metadata
+    val hasData = track.isNotEmpty() || pins.isNotEmpty()
+    val dataKey = if (metadata?.bounds == null) hasData else null
+    LaunchedEffect(loadedStyle, frameKey, dataKey) {
+        val m = map ?: return@LaunchedEffect
+        if (loadedStyle == null) return@LaunchedEffect
+        applyCamera(context, m, metadata, dataBounds(latestTrack, latestPins))
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
@@ -266,9 +247,11 @@ fun TrackMapView(
 
 private fun addPinImage(context: Context, style: Style, number: Int) {
     val name = pinIconName(number)
-    if (style.getImage(name) == null) style.addImage(name, PinBitmaps.get(context, number))
+    if (style.getImage(name) == null) style.addImage(name, pinBitmap(context, number))
 }
 
+// Deliberately re-checks what the host's `locationPermitted` already says: it is the guard lint's
+// MissingPermission suppression on applyLocation relies on, right at the activation call site.
 private fun hasLocationPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED ||
@@ -308,49 +291,41 @@ private fun applyLocation(
 }
 
 /**
- * Initial camera for a freshly loaded style. Offline with MBTiles `bounds`: the camera target is
- * clamped to the bounds and the view frames them; zoom preferences follow `minzoom`/`maxzoom`.
- * Otherwise: fit track + pins (48 dp padding), else the last known location, else a default frame.
+ * Frames the camera per [cameraFrame]. Zoom preferences follow MBTiles `minzoom`/`maxzoom` (else
+ * MapLibre's limits); file bounds also clamp the camera target (0 padding), a data fit uses 48 dp.
  */
 private fun applyCamera(
     context: Context,
     map: MapLibreMap,
     metadata: MbtilesMetadata?,
-    trackGeoJson: String,
-    pinsGeoJson: String,
+    dataBounds: Bounds?,
 ) {
     map.setMinZoomPreference(metadata?.minZoom?.toDouble() ?: MapLibreConstants.MINIMUM_ZOOM.toDouble())
     map.setMaxZoomPreference(metadata?.maxZoom?.toDouble() ?: MapLibreConstants.MAXIMUM_ZOOM.toDouble())
 
-    val fileBounds = metadata?.bounds
-    if (fileBounds != null) {
-        val bounds = fileBounds.toLatLngBounds()
-        map.setLatLngBoundsForCameraTarget(bounds)
-        map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 0))
-        return
-    }
-    map.setLatLngBoundsForCameraTarget(null)
-
-    val dataBounds = geoJsonBounds(trackGeoJson, pinsGeoJson)
-    if (dataBounds != null) {
-        if (dataBounds.west == dataBounds.east && dataBounds.south == dataBounds.north) {
-            map.moveCamera(
-                CameraUpdateFactory.newLatLngZoom(LatLng(dataBounds.north, dataBounds.east), SINGLE_POINT_ZOOM),
-            )
-        } else {
+    val frame = cameraFrame(metadata?.bounds, dataBounds)
+    map.setLatLngBoundsForCameraTarget((frame as? CameraFrame.FileBounds)?.bounds?.toLatLngBounds())
+    when (frame) {
+        is CameraFrame.FileBounds ->
+            map.moveCamera(CameraUpdateFactory.newLatLngBounds(frame.bounds.toLatLngBounds(), 0))
+        is CameraFrame.SinglePoint ->
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(frame.lat, frame.lon), SINGLE_POINT_ZOOM))
+        is CameraFrame.FitData -> {
             val padding = (FIT_PADDING_DP * context.resources.displayMetrics.density).toInt()
-            map.moveCamera(CameraUpdateFactory.newLatLngBounds(dataBounds.toLatLngBounds(), padding))
+            map.moveCamera(CameraUpdateFactory.newLatLngBounds(frame.bounds.toLatLngBounds(), padding))
         }
-        return
-    }
-
-    val last = runCatching {
-        map.locationComponent.takeIf { it.isLocationComponentActivated }?.lastKnownLocation
-    }.getOrNull()
-    if (last != null) {
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(last.latitude, last.longitude), LAST_LOCATION_ZOOM))
-    } else {
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(DEFAULT_CENTER, DEFAULT_ZOOM))
+        CameraFrame.NoData -> {
+            val last = runCatching {
+                map.locationComponent.takeIf { it.isLocationComponentActivated }?.lastKnownLocation
+            }.getOrNull()
+            if (last != null) {
+                map.moveCamera(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(last.latitude, last.longitude), LAST_LOCATION_ZOOM),
+                )
+            } else {
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(DEFAULT_CENTER, DEFAULT_ZOOM))
+            }
+        }
     }
 }
 

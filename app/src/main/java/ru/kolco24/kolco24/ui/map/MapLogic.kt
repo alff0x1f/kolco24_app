@@ -1,13 +1,7 @@
 package ru.kolco24.kolco24.ui.map
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.addJsonArray
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -15,6 +9,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.map.Bounds
+import ru.kolco24.kolco24.data.map.MbtilesMetadata
 import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.data.track.TrackPointLike
 import java.text.SimpleDateFormat
@@ -62,31 +57,23 @@ fun mapPins(marks: List<MarkEntity>, checkpointCosts: Map<Int, Int>): List<MapPi
 /**
  * GeoJSON `FeatureCollection` of the track: a single `LineString` feature in the given (already
  * filtered + sorted) order, coordinates `[lon, lat]`. Fewer than 2 points → an empty collection
- * (a `LineString` needs at least two positions).
+ * (a `LineString` needs at least two positions). Built with a plain [StringBuilder] — a day-long
+ * track is ~17k points and is rebuilt on every GPS fix (the map view calls this off the main thread).
  */
-fun trackGeoJson(points: List<TrackPointLike>): String =
-    buildJsonObject {
-        put("type", "FeatureCollection")
-        putJsonArray("features") {
-            if (points.size >= 2) {
-                addJsonObject {
-                    put("type", "Feature")
-                    putJsonObject("properties") {}
-                    putJsonObject("geometry") {
-                        put("type", "LineString")
-                        putJsonArray("coordinates") {
-                            points.forEach { p ->
-                                addJsonArray {
-                                    add(p.lon)
-                                    add(p.lat)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }.toString()
+fun trackGeoJson(points: List<TrackPointLike>): String {
+    if (points.size < 2) return EMPTY_FEATURE_COLLECTION
+    val sb = StringBuilder(points.size * 40 + 128)
+    sb.append("""{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},""")
+    sb.append(""""geometry":{"type":"LineString","coordinates":[""")
+    points.forEachIndexed { i, p ->
+        if (i > 0) sb.append(',')
+        sb.append('[').append(p.lon).append(',').append(p.lat).append(']')
+    }
+    sb.append("]}}]}")
+    return sb.toString()
+}
+
+private const val EMPTY_FEATURE_COLLECTION = """{"type":"FeatureCollection","features":[]}"""
 
 /** Style-image name of a pin's icon (registered by the map view per checkpoint number). */
 fun pinIconName(number: Int): String = "kp-$number"
@@ -121,45 +108,93 @@ private fun pinFeature(pin: MapPin): JsonObject = buildJsonObject {
 }
 
 /**
- * Bounding box of every `coordinates` position (`[lon, lat, ...]`) found in the given GeoJSON
- * documents — the online-mode camera fit over track + pins. `null` when there is no position at
- * all; malformed JSON is skipped, never thrown. A single position yields a zero-extent box.
+ * Bounding box of the track points and pins — the online-mode camera fit. `null` when there is no
+ * position at all; a single position yields a zero-extent box.
  */
-fun geoJsonBounds(vararg geoJson: String): Bounds? {
+fun dataBounds(track: List<TrackPointLike>, pins: List<MapPin>): Bounds? {
+    if (track.isEmpty() && pins.isEmpty()) return null
     var west = Double.POSITIVE_INFINITY
     var south = Double.POSITIVE_INFINITY
     var east = Double.NEGATIVE_INFINITY
     var north = Double.NEGATIVE_INFINITY
-    var found = false
-
-    fun visitCoordinates(element: JsonElement) {
-        val array = element as? JsonArray ?: return
-        val lon = (array.getOrNull(0) as? JsonPrimitive)?.doubleOrNull
-        val lat = (array.getOrNull(1) as? JsonPrimitive)?.doubleOrNull
-        if (lon != null && lat != null) {
-            west = minOf(west, lon); east = maxOf(east, lon)
-            south = minOf(south, lat); north = maxOf(north, lat)
-            found = true
-        } else {
-            array.forEach(::visitCoordinates)
-        }
+    fun visit(lat: Double, lon: Double) {
+        if (lon < west) west = lon
+        if (lon > east) east = lon
+        if (lat < south) south = lat
+        if (lat > north) north = lat
     }
-
-    fun visit(element: JsonElement) {
-        when (element) {
-            is JsonObject -> element.forEach { (key, value) ->
-                if (key == "coordinates") visitCoordinates(value) else visit(value)
-            }
-            is JsonArray -> element.forEach(::visit)
-            else -> Unit
-        }
-    }
-
-    geoJson.forEach { json ->
-        runCatching { Json.parseToJsonElement(json) }.getOrNull()?.let(::visit)
-    }
-    return if (found) Bounds(west, south, east, north) else null
+    track.forEach { visit(it.lat, it.lon) }
+    pins.forEach { visit(it.lat, it.lon) }
+    return Bounds(west = west, south = south, east = east, north = north)
 }
+
+/** Initial camera of a freshly loaded style (see [cameraFrame]). */
+sealed interface CameraFrame {
+    /** Offline map with MBTiles `bounds`: clamp the camera target to them and frame them edge to edge. */
+    data class FileBounds(val bounds: Bounds) : CameraFrame
+
+    /** A single data position: center on it at a street-level zoom. */
+    data class SinglePoint(val lat: Double, val lon: Double) : CameraFrame
+
+    /** Track + pins: fit their box with padding. */
+    data class FitData(val bounds: Bounds) : CameraFrame
+
+    /** Nothing to frame: the last known location, else the default region. */
+    data object NoData : CameraFrame
+}
+
+/** Camera choice: file bounds → single data point → data fit → no data. */
+fun cameraFrame(fileBounds: Bounds?, dataBounds: Bounds?): CameraFrame = when {
+    fileBounds != null -> CameraFrame.FileBounds(fileBounds)
+    dataBounds == null -> CameraFrame.NoData
+    dataBounds.west == dataBounds.east && dataBounds.south == dataBounds.north ->
+        CameraFrame.SinglePoint(lat = dataBounds.north, lon = dataBounds.east)
+    else -> CameraFrame.FitData(dataBounds)
+}
+
+/** Base layer of the map: the race's downloaded MBTiles file (+ its metadata), or online OSM tiles. */
+sealed interface MapStyleSource {
+    /** Absolute [path] of a downloaded `<raceId>-<generation>.mbtiles`; [metadata] read off-main by the host. */
+    data class Offline(val path: String, val metadata: MbtilesMetadata?) : MapStyleSource
+    data object Online : MapStyleSource
+}
+
+private const val BASE_SOURCE = "base"
+private const val OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+private const val OSM_MAX_ZOOM = 19
+private const val TILE_SIZE_PX = 256
+const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
+
+/**
+ * Style JSON with a single raster base layer (see «Итоги spike (Task 1)» in the map-tab plan):
+ * offline → `mbtiles://<absolute path>` (MapLibre's MBTiles source handles the TMS y-flip itself);
+ * online → the OSM tile template, `maxzoom` 19 and the attribution. Both set `tileSize` 256 explicitly —
+ * MapLibre's raster default is 512 and both OSM and our MBTiles are 256 px tiles.
+ */
+fun styleJson(source: MapStyleSource): String = buildJsonObject {
+    put("version", 8)
+    putJsonObject("sources") {
+        putJsonObject(BASE_SOURCE) {
+            put("type", "raster")
+            when (source) {
+                is MapStyleSource.Offline -> put("url", "mbtiles://" + source.path)
+                MapStyleSource.Online -> {
+                    putJsonArray("tiles") { add(OSM_TILES) }
+                    put("maxzoom", OSM_MAX_ZOOM)
+                    put("attribution", OSM_ATTRIBUTION)
+                }
+            }
+            put("tileSize", TILE_SIZE_PX)
+        }
+    }
+    putJsonArray("layers") {
+        addJsonObject {
+            put("id", BASE_SOURCE)
+            put("type", "raster")
+            put("source", BASE_SOURCE)
+        }
+    }
+}.toString()
 
 /** «КП 32 · 4 балла · 14:07» — the take time rendered in [timeZone] (device TZ in prod). */
 fun pinCaption(pin: MapPin, timeZone: TimeZone): String {
