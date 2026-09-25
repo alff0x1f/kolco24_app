@@ -11,11 +11,11 @@ import java.util.TimeZone
  * this serializer stays dumb and total.
  *
  * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per line**.
- * Lines never cross a recording session ([TrackPointEntity.segmentId]) or an unreachable jump, so a
- * stop→start gap or a spike-filter break renders as separate segments instead of a teleport line; no
- * own `segmentId` grouping is done here ([trackLines] never returns an empty line). Each point's
- * `<time>` uses `trustedMs ?: wallMs` formatted as ISO-8601 UTC; `<ele>` is omitted when altitude is null. Numbers use [Locale.US] so the decimal
- * separator is always `.` regardless of device locale.
+ * Grouping is entirely the caller's: [trackLines] never crosses a recording session
+ * ([TrackPointEntity.segmentId]) or an unreachable jump, so a stop→start gap or a spike-filter break
+ * renders as separate segments instead of a teleport line. Each point's `<time>` uses
+ * `trustedMs ?: wallMs` formatted as ISO-8601 UTC; `<ele>` is omitted when altitude is null. Numbers
+ * use [Locale.US] so the decimal separator is always `.` regardless of device locale.
  */
 
 private const val GPX_HEADER =

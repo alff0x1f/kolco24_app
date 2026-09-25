@@ -2,6 +2,12 @@ package ru.kolco24.kolco24.data.track
 
 import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.db.TrackPointEntity
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Pure, Android-free track models (mirrors `ScanSession.kt`/`CheckpointColor.kt`): a raw-fix value
@@ -69,36 +75,39 @@ fun <T : TrackPointLike> sortedTrackPoints(points: List<T>): List<T> =
     points.sortedWith(trackPointComparator())
 
 /** Fixes reporting a worse accuracy (meters) than this are always dropped by [trackLines]. */
-internal const val HARD_CAP_ACCURACY_M = 500f
+private const val HARD_CAP_ACCURACY_M = 500f
 
 /** Top plausible speed (~50 km/h — covers a bike downhill) for the [trackLines] reachability test. */
-internal const val MAX_SPEED_MPS = 14f
+private const val MAX_SPEED_MPS = 14f
 
 /** A chain of at most this many points **and** shorter than [SHORT_CHAIN_MAX_DURATION_MS] is short. */
-internal const val SHORT_CHAIN_MAX_POINTS = 3
+private const val SHORT_CHAIN_MAX_POINTS = 3
 
 /** A chain spanning this long (or longer) is never short, whatever its point count. */
-internal const val SHORT_CHAIN_MAX_DURATION_MS = 60_000L
+private const val SHORT_CHAIN_MAX_DURATION_MS = 60_000L
 
 /** A short tail is dropped only when its median accuracy is at least this many times worse. */
-internal const val TAIL_ACCURACY_RATIO = 3f
+private const val TAIL_ACCURACY_RATIO = 3f
 
 /**
  * Floor (meters) of the reference median in the tail ratio — a long chain reporting accuracy 0
  * would otherwise make `>= 3 × 0` drop every short tail.
  */
-internal const val TAIL_REFERENCE_MIN_ACCURACY_M = 1f
+private const val TAIL_REFERENCE_MIN_ACCURACY_M = 1f
 
 private const val EARTH_RADIUS_M = 6_371_000.0
 
 /** Great-circle distance in meters between two WGS84 coordinates (haversine, spherical Earth). */
-fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val h = Math.sin(dLat / 2).let { it * it } +
-        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2).let { it * it }
-    return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h.coerceIn(0.0, 1.0)))
+internal fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val dLat = toRadians(lat2 - lat1)
+    val dLon = toRadians(lon2 - lon1)
+    val sinLat = sin(dLat / 2)
+    val sinLon = sin(dLon / 2)
+    val h = sinLat * sinLat + cos(toRadians(lat1)) * cos(toRadians(lat2)) * sinLon * sinLon
+    return 2 * EARTH_RADIUS_M * asin(sqrt(h.coerceIn(0.0, 1.0)))
 }
+
+private fun toRadians(deg: Double): Double = deg * PI / 180.0
 
 /**
  * Could the device have moved from [a] to [b]? The distance is reduced by the better of the two
@@ -108,7 +117,7 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
  */
 internal fun isReachable(a: TrackPointLike, b: TrackPointLike): Boolean {
     val d = haversineMeters(a.lat, a.lon, b.lat, b.lon)
-    val dtMs = maxOf(Math.abs(trackPointTimeMs(b) - trackPointTimeMs(a)), 1000L)
+    val dtMs = maxOf(abs(trackPointTimeMs(b) - trackPointTimeMs(a)), 1000L)
     val excess = maxOf(0.0, d - minOf(a.accuracy, b.accuracy))
     return excess / (dtMs / 1000.0) <= MAX_SPEED_MPS
 }

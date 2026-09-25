@@ -118,6 +118,7 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
+import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
@@ -127,7 +128,6 @@ import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
-import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.track.trackLines
 import java.io.File
 import ru.kolco24.kolco24.data.map.MapDownloadState
@@ -616,6 +616,9 @@ private sealed interface SelectedTeamState {
     data class Present(val team: TeamEntity) : SelectedTeamState
 }
 
+/** Spike-filtered track lines plus how many raw points the filter hid (see `trackFiltered`). */
+private data class FilteredTrack(val lines: List<List<TrackPointEntity>>, val hiddenCount: Int)
+
 private data class PickerTeamsState(
     val raceId: Int? = null,
     val teams: List<TeamEntity> = emptyList(),
@@ -927,22 +930,21 @@ private fun Kolco24AppRoot(
     // The result is tagged with the team it was computed for: until the new team's lines land, the
     // previous team's never leak through (valueForKey → empty); within a team the last lines stay up
     // while the next fix is being filtered. The hidden count is derived from the same input.
-    val trackFiltered by produceState<Pair<Int, Pair<List<List<TrackPointEntity>>, Int>>?>(
+    val trackFiltered by produceState<Pair<Int, FilteredTrack>?>(
         null, safeTrack, showAllTrackPoints, selectedTeamId,
     ) {
         val tid = selectedTeamId ?: return@produceState
-        val raw = safeTrack
         value = tid to withContext(Dispatchers.Default) {
-            val lines = trackLines(sortedTrackPoints(raw), filter = !showAllTrackPoints)
-            lines to raw.size - lines.sumOf { it.size }
+            val lines = trackLines(sortedTrackPoints(safeTrack), filter = !showAllTrackPoints)
+            FilteredTrack(lines, hiddenCount = safeTrack.size - lines.sumOf { it.size })
         }
     }
     val trackFilteredNow = valueForKey(trackFiltered, selectedTeamId)
-    val trackLinesNow = trackFilteredNow?.first ?: emptyList()
+    val trackLinesNow = trackFilteredNow?.lines ?: emptyList()
     val trackUsable = remember(trackLinesNow) { trackLinesNow.flatten() }
     // Points the filter hid from the map/GPX (always 0 with «Все точки» on — the selected map chip
     // then shows no count, by design). Every kept point is drawn (1-point lines as dots).
-    val trackHiddenCount = trackFilteredNow?.second ?: 0
+    val trackHiddenCount = trackFilteredNow?.hiddenCount ?: 0
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
