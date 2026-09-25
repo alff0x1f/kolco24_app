@@ -189,4 +189,44 @@ class MigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun migrate5To6_addsNullMapUrlAndDropsOnlyRacesEtags() {
+        // Seed a v5 races row plus races ETags for both origins and an unrelated resource ETag.
+        helper.createDatabase(testDb, 5).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus)
+                VALUES (8, 'Кольцо24', 'kolco24', '2026-06-20', NULL, 'Бор', 'open')
+                """.trimIndent(),
+            )
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'races', '\"v1\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('http://lan/', 'races', '\"l1\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'teams-8', '\"t1\"')")
+        }
+
+        // Run the migration; MigrationTestHelper validates the result against schemas/6.json.
+        val db = helper.runMigrationsAndValidate(testDb, 6, true, AppDatabase.MIGRATION_5_6)
+
+        // The legacy race survived with its data, and the new column is NULL.
+        db.query("SELECT COUNT(*), name, mapUrl FROM races WHERE id = 8").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals("Кольцо24", c.getString(1))
+            assertNull(c.getString(2))
+        }
+
+        // Every origin's races ETag is gone (forces a full re-fetch that picks up map_url)...
+        db.query("SELECT COUNT(*) FROM sync_meta WHERE resource = 'races'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        // ...while other resources' ETags are intact.
+        db.query("SELECT etag FROM sync_meta WHERE resource = 'teams-8'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("\"t1\"", c.getString(0))
+        }
+
+        db.close()
+    }
 }

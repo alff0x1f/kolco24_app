@@ -42,9 +42,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -121,9 +123,14 @@ import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
 import java.io.File
+import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.data.marks.PhotoTarget
 import ru.kolco24.kolco24.data.marks.decidePhotoTarget
 import ru.kolco24.kolco24.ui.legend.LegendScreen
+import ru.kolco24.kolco24.ui.map.MapScreen
+import ru.kolco24.kolco24.ui.map.MapStyleSource
+import ru.kolco24.kolco24.ui.map.mapAvailability
+import ru.kolco24.kolco24.ui.map.mapPins
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.marks.PhotoLightboxOverlay
 import ru.kolco24.kolco24.ui.photo.PhotoCaptureScreen
@@ -506,7 +513,7 @@ private fun Kolco24AppRoot(
     economyMode: Boolean,
     onEconomyModeChange: (Boolean) -> Unit,
 ) {
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
     // One-shot celebration hand-off from ScanScreen's completion auto-close to MarksScreen; plain
@@ -551,6 +558,7 @@ private fun Kolco24AppRoot(
     val bindingRepo = container.memberChipBindingRepository
     val markRepo = container.markRepository
     val trackRepo = container.trackRepository
+    val mapRepo = container.mapRepository
     val today = todayIso()
 
     // NFC capability, recomputed on every resume by MainActivity; drives the bind affordances.
@@ -865,6 +873,8 @@ private fun Kolco24AppRoot(
     // Track-recording UI state: confirmation dialogs for clearing the track, a disabled-location
     // notice, and a permanently-denied-permission notice (deep-links to settings).
     var showClearTrackDialog by rememberSaveable { mutableStateOf(false) }
+    // «Удалить карту гонки» confirmation (Settings).
+    var showDeleteMapDialog by rememberSaveable { mutableStateOf(false) }
     var showLocationDisabledDialog by rememberSaveable { mutableStateOf(false) }
     var showLocationDeniedDialog by rememberSaveable { mutableStateOf(false) }
     // Tracks whether we have already launched a location permission request at least once this
@@ -890,7 +900,8 @@ private fun Kolco24AppRoot(
         showJudgeScan = null
         showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
         photoCaptureCpNumber = 0; photoCaptureCheckpointId = 0
-        showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+        showClearTrackDialog = false; showDeleteMapDialog = false
+        showLocationDisabledDialog = false; showLocationDeniedDialog = false
         pendingCelebration = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
@@ -1113,7 +1124,8 @@ private fun Kolco24AppRoot(
                 showJudgeScan = null
                 bindSlot = null; unbindSlot = null; chipInfoArmed = false; chipInfoModel = null
                 showPhotoPicker = false; photoCaptureMarkId = null; photoCaptureAttach = false
-                showClearTrackDialog = false; showLocationDisabledDialog = false; showLocationDeniedDialog = false
+                showClearTrackDialog = false; showDeleteMapDialog = false
+                showLocationDisabledDialog = false; showLocationDeniedDialog = false
                 act.pendingScan.value = scan
                 showScan = true
                 act.nfcLaunchScan.value = null
@@ -1148,6 +1160,56 @@ private fun Kolco24AppRoot(
     val pickerCategories by remember(pickerRaceId) {
         pickerRaceId?.let { teamRepo.categoriesForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+
+    // «Карта» tab. `downloaded` is null until the repository's startup disk listing lands (off-main).
+    val mapDownloadState by mapRepo.state.collectAsState()
+    val mapDownloaded by mapRepo.downloaded.collectAsState()
+    val selectedMapUrl = races.firstOrNull { it.id == selectedRaceId }?.mapUrl
+    val mapAvailabilityNow = selectedRaceId?.let { rid ->
+        mapDownloaded?.let { mapAvailability(rid, selectedMapUrl, it.keys, mapDownloadState) }
+    }
+    // Current map file of the selected race. A fresh path per download (MapLibre caches SQLite handles
+    // by path for the process), so a re-download over an existing map re-keys the base below.
+    val mapPath = selectedRaceId?.let { mapDownloaded?.get(it) }
+    val mapFileReady = mapPath != null
+    // Settings «Удалить карту гонки» subtitle: file size read off-main (disk stat), re-read when the
+    // race or the downloaded set changes. Only computed while Settings is open.
+    val mapSizeBytes by produceState<Long?>(null, selectedRaceId, mapDownloaded, showSettings) {
+        val rid = selectedRaceId
+        value = if (rid != null && mapFileReady && showSettings) {
+            withContext(Dispatchers.IO) { mapRepo.size(rid) }
+        } else {
+            null
+        }
+    }
+    val mapDeleteEnabled = mapFileReady &&
+        (mapDownloadState as? MapDownloadState.Downloading)?.raceId != selectedRaceId
+    // Base layer (+ MBTiles metadata), read off-main (SQLite). The previous value is kept while a new
+    // one loads (no reset to null) so a finished download swaps the base without tearing the view down.
+    // Stays null until the disk listing is known (no Online → Offline style flip on a cold start).
+    val mapListingKnown = mapDownloaded != null
+    val mapBase by produceState<MapStyleSource?>(initialValue = null, mapPath, mapListingKnown) {
+        if (!mapListingKnown) return@produceState
+        val path = mapPath
+        value = if (path != null) {
+            val metadata = withContext(Dispatchers.IO) { mapRepo.metadata(path) }
+            MapStyleSource.Offline(path, metadata)
+        } else {
+            MapStyleSource.Online
+        }
+    }
+    // The MapView lives only on the settled «Карта» page (never off-screen / mid-animation).
+    val mapActive = pagerState.settledPage == 2
+    val mapPinsNow = remember(safeMarks, checkpointCosts, mapActive) {
+        if (mapActive) mapPins(safeMarks, checkpointCosts) else emptyList()
+    }
+    // A failed download surfaces once as a snackbar (on any tab). Consume first; the snackbar runs on
+    // the composition scope so the state change (which restarts this effect) doesn't cancel it.
+    LaunchedEffect(mapDownloadState) {
+        val failed = mapDownloadState as? MapDownloadState.Failed ?: return@LaunchedEffect
+        mapRepo.consumeFailure()
+        scope.launch { snackbarHostState.showSnackbar("Не удалось скачать карту: ${failed.message}") }
+    }
 
     val navItemColors = NavigationBarItemDefaults.colors(
         indicatorColor = Color.Transparent,
@@ -1197,7 +1259,19 @@ private fun Kolco24AppRoot(
                         onClick = { switchToTab(2) },
                         icon = {
                             Icon(
-                                if (activePage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
+                                if (activePage == 2) Icons.Filled.Place else Icons.Outlined.Place,
+                                contentDescription = null,
+                            )
+                        },
+                        label = { Text("Карта") },
+                        colors = navItemColors,
+                    )
+                    NavigationBarItem(
+                        selected = activePage == 3,
+                        onClick = { switchToTab(3) },
+                        icon = {
+                            Icon(
+                                if (activePage == 3) Icons.Filled.Groups else Icons.Outlined.Groups,
                                 contentDescription = null,
                             )
                         },
@@ -1244,7 +1318,7 @@ private fun Kolco24AppRoot(
                         trackRecording = (trackState as? TrackState.Recording)?.teamId == selectedTeamId,
                         locationGranted = activity?.locationGranted ?: false,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
-                        onBindChips = { scope.launch { pagerState.animateScrollToPage(2) } },
+                        onBindChips = { scope.launch { pagerState.animateScrollToPage(3) } },
                         onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
@@ -1270,7 +1344,26 @@ private fun Kolco24AppRoot(
                         },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
-                    2 -> TeamScreen(
+                    2 -> MapScreen(
+                        hasTeam = teamState !is SelectedTeamState.None,
+                        onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
+                        isActive = mapActive,
+                        availability = mapAvailabilityNow,
+                        base = mapBase,
+                        // The track GeoJSON is built off-main inside the map view, only while it is shown.
+                        track = trackUsable,
+                        pins = mapPinsNow,
+                        frameKey = selectedTeamId,
+                        locationPermitted = activity?.locationGranted ?: false,
+                        onDownload = {
+                            val rid = selectedRaceId
+                            val url = selectedMapUrl
+                            if (rid != null && !url.isNullOrBlank()) mapRepo.download(rid, url)
+                        },
+                        onCancelDownload = { mapRepo.cancel() },
+                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                    )
+                    3 -> TeamScreen(
                         team = teamForTab,
                         category = tabCategory,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
@@ -1500,6 +1593,9 @@ private fun Kolco24AppRoot(
                 trackClearEnabled = safeTrack.isNotEmpty() &&
                     (trackState as? TrackState.Recording)?.teamId != selectedTeamId,
                 onClearTrack = { showClearTrackDialog = true },
+                mapSizeBytes = mapSizeBytes,
+                mapDeleteEnabled = mapDeleteEnabled,
+                onDeleteMap = { showDeleteMapDialog = true },
                 localMode = localMode,
                 localModeBusy = localModeBusy,
                 localModeExpiresAtMs = localModeExpiresAtMs,
@@ -2004,6 +2100,33 @@ private fun Kolco24AppRoot(
                 },
                 dismissButton = {
                     TextButton(onClick = { showClearTrackDialog = false }) { Text("Отмена") }
+                },
+            )
+        }
+
+        // Confirm deleting the current race's offline map. delete() is blocking file I/O and a no-op
+        // while this race downloads; applicationScope + IO so it outlives the closing dialog. The
+        // «Карта» tab updates itself via mapRepository.downloaded.
+        if (showDeleteMapDialog) {
+            val deleteRaceId = selectedRaceId
+            AlertDialog(
+                onDismissRequest = { showDeleteMapDialog = false },
+                title = { Text("Удалить карту гонки?") },
+                text = { Text("Офлайн-карта этой гонки будет удалена с устройства. Её можно будет скачать заново.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (deleteRaceId != null) {
+                                container.applicationScope.launch(Dispatchers.IO) { mapRepo.delete(deleteRaceId) }
+                            }
+                            showDeleteMapDialog = false
+                        },
+                    ) {
+                        Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteMapDialog = false }) { Text("Отмена") }
                 },
             )
         }

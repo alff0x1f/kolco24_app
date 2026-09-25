@@ -98,6 +98,31 @@ class RaceRepositoryTest {
     }
 
     @Test
+    fun success_persistsMapUrl() = runTest {
+        val body = racesJson(8, "Кольцо24").replace(
+            "\"reg_status\": \"open\",",
+            "\"reg_status\": \"open\",\n\"map_url\": \"https://kolco24.ru/media/maps/8.mbtiles\",",
+        )
+        server.enqueue(MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(body))
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        val stored = repository.races.first()
+        assertEquals("https://kolco24.ru/media/maps/8.mbtiles", stored[0].mapUrl)
+    }
+
+    @Test
+    fun success_withoutMapUrl_persistsNull() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(racesJson(8, "Кольцо24")),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        assertNull(repository.races.first()[0].mapUrl)
+    }
+
+    @Test
     fun notModified_leavesDatabaseUntouched() = runTest {
         raceDao.set(listOf(entity(8, "Cached race")))
         syncMetaDao.upsert(SyncMetaEntity(origin, "races", "\"v1\""))

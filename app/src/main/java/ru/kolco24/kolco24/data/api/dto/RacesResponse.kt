@@ -22,4 +22,9 @@ data class RaceDto(
     @SerialName("date_end") val dateEnd: String? = null,
     val place: String,
     @SerialName("reg_status") val regStatus: String,
+    /**
+     * Direct URL of the race's offline MBTiles basemap (static file, no HMAC). Optional — absent
+     * on servers that predate the map tab and on races without a prepared map.
+     */
+    @SerialName("map_url") val mapUrl: String? = null,
 )

@@ -17,4 +17,6 @@ data class RaceEntity(
     val dateEnd: String?,
     val place: String,
     val regStatus: String,
+    /** Offline MBTiles basemap URL (`map_url`, nullable; added in v6 by `MIGRATION_5_6`). */
+    val mapUrl: String? = null,
 )

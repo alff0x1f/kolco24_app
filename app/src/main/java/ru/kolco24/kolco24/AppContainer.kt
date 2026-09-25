@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 import ru.kolco24.kolco24.data.AdminAuthRepository
 import ru.kolco24.kolco24.data.AdminTokenStore
 import ru.kolco24.kolco24.data.InstallId
@@ -38,6 +40,11 @@ import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.lease.RaceLease
 import ru.kolco24.kolco24.data.lease.RaceLeaseStore
 import ru.kolco24.kolco24.data.lease.isPinned
+import ru.kolco24.kolco24.data.map.MapDownloader
+import ru.kolco24.kolco24.data.map.MapFileStorage
+import ru.kolco24.kolco24.data.map.MapRepository
+import ru.kolco24.kolco24.data.map.readMbtilesMetadata
+import ru.kolco24.kolco24.data.map.validateMbtiles
 import ru.kolco24.kolco24.data.marks.PhotoStorage
 import ru.kolco24.kolco24.data.sync.SyncCoordinator
 import ru.kolco24.kolco24.data.time.ClockAnchorStore
@@ -561,5 +568,38 @@ class AppContainer(private val context: Context) {
      */
     suspend fun sweepOrphanPhotoDirs() {
         PhotoStorage.sweepOrphanDirs(context.filesDir, database.markDao().allIds().toHashSet())
+    }
+
+    /**
+     * Per-race MBTiles basemaps under `noBackupFilesDir/maps/` (outside Auto Backup). Not touched by
+     * [clearDatabase] — a downloaded map is not DB state.
+     */
+    val mapFileStorage: MapFileStorage = MapFileStorage(File(context.noBackupFilesDir, "maps"))
+
+    /**
+     * Race-map download + «which races have a map» state. The downloader uses its own plain OkHttp
+     * client — no [signatureInterceptor] / [ServerTimeInterceptor]: `map_url` is a static file,
+     * possibly on another host, and must never anchor trusted time. Long read timeout for a
+     * multi-MB body on a slow link. Downloads run on [applicationScope] (outlive the Map tab).
+     * Lazy only to skip building the client in processes that never show the UI; construction does no
+     * disk I/O — the `.part` sweep + `downloaded` seed run on [applicationScope] (see [MapRepository]).
+     */
+    val mapRepository: MapRepository by lazy {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val downloader = MapDownloader(
+            client = client,
+            storage = mapFileStorage,
+            validate = ::validateMbtiles,
+            usableSpace = { mapFileStorage.ensureRoot().usableSpace },
+        )
+        MapRepository(
+            storage = mapFileStorage,
+            download = { url, raceId, onProgress -> downloader.download(url, raceId, onProgress) },
+            scope = applicationScope,
+            readMetadata = ::readMbtilesMetadata,
+        )
     }
 }
