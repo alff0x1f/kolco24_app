@@ -332,14 +332,14 @@ var powerSaveMode by mutableStateOf(false)
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] все девять пунктов реализованы, порядок фиксирован
-- [ ] Map скрыт на гонке без карты; Notifications скрыт на API < 33; Power виден только при включённом режиме
-- [ ] чек-лист исчезает после первого взятия и не мигает на холодном старте (гейт из трёх сигналов, `mapResolved` ждёт каталог гонок)
-- [ ] `Blocked` только у Team / Chips / Nfc
-- [ ] `grep -rnw "MarksEmpty\|TrackNudge\|LocationNudge\|GhostTileRow\|GhostTile" app/src` — пусто
-- [ ] `./gradlew testDebugUnitTest` — зелено
-- [ ] `./gradlew lintDebug` — зелено
-- [ ] `./gradlew assembleDebug` — зелено
+- [x] все девять пунктов реализованы, порядок фиксирован
+- [x] Map скрыт на гонке без карты; Notifications скрыт на API < 33; Power виден только при включённом режиме
+- [x] чек-лист исчезает после первого взятия и не мигает на холодном старте (гейт из трёх сигналов, `mapResolved` ждёт каталог гонок)
+- [x] `Blocked` только у Team / Chips / Nfc
+- [x] `grep -rnw "MarksEmpty\|TrackNudge\|LocationNudge\|GhostTileRow\|GhostTile" app/src` — пусто
+- [x] `./gradlew testDebugUnitTest` — зелено
+- [x] `./gradlew lintDebug` — зелено
+- [x] `./gradlew assembleDebug` — зелено
 
 ### Task 5: [Final] Update documentation
 
