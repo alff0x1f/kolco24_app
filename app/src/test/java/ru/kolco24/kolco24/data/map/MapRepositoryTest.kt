@@ -326,6 +326,61 @@ class MapRepositoryTest {
     }
 
     @Test
+    fun repeatedCancelRetryWaitsForTheFirstCancelledJobsCleanup() = runTest {
+        // A is cancelled but its cleanup (deleting the shared `.part`) is still running; B is started
+        // and cancelled while waiting; C must still wait for A — else A deletes C's `.part`.
+        val aCleanup = CompletableDeferred<Unit>()
+        val started = mutableListOf<String>()
+        val r = repo(
+            download = { url, raceId, _ ->
+                started += url
+                if (url == "a") {
+                    try {
+                        kotlinx.coroutines.awaitCancellation()
+                    } finally {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { aCleanup.await() }
+                        storage.partFile(raceId).delete()
+                    }
+                }
+                storage.partFile(raceId).writeBytes(ByteArray(10))
+                gate.await()
+                assertTrue(storage.partFile(raceId).isFile) // A's cleanup never ran over our `.part`
+                check(storage.commit(raceId))
+            },
+        )
+        r.download(5, "a")
+        runCurrent()
+        r.cancel()
+        r.download(5, "b")
+        runCurrent()
+        r.cancel()
+        r.download(5, "c")
+        runCurrent()
+        assertEquals(listOf("a"), started) // C waits for A's cleanup, not just for cancelled B
+
+        aCleanup.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("a", "c"), started)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(MapDownloadState.Idle, r.state.value)
+        assertEquals(setOf(5), r.downloaded.value?.keys)
+    }
+
+    @Test
+    fun startupKeepsCommittedMapsWithoutRevalidating() = runTest {
+        // Maps are validated before commit only; startup must never delete a committed map (a transient
+        // SQLite failure there would lose a good offline map with no network to re-download it).
+        writeMap(3, 1)
+        writeMap(4, 2)
+        val r = repo()
+        runCurrent()
+        assertEquals(setOf(3, 4), r.downloaded.value?.keys)
+        assertNotNull(storage.file(3))
+        assertNotNull(storage.file(4))
+    }
+
+    @Test
     fun cancelLandingAfterCommitStillRefreshesDownloaded() = runTest {
         val r = repo(
             download = { _, raceId, _ ->

@@ -82,6 +82,9 @@ class MapDownloader(
                 }
                 ensureActive()
                 if (!validate(part)) throw MapDownloadException("Файл карты повреждён")
+                // validate() is a blocking full-table SQLite scan — a cancel landing during it must
+                // not still commit the map.
+                ensureActive()
                 if (!storage.commit(raceId)) throw MapDownloadException("Не удалось сохранить файл карты")
                 committed = true
             } catch (e: IOException) {

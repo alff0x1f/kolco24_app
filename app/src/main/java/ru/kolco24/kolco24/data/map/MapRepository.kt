@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 
 /** Download state of the (single, app-wide) race-map download. */
@@ -28,16 +30,22 @@ sealed interface MapDownloadState {
  * - One download at a time, app-wide: [download] is a no-op while any race is `Downloading`.
  * - The download runs on [scope] (prod: `applicationScope`, `Dispatchers.IO`) so it outlives the Map
  *   tab / composition.
- * - Construction does no I/O: a startup job on [scope] first sweeps stale `*.part` files (a process
- *   killed mid-download), then seeds [downloaded] from disk. Every download joins that job first, so
- *   the sweep can never delete a live download's `.part`.
+ * - Construction does no I/O: a startup job on [scope] sweeps stale `*.part` files (a process killed
+ *   mid-download) and superseded generations, then seeds [downloaded] from disk. Every download joins
+ *   that job first, so the sweep can never delete a live download's `.part`. Committed maps are **not**
+ *   re-validated here: every map is validated before commit (`MapDownloader`), and a startup re-check
+ *   would full-scan every map on each cold start and could delete a good offline map on a transient
+ *   SQLite/I/O failure (`validateMbtiles` maps any exception to `false`).
+ * - Download bodies run strictly one after another under [runLock], cleanup included: a cancelled
+ *   download still deleting its `.part` holds it, so a retry (even after several cancelled retries)
+ *   can never start writing the same `.part` before that delete.
  * - [downloaded] is `null` until that seed lands, then refreshed after every download attempt that
  *   may have committed a file and after [delete] — the single «file exists» source for the UI. It maps
  *   race id → absolute path of the current map; the path changes on every commit (see
  *   [MapFileStorage]), so a re-download re-keys the host's style even when the race set is unchanged.
  *
- * [download] is the network seam (prod: `MapDownloader::download`); [readMetadata] the SQLite seam
- * (prod: `readMbtilesMetadata`). Both lambdas keep this class JVM-testable.
+ * [download] is the network seam (prod: `MapDownloader::download`); [readMetadata] the SQLite
+ * seam (prod: `readMbtilesMetadata`). The lambdas keep this class JVM-testable.
  */
 class MapRepository(
     private val storage: MapFileStorage,
@@ -47,6 +55,9 @@ class MapRepository(
 ) {
     private val lock = Any()
     private var job: Job? = null
+
+    /** Held for a download's whole body incl. its `.part` cleanup (FIFO; a cancelled waiter just leaves). */
+    private val runLock = Mutex()
 
     private val _state = MutableStateFlow<MapDownloadState>(MapDownloadState.Idle)
     val state: StateFlow<MapDownloadState> = _state.asStateFlow()
@@ -65,8 +76,6 @@ class MapRepository(
     fun download(raceId: Int, url: String) {
         synchronized(lock) {
             if (_state.value is MapDownloadState.Downloading) return
-            // A just-cancelled job may still be deleting its `.part` — let it finish before we reuse it.
-            val previous = job
             _state.value = MapDownloadState.Downloading(raceId, null)
             // LAZY + assign-then-start: `job` must already point at this coroutine when its body runs.
             // `synchronized` is reentrant, so an immediate/undispatched dispatcher would otherwise run
@@ -74,32 +83,36 @@ class MapRepository(
             val self = scope.launch(start = CoroutineStart.LAZY) {
                 val me = coroutineContext.job
                 startup.join()
-                previous?.join()
-                var lastPercent = -1
-                try {
-                    download(url, raceId) { read, total ->
-                        val progress = if (total > 0) (read.toFloat() / total).coerceIn(0f, 1f) else null
-                        // Throttle to whole-percent steps (a 64 KB chunk each would flood recomposition).
-                        val percent = progress?.let { (it * 100).toInt() } ?: -1
-                        if (percent != lastPercent) {
-                            lastPercent = percent
-                            setIfCurrent(me, MapDownloadState.Downloading(raceId, progress))
-                        }
-                    }
-                    // Refresh before going Idle, so the UI never sees «Idle + not downloaded» in between.
-                    refreshDownloaded()
-                    setIfCurrent(me, MapDownloadState.Idle)
-                } catch (e: CancellationException) {
-                    // A cancel can land after the commit (e.g. on withContext's way out) — the file may exist.
-                    refreshDownloaded()
-                    setIfCurrent(me, MapDownloadState.Idle)
-                    throw e
-                } catch (e: Exception) {
-                    setIfCurrent(me, MapDownloadState.Failed(raceId, e.message ?: e.javaClass.simpleName))
-                }
+                // A just-cancelled job may still be deleting its `.part` — it holds runLock until done.
+                runLock.withLock { runDownload(me, raceId, url) }
             }
             job = self
             self.start()
+        }
+    }
+
+    private suspend fun runDownload(me: Job, raceId: Int, url: String) {
+        var lastPercent = -1
+        try {
+            download(url, raceId) { read, total ->
+                val progress = if (total > 0) (read.toFloat() / total).coerceIn(0f, 1f) else null
+                // Throttle to whole-percent steps (a 64 KB chunk each would flood recomposition).
+                val percent = progress?.let { (it * 100).toInt() } ?: -1
+                if (percent != lastPercent) {
+                    lastPercent = percent
+                    setIfCurrent(me, MapDownloadState.Downloading(raceId, progress))
+                }
+            }
+            // Refresh before going Idle, so the UI never sees «Idle + not downloaded» in between.
+            refreshDownloaded()
+            setIfCurrent(me, MapDownloadState.Idle)
+        } catch (e: CancellationException) {
+            // A cancel can land after the commit (e.g. on withContext's way out) — the file may exist.
+            refreshDownloaded()
+            setIfCurrent(me, MapDownloadState.Idle)
+            throw e
+        } catch (e: Exception) {
+            setIfCurrent(me, MapDownloadState.Failed(raceId, e.message ?: e.javaClass.simpleName))
         }
     }
 

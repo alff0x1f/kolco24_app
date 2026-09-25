@@ -300,8 +300,14 @@ private fun applyCamera(
     metadata: MbtilesMetadata?,
     dataBounds: Bounds?,
 ) {
-    map.setMinZoomPreference(metadata?.minZoom?.toDouble() ?: MapLibreConstants.MINIMUM_ZOOM.toDouble())
-    map.setMaxZoomPreference(metadata?.maxZoom?.toDouble() ?: MapLibreConstants.MAXIMUM_ZOOM.toDouble())
+    // Native setMinZoom/setMaxZoom silently ignore a value past the *current* opposite limit (10–13 →
+    // 15–18 would keep min 10), and the effective min zoom is constrained by the target bounds — so
+    // clear the bounds and widen to MapLibre's full range first, then apply the new pair min → max.
+    map.setLatLngBoundsForCameraTarget(null)
+    map.setMinZoomPreference(MapLibreConstants.MINIMUM_ZOOM.toDouble())
+    map.setMaxZoomPreference(MapLibreConstants.MAXIMUM_ZOOM.toDouble())
+    metadata?.minZoom?.let { map.setMinZoomPreference(it.toDouble()) }
+    metadata?.maxZoom?.let { map.setMaxZoomPreference(it.toDouble()) }
 
     val frame = cameraFrame(metadata?.bounds, dataBounds)
     map.setLatLngBoundsForCameraTarget((frame as? CameraFrame.FileBounds)?.bounds?.toLatLngBounds())

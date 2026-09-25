@@ -8,7 +8,9 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -202,6 +204,38 @@ class MapDownloaderTest {
         assertFalse(storage.partFile(7).exists())
         assertEquals("old map", storage.file(7)!!.readText())
         assertEquals(0, validateCalls)
+    }
+
+    @Test
+    fun cancellationDuringValidationDoesNotCommit() = runBlocking {
+        storage.ensureRoot()
+        seedMap("old map")
+        server.enqueue(MockResponse().setBody(Buffer().write(bytes(10_000))))
+        var validatedPart: File? = null
+        lateinit var job: Job
+        val d = MapDownloader(
+            client = client,
+            storage = storage,
+            // The cancel arrives mid-scan; the (blocking) scan itself still finishes and passes.
+            validate = { part ->
+                validateCalls++
+                validatedPart = part
+                job.cancel()
+                true
+            },
+            usableSpace = { Long.MAX_VALUE },
+        )
+        job = launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+            d.download(url(), 7) { _, _ -> }
+        }
+        job.start()
+        job.join()
+
+        assertTrue(job.isCancelled)
+        assertEquals(1, validateCalls)
+        assertEquals(storage.partFile(7), validatedPart)
+        assertFalse(storage.partFile(7).exists())
+        assertEquals("old map", storage.file(7)!!.readText())
     }
 
     @Test
