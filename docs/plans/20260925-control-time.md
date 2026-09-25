@@ -221,20 +221,20 @@ fun controlTimeState(
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] все состояния из Overview реализованы, подписи по таблице
-- [ ] `ControlTime.kt` без `android.*` импортов
-- [ ] `./gradlew testDebugUnitTest`
-- [ ] `./gradlew lintDebug`
-- [ ] `./gradlew assembleDebug`
-- [ ] `./gradlew connectedDebugAndroidTest`, если подключено устройство/эмулятор (иначе явно отметить ⚠️ пропуск)
+- [x] все состояния из Overview реализованы, подписи по таблице
+- [x] `ControlTime.kt` без `android.*` импортов
+- [x] `./gradlew testDebugUnitTest`
+- [x] `./gradlew lintDebug`
+- [x] `./gradlew assembleDebug`
+- [x] `./gradlew connectedDebugAndroidTest`, если подключено устройство/эмулятор (иначе явно отметить ⚠️ пропуск) (skipped - no device, `adb devices` empty, ⚠️)
 
 ### Task 5: [Final] Update documentation
 
-- [ ] `docs/design/UI-NOTES.md`: `MarksScreen` — ячейка КВ, точный тик, `LifecycleStartEffect` (uptime стоит во сне), известный край после перезагрузки; пункт про `ControlTime.kt`
-- [ ] `docs/design/DATA-NOTES.md`: `CategoryEntity.controlTime`, `MIGRATION_6_7` + сброс ETag teams
-- [ ] `CLAUDE.md`: Room **v7**, `MIGRATION_6_7` в строке `connectedDebugAndroidTest`, `ControlTime` в списке чистых моделей
-- [ ] `docs/IOS-PARITY.md`: удалить пункт 1, перенумеровать остальные
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `docs/design/UI-NOTES.md`: `MarksScreen` — ячейка КВ, точный тик, `LifecycleStartEffect` (uptime стоит во сне), известный край после перезагрузки; пункт про `ControlTime.kt`
+- [x] `docs/design/DATA-NOTES.md`: `CategoryEntity.controlTime`, `MIGRATION_6_7` + сброс ETag teams
+- [x] `CLAUDE.md`: Room **v7**, `MIGRATION_6_7` в строке `connectedDebugAndroidTest`, `ControlTime` в списке чистых моделей
+- [x] `docs/IOS-PARITY.md`: удалить пункт 1, перенумеровать остальные
+- [x] move plan (done by orchestrator at completion)
 
 ## Post-Completion
 

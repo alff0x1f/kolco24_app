@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew assembleRelease            # build release APK
 ./gradlew lintDebug                  # run lint (must pass before merging)
 ./gradlew testDebugUnitTest          # run unit tests
-./gradlew connectedDebugAndroidTest  # run instrumented tests (requires emulator/device) — guards CheckpointDao preserve-on-resync + MIGRATION_1_2/MIGRATION_2_3/MIGRATION_3_4/MIGRATION_4_5/MIGRATION_5_6 + MarkDaoTest frame-drain queries + attachPhotos column-scope + uploadCountsMetadata/photoFrameRows + JudgeScanDaoTest
+./gradlew connectedDebugAndroidTest  # run instrumented tests (requires emulator/device) — guards CheckpointDao preserve-on-resync + MIGRATION_1_2/MIGRATION_2_3/MIGRATION_3_4/MIGRATION_4_5/MIGRATION_5_6/MIGRATION_6_7 + MarkDaoTest frame-drain queries + attachPhotos column-scope + uploadCountsMetadata/photoFrameRows + JudgeScanDaoTest
 ```
 
 ## Architecture
@@ -23,7 +23,7 @@ Single-activity Jetpack Compose app (minSdk 24, targetSdk 36). No ViewModel, no 
 These cross-cutting rules hold project-wide; the notes files assume them rather than repeating them.
 
 - **minSdk 24, no desugaring** — use `SimpleDateFormat` (`Locale.US`, UTC where needed), never `java.time`. ISO date/time strings are fixed-width, so compare them **lexicographically** instead of parsing.
-- **Pure models** (`ScanSession`, `CheckpointColor`, `ThemeMode`, `TrackProfile`, `TrustedClock`, `ProvisioningModel`, `ChipCheckModel`, `TrackModels`, `GpxExport`, `ReadinessChecklist`, `PermissionPrompts`, `KeyedValue`, the `*Logic`/mapper helpers, `LegendCrypto`, `MapAvailability`, `MbtilesMetadata`, `MapFileStorage` (pure `java.io`, `TemporaryFolder`-tested)) are **Android-free and JVM-unit-tested** (their `*Test` classes). **Compose UI, real Android adapters** (location engines, `TrackRecordingService`, the `NfcA`/DAO adapters, `MbtilesSqlite`, `TrackMapView`/`PinBitmap`), and trivial wiring are **untested by convention**. Trust boundaries (request signing, `ServerTimeInterceptor`) are the exception — they are tested.
+- **Pure models** (`ScanSession`, `CheckpointColor`, `ThemeMode`, `TrackProfile`, `TrustedClock`, `ProvisioningModel`, `ChipCheckModel`, `TrackModels`, `GpxExport`, `ReadinessChecklist`, `ControlTime`, `PermissionPrompts`, `KeyedValue`, the `*Logic`/mapper helpers, `LegendCrypto`, `MapAvailability`, `MbtilesMetadata`, `MapFileStorage` (pure `java.io`, `TemporaryFolder`-tested)) are **Android-free and JVM-unit-tested** (their `*Test` classes). **Compose UI, real Android adapters** (location engines, `TrackRecordingService`, the `NfcA`/DAO adapters, `MbtilesSqlite`, `TrackMapView`/`PinBitmap`), and trivial wiring are **untested by convention**. Trust boundaries (request signing, `ServerTimeInterceptor`) are the exception — they are tested.
 - **Duplicate, don't couple** — small repeated UI rows (e.g. `SwitchTeamRow`/`ChangeTeamRow`, the marks vs track upload-status row) are **copied**, not extracted to a shared file.
 - **Room is shipped** (see memory `room-released-with-migrations`) — on-device data must survive upgrades. A schema bump needs a real `Migration` appended to `.addMigrations(...)` **and** a committed `schemas/<n>.json`, or it crashes on upgrade. `exportSchema = true`.
 - **Overlay pattern** — full-screen overlays (scan, settings, team-picker, admin, provisioning, check-chip, bind/unbind) are driven by `rememberSaveable` flags rendered after `Scaffold` in one `Box`, dismissed via `BackHandler`. No Navigation Compose. Per-team/race flows use the null-guarded keyed-`remember` pattern: `remember(selectedTeamId) { id?.let { repo.observe(it) } ?: flowOf(emptyList()) }`.
@@ -41,7 +41,7 @@ One line per area — full per-file notes in the two docs files above.
 
 - `MainActivity.kt` — entry point; `HorizontalPager` with 4 tabs (Отметки / Легенда / Карта / Команда = pages 0–3), hosts all overlay state, NFC reader-mode dispatch (`@Volatile` tag hooks), open-on-tap, 5-min foreground upload-retry ticker, 60 s judge-scan upload ticker.
 - `ui/scan/` — NFC take overlay (`ScanScreen`, 20 s window, completion hold) + pure `ScanSession` state machine + pure `ScanFeedback` mapper.
-- `ui/marks/MarksScreen.kt` — Отметки tab: tile grid, metrics, pre-start readiness checklist card (empty state; pure `ReadinessChecklist` model, device signals polled in `MainActivity`), photo tiles + lightbox, judge-review and hidden-КП notices, take celebration.
+- `ui/marks/MarksScreen.kt` — Отметки tab: tile grid, metrics (live control-time/КВ cell, pure `ControlTime`), pre-start readiness checklist card (empty state; pure `ReadinessChecklist` model, device signals polled in `MainActivity`), photo tiles + lightbox, judge-review and hidden-КП notices, take celebration.
 - `ui/legend/` — Легенда tab (locked-row masking, team-scoped taken, ScoreCard scoring counts) + pure `CheckpointColor`.
 - `ui/map/` — Карта tab: `MapScreen` (download/progress cards, OSM attribution; composes `TrackMapView` only when the host's `settledPage == 2` gate is set), `TrackMapView` MapLibre adapter (bitmap pins, OSM UA, off-main track GeoJSON), pure `MapLogic` (GeoJSON, style JSON, camera choice)/`MapAvailability`.
 - `ui/team/` — Команда tab (roster + live chip bindings) + `BindChipSheet` (pure `decideBind`).
@@ -58,7 +58,7 @@ One line per area — full per-file notes in the two docs files above.
 
 - `Kolco24App.kt` / `AppContainer.kt` — Application launch sequences A/B; manual DI (no Hilt), construction cycles broken via lambda seams.
 - `data/api/` — HMAC `AppSignatureInterceptor` (GET-only 403 retry-once), `ApiClient` (cloud + LAN instances share the upload methods; `fetchLanTime` = signed LAN time endpoint), `ServerTimeInterceptor` (trusted-time anchor, `TimeCandidate` with `rtt/2 + 500` uncertainty), snake_case DTOs.
-- `data/db/` — Room **v6**, migrations 1→6 with committed schemas; local-only marks/track/bindings/judge-scan tables; DAO gotchas: preserve-on-resync, column-scoped updates, version-guarded flag flips, frame-drain queries.
+- `data/db/` — Room **v7**, migrations 1→7 with committed schemas; local-only marks/track/bindings/judge-scan tables; DAO gotchas: preserve-on-resync, column-scoped updates, version-guarded flag flips, frame-drain queries.
 - `data/lease/` + `data/SyncSource.kt` + `data/sync/SyncCoordinator.kt` — local-mode pin/lease subsystem (race-day LAN switch).
 - `data/{Race,Team,Legend,MemberTags}Repository.kt` — the four sync repos (repo refresh pattern + SyncSource routing); `LegendRepository` also owns the offline `unlock` reveal path and legend aggregates.
 - `data/MarkRepository.kt` — two-phase takes, dual-target upload loop, photo-mark creation + frame drain, pure metric helpers; `trustedAt` seam backfills `trusted_ms` on upload for offline takes.
