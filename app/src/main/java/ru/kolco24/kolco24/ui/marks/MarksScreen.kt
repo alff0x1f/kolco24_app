@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -40,19 +39,14 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddLink
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Nfc
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -74,15 +68,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
@@ -99,7 +88,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -125,7 +113,8 @@ import ru.kolco24.kolco24.ui.legend.CheckpointColor
 import ru.kolco24.kolco24.ui.legend.parseCheckpointColor
 import ru.kolco24.kolco24.ui.theme.OrangeCta
 import ru.kolco24.kolco24.ui.theme.RobotoMono
-import ru.kolco24.kolco24.ui.theme.Tertiary
+import ru.kolco24.kolco24.ui.theme.WarningAmber
+import ru.kolco24.kolco24.ui.theme.WarningAmberDark
 
 private val marksFabListBottomPadding = 128.dp
 private val marksFabScrollClearance = 104.dp
@@ -325,19 +314,14 @@ fun MarksScreen(
     totalCost: Int = 0,
     nfcAvailable: Boolean = true,
     nfcDisabled: Boolean = false,
-    hasTeam: Boolean = false,
-    // Room hasn't emitted marks/bindings for the resolved team yet: suppress the empty state so a
-    // cold start doesn't flash a false «Привяжите чипы» for a few frames before the tiles land.
-    loading: Boolean = false,
-    memberCount: Int = 0,
-    boundCount: Int = 0,
-    trackRecording: Boolean = false,
-    locationGranted: Boolean = true,
-    onChooseTeam: () -> Unit = {},
-    onBindChips: () -> Unit = {},
+    // Pre-start readiness checklist rows, shown while no КП is taken. `null` = the host's gate is still
+    // closed (marks/bindings, legend or map not resolved yet) → render nothing, so a cold start never
+    // flashes false «0 из N» / «Легенда не загружена» rows.
+    readiness: List<ReadinessItem>? = null,
+    // A checklist «Обновить» (Refresh action) sync is in flight → its rows show a spinner, not a chevron.
+    readinessRefreshing: Boolean = false,
+    onReadinessAction: (ReadinessAction) -> Unit = {},
     onOpenNfcSettings: () -> Unit = {},
-    onStartTrack: () -> Unit = {},
-    onRequestLocation: () -> Unit = {},
     onPhotoClick: () -> Unit = {},
     // A photo tile was tapped: the host opens the full-screen lightbox (hoisted to MainActivity's overlay
     // stack so it covers the bottom navigation bar). The tapped take's own frame paths are handed up; the
@@ -458,23 +442,14 @@ fun MarksScreen(
                     }
                 }
                 if (tiles.isEmpty()) {
-                    // While loading, render neither branch — a blank beat instead of a false empty
-                    // state (no skeleton: the window is a few frames, a skeleton would itself flash).
-                    if (!loading) item("empty") {
-                        MarksEmpty(
-                            hasTeam = hasTeam,
-                            nfcAvailable = nfcAvailable,
-                            nfcDisabled = nfcDisabled,
-                            memberCount = memberCount,
-                            boundCount = boundCount,
-                            trackRecording = trackRecording,
-                            locationGranted = locationGranted,
-                            onChooseTeam = onChooseTeam,
-                            onBindChips = onBindChips,
-                            onOpenNfcSettings = onOpenNfcSettings,
-                            onStartTrack = onStartTrack,
-                            onRequestLocation = onRequestLocation,
-                            modifier = Modifier.padding(top = 40.dp),
+                    // Gate closed → a blank beat instead of a false checklist (no skeleton: the window
+                    // is a few frames, a skeleton would itself flash).
+                    if (readiness != null) item("readiness") {
+                        ReadinessCard(
+                            items = readiness,
+                            refreshing = readinessRefreshing,
+                            onAction = onReadinessAction,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
                         )
                     }
                 } else {
@@ -487,8 +462,8 @@ fun MarksScreen(
                             celebrationAlpha = celebrationAlpha.value,
                         )
                     }
-                    // The empty state folds the NFC notice into its own message, so only surface the
-                    // standalone banner once there are tiles to sit above.
+                    // The readiness checklist carries the NFC row while no КП is taken, so only surface
+                    // the standalone banner once there are tiles to sit above.
                     if (!nfcAvailable) {
                         item("nfc_banner") {
                             NfcUnavailableBanner(
@@ -548,329 +523,160 @@ internal fun PhotoLightboxOverlay(
 }
 
 /**
- * The empty Отметки state, framed as the next step toward the first take rather than a flat "nothing
- * here". The signature is a [ScorecardGhostRow] — a preview of the tile grid that will fill in — and the
- * headline/body/CTA are chosen for where the team actually is in the flow, in workflow order:
- *  1. no team selected → choose one;
- *  2. NFC switched off → a CTA into system NFC settings (the toggle is the one thing in the user's way);
- *  3. NFC absent (no hardware) → the photo fallback (folds in what used to be a separate floating banner);
- *  4. chips not all bound → bind them (a take only scores once **every** member is present, so an
- *     unbound roster can never produce a tile — this is the prerequisite the user most needs surfaced);
- *  5. ready → tap a КП, plus a [TrackNudge] pre-start reminder to start the GPS track (the one thing a
- *     team can actually do at the start line, and the easiest to forget).
- *
- * [nfcDisabled] (NFC present but switched off) is checked before [nfcAvailable] so the disabled branch
- * with its «Включить NFC» CTA wins; `!nfcAvailable && !nfcDisabled` is then unambiguously no-hardware.
- *
- * In the ready state, when [locationGranted] is false a [LocationNudge] is shown above the track reminder:
- * a КП take stamps a one-shot GPS coordinate (anti-cheat proof the team was physically there), so the
- * pre-start checklist asks for location permission while the team can still grant it calmly.
+ * Pre-start readiness checklist — replaces the old single-next-step empty state while no КП is taken.
+ * All status / text / action rules live in the pure [readinessItems]; this view only maps a
+ * [ReadinessStatus] to a colour (`Blocked` → `error`, `Warning` → [WarningAmber], `Done` → `tertiary`)
+ * and forwards a row's [ReadinessAction] up. Rows keep their fixed order; done rows stay visible but
+ * muted. When every row is done the card collapses to a single green «Всё готово к старту» line.
+ * [WarningAmber] is a deliberate exception to the «one alert palette» rule of the Отметки notices: a
+ * checklist needs to tell "blocks the take" (red) from "worth fixing" (amber) at a glance.
  */
 @Composable
-private fun MarksEmpty(
-    hasTeam: Boolean,
-    nfcAvailable: Boolean,
-    nfcDisabled: Boolean,
-    memberCount: Int,
-    boundCount: Int,
-    trackRecording: Boolean,
-    locationGranted: Boolean,
-    onChooseTeam: () -> Unit,
-    onBindChips: () -> Unit,
-    onOpenNfcSettings: () -> Unit,
-    onStartTrack: () -> Unit,
-    onRequestLocation: () -> Unit,
+private fun ReadinessCard(
+    items: List<ReadinessItem>,
+    refreshing: Boolean,
+    onAction: (ReadinessAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val needsBinding = memberCount > 0 && boundCount < memberCount
-
-    // (lead glyph, headline, body, optional CTA). `trackNudge` appends the pre-start track reminder —
-    // only the ready state sets it, so the nudge never competes with a branch that has its own CTA.
-    data class EmptyContent(
-        val glyph: ImageVector,
-        val headline: String,
-        val body: String,
-        val ctaLabel: String? = null,
-        val onCta: (() -> Unit)? = null,
-        val trackNudge: Boolean = false,
-    )
-
-    val content = when {
-        !hasTeam -> EmptyContent(
-            glyph = Icons.Filled.Groups,
-            headline = "Отметок пока нет",
-            body = "Выберите соревнование и команду — отметки появятся здесь.",
-            ctaLabel = "Выбрать команду",
-            onCta = onChooseTeam,
-        )
-        nfcDisabled -> EmptyContent(
-            glyph = Icons.Filled.Nfc,
-            headline = "NFC выключен",
-            body = "Включите NFC, чтобы отмечать КП прикосновением.",
-            ctaLabel = "Включить NFC",
-            onCta = onOpenNfcSettings,
-        )
-        !nfcAvailable -> EmptyContent(
-            glyph = Icons.Filled.CameraAlt,
-            headline = "NFC недоступен",
-            body = "Отметить КП по NFC на этом устройстве не получится. Отмечайте КП через «Фото».",
-        )
-        needsBinding -> EmptyContent(
-            glyph = Icons.Filled.AddLink,
-            headline = "Привяжите чипы участникам",
-            body = "Отметка засчитывается, только когда отмечены все участники команды. " +
-                "Сейчас с чипом $boundCount из $memberCount.",
-            ctaLabel = "Привязать чипы",
-            onCta = onBindChips,
-        )
-        else -> EmptyContent(
-            glyph = Icons.Filled.Nfc,
-            headline = "Здесь появятся отметки",
-            body = "Приложите телефон к метке КП — отметка добавится сюда.",
-            trackNudge = true,
-        )
-    }
-
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        GhostTileRow(leadGlyph = content.glyph)
-
-        Spacer(Modifier.height(22.dp))
-        Text(
-            text = content.headline,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = content.body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-
-        if (content.ctaLabel != null && content.onCta != null) {
-            Spacer(Modifier.height(22.dp))
-            Button(
-                onClick = content.onCta,
-                modifier = Modifier.height(48.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = OrangeCta,
-                    contentColor = Color.White,
-                ),
-                contentPadding = PaddingValues(horizontal = 22.dp),
-            ) {
-                Icon(content.glyph, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(content.ctaLabel, style = MaterialTheme.typography.titleSmall)
-            }
-        }
-
-        // Anti-cheat coordinate nudge: only in the ready state (alongside the track reminder), and only
-        // while permission is missing — once granted there is nothing to ask for. Shown above the track
-        // nudge so the «can we even stamp the take?» prerequisite leads the optional «start track» step.
-        if (content.trackNudge && !locationGranted) {
-            Spacer(Modifier.height(28.dp))
-            LocationNudge(onRequest = onRequestLocation)
-        }
-
-        if (content.trackNudge) {
-            Spacer(Modifier.height(28.dp))
-            TrackNudge(recording = trackRecording, onStart = onStartTrack)
-        }
-    }
-}
-
-/**
- * Pre-start location-permission reminder shown under the ready empty state when foreground location is
- * not yet granted. A КП take stamps a one-shot GPS coordinate as anti-cheat proof the team was at the
- * checkpoint; without permission the take still lands, just without that proof. Tapping the card asks for
- * the permission (or routes to app settings on a permanent denial — the host decides). Mirrors the
- * [TrackNudge] card vocabulary so it reads as part of the same pre-start checklist.
- */
-@Composable
-private fun LocationNudge(onRequest: () -> Unit, modifier: Modifier = Modifier) {
+    val summary = readinessSummary(items)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClick = onRequest)
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(40.dp).background(OrangeCta, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.LocationOn,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Разрешите геолокацию",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "Координата на КП подтверждает, что вы были на точке",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Pre-start GPS-track reminder shown under the ready empty state. Before the gun the one thing a team can
- * actually do on this screen is start their track — and it is the easiest step to forget — so the reminder
- * sits here as a single tappable card. The orange play badge is the same «start track» vocabulary as the
- * Команда-tab `TrackCard`, so it reads as the same feature rather than a new control. Once recording, the
- * card gives way to a quiet success line so a team that already started is acknowledged, not nagged.
- */
-@Composable
-private fun TrackNudge(recording: Boolean, onStart: () -> Unit, modifier: Modifier = Modifier) {
-    if (recording) {
-        Row(
-            modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(20.dp).background(Tertiary, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(13.dp),
-                )
-            }
-            Text(
-                text = "Трек записывается",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+        if (summary.allDone) {
+            ReadinessRow(
+                status = ReadinessStatus.Done,
+                title = "Всё готово к старту",
+                detail = "Приложите телефон к метке КП",
+                muted = false,
+                onClick = null,
             )
+            return@Surface
         }
-        return
-    }
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClick = onStart)
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(40.dp).background(OrangeCta, CircleShape),
-                contentAlignment = Alignment.Center,
+        Column {
+            val worstColor = readinessColor(summary.worst)
+            Row(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp),
+                Box(Modifier.size(8.dp).background(worstColor, CircleShape))
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = "ГОТОВНОСТЬ К СТАРТУ",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = RobotoMono,
+                    letterSpacing = 1.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "${summary.done} / ${summary.total}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = RobotoMono,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Не забудьте трек",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+            // Flat 3dp progress bar (a plain Box pair, not LinearProgressIndicator — no stop dot/gap).
+            val fraction = summary.done.toFloat() / summary.total
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxHeight()
+                        .background(worstColor),
                 )
+            }
+            Spacer(Modifier.height(6.dp))
+            items.forEach { item ->
+                ReadinessRow(
+                    status = item.status,
+                    title = item.title,
+                    detail = item.detail,
+                    muted = item.status == ReadinessStatus.Done,
+                    onClick = item.action?.let { action -> { onAction(action) } },
+                    busy = refreshing && item.action == ReadinessAction.Refresh,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+}
+
+/** Status colour: `Blocked` → `error`, `Warning` → [WarningAmber] (dark: [WarningAmberDark]), `Done` → `tertiary`. */
+@Composable
+private fun readinessColor(status: ReadinessStatus): Color = when (status) {
+    ReadinessStatus.Blocked -> MaterialTheme.colorScheme.error
+    ReadinessStatus.Warning -> if (isDarkScheme()) WarningAmberDark else WarningAmber
+    ReadinessStatus.Done -> MaterialTheme.colorScheme.tertiary
+}
+
+/**
+ * One checklist row: status glyph, title + detail, and a trailing chevron when it has an action
+ * ([busy] swaps the chevron for a small spinner while that action's work is in flight).
+ */
+@Composable
+private fun ReadinessRow(
+    status: ReadinessStatus,
+    title: String,
+    detail: String,
+    muted: Boolean,
+    onClick: (() -> Unit)?,
+    busy: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = when (status) {
+                ReadinessStatus.Done -> Icons.Filled.Check
+                ReadinessStatus.Warning -> Icons.Filled.PriorityHigh
+                ReadinessStatus.Blocked -> Icons.Filled.Close
+            },
+            contentDescription = null,
+            tint = readinessColor(status),
+            modifier = Modifier.size(20.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (muted) FontWeight.Normal else FontWeight.SemiBold,
+                color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+            )
+            if (detail.isNotEmpty()) {
                 Text(
-                    text = "Включите GPS-запись пути перед стартом",
+                    text = detail,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-    }
-}
-
-/**
- * The empty-state signature: a small centered preview of the grid this screen fills in — four 54dp
- * **flat squares** (0dp radius, matching the populated `TileGrid`'s flat color-fill tiles, not the old
- * rounded card). The first is the **next slot**: a solid neutral square (the real null-color [tileFill],
- * so an empty slot and a colorless real take share a shade) carrying the state's lead glyph where a real
- * tile's `<стоимость>-<номер>` token would sit. The trailing three are dashed square outlines that fade
- * out, reading «marks land here, one КП at a time». The dashes use the readable `onSurfaceVariant` (not
- * the near-invisible `outlineVariant`) so the stroke shows on the light surface too. Decorative — no
- * state, no motion.
- */
-@Composable
-private fun GhostTileRow(leadGlyph: ImageVector, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GhostTile(active = true, glyph = leadGlyph)
-        GhostTile(active = false, alpha = 0.65f)
-        GhostTile(active = false, alpha = 0.45f)
-        GhostTile(active = false, alpha = 0.30f)
-    }
-}
-
-@Composable
-private fun GhostTile(active: Boolean, glyph: ImageVector? = null, alpha: Float = 1f) {
-    val fill = tileFill(null, isDarkScheme()).fill
-    val dash = MaterialTheme.colorScheme.onSurfaceVariant
-    Box(
-        modifier = Modifier
-            .size(54.dp)
-            .then(
-                if (active) {
-                    // The next slot: a solid flat square, the same shade a colorless real tile renders.
-                    Modifier.background(fill)
-                } else {
-                    // An upcoming slot: a dashed square outline (sharp corners to match the flat tiles).
-                    Modifier.drawBehind {
-                        val s = 1.dp.toPx()
-                        drawRect(
-                            color = dash.copy(alpha = alpha),
-                            topLeft = Offset(s / 2, s / 2),
-                            size = Size(size.width - s, size.height - s),
-                            style = Stroke(
-                                width = s,
-                                pathEffect = PathEffect.dashPathEffect(
-                                    floatArrayOf(4.dp.toPx(), 4.dp.toPx()),
-                                ),
-                            ),
-                        )
-                    }
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (glyph != null) {
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (onClick != null) {
             Icon(
-                imageVector = glyph,
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = OrangeCta,
-                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
             )
         }
     }

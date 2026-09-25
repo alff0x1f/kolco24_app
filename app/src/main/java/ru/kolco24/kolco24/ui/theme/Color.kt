@@ -70,3 +70,8 @@ val TertiaryDark            = Color(0xFF83D99B)
 val OnTertiaryDark          = Color(0xFF003919)
 val TertiaryContainerDark   = Color(0xFF005228)
 val OnTertiaryContainerDark = Color(0xFFA6F2BC)
+
+// Readiness-checklist warning hue («Отметки», pre-start). Deliberately scoped to that checklist — the
+// Отметки notices keep the one error-container alert palette (see docs/design/UI-NOTES.md).
+val WarningAmber     = Color(0xFFB26A00)
+val WarningAmberDark = Color(0xFFFFB951)
