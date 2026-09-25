@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +78,8 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     economyMode: Boolean = false,
     onEconomyModeChange: (Boolean) -> Unit = {},
+    showAllTrackPoints: Boolean = false,
+    onShowAllTrackPointsChange: (Boolean) -> Unit = {},
     trackPointCount: Int = 0,
     trackClearEnabled: Boolean = false,
     onClearTrack: () -> Unit = {},
@@ -172,6 +175,10 @@ fun SettingsScreen(
         ) {
             Column {
                 EconomyModeRow(checked = economyMode, onCheckedChange = onEconomyModeChange)
+                ShowAllTrackPointsRow(
+                    checked = showAllTrackPoints,
+                    onCheckedChange = onShowAllTrackPointsChange,
+                )
                 ClearTrackRow(
                     pointCount = trackPointCount,
                     enabled = trackClearEnabled,
@@ -499,6 +506,50 @@ private fun EconomyModeRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit)
             )
             Text(
                 text = if (checked) "Координата раз в 3 мин" else "Точная запись, 15 с",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * «Показывать все точки трека» row — copy of [EconomyModeRow] (duplicate, don't couple). On = the
+ * map and GPX show every recorded fix (no spike filter, see `trackLines`); the same persisted
+ * preference is also toggled by the «Все точки» chip on the Карта tab. Tapping the whole row toggles.
+ */
+@Composable
+private fun ShowAllTrackPointsRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(neutralAvatarContainerColor(), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Timeline,
+                contentDescription = null,
+                tint = neutralAvatarContentColor(),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Показывать все точки трека",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Без фильтрации выбросов GPS",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

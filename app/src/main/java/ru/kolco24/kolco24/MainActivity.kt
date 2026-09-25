@@ -1922,6 +1922,8 @@ private fun Kolco24AppRoot(
                 onThemeModeChange = onThemeModeChange,
                 economyMode = economyMode,
                 onEconomyModeChange = onEconomyModeChange,
+                showAllTrackPoints = showAllTrackPoints,
+                onShowAllTrackPointsChange = onShowAllTrackPointsChange,
                 trackPointCount = safeTrack.size,
                 // Clearing is allowed only when a track exists and is NOT recording for this team
                 // (same Recording-for-this-team check the TeamScreen TrackCard uses). The confirm

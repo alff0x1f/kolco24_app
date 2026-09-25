@@ -181,9 +181,9 @@ Integration in `MainActivity`:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `ShowAllTrackPointsRow(checked, onCheckedChange)` copied from `EconomyModeRow` (duplicate, don't couple): title «Показывать все точки трека», subtitle «Без фильтрации выбросов GPS», suitable icon
-- [ ] place it right after `EconomyModeRow`; add `showAllTrackPoints` / `onShowAllTrackPointsChange` params and pass them from the host
-- [ ] run `./gradlew assembleDebug` — must pass (Compose UI untested by convention)
+- [x] add `ShowAllTrackPointsRow(checked, onCheckedChange)` copied from `EconomyModeRow` (duplicate, don't couple): title «Показывать все точки трека», subtitle «Без фильтрации выбросов GPS», suitable icon
+- [x] place it right after `EconomyModeRow`; add `showAllTrackPoints` / `onShowAllTrackPointsChange` params and pass them from the host
+- [x] run `./gradlew assembleDebug` — must pass (Compose UI untested by convention)
 
 ### Task 6: Map chip «Все точки»
 
