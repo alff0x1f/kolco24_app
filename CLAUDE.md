@@ -43,7 +43,7 @@ One line per area — full per-file notes in the two docs files above.
 - `ui/scan/` — NFC take overlay (`ScanScreen`, 20 s window, completion hold) + pure `ScanSession` state machine + pure `ScanFeedback` mapper.
 - `ui/marks/MarksScreen.kt` — Отметки tab: tile grid, metrics (live control-time/КВ cell, pure `ControlTime`), pre-start readiness checklist card (empty state; pure `ReadinessChecklist` model, device signals polled in `MainActivity`), photo tiles + lightbox, judge-review and hidden-КП notices, take celebration.
 - `ui/legend/` — Легенда tab (locked-row masking, team-scoped taken, ScoreCard scoring counts) + pure `CheckpointColor`.
-- `ui/map/` — Карта tab: `MapScreen` (download/progress cards, OSM attribution; composes `TrackMapView` only when the host's `settledPage == 2` gate is set), `TrackMapView` MapLibre adapter (bitmap pins, OSM UA, off-main track GeoJSON), pure `MapLogic` (GeoJSON, style JSON, camera choice)/`MapAvailability`.
+- `ui/map/` — Карта tab: `MapScreen` (download/progress cards, OSM attribution, «Все точки» filter chip; composes `TrackMapView` only when the host's `settledPage == 2` gate is set), `TrackMapView` MapLibre adapter (bitmap pins, OSM UA, off-main track `MultiLineString` GeoJSON), pure `MapLogic` (GeoJSON, style JSON, camera choice)/`MapAvailability`.
 - `ui/team/` — Команда tab (roster + live chip bindings) + `BindChipSheet` (pure `decideBind`).
 - `ui/teampicker/` — team-selection flow + pure `TeamPickerLogic`.
 - `ui/photo/` — CameraX capture overlay (pure `bucketOrientationDegrees` rotation) + `PhotoNumberPicker`.
@@ -66,12 +66,12 @@ One line per area — full per-file notes in the two docs files above.
 - `data/MemberChipBindingRepository.kt` — local-only member↔chip bindings, atomic reassign; keyed by `(teamId, numberInTeam)`.
 - `data/marks/` — pure `PhotoPaths` codec (path-traversal guard, thumb convention), pure `PhotoTarget` router, `PhotoStorage` frame I/O adapter.
 - `data/map/` — race MBTiles basemaps: `MapFileStorage` (`noBackupFilesDir/maps/<raceId>-<generation>.mbtiles`, file = «downloaded» flag, `.part` → validate → rename to a fresh generation — MapLibre caches MBTiles SQLite handles by path for the process, so a path is never re-used), `MapDownloader` (plain unsigned OkHttp), `MapRepository` (single app-wide download on `applicationScope`, cancellable mid-read; startup `.part`/superseded-generation sweep + `downloaded` (race → path) seed off-main), pure `MbtilesMetadata` + SQLite `MbtilesSqlite` readers.
-- `data/track/` — GPS subsystem: pure models/GPX/profiles, `TrackRepository`, location engines + one-shot `CurrentLocationProvider`.
+- `data/track/` — GPS subsystem: pure models/GPX/profiles + read-only spike filter `trackLines` (lines, not a flat list; upload stays raw), `TrackRepository`, location engines + one-shot `CurrentLocationProvider`.
 - `data/nfc/MifareUltralightWriter.kt` — raw `K24` on-chip format; header written **last** (commit marker), `NfcA` direct.
 - `data/crypto/LegendCrypto.kt` — pure offline legend crypto (bid / HKDF / AES-GCM), never throws.
 - `data/time/` — `TrustedClock` (`onTimeCandidate` + effective-uncertainty replacement rule, `DRIFT_PPM`) + `ClockAnchorStore` (5-segment format, legacy 4-segment fallback) — monotonic+server trusted time, reboot detection; `GpsTimeCandidate` (offline GPS anchor), `LanTimeVerifier` (signed LAN time in local mode). `kolco24.clock.xml` excluded from backup rules (a restored anchor could pass a warm start on a `BOOT_COUNT` collision).
 - `data/ScanFeedbackPlayer.kt` — SoundPool/vibration adapter for scan outcomes + celebration cues (eager-constructed).
-- `data/AdminAuthRepository.kt`/`AdminTokenStore.kt`, `ThemePreference`/`TrackProfilePreference`/`InstallId`, `PermissionRequestLog` (persisted permission denied-before flags, excluded from backup), pure `NfcUid`, `DateUtils`.
+- `data/AdminAuthRepository.kt`/`AdminTokenStore.kt`, `ThemePreference`/`TrackProfilePreference`/`TrackFilterPreference`/`InstallId`, `PermissionRequestLog` (persisted permission denied-before flags, excluded from backup), pure `NfcUid`, `DateUtils`.
 - `TrackRecordingService.kt` — foreground GPS service; lossless «Стоп» flush, live profile switch, 10-min throttled live upload.
 
 ## Config / references

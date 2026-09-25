@@ -209,18 +209,18 @@ Integration in `MainActivity`:
 - [x] run `./gradlew assembleDebug` — must pass
 
 ### Task 8: Verify acceptance criteria
-- [ ] map, time span and GPX all use the same lines; toggle flips all three
-- [ ] no line is drawn between recording segments or across an unreachable step
-- [ ] Settings switch and map chip stay in sync
-- [ ] server upload path untouched (`TrackRepository.flushScope` unchanged)
-- [ ] run `./gradlew testDebugUnitTest`
-- [ ] run `./gradlew lintDebug`
+- [x] map, time span and GPX all use the same lines; toggle flips all three
+- [x] no line is drawn between recording segments or across an unreachable step
+- [x] Settings switch and map chip stay in sync
+- [x] server upload path untouched (`TrackRepository.flushScope` unchanged)
+- [x] run `./gradlew testDebugUnitTest`
+- [x] run `./gradlew lintDebug`
 
 ### Task 9: [Final] Update documentation
-- [ ] `docs/design/DATA-NOTES.md` — `buildGpx` takes lines; replace the `filterPoints` note (line 29) with `trackLines` (chains, head/interior/tail rules, constants, known behaviour); add `TrackFilterPreference`
-- [ ] `docs/design/UI-NOTES.md` — `MapLogic.trackGeoJson` line-based `MultiLineString`, `TrackMapView`/`MapScreen` `trackLines` param, MainActivity `trackUsable`/`hiddenCount`, MapScreen chip, Settings row, TrackCard label
-- [ ] `CLAUDE.md` — add `TrackFilterPreference` to the prefs list in the Data module map
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `docs/design/DATA-NOTES.md` — `buildGpx` takes lines; replace the `filterPoints` note (line 29) with `trackLines` (chains, head/interior/tail rules, constants, known behaviour); add `TrackFilterPreference`
+- [x] `docs/design/UI-NOTES.md` — `MapLogic.trackGeoJson` line-based `MultiLineString`, `TrackMapView`/`MapScreen` `trackLines` param, MainActivity `trackUsable`/`hiddenCount`, MapScreen chip, Settings row, TrackCard label
+- [x] `CLAUDE.md` — add `TrackFilterPreference` to the prefs list in the Data module map
+- [x] move this plan to `docs/plans/completed/` (deferred - moved by orchestrator after reviews)
 
 ## Post-Completion
 *Informational only*
