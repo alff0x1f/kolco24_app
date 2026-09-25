@@ -343,10 +343,10 @@ var powerSaveMode by mutableStateOf(false)
 
 ### Task 5: [Final] Update documentation
 
-- [ ] `docs/design/UI-NOTES.md`: секция `MarksScreen` (чек-лист вместо `MarksEmpty`, гейт, `WarningAmber` — исключение из правила «no third amber hue», которое остаётся для notices) + `ReadinessChecklist` + в секции `MainActivity`: `pollDeviceState`, receiver power save/NFC, launcher уведомлений, upgrade до точной геопозиции
-- [ ] `CLAUDE.md`: в module map `ui/marks/MarksScreen.kt` упомянуть чек-лист готовности и pure `ReadinessChecklist`; добавить `ReadinessChecklist` в список pure models
-- [ ] `docs/IOS-PARITY.md`: убрать п.1 (реализован)
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `docs/design/UI-NOTES.md`: секция `MarksScreen` (чек-лист вместо `MarksEmpty`, гейт, `WarningAmber` — исключение из правила «no third amber hue», которое остаётся для notices) + `ReadinessChecklist` + в секции `MainActivity`: `pollDeviceState`, receiver power save/NFC, launcher уведомлений, upgrade до точной геопозиции
+- [x] `CLAUDE.md`: в module map `ui/marks/MarksScreen.kt` упомянуть чек-лист готовности и pure `ReadinessChecklist`; добавить `ReadinessChecklist` в список pure models
+- [x] `docs/IOS-PARITY.md`: убрать п.1 (реализован)
+- [x] move plan (deferred - orchestrator moves it after reviews)
 
 ## Post-Completion
 
