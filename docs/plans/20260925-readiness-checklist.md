@@ -322,13 +322,13 @@ var powerSaveMode by mutableStateOf(false)
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/theme/Color.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (вызов `MarksScreen`)
 
-- [ ] добавить `WarningAmber` (light/dark) в `Color.kt`
-- [ ] создать `private fun ReadinessCard(items, onAction)`: шапка + счётчик + полоска, строки пунктов, свёрнутое состояние `allDone`
-- [ ] заменить `MarksEmpty` на `ReadinessCard` в ветке `tiles.isEmpty()`; `readiness == null` → ничего не рисовать
-- [ ] удалить `MarksEmpty`, `LocationNudge`, `TrackNudge`, `GhostTileRow`, `GhostTile`, десять параметров `MarksScreen` (см. Technical Details) и осиротевшие импорты иконок
-- [ ] обновить вызов `MarksScreen` в `MainActivity` (`onStartTrack` в хосте остаётся — его использует `TeamScreen`)
-- [ ] проверить, что `nfc_banner` при непустой сетке, photo-review и hidden-КП notices не затронуты
-- [ ] тестов на Compose нет (конвенция); `./gradlew testDebugUnitTest assembleDebug lintDebug` — зелено до Task 4
+- [x] добавить `WarningAmber` (light/dark) в `Color.kt`
+- [x] создать `private fun ReadinessCard(items, onAction)`: шапка + счётчик + полоска, строки пунктов, свёрнутое состояние `allDone`
+- [x] заменить `MarksEmpty` на `ReadinessCard` в ветке `tiles.isEmpty()`; `readiness == null` → ничего не рисовать
+- [x] удалить `MarksEmpty`, `LocationNudge`, `TrackNudge`, `GhostTileRow`, `GhostTile`, десять параметров `MarksScreen` (см. Technical Details) и осиротевшие импорты иконок
+- [x] обновить вызов `MarksScreen` в `MainActivity` (`onStartTrack` в хосте остаётся — его использует `TeamScreen`)
+- [x] проверить, что `nfc_banner` при непустой сетке, photo-review и hidden-КП notices не затронуты
+- [x] тестов на Compose нет (конвенция); `./gradlew testDebugUnitTest assembleDebug lintDebug` — зелено до Task 4
 
 ### Task 4: Verify acceptance criteria
 
