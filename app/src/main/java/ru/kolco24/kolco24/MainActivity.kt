@@ -125,9 +125,9 @@ import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
-import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
+import ru.kolco24.kolco24.data.track.trackLines
 import java.io.File
 import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.data.marks.PhotoTarget
@@ -911,13 +911,13 @@ private fun Kolco24AppRoot(
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
-    // Time span uses the accuracy-filtered, reboot-safe ordered points (raw count stays full).
-    val trackUsable = remember(safeTrack) { sortedTrackPoints(filterPoints(safeTrack)) }
+    // Time span uses the spike-filtered (trackLines), reboot-safe ordered points (raw count stays full).
+    val trackUsable = remember(safeTrack) { trackLines(sortedTrackPoints(safeTrack), filter = true).flatten() }
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
-    // points so a session of only coarse fixes — dropped by filterPoints — still counts, matching the
-    // raw «Точек» count rather than the accuracy-filtered span.
+    // points so a session whose fixes are all dropped by the trackLines spike filter still counts,
+    // matching the raw «Точек» count rather than the filtered span.
     val trackSegmentCount = remember(safeTrack) { safeTrack.mapTo(HashSet()) { it.segmentId }.size }
     // Degraded accuracy = network is available but GPS is not enabled (no chip or toggle off) — the
     // track will be coarse but recording is still allowed (the engine falls back to network).
@@ -1180,9 +1180,10 @@ private fun Kolco24AppRoot(
             val label = teamForTab?.startNumber?.takeIf { it.isNotBlank() } ?: tid.toString()
             val fileName = gpxFileName(label, today)
             container.applicationScope.launch {
-                val points = filterPoints(
-                    trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid },
-                ).let(::sortedTrackPoints)
+                val points = trackLines(
+                    sortedTrackPoints(trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid }),
+                    filter = true,
+                ).flatten()
                 if (points.isEmpty()) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Нет точных точек для экспорта", Toast.LENGTH_SHORT).show()

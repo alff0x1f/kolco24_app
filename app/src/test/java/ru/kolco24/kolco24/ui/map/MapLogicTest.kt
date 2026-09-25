@@ -56,6 +56,7 @@ class MapLogicTest {
         override val bootCount: Int? = null,
         override val wallMs: Long = 0L,
         override val trustedMs: Long? = null,
+        override val segmentId: String = "seg",
     ) : TrackPointLike
 
     // ---- mapPins ----

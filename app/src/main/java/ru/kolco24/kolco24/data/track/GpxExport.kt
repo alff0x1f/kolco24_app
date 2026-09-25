@@ -7,7 +7,7 @@ import java.util.TimeZone
 
 /**
  * Pure, Android-free GPX serialization (mirrors `ScanSession.kt`/`TrackModels.kt` — JVM-unit-testable,
- * no Android imports). The caller passes already-[filterPoints]-ed, reboot-safe ordered points; this
+ * no Android imports). The caller passes [trackLines]-filtered, reboot-safe ordered points; this
  * serializer stays dumb and total.
  *
  * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per consecutive

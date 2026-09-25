@@ -125,15 +125,15 @@ Integration in `MainActivity`:
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackPointMappingTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/map/MapLogicTest.kt`
 
-- [ ] add `segmentId` to `TrackPointLike`; make `TrackPointEntity.segmentId` `override`; add `segmentId` to the `MapLogicTest` fake
-- [ ] write `haversineMeters` tests (known distance, zero distance)
-- [ ] write `trackLines` tests (filter on): `[A,B][X][C,D]` → one line of 4; the A/B/C example → lines `[A,B]`,`[C]`; realistic spike (acc 450 m, displaced 600 m, dt 15 s) between long chains removed; multipath spike with better accuracy removed; slow 60–100 m jitter kept as one line; head network cluster before a long chain removed; short head before a short chain kept; trailing network fixes (≥ 3× worse median accuracy) after a long chain removed; trailing GPS-quality short chain after a break kept as its own line; interior short chain with unreachable bypass kept as its own line; two long chains with an unreachable step → two lines; segment of only short chains → no points removed; different `segmentId`s → separate lines, never merged; `accuracy > 500` dropped, `= 500` kept; `dt = 0` (1 s floor); `short()` boundaries (1 point short; 3 points over ≥ 60 s not short; 4 points in 45 s not short); empty input → empty list; generic type preserved
-- [ ] write `trackLines` tests (filter off): only split by consecutive `segmentId`, 500 m cap not applied
-- [ ] implement `haversineMeters`, constants, `trackLines` in `TrackModels.kt`
-- [ ] migrate `MainActivity.kt:915` and `:1183` to `trackLines(sortedTrackPoints(...), filter = true).flatten()` for now (consumers switch to lines in Task 2); drop the `filterPoints` import
-- [ ] remove `filterPoints` + `DEFAULT_MAX_ACCURACY_METERS` and their tests in `TrackPointMappingTest`
-- [ ] fix stale references: `TrackModels.kt` header + `TrackPointLike` KDoc, `GpxExport.kt:10`, `MainActivity.kt:914,919-920` comments
-- [ ] run `./gradlew testDebugUnitTest` — must pass
+- [x] add `segmentId` to `TrackPointLike`; make `TrackPointEntity.segmentId` `override`; add `segmentId` to the `MapLogicTest` fake
+- [x] write `haversineMeters` tests (known distance, zero distance)
+- [x] write `trackLines` tests (filter on): `[A,B][X][C,D]` → one line of 4; the A/B/C example → lines `[A,B]`,`[C]`; realistic spike (acc 450 m, displaced 600 m, dt 15 s) between long chains removed; multipath spike with better accuracy removed; slow 60–100 m jitter kept as one line; head network cluster before a long chain removed; short head before a short chain kept; trailing network fixes (≥ 3× worse median accuracy) after a long chain removed; trailing GPS-quality short chain after a break kept as its own line; interior short chain with unreachable bypass kept as its own line; two long chains with an unreachable step → two lines; segment of only short chains → no points removed; different `segmentId`s → separate lines, never merged; `accuracy > 500` dropped, `= 500` kept; `dt = 0` (1 s floor); `short()` boundaries (1 point short; 3 points over ≥ 60 s not short; 4 points in 45 s not short); empty input → empty list; generic type preserved
+- [x] write `trackLines` tests (filter off): only split by consecutive `segmentId`, 500 m cap not applied
+- [x] implement `haversineMeters`, constants, `trackLines` in `TrackModels.kt`
+- [x] migrate `MainActivity.kt:915` and `:1183` to `trackLines(sortedTrackPoints(...), filter = true).flatten()` for now (consumers switch to lines in Task 2); drop the `filterPoints` import
+- [x] remove `filterPoints` + `DEFAULT_MAX_ACCURACY_METERS` and their tests in `TrackPointMappingTest`
+- [x] fix stale references: `TrackModels.kt` header + `TrackPointLike` KDoc, `GpxExport.kt:10`, `MainActivity.kt:914,919-920` comments
+- [x] run `./gradlew testDebugUnitTest` — must pass
 
 ### Task 2: Map and GPX draw lines
 
