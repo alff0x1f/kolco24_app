@@ -54,6 +54,8 @@ class TeamsResponseTest {
         assertEquals("МУЖ", category.shortName)
         assertEquals("Мужская", category.name)
         assertEquals(0, category.order)
+        // No control_time key → null (mapped to 0 by TeamRepository).
+        assertNull(category.controlTime)
 
         assertEquals(1, response.teams.size)
         val team = response.teams[0]
@@ -187,5 +189,39 @@ class TeamsResponseTest {
         assertEquals(42, response.teams[0].id)
         assertEquals(1, response.teams[0].members[0].numberInTeam)
         assertEquals(1, response.categories[0].id)
+    }
+
+    @Test
+    fun parsesControlTime() {
+        val payload = """
+            {
+              "race": 8,
+              "categories": [
+                { "id": 1, "code": "M", "short_name": "МУЖ", "name": "Мужская", "order": 0, "control_time": 480 }
+              ],
+              "teams": []
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<TeamsResponse>(payload)
+
+        assertEquals(480, response.categories[0].controlTime)
+    }
+
+    @Test
+    fun parsesExplicitNullControlTime() {
+        val payload = """
+            {
+              "race": 8,
+              "categories": [
+                { "id": 1, "code": "M", "short_name": "МУЖ", "name": "Мужская", "order": 0, "control_time": null }
+              ],
+              "teams": []
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<TeamsResponse>(payload)
+
+        assertNull(response.categories[0].controlTime)
     }
 }

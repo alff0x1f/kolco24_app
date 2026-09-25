@@ -130,6 +130,7 @@ private fun CategoryDto.toEntity(raceId: Int): CategoryEntity = CategoryEntity(
     shortName = shortName,
     name = name,
     sortOrder = order,
+    controlTime = controlTime ?: 0,
 )
 
 /** Maps a network DTO to the persisted entity; `members` becomes the JSON column payload. */

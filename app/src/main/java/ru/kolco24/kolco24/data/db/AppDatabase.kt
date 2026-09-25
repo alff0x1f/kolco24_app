@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrackPointEntity::class,
         JudgeScanEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(
@@ -145,13 +145,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v6→v7 (control time / КВ): adds `categories.controlTime` (minutes, `0` = not set). Unlike
+         * v3/v4, the `DEFAULT 0` is declared both in this DDL and in `@ColumnInfo(defaultValue = "0")`
+         * on [CategoryEntity.controlTime], so a fresh install and an upgrade produce the same schema.
+         * Also drops every cached teams ETag (`race/<id>/teams`, all races, all origins): a pre-v7
+         * client may have stored the ETag of a body that already carried `control_time` but persisted
+         * rows without it — a 304 on that ETag would keep `controlTime = 0` forever. Dropping it
+         * forces one full re-fetch; other resources' ETags (races, legend, member_tags) are untouched.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE categories ADD COLUMN controlTime INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("DELETE FROM sync_meta WHERE resource LIKE 'race/%/teams'")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }

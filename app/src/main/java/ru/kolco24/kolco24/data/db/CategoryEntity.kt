@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -15,4 +16,10 @@ data class CategoryEntity(
     val shortName: String,
     val name: String,
     val sortOrder: Int,
+    /**
+     * Control time (КВ) in minutes; `0` = not set (server sends `0` or omits the key). Added in v7
+     * ([AppDatabase.MIGRATION_6_7]); the default lives both here and in the migration DDL so a fresh
+     * install and an upgrade produce the same schema.
+     */
+    @ColumnInfo(defaultValue = "0") val controlTime: Int = 0,
 )

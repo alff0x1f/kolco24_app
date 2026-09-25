@@ -123,6 +123,7 @@ class TrustedClock(
     private val lock = Any()
     private val ref: AtomicReference<ClockState>
     private val statusFlow: MutableStateFlow<ClockStatus>
+    private val anchorRevisionFlow = MutableStateFlow(0L)
 
     init {
         // Warm start through boot identity (P0, null-safe): both bootCounts must be non-null AND
@@ -141,6 +142,14 @@ class TrustedClock(
 
     /** Observable clock status (deduped by [MutableStateFlow]); recomputed on sync and on tick. */
     val status: StateFlow<ClockStatus> = statusFlow.asStateFlow()
+
+    /**
+     * Counter bumped once per **accepted** [onTimeCandidate] (starts at `0`, unchanged by a rejected
+     * candidate or by [recomputeStatus]). Unlike [status] — deduped, so an accepted re-anchor that
+     * keeps [ClockStatus.Ok] emits nothing — every anchor change is observable here, letting UI that
+     * re-anchors past monotonic moments via [trustedAt] recompute.
+     */
+    val anchorRevision: StateFlow<Long> = anchorRevisionFlow.asStateFlow()
 
     /**
      * Pure: trusted epoch ms from an already-captured [state] + readings, or `null` when there is no
@@ -286,6 +295,7 @@ class TrustedClock(
             ref.set(newState)
             runCatching { persist(newAnchor) } // P2: must not throw on the OkHttp thread
             statusFlow.value = computeStatus(newState, elapsedNow, wallNow, bootNow)
+            anchorRevisionFlow.value = anchorRevisionFlow.value + 1
         }
     }
 

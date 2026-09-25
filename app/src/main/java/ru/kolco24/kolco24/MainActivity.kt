@@ -144,6 +144,7 @@ import ru.kolco24.kolco24.ui.marks.readinessBoundCount
 import ru.kolco24.kolco24.ui.marks.readinessLegendLoaded
 import ru.kolco24.kolco24.ui.marks.readinessMapResolved
 import ru.kolco24.kolco24.ui.marks.readinessTeamTitle
+import ru.kolco24.kolco24.ui.marks.resolveMarkTime
 import ru.kolco24.kolco24.ui.common.LocationPrompt
 import ru.kolco24.kolco24.ui.common.locationDenialLogUpdate
 import ru.kolco24.kolco24.ui.common.locationResultPrompt
@@ -977,6 +978,22 @@ private fun Kolco24AppRoot(
     // Per-checkpoint color token (checkpoint id → server color), so «Отметки» tiles can paint the same
     // leading color bar the Легенда rows use. Race-scoped public data, joined off the mark's checkpointId.
     val checkpointColors = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.color } }
+    // Control time (КВ) inputs for the «Отметки» metrics cell: checkpoint id → type (start/finish/…),
+    // the selected team's category КВ in minutes (0 = not set), take time re-anchored on the trusted
+    // scale exactly like the upload backfill, and «now» on the same trusted-or-wall scale as localModeNow.
+    val checkpointTypes = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.type } }
+    val controlMinutes = tabCategory?.controlTime ?: 0
+    val markTime: (MarkEntity) -> Long = remember {
+        { m -> resolveMarkTime(m, container.trustedClock::trustedAt) }
+    }
+    // Keyed on the anchor revision (bumped on every accepted anchor) and clockStatus: a new trusted
+    // anchor yields a new seam identity, which makes the КВ cell re-sample `now` and re-anchor
+    // monotonic takes via markTime. clockStatus alone is not enough — it is deduped, so an accepted
+    // re-anchor that keeps ClockStatus.Ok would leave a Finished duration/lateness stale.
+    val clockAnchorRevision by container.trustedClock.anchorRevision.collectAsState()
+    val controlTimeNow: () -> Long = remember(clockAnchorRevision, clockStatus) {
+        { container.trustedClock.sample().let { it.trustedMs ?: it.wallMs } }
+    }
     // Live per-checkpoint cost (checkpoint id → current cost), so «Отметки» СУММА/tiles score off the latest
     // legend value rather than the cost snapshotted onto the mark row at take time (which goes stale if
     // the organizer edits a КП cost afterwards). Locked CPs (null cost) are omitted; the mark snapshot
@@ -1628,6 +1645,10 @@ private fun Kolco24AppRoot(
                         celebration = pendingCelebration,
                         onCelebrationDone = { pendingCelebration = false },
                         onCoinSound = { container.scanFeedback.coin() },
+                        checkpointTypes = checkpointTypes,
+                        controlMinutes = controlMinutes,
+                        markTime = markTime,
+                        nowMs = controlTimeNow,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     PAGE_LEGEND -> LegendScreen(

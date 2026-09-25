@@ -61,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -93,6 +94,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.compose.LifecycleStartEffect
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import java.io.File
@@ -101,6 +103,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
@@ -332,6 +335,14 @@ fun MarksScreen(
     celebration: Boolean = false,
     onCelebrationDone: () -> Unit = {},
     onCoinSound: () -> Unit = {},
+    // Control time (КВ) inputs: checkpoint id → `CheckpointEntity.type`, the category КВ in minutes
+    // (`0` = not set), the take time on the trusted scale, and the current trusted-or-wall time (a new
+    // `nowMs` identity — the host re-keys it on the trusted-clock status — re-samples the КВ cell).
+    // The time seams are required so the host's trusted re-anchoring can't be silently skipped.
+    checkpointTypes: Map<Int, String> = emptyMap(),
+    controlMinutes: Int = 0,
+    markTime: (MarkEntity) -> Long,
+    nowMs: () -> Long,
     modifier: Modifier = Modifier,
 ) {
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
@@ -416,13 +427,16 @@ fun MarksScreen(
                 contentPadding = PaddingValues(bottom = marksFabListBottomPadding),
             ) {
                 item("metrics") {
-                    // «ДО КВ» has no real source yet — placeholder until control-time lands.
-                    MetricsCard(
+                    ControlTimeMetrics(
+                        marks = marks,
+                        checkpointTypes = checkpointTypes,
+                        controlMinutes = controlMinutes,
+                        markTime = markTime,
+                        nowMs = nowMs,
                         takenKp = takenKp,
                         totalKp = totalKp,
                         takenScore = takenScore,
                         totalCost = totalCost,
-                        timeToKv = "—",
                     )
                 }
                 if (photoReview != null) {
@@ -795,13 +809,57 @@ private fun HiddenKpNotice(tokens: List<String>, modifier: Modifier = Modifier) 
     }
 }
 
+/**
+ * [MetricsCard] with a live КВ cell. The minute tick lives here so only the metrics card recomposes,
+ * not the whole screen. `now` is re-sampled synchronously whenever the inputs change (a fresh start
+ * take must not be measured against a stale `now` from a non-ticking state), when the [nowMs] seam
+ * changes identity (the host re-keys it on the trusted-clock status: a new anchor re-anchors monotonic
+ * takes via `markTime`), on every tick, and on
+ * `ON_START` — `delay` runs on `uptimeMillis`, which stops while the phone sleeps. The next tick lands
+ * exactly on the minute boundary counted from the start ([msUntilNextChange]).
+ */
+@Composable
+private fun ControlTimeMetrics(
+    marks: List<MarkEntity>,
+    checkpointTypes: Map<Int, String>,
+    controlMinutes: Int,
+    markTime: (MarkEntity) -> Long,
+    nowMs: () -> Long,
+    takenKp: Int,
+    totalKp: Int,
+    takenScore: Int,
+    totalCost: Int,
+) {
+    var tick by remember { mutableIntStateOf(0) }
+    LifecycleStartEffect(Unit) {
+        tick++
+        onStopOrDispose {}
+    }
+    val now = remember(tick, marks, checkpointTypes, controlMinutes, nowMs) { nowMs() }
+    val kv = controlTimeState(marks, checkpointTypes, controlMinutes, now, markTime)
+    // Keyed on `tick` too: a re-sample that yields an equal `kv` (anchor stepped back) must still re-arm.
+    LaunchedEffect(kv, tick) {
+        msUntilNextChange(kv)?.let {
+            delay(it)
+            tick++
+        }
+    }
+    MetricsCard(
+        takenKp = takenKp,
+        totalKp = totalKp,
+        takenScore = takenScore,
+        totalCost = totalCost,
+        controlTime = controlTimeLabel(kv),
+    )
+}
+
 @Composable
 private fun MetricsCard(
     takenKp: Int,
     totalKp: Int,
     takenScore: Int,
     totalCost: Int,
-    timeToKv: String,
+    controlTime: ControlTimeLabel,
 ) {
     Surface(
         modifier = Modifier
@@ -838,7 +896,13 @@ private fun MetricsCard(
                 modifier = Modifier.height(36.dp).padding(horizontal = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
-            MetricItem(label = "ДО КВ", value = timeToKv, isWarn = true, modifier = Modifier.weight(1f))
+            MetricItem(
+                label = controlTime.label,
+                value = controlTime.value,
+                mono = true,
+                isError = controlTime.isError,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -854,7 +918,8 @@ private fun MetricItem(
     value: String,
     total: String? = null,
     unit: String? = null,
-    isWarn: Boolean = false,
+    mono: Boolean = false,
+    isError: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.padding(vertical = 10.dp)) {
@@ -871,8 +936,8 @@ private fun MetricItem(
             Text(
                 text = value,
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium),
-                fontFamily = if (isWarn) RobotoMono else null,
-                color = if (isWarn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                fontFamily = if (mono) RobotoMono else null,
+                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
             if (total != null) {
                 Text(

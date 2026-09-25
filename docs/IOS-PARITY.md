@@ -9,22 +9,7 @@ iOS-приложение (`~/src/kolco24_ios/kolco24`) — порт этого �
 
 ## Фичи
 
-### 1. Контрольное время — ячейка «До КВ»
-
-План: `20260923-control-time.md`. iOS: `Core/Marks/ControlTime`, `MarksModel`, `MarksView`.
-
-- В Android ячейка «ДО КВ» — заглушка (`MarksScreen.kt`, комментарий «placeholder until control-time lands»).
-- Сервер уже отдаёт `categories[].control_time` (минуты, `0` = не задано) в `GET /app/race/<id>/teams/`.
-  Нужно протащить DTO → entity → Room (миграция).
-- Состояния ячейки:
-  - до старта — «КВ 8:00»;
-  - после своей NFC-отметки на КП типа `start` — обратный отсчёт «До КВ 3:27»;
-  - КВ вышло, финиша нет — «Опоздание +0:12» красным;
-  - после отметки на КП типа `finish` — «Время 7:48» (красным при опоздании).
-- Старт/финиш — только свои отметки команды, `method == "nfc"`, время > 0 (`trustedTakenAt ?: takenAt`).
-  Округление вниз до минут, как на сервере (`apps/race/results.py`). Работает оффлайн.
-
-### 2. Способ проверки КП (`check_method`: offline / cloud / local)
+### 1. Способ проверки КП (`check_method`: offline / cloud / local)
 
 План: `20260924-check-method.md`. iOS: `Core/Marks/CheckMethod`, `ScanModel`, `ScanSheet`,
 `MarkUploadRepository.confirm`, `MarksView`, `PhotoLightboxView`.
@@ -43,7 +28,7 @@ iOS-приложение (`~/src/kolco24_ios/kolco24`) — порт этого �
 - Фото-отметки всегда `offline`. Неизвестное значение → `offline`. Сервер переименовывает значения
   (`online` → `cloud`, `local_server` → `local`); до этого старые значения парсятся как `offline`.
 
-### 3. Запись кодов на браслеты участников (админка)
+### 2. Запись кодов на браслеты участников (админка)
 
 План: `20260923-member-chip-provisioning.md`. iOS: `MemberProvisioningView`, `App/MemberProvisioningModel`,
 `Core/Admin/MemberProvisioningLogic`, `Net/Dto/MemberTagBind`.

@@ -229,4 +229,53 @@ class MigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun migrate6To7_addsZeroControlTimeAndDropsOnlyTeamsEtags() {
+        // Seed a v6 category plus teams ETags for two races and both origins, and unrelated ETags.
+        helper.createDatabase(testDb, 6).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO categories (id, raceId, code, shortName, name, sortOrder)
+                VALUES (1, 8, 'M', 'Муж', 'Мужская', 2)
+                """.trimIndent(),
+            )
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'race/1/teams', '\"t1\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('http://lan/', 'race/1/teams', '\"l1\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'race/2/teams', '\"t2\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('http://lan/', 'race/2/teams', '\"l2\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'races', '\"r1\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'race/1/legend', '\"g1\"')")
+            db.execSQL("INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'race/1/member_tags', '\"m1\"')")
+            db.execSQL(
+                "INSERT INTO sync_meta (origin, resource, etag) VALUES ('https://cloud/', 'race/1/member_tags/synced', '\"s1\"')",
+            )
+        }
+
+        // Run the migration; MigrationTestHelper validates the result against schemas/7.json.
+        val db = helper.runMigrationsAndValidate(testDb, 7, true, AppDatabase.MIGRATION_6_7)
+
+        // The legacy category survived with its data, and the new column defaults to 0.
+        db.query("SELECT COUNT(*), shortName, controlTime FROM categories WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals("Муж", c.getString(1))
+            assertEquals(0, c.getInt(2))
+        }
+
+        // Every race's and origin's teams ETag is gone (forces a full re-fetch that picks up control_time)...
+        db.query("SELECT COUNT(*) FROM sync_meta WHERE resource LIKE 'race/%/teams'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        // ...while other resources' ETags are intact.
+        for (resource in listOf("races", "race/1/legend", "race/1/member_tags", "race/1/member_tags/synced")) {
+            db.query("SELECT COUNT(*) FROM sync_meta WHERE resource = ?", arrayOf(resource)).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(resource, 1, c.getInt(0))
+            }
+        }
+
+        db.close()
+    }
 }
