@@ -212,12 +212,12 @@ fun controlTimeState(
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `MarksScreen`: параметры `checkpointTypes`, `controlMinutes`, `markTime`, `nowMs` с дефолтами; private `ControlTimeMetrics` вокруг `MetricsCard` — `tick`, `remember(tick, marks, checkpointTypes, controlMinutes) { nowMs() }`, `LifecycleStartEffect`, `LaunchedEffect(kv)` с точным тиком
-- [ ] `MetricsCard`: вместо `timeToKv: String` — `ControlTimeLabel`; убрать комментарий-заглушку
-- [ ] `MetricItem`: `isWarn` используется только ячейкой КВ — заменить на `mono: Boolean` + `isError: Boolean` (→ `colorScheme.error`); обычный цвет `onSurface`, не `primary`
-- [ ] `MainActivity`: `checkpointTypes`, `controlMinutes`, `markTime` (`resolveMarkTime(m, trustedClock::trustedAt)`), `nowMs` — передать в `MarksScreen`
-- [ ] логика покрыта тестами задачи 2 (Compose UI не тестируется по конвенции); `./gradlew assembleDebug` проходит
-- [ ] run `./gradlew testDebugUnitTest` — must pass before task 4
+- [x] `MarksScreen`: параметры `checkpointTypes`, `controlMinutes`, `markTime`, `nowMs` с дефолтами; private `ControlTimeMetrics` вокруг `MetricsCard` — `tick`, `remember(tick, marks, checkpointTypes, controlMinutes) { nowMs() }`, `LifecycleStartEffect`, `LaunchedEffect(kv)` с точным тиком
+- [x] `MetricsCard`: вместо `timeToKv: String` — `ControlTimeLabel`; убрать комментарий-заглушку
+- [x] `MetricItem`: `isWarn` используется только ячейкой КВ — заменить на `mono: Boolean` + `isError: Boolean` (→ `colorScheme.error`); обычный цвет `onSurface`, не `primary`
+- [x] `MainActivity`: `checkpointTypes`, `controlMinutes`, `markTime` (`resolveMarkTime(m, trustedClock::trustedAt)`), `nowMs` — передать в `MarksScreen`
+- [x] логика покрыта тестами задачи 2 (Compose UI не тестируется по конвенции); `./gradlew assembleDebug` проходит
+- [x] run `./gradlew testDebugUnitTest` — must pass before task 4
 
 ### Task 4: Verify acceptance criteria
 
