@@ -1720,6 +1720,7 @@ private fun Kolco24AppRoot(
                         onRefresh = { pullRefresh({ teamRefreshing = it }, container.syncCoordinator::refreshAll) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
+                        trackShownPointCount = trackUsable.size,
                         trackSegmentCount = trackSegmentCount,
                         trackDegradedAccuracy = degradedAccuracy,
                         trackFirstPointTime = trackFirstTime,

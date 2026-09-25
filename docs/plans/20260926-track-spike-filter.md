@@ -204,9 +204,9 @@ Integration in `MainActivity`:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/team/TeamScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `shownPointCount: Int` param through `TeamScreen` → `TrackCard`; pass `trackUsable.size` from `MainActivity.kt:1705` (Settings `:1911` stays raw)
-- [ ] in the metrics row (`TrackCard.kt:213-221`) show «на карте N» under/next to the point count only when `shownPointCount != pointCount`; `RecordingHeader` stays unchanged
-- [ ] run `./gradlew assembleDebug` — must pass
+- [x] add `shownPointCount: Int` param through `TeamScreen` → `TrackCard`; pass `trackUsable.size` from `MainActivity.kt:1705` (Settings `:1911` stays raw)
+- [x] in the metrics row (`TrackCard.kt:213-221`) show «на карте N» under/next to the point count only when `shownPointCount != pointCount`; `RecordingHeader` stays unchanged
+- [x] run `./gradlew assembleDebug` — must pass
 
 ### Task 8: Verify acceptance criteria
 - [ ] map, time span and GPX all use the same lines; toggle flips all three
