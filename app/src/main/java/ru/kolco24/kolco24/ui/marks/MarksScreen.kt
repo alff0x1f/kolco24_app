@@ -336,11 +336,13 @@ fun MarksScreen(
     onCelebrationDone: () -> Unit = {},
     onCoinSound: () -> Unit = {},
     // Control time (КВ) inputs: checkpoint id → `CheckpointEntity.type`, the category КВ in minutes
-    // (`0` = not set), the take time on the trusted scale, and the current trusted-or-wall time.
+    // (`0` = not set), the take time on the trusted scale, and the current trusted-or-wall time (a new
+    // `nowMs` identity — the host re-keys it on the trusted-clock status — re-samples the КВ cell).
+    // The time seams are required so the host's trusted re-anchoring can't be silently skipped.
     checkpointTypes: Map<Int, String> = emptyMap(),
     controlMinutes: Int = 0,
-    markTime: (MarkEntity) -> Long = { it.trustedTakenAt ?: it.takenAt },
-    nowMs: () -> Long = { System.currentTimeMillis() },
+    markTime: (MarkEntity) -> Long,
+    nowMs: () -> Long,
     modifier: Modifier = Modifier,
 ) {
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
@@ -810,7 +812,9 @@ private fun HiddenKpNotice(tokens: List<String>, modifier: Modifier = Modifier) 
 /**
  * [MetricsCard] with a live КВ cell. The minute tick lives here so only the metrics card recomposes,
  * not the whole screen. `now` is re-sampled synchronously whenever the inputs change (a fresh start
- * take must not be measured against a stale `now` from a non-ticking state), on every tick, and on
+ * take must not be measured against a stale `now` from a non-ticking state), when the [nowMs] seam
+ * changes identity (the host re-keys it on the trusted-clock status: a new anchor re-anchors monotonic
+ * takes via `markTime`), on every tick, and on
  * `ON_START` — `delay` runs on `uptimeMillis`, which stops while the phone sleeps. The next tick lands
  * exactly on the minute boundary counted from the start ([msUntilNextChange]).
  */
@@ -831,9 +835,10 @@ private fun ControlTimeMetrics(
         tick++
         onStopOrDispose {}
     }
-    val now = remember(tick, marks, checkpointTypes, controlMinutes) { nowMs() }
+    val now = remember(tick, marks, checkpointTypes, controlMinutes, nowMs) { nowMs() }
     val kv = controlTimeState(marks, checkpointTypes, controlMinutes, now, markTime)
-    LaunchedEffect(kv) {
+    // Keyed on `tick` too: a re-sample that yields an equal `kv` (anchor stepped back) must still re-arm.
+    LaunchedEffect(kv, tick) {
         msUntilNextChange(kv)?.let {
             delay(it)
             tick++

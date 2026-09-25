@@ -446,4 +446,33 @@ class TrustedClockTest {
         assertEquals(4, s.bootCount)
         assertEquals(10_000_000L + (2_000L - 1_000L), s.trustedMs)
     }
+
+    @Test
+    fun anchorRevision_bumpsOnEveryAcceptedAnchor_evenWhenStatusStaysOk() {
+        val f = Fakes(elapsed = 1_000L, wall = 10_000_000L, boot = 1)
+        val c = clock(f)
+        assertEquals(0L, c.anchorRevision.value)
+        c.onServerTime(10_000_000L, anchorElapsed = 1_000L, wallNow = 10_000_000L, bootNow = 1, uncertaintyMs = 9_900L)
+        assertEquals(ClockStatus.Ok, c.status.value)
+        assertEquals(1L, c.anchorRevision.value)
+        // A better candidate shifts the anchor by 5 s: status stays Ok (deduped, no emission), but the
+        // revision must still change so re-anchored past takes are recomputed.
+        f.elapsed = 2_000L
+        c.onServerTime(10_006_000L, anchorElapsed = 2_000L, wallNow = 10_001_000L, bootNow = 1, uncertaintyMs = 50L)
+        assertEquals(ClockStatus.Ok, c.status.value)
+        assertEquals(2L, c.anchorRevision.value)
+        assertEquals(10_005_000L, c.trustedAt(elapsedAt = 1_000L, bootAt = 1))
+    }
+
+    @Test
+    fun anchorRevision_unchangedByRejectedCandidateAndStatusRecompute() {
+        val f = Fakes(elapsed = 1_000L, wall = 0L, boot = 1)
+        val c = clock(f)
+        c.onServerTime(10_000_000L, anchorElapsed = 1_000L, wallNow = 0L, bootNow = 1, uncertaintyMs = 50L)
+        assertEquals(1L, c.anchorRevision.value)
+        f.elapsed = 2_000L
+        c.onTimeCandidate(TimeCandidate(serverMs = 99_999_999L, anchorElapsedMs = 2_000L, uncertaintyMs = 9_900L), 0L, 1)
+        c.recomputeStatus()
+        assertEquals(1L, c.anchorRevision.value)
+    }
 }

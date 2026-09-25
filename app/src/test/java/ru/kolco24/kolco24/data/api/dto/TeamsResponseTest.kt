@@ -207,4 +207,21 @@ class TeamsResponseTest {
 
         assertEquals(480, response.categories[0].controlTime)
     }
+
+    @Test
+    fun parsesExplicitNullControlTime() {
+        val payload = """
+            {
+              "race": 8,
+              "categories": [
+                { "id": 1, "code": "M", "short_name": "МУЖ", "name": "Мужская", "order": 0, "control_time": null }
+              ],
+              "teams": []
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<TeamsResponse>(payload)
+
+        assertNull(response.categories[0].controlTime)
+    }
 }

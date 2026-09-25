@@ -1,7 +1,7 @@
 package ru.kolco24.kolco24.ui.marks
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
@@ -22,6 +22,7 @@ class ControlTimeTest {
         trustedTakenAt: Long? = null,
         elapsedRealtimeAt: Long? = null,
         bootCount: Int? = null,
+        complete: Boolean = true,
     ) = MarkEntity(
         id = id,
         raceId = 1,
@@ -34,7 +35,7 @@ class ControlTimeTest {
         cpCode = "CODE",
         present = emptyList(),
         expectedCount = 0,
-        complete = true,
+        complete = complete,
         takenAt = takenAt,
         updatedAt = takenAt,
         trustedTakenAt = trustedTakenAt,
@@ -115,13 +116,55 @@ class ControlTimeTest {
     @Test
     fun `finished within control time`() {
         val marks = listOf(mark("s", 1, base), mark("f", 3, base + 7 * hour + 48 * min))
-        assertEquals(ControlTimeState.Finished(7 * hour + 48 * min, null), state(marks))
+        assertEquals(ControlTimeState.Finished(7 * hour + 48 * min, false), state(marks))
     }
 
     @Test
-    fun `finished late carries overMs`() {
+    fun `finished late is flagged late`() {
         val marks = listOf(mark("s", 1, base), mark("f", 3, base + 8 * hour + 12 * min))
-        assertEquals(ControlTimeState.Finished(8 * hour + 12 * min, 12 * min), state(marks))
+        assertEquals(ControlTimeState.Finished(8 * hour + 12 * min, true), state(marks))
+    }
+
+    @Test
+    fun `finish exactly at control time is not late`() {
+        val marks = listOf(mark("s", 1, base), mark("f", 3, base + 8 * hour))
+        assertEquals(ControlTimeState.Finished(8 * hour, false), state(marks))
+    }
+
+    @Test
+    fun `finish at the start instant counts`() {
+        val marks = listOf(mark("s", 1, base), mark("f", 3, base))
+        assertEquals(ControlTimeState.Finished(0, false), state(marks))
+    }
+
+    @Test
+    fun `last ms before control time is still running`() {
+        assertEquals(
+            ControlTimeState.Running(1),
+            state(listOf(mark("s", 1, base)), nowMs = base + 8 * hour - 1),
+        )
+    }
+
+    @Test
+    fun `now before start is not clamped`() {
+        // Mixed trusted/wall scales: the countdown exceeds the КВ rather than freezing the tick schedule.
+        assertEquals(
+            ControlTimeState.Running(8 * hour + 3 * min),
+            state(listOf(mark("s", 1, base)), nowMs = base - 3 * min),
+        )
+    }
+
+    @Test
+    fun `negative control time is unknown`() {
+        assertEquals(ControlTimeState.Unknown, state(listOf(mark("s", 1, base)), controlMinutes = -5))
+    }
+
+    @Test
+    fun `incomplete start take still starts the clock`() {
+        assertEquals(
+            ControlTimeState.Running(7 * hour),
+            state(listOf(mark("s", 1, base, complete = false)), nowMs = base + hour),
+        )
     }
 
     // --- rules ---
@@ -145,7 +188,7 @@ class ControlTimeTest {
             mark("f2", 3, base + 3 * hour),
             mark("f1", 3, base + 2 * hour),
         )
-        assertEquals(ControlTimeState.Finished(2 * hour, null), state(marks))
+        assertEquals(ControlTimeState.Finished(2 * hour, false), state(marks))
     }
 
     @Test
@@ -159,6 +202,19 @@ class ControlTimeTest {
             ControlTimeState.NotStarted(8 * hour),
             state(listOf(mark("s", 1, base, method = "photo"))),
         )
+    }
+
+    @Test
+    fun `photo mark on finish does not finish`() {
+        val marks = listOf(mark("s", 1, base), mark("f", 3, base + hour, method = "photo"))
+        assertEquals(ControlTimeState.Running(6 * hour), state(marks, nowMs = base + 2 * hour))
+    }
+
+    @Test
+    fun `kp take is neither start nor finish`() {
+        val marks = listOf(mark("k", 2, base - hour), mark("s", 1, base), mark("k2", 2, base + hour))
+        assertEquals(ControlTimeState.Running(6 * hour), state(marks, nowMs = base + 2 * hour))
+        assertEquals(ControlTimeState.NotStarted(8 * hour), state(listOf(mark("k", 2, base))))
     }
 
     @Test
@@ -188,22 +244,19 @@ class ControlTimeTest {
     @Test
     fun `finish 59 s late is not overtime`() {
         val marks = listOf(mark("s", 1, base), mark("f", 3, base + 8 * hour + 59_000))
-        val s = state(marks) as ControlTimeState.Finished
-        assertNull(s.overMs)
+        assertEquals(ControlTimeState.Finished(8 * hour + 59_000, false), state(marks))
     }
 
     @Test
     fun `finish 60 s late is overtime`() {
         val marks = listOf(mark("s", 1, base), mark("f", 3, base + 8 * hour + 60_000))
-        val s = state(marks) as ControlTimeState.Finished
-        assertNotNull(s.overMs)
-        assertEquals(60_000L, s.overMs)
+        assertEquals(ControlTimeState.Finished(8 * hour + min, true), state(marks))
     }
 
     @Test
-    fun `finished without control time has no overMs`() {
+    fun `finished without control time is never late`() {
         val marks = listOf(mark("s", 1, base), mark("f", 3, base + 20 * hour))
-        assertEquals(ControlTimeState.Finished(20 * hour, null), state(marks, controlMinutes = 0))
+        assertEquals(ControlTimeState.Finished(20 * hour, false), state(marks, controlMinutes = 0))
     }
 
     // --- formatHoursMinutes ---
@@ -214,6 +267,8 @@ class ControlTimeTest {
         assertEquals("0:00", formatHoursMinutes(59_999))
         assertEquals("8:00", formatHoursMinutes(8 * hour))
         assertEquals("3:27", formatHoursMinutes(3 * hour + 27 * min + 59_000))
+        assertEquals("10:05", formatHoursMinutes(10 * hour + 5 * min))
+        assertEquals("26:40", formatHoursMinutes(26 * hour + 40 * min))
     }
 
     // --- msUntilNextChange ---
@@ -222,6 +277,8 @@ class ControlTimeTest {
     fun `msUntilNextChange ticks on the minute from start`() {
         assertEquals(1L, msUntilNextChange(ControlTimeState.Running(60_000)))
         assertEquals(30_001L, msUntilNextChange(ControlTimeState.Running(90_000)))
+        assertEquals(59_999L, msUntilNextChange(ControlTimeState.Running(59_999)))
+        assertEquals(1L, msUntilNextChange(ControlTimeState.Running(1)))
         assertEquals(60_000L, msUntilNextChange(ControlTimeState.Overtime(0)))
         assertEquals(59_000L, msUntilNextChange(ControlTimeState.Overtime(61_000)))
     }
@@ -230,8 +287,25 @@ class ControlTimeTest {
     fun `msUntilNextChange is null for static states`() {
         assertNull(msUntilNextChange(ControlTimeState.Unknown))
         assertNull(msUntilNextChange(ControlTimeState.NotStarted(8 * hour)))
-        assertNull(msUntilNextChange(ControlTimeState.Finished(hour, null)))
-        assertNull(msUntilNextChange(ControlTimeState.Finished(9 * hour, hour)))
+        assertNull(msUntilNextChange(ControlTimeState.Finished(hour, false)))
+        assertNull(msUntilNextChange(ControlTimeState.Finished(9 * hour, true)))
+    }
+
+    @Test
+    fun `msUntilNextChange lands exactly on the next label change`() {
+        val start = listOf(mark("s", 1, base))
+        val offsets = listOf(
+            0L, 1L, 30_000L, 59_999L, 60_000L, hour + 12_345L,
+            8 * hour - 60_001L, 8 * hour - 60_000L, 8 * hour - 59_999L, 8 * hour - 1,
+            8 * hour, 8 * hour + 1, 8 * hour + 61_000L,
+        )
+        for (offset in offsets) {
+            val now = base + offset
+            val kv = state(start, nowMs = now)
+            val d = msUntilNextChange(kv)!!
+            assertEquals("offset $offset", controlTimeLabel(kv), controlTimeLabel(state(start, nowMs = now + d - 1)))
+            assertNotEquals("offset $offset", controlTimeLabel(kv), controlTimeLabel(state(start, nowMs = now + d)))
+        }
     }
 
     // --- controlTimeLabel ---
@@ -253,11 +327,11 @@ class ControlTimeTest {
         )
         assertEquals(
             ControlTimeLabel("ВРЕМЯ", "7:48", false),
-            controlTimeLabel(ControlTimeState.Finished(7 * hour + 48 * min, null)),
+            controlTimeLabel(ControlTimeState.Finished(7 * hour + 48 * min, false)),
         )
         assertEquals(
             ControlTimeLabel("ВРЕМЯ", "8:12", true),
-            controlTimeLabel(ControlTimeState.Finished(8 * hour + 12 * min, 12 * min)),
+            controlTimeLabel(ControlTimeState.Finished(8 * hour + 12 * min, true)),
         )
     }
 }

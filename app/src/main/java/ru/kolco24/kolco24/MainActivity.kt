@@ -142,9 +142,9 @@ import ru.kolco24.kolco24.ui.marks.LocationAccess
 import ru.kolco24.kolco24.ui.marks.locationAccessOf
 import ru.kolco24.kolco24.ui.marks.readinessBoundCount
 import ru.kolco24.kolco24.ui.marks.readinessLegendLoaded
-import ru.kolco24.kolco24.ui.marks.resolveMarkTime
 import ru.kolco24.kolco24.ui.marks.readinessMapResolved
 import ru.kolco24.kolco24.ui.marks.readinessTeamTitle
+import ru.kolco24.kolco24.ui.marks.resolveMarkTime
 import ru.kolco24.kolco24.ui.common.LocationPrompt
 import ru.kolco24.kolco24.ui.common.locationDenialLogUpdate
 import ru.kolco24.kolco24.ui.common.locationResultPrompt
@@ -983,12 +983,16 @@ private fun Kolco24AppRoot(
     // scale exactly like the upload backfill, and «now» on the same trusted-or-wall scale as localModeNow.
     val checkpointTypes = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.type } }
     val controlMinutes = tabCategory?.controlTime ?: 0
-    val controlTimeClock = container.trustedClock
-    val markTime: (MarkEntity) -> Long = remember(controlTimeClock) {
-        { m -> resolveMarkTime(m, controlTimeClock::trustedAt) }
+    val markTime: (MarkEntity) -> Long = remember {
+        { m -> resolveMarkTime(m, container.trustedClock::trustedAt) }
     }
-    val controlTimeNow: () -> Long = remember(controlTimeClock) {
-        { controlTimeClock.sample().let { it.trustedMs ?: it.wallMs } }
+    // Keyed on the anchor revision (bumped on every accepted anchor) and clockStatus: a new trusted
+    // anchor yields a new seam identity, which makes the КВ cell re-sample `now` and re-anchor
+    // monotonic takes via markTime. clockStatus alone is not enough — it is deduped, so an accepted
+    // re-anchor that keeps ClockStatus.Ok would leave a Finished duration/lateness stale.
+    val clockAnchorRevision by container.trustedClock.anchorRevision.collectAsState()
+    val controlTimeNow: () -> Long = remember(clockAnchorRevision, clockStatus) {
+        { container.trustedClock.sample().let { it.trustedMs ?: it.wallMs } }
     }
     // Live per-checkpoint cost (checkpoint id → current cost), so «Отметки» СУММА/tiles score off the latest
     // legend value rather than the cost snapshotted onto the mark row at take time (which goes stale if

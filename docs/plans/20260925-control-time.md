@@ -81,6 +81,13 @@ checkpointTypes, controlMinutes) { nowMs() }`), иначе после взяти
 - Округление минут вниз везде, как на сервере. Первую минуту после КВ — «ОПОЗДАНИЕ +0:00» красным (штрафа ещё нет).
 - Известный край (не лечим): после перезагрузки `trustedMs == null` до синхронизации → «сейчас» по стенным часам,
   а старт может быть в доверенной шкале; при сбитых часах отсчёт сдвинут до первой синхры (виден `ClockWarningBanner`).
+  Если «сейчас» раньше старта, `Running` не зажимается до КВ (иначе тик по минутам вырождается) — «ДО КВ» может
+  показать больше КВ.
+- Известный край (не лечим, review): старт без `trustedTakenAt` в прошлой загрузке → `trustedAt` отвергает
+  (другой `bootCount`) → сырое стенное `takenAt`, а «сейчас» уже доверенное → сдвиг на перекос стенных часов той
+  загрузки без баннера. Если у отметки или якоря `bootCount == null`, `trustedAt` пере-якорит старый
+  `elapsedRealtimeAt` на новый якорь — бессмысленное время, но ровно то, что уйдёт на сервер при выгрузке.
+- Расхождение с сервером (как в iOS): сервер берёт самый ранний финиш без оглядки на старт, клиент — финиш ≥ старта.
 
 ## Technical Details
 
@@ -104,7 +111,7 @@ sealed interface ControlTimeState {
     data class NotStarted(val limitMs: Long) : ControlTimeState
     data class Running(val remainingMs: Long) : ControlTimeState
     data class Overtime(val overMs: Long) : ControlTimeState
-    data class Finished(val elapsedMs: Long, val overMs: Long?) : ControlTimeState
+    data class Finished(val elapsedMs: Long, val late: Boolean) : ControlTimeState
 }
 
 fun controlTimeState(
@@ -120,7 +127,7 @@ fun controlTimeState(
 1. Фильтр: `method == "nfc"` и `timeOf(m) > 0`.
 2. `start = min timeOf` среди отметок с типом `start`; `finish = min timeOf` среди `finish` с `t >= start`.
 3. `limitMs = controlMinutes * 60_000L`.
-4. Есть `start` и `finish`: `elapsed = finish − start`; `overMs = if (controlMinutes > 0 && elapsed / 60_000 > controlMinutes) elapsed − limitMs else null` → `Finished`.
+4. Есть `start` и `finish`: `elapsed = finish − start`; `late = controlMinutes > 0 && elapsed / 60_000 > controlMinutes` → `Finished`.
 5. `controlMinutes <= 0` → `Unknown`.
 6. Нет `start` → `NotStarted(limitMs)`.
 7. `elapsed = nowMs − start`; `elapsed < limitMs` → `Running(limitMs − elapsed)`, иначе `Overtime(elapsed − limitMs)`.
@@ -140,8 +147,8 @@ fun controlTimeState(
 | NotStarted | КВ | 8:00 | false |
 | Running | ДО КВ | 3:27 | false |
 | Overtime | ОПОЗДАНИЕ | +0:12 | true |
-| Finished, `overMs == null` | ВРЕМЯ | 7:48 | false |
-| Finished, `overMs != null` | ВРЕМЯ | 8:12 | true |
+| Finished, `!late` | ВРЕМЯ | 7:48 | false |
+| Finished, `late` | ВРЕМЯ | 8:12 | true |
 
 ### Связка
 
@@ -149,7 +156,10 @@ fun controlTimeState(
   - `checkpointTypes = remember(safeCheckpoints) { safeCheckpoints.associate { it.id to it.type } }`
   - `controlMinutes = tabCategory?.controlTime ?: 0`
   - `markTime = { m -> resolveMarkTime(m, trustedClock::trustedAt) }`
-  - `nowMs = { trustedClock.sample().let { it.trustedMs ?: it.wallMs } }`
+  - `nowMs = remember(clockAnchorRevision, clockStatus) { { trustedClock.sample().let { it.trustedMs ?: it.wallMs } } }` —
+    новый якорь (`TrustedClock.anchorRevision`, растёт на каждый принятый кандидат) → новая identity seam →
+    пересчёт даже для нетикающего `Finished`; одного `clockStatus` мало: он дедуплицируется, и принятый
+    пере-якорь при `Ok` не даёт эмиссии (review).
 - `MarksScreen` → private `ControlTimeMetrics(...)` вокруг `MetricsCard` в item `"metrics"`:
   ```kotlin
   var tick by remember { mutableIntStateOf(0) }

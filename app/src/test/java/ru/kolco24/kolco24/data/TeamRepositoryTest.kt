@@ -153,6 +153,17 @@ class TeamRepositoryTest {
     }
 
     @Test
+    fun success_mapsNullControlTimeToZero() = runTest {
+        val body = teamsJson().replace("\"order\": 2 }", "\"order\": 2, \"control_time\": null }")
+        check(body.contains("control_time"))
+        server.enqueue(MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(body))
+
+        assertEquals(RefreshResult.Updated, repository.refreshTeams(8))
+
+        assertEquals(0, repository.categoriesForRace(8).first()[0].controlTime)
+    }
+
+    @Test
     fun success_writesDataBeforeEtag() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setHeader("ETag", "\"v1\"").setBody(teamsJson()),
