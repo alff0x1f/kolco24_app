@@ -43,14 +43,14 @@ One line per area — full per-file notes in the two docs files above.
 - `ui/scan/` — NFC take overlay (`ScanScreen`, 20 s window, completion hold) + pure `ScanSession` state machine + pure `ScanFeedback` mapper.
 - `ui/marks/MarksScreen.kt` — Отметки tab: tile grid, metrics (live control-time/КВ cell, pure `ControlTime`), pre-start readiness checklist card (empty state; pure `ReadinessChecklist` model, device signals polled in `MainActivity`), photo tiles + lightbox, judge-review and hidden-КП notices, take celebration.
 - `ui/legend/` — Легенда tab (locked-row masking, team-scoped taken, ScoreCard scoring counts) + pure `CheckpointColor`.
-- `ui/map/` — Карта tab: `MapScreen` (download/progress cards, OSM attribution, «Все точки» filter chip; composes `TrackMapView` only when the host's `settledPage == 2` gate is set), `TrackMapView` MapLibre adapter (bitmap pins, OSM UA, off-main track `MultiLineString` GeoJSON), pure `MapLogic` (GeoJSON, style JSON, camera choice)/`MapAvailability`.
+- `ui/map/` — Карта tab: `MapScreen` (download/progress cards, OSM attribution, «Все точки» filter chip; composes `TrackMapView` only when the host's `settledPage == 2` gate is set), `TrackMapView` MapLibre adapter (bitmap pins, OSM UA, off-main track `MultiLineString` GeoJSON + dot circle layer for 1-point lines), pure `MapLogic` (GeoJSON, style JSON, camera choice)/`MapAvailability`.
 - `ui/team/` — Команда tab (roster + live chip bindings) + `BindChipSheet` (pure `decideBind`).
 - `ui/teampicker/` — team-selection flow + pure `TeamPickerLogic`.
 - `ui/photo/` — CameraX capture overlay (pure `bucketOrientationDegrees` rotation) + `PhotoNumberPicker`.
 - `ui/admin/` — admin overlay: login, chip provisioning, КП-chip check, member-bracelet check, judge start/finish scan (pure `ProvisioningModel`/`ChipCheckModel`/`MemberChipCheckModel`/`JudgeScanModel`).
-- `ui/settings/SettingsScreen.kt` — settings cards: team, theme, track profile, local-mode switch + delete race map, admin, debug-only tools.
+- `ui/settings/SettingsScreen.kt` — settings cards: team, theme, track profile + «Все точки» track-filter switch, local-mode switch + delete race map, admin, debug-only tools.
 - `ui/upload/` — «Загрузка данных» overlay + pure upload-status models (shared home for `TrackUploadStatus`).
-- `ui/track/TrackCard.kt` — track recording card in TeamScreen; GPX share.
+- `ui/track/TrackCard.kt` — track recording card in TeamScreen (raw «Точек» count + «на карте N» when the spike filter hides points); GPX share.
 - `ui/common/` — `ClockWarningBanner`/`ScanClockBanner`, `PullToRefresh`, pure `PermissionPrompts` (location/notifications permanent-denial routing, decided from the launcher result + a second-silent-denial-in-session fallback), pure `KeyedValue` (`valueForKey` key-tagged emission filter).
 - `ui/theme/` — M3 tokens, `Kolco24Theme` (no dynamic color), pure `ThemeMode`, `RobotoMono` type.
 

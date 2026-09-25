@@ -55,7 +55,7 @@
 - Inside each `segmentId` run the points are cut into **chains** at every unreachable step. Short chains are *candidates* for removal, not garbage: an interior short chain is removed only if bypassing it gives a reachable connection. Otherwise it stays as its own line with gaps around it.
 - Head and tail get separate, more careful rules (no bypass possible there). The live tail is shown by default, so the track never "freezes" after a break.
 - A segment made only of short chains is not wiped because of size alone.
-- One left-to-right pass, deterministic. Rare miss accepted: two independent spike chains in a row, mutually unreachable — one stays as a separate line, but no jump is drawn.
+- One left-to-right pass, deterministic. Rare miss accepted: two independent spike chains in a row, mutually unreachable — both stay, each as its own line, but no jump is drawn (review fix: wording matched to the code, pinned by a test). Also accepted: a spike cluster split into two short chains at the head or tail survives (documented in the KDoc).
 - One preference, two switches (Settings row + map chip). The host collects it once and passes value + setter down, like `trackProfile`.
 
 ## Technical Details
@@ -97,15 +97,15 @@ Worked examples (pinned in tests):
 - Driving above ~50 km/h: the track breaks into chains; short ones may drop, long ones stay as separate lines.
 
 Consumers:
-- Map: `trackGeoJson(lines)` → one `MultiLineString` feature, one part per line with ≥ 2 points (a 1-point line is not drawable and is skipped); empty collection if no part qualifies.
+- Map: `trackGeoJson(lines)` → one `MultiLineString` feature, one part per line with ≥ 2 points, plus (review fix) one `MultiPoint` feature `{"dot": true}` for the 1-point lines, drawn by a filtered `CircleLayer` — so the first fix of a live tail after a break is visible immediately; empty collection if there are no points.
 - GPX: `buildGpx(lines, name)` → one `<trkseg>` per line; no own `segmentId` grouping any more.
 - Time span, counts: `lines.flatten()`.
 
 Preference: `TrackFilterPreference(load: () -> Boolean, save: (Boolean) -> Unit)` with `showAllPoints: StateFlow<Boolean>` and `setShowAllPoints(Boolean)`; adapter uses `getBoolean("track_show_all_points", false)` in `kolco24.settings`. Setter is synchronous (`apply()`), same as `setProfile`.
 
-Integration in `MainActivity`:
-- `trackLinesNow = remember(safeTrack, showAllPoints) { trackLines(sortedTrackPoints(safeTrack), filter = !showAllPoints) }`; `trackUsable = trackLinesNow.flatten()` for the time span.
-- `hiddenCount = safeTrack.size - trackUsable.size` (always 0 when `showAllPoints` is on; the selected chip then shows no count — intended).
+Integration in `MainActivity` (code names: `showAllTrackPoints` / `onShowAllTrackPointsChange`, `trackHiddenCount`):
+- `trackLinesNow` = `trackLines(sortedTrackPoints(safeTrack), filter = !showAllTrackPoints)` — (review fix) computed in a team-tagged `produceState` on `Dispatchers.Default` instead of `remember`, gated with `valueForKey`; `trackUsable = trackLinesNow.flatten()` for the time span.
+- `trackHiddenCount` = raw size − kept points, computed with the lines from the same input (always 0 when `showAllTrackPoints` is on; the selected chip then shows no count — intended).
 - `onShareTrack` uses the same expression; the empty-result toast becomes «Нет точек для экспорта».
 
 ## What Goes Where

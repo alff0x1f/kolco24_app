@@ -69,19 +69,25 @@ fun <T : TrackPointLike> sortedTrackPoints(points: List<T>): List<T> =
     points.sortedWith(trackPointComparator())
 
 /** Fixes reporting a worse accuracy (meters) than this are always dropped by [trackLines]. */
-const val HARD_CAP_ACCURACY_M = 500f
+internal const val HARD_CAP_ACCURACY_M = 500f
 
 /** Top plausible speed (~50 km/h — covers a bike downhill) for the [trackLines] reachability test. */
-const val MAX_SPEED_MPS = 14f
+internal const val MAX_SPEED_MPS = 14f
 
 /** A chain of at most this many points **and** shorter than [SHORT_CHAIN_MAX_DURATION_MS] is short. */
-const val SHORT_CHAIN_MAX_POINTS = 3
+internal const val SHORT_CHAIN_MAX_POINTS = 3
 
 /** A chain spanning this long (or longer) is never short, whatever its point count. */
-const val SHORT_CHAIN_MAX_DURATION_MS = 60_000L
+internal const val SHORT_CHAIN_MAX_DURATION_MS = 60_000L
 
 /** A short tail is dropped only when its median accuracy is at least this many times worse. */
-const val TAIL_ACCURACY_RATIO = 3f
+internal const val TAIL_ACCURACY_RATIO = 3f
+
+/**
+ * Floor (meters) of the reference median in the tail ratio — a long chain reporting accuracy 0
+ * would otherwise make `>= 3 × 0` drop every short tail.
+ */
+internal const val TAIL_REFERENCE_MIN_ACCURACY_M = 1f
 
 private const val EARTH_RADIUS_M = 6_371_000.0
 
@@ -97,7 +103,8 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
 /**
  * Could the device have moved from [a] to [b]? The distance is reduced by the better of the two
  * accuracies (a noise allowance), the time gap is floored at 1 s, and the implied speed must not
- * exceed [MAX_SPEED_MPS].
+ * exceed [MAX_SPEED_MPS] (inclusive). Time is [trackPointTimeMs] (`trustedMs ?: wallMs`). Internal for
+ * the direct boundary tests.
  */
 internal fun isReachable(a: TrackPointLike, b: TrackPointLike): Boolean {
     val d = haversineMeters(a.lat, a.lon, b.lat, b.lon)
@@ -133,13 +140,20 @@ private fun medianAccuracy(chain: List<TrackPointLike>): Float {
  * 4. walk the chains left to right. The **head** is dropped if it is short and the next chain is
  *    long (a long chain proves the real track is elsewhere). A short **interior** chain is dropped if
  *    bypassing it is reachable from the last accepted point. A short **tail** is dropped only after
- *    a long chain whose median accuracy is at least [TAIL_ACCURACY_RATIO]× better — otherwise the
+ *    a long chain whose median accuracy is at least [TAIL_ACCURACY_RATIO]× better
+ *    (median accuracy of the long chain floored at [TAIL_REFERENCE_MIN_ACCURACY_M]) — otherwise the
  *    live tail stays visible (the next fix turns it into an interior chain with the bypass check);
  * 5. a kept chain joins the current line when reachable from its last point, else starts a new one.
  *
  * Accuracy never decides which point is right (a 68% estimate): it only feeds the hard cap, the
- * reachability noise allowance and the tail ratio. One deterministic pass; two mutually unreachable
- * spike chains in a row leave one of them as its own line (no jump is drawn). Lines are never empty.
+ * reachability noise allowance and the tail ratio. One deterministic pass. Known accepted misses
+ * (rare; no jump is ever drawn, only an extra short line stays):
+ * - two mutually unreachable spike chains in a row between long chains (`L X Y R`) both stay, each
+ *   as its own line — neither bypass (`L→Y`, `X→R`) is reachable;
+ * - a spike cluster split into two short chains at the head or tail survives: the head rule only
+ *   looks at the next chain (short), the tail rule only after a kept long chain (`L n1 n2`: `n1`'s
+ *   bypass `L→n2` is unreachable, `n2` follows a short chain).
+ * Lines are never empty.
  */
 fun <T : TrackPointLike> trackLines(points: List<T>, filter: Boolean): List<List<T>> {
     val input = if (filter) points.filter { it.accuracy <= HARD_CAP_ACCURACY_M } else points
@@ -162,7 +176,8 @@ private fun <T : TrackPointLike> runLines(run: List<T>): List<List<T>> {
             !short -> false
             i < chains.size - 1 -> lastAccepted != null && isReachable(lastAccepted, chains[i + 1].first())
             else -> prevKeptLong &&
-                medianAccuracy(chain) >= TAIL_ACCURACY_RATIO * medianAccuracy(chains[i - 1])
+                medianAccuracy(chain) >=
+                TAIL_ACCURACY_RATIO * maxOf(medianAccuracy(chains[i - 1]), TAIL_REFERENCE_MIN_ACCURACY_M)
         }
         prevKeptLong = !drop && !short
         if (drop) continue

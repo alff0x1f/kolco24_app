@@ -127,6 +127,7 @@ import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
+import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.track.trackLines
 import java.io.File
 import ru.kolco24.kolco24.data.map.MapDownloadState
@@ -915,17 +916,33 @@ private fun Kolco24AppRoot(
         val rid = selectedRaceId
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
-    val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
+    // Remembered so an unchanged track keeps the same list instance (keys below compare by identity fast).
+    val safeTrack = remember(track, selectedTeamId) {
+        if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
+    }
     // Spike-filtered lines (trackLines) over reboot-safe ordered points: the map draws them as separate
     // parts; the time span uses their flattened points (raw count stays full). «Все точки»
     // (showAllTrackPoints) disables the filter — lines are then just the recording segments.
-    val trackLinesNow = remember(safeTrack, showAllTrackPoints) {
-        trackLines(sortedTrackPoints(safeTrack), filter = !showAllTrackPoints)
+    // Sort + filter run off the main thread (a day-long track is ~17k points, re-run every GPS fix).
+    // The result is tagged with the team it was computed for: until the new team's lines land, the
+    // previous team's never leak through (valueForKey → empty); within a team the last lines stay up
+    // while the next fix is being filtered. The hidden count is derived from the same input.
+    val trackFiltered by produceState<Pair<Int, Pair<List<List<TrackPointEntity>>, Int>>?>(
+        null, safeTrack, showAllTrackPoints, selectedTeamId,
+    ) {
+        val tid = selectedTeamId ?: return@produceState
+        val raw = safeTrack
+        value = tid to withContext(Dispatchers.Default) {
+            val lines = trackLines(sortedTrackPoints(raw), filter = !showAllTrackPoints)
+            lines to raw.size - lines.sumOf { it.size }
+        }
     }
+    val trackFilteredNow = valueForKey(trackFiltered, selectedTeamId)
+    val trackLinesNow = trackFilteredNow?.first ?: emptyList()
     val trackUsable = remember(trackLinesNow) { trackLinesNow.flatten() }
     // Points the filter hid from the map/GPX (always 0 with «Все точки» on — the selected map chip
-    // then shows no count, by design).
-    val trackHiddenCount = safeTrack.size - trackUsable.size
+    // then shows no count, by design). Every kept point is drawn (1-point lines as dots).
+    val trackHiddenCount = trackFilteredNow?.second ?: 0
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
@@ -1720,7 +1737,7 @@ private fun Kolco24AppRoot(
                         onRefresh = { pullRefresh({ teamRefreshing = it }, container.syncCoordinator::refreshAll) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
-                        trackShownPointCount = trackUsable.size,
+                        trackShownPointCount = safeTrack.size - trackHiddenCount,
                         trackSegmentCount = trackSegmentCount,
                         trackDegradedAccuracy = degradedAccuracy,
                         trackFirstPointTime = trackFirstTime,

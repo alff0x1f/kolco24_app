@@ -13,8 +13,8 @@ import java.util.TimeZone
  * The track is emitted as GPX 1.1: one `<trk>` with a `<name>`, then **one `<trkseg>` per line**.
  * Lines never cross a recording session ([TrackPointEntity.segmentId]) or an unreachable jump, so a
  * stop→start gap or a spike-filter break renders as separate segments instead of a teleport line; no
- * own `segmentId` grouping is done here. Empty lines are skipped. Each point's `<time>` uses `trustedMs ?: wallMs` formatted
- * as ISO-8601 UTC; `<ele>` is omitted when altitude is null. Numbers use [Locale.US] so the decimal
+ * own `segmentId` grouping is done here ([trackLines] never returns an empty line). Each point's
+ * `<time>` uses `trustedMs ?: wallMs` formatted as ISO-8601 UTC; `<ele>` is omitted when altitude is null. Numbers use [Locale.US] so the decimal
  * separator is always `.` regardless of device locale.
  */
 
@@ -33,7 +33,6 @@ fun buildGpx(lines: List<List<TrackPointEntity>>, trackName: String): String {
     sb.append("    <name>").append(xmlEscape(trackName)).append("</name>\n")
 
     for (line in lines) {
-        if (line.isEmpty()) continue
         sb.append("    <trkseg>\n")
         for (p in line) {
             sb.append("      <trkpt lat=\"")

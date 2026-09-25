@@ -54,31 +54,57 @@ fun mapPins(marks: List<MarkEntity>, checkpointCosts: Map<Int, Int>): List<MapPi
         }
         .sortedBy { it.timeMs }
 
+/** Property set on the track's single-point feature — the map view's dot layer filters on it. */
+const val TRACK_DOT_PROPERTY = "dot"
+
 /**
- * GeoJSON `FeatureCollection` of the track: a single `MultiLineString` feature with one part per
- * [lines] entry (the output of `trackLines` — nothing is drawn between parts, so a stop→start gap or
- * an unreachable jump never renders as a straight line), coordinates `[lon, lat]`. A line with fewer
- * than 2 points is not drawable and is skipped; no drawable line → an empty collection. Built with a
- * plain [StringBuilder] — a day-long track is ~17k points and is rebuilt on every GPS fix (the map
- * view calls this off the main thread).
+ * GeoJSON `FeatureCollection` of the track, coordinates `[lon, lat]`, [lines] = the output of
+ * `trackLines` (nothing is drawn between lines, so a stop→start gap or an unreachable jump never
+ * renders as a straight line):
+ * - every line of 2+ points is one part of a single `MultiLineString` feature (drawn by the line layer);
+ * - every 1-point line (the first fix of a live tail after a break, a kept short chain with an
+ *   unreachable bypass) is one point of a single `MultiPoint` feature with property
+ *   [TRACK_DOT_PROPERTY] `true` (drawn as a dot by the circle layer) — so every kept point is visible
+ *   and the «на карте N» / «+N» counts match what the map draws.
+ * Features in that order, each only when non-empty; empty lines are ignored; nothing → an empty
+ * collection. Built with a plain [StringBuilder] — a day-long track is ~17k points and is rebuilt on
+ * every GPS fix (the map view calls this off the main thread).
  */
 fun trackGeoJson(lines: List<List<TrackPointLike>>): String {
-    val drawable = lines.filter { it.size >= 2 }
-    if (drawable.isEmpty()) return EMPTY_FEATURE_COLLECTION
-    val sb = StringBuilder(drawable.sumOf { it.size } * 40 + 128)
-    sb.append("""{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},""")
-    sb.append(""""geometry":{"type":"MultiLineString","coordinates":[""")
-    drawable.forEachIndexed { li, line ->
-        if (li > 0) sb.append(',')
-        sb.append('[')
-        line.forEachIndexed { i, p ->
-            if (i > 0) sb.append(',')
-            sb.append('[').append(p.lon).append(',').append(p.lat).append(']')
+    val polylines = lines.filter { it.size >= 2 }
+    val dots = lines.mapNotNull { it.singleOrNull() }
+    if (polylines.isEmpty() && dots.isEmpty()) return EMPTY_FEATURE_COLLECTION
+    val sb = StringBuilder((polylines.sumOf { it.size } + dots.size) * 40 + 256)
+    sb.append("""{"type":"FeatureCollection","features":[""")
+    if (polylines.isNotEmpty()) {
+        sb.append("""{"type":"Feature","properties":{},"geometry":{"type":"MultiLineString","coordinates":[""")
+        polylines.forEachIndexed { li, line ->
+            if (li > 0) sb.append(',')
+            sb.append('[')
+            line.forEachIndexed { i, p ->
+                if (i > 0) sb.append(',')
+                sb.appendLonLat(p)
+            }
+            sb.append(']')
         }
-        sb.append(']')
+        sb.append("]}}")
     }
-    sb.append("]}}]}")
+    if (dots.isNotEmpty()) {
+        if (polylines.isNotEmpty()) sb.append(',')
+        sb.append("""{"type":"Feature","properties":{"$TRACK_DOT_PROPERTY":true},""")
+        sb.append(""""geometry":{"type":"MultiPoint","coordinates":[""")
+        dots.forEachIndexed { i, p ->
+            if (i > 0) sb.append(',')
+            sb.appendLonLat(p)
+        }
+        sb.append("]}}")
+    }
+    sb.append("]}")
     return sb.toString()
+}
+
+private fun StringBuilder.appendLonLat(p: TrackPointLike) {
+    append('[').append(p.lon).append(',').append(p.lat).append(']')
 }
 
 private const val EMPTY_FEATURE_COLLECTION = """{"type":"FeatureCollection","features":[]}"""

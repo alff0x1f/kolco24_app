@@ -56,10 +56,13 @@ import java.util.TimeZone
  *   LocationComponent) never lives off-screen or during a tab animation through this page.
  * - [availability]/[base] `null` → still resolving (team/race/disk listing/metadata) → plain background.
  * - [frameKey] (the selected team) re-frames the camera when it changes.
- * - «Все точки» chip (TopStart, below [NoMapBanner] when that is shown): [onToggleShowAll] flips the
+ * - «Все точки» chip (top-start, stacked below [NoMapBanner] in one top column when that is shown —
+ *   no fixed offset, so a tall banner at a large font scale never overlaps it): [onToggleShowAll] flips the
  *   same persisted preference as the Settings row. Hidden while filtering hides nothing
  *   (`!showAllPoints && hiddenCount == 0`); selected while [showAllPoints] so the user can switch back
- *   (then [hiddenCount] is 0 and no count is shown). Toggling never re-frames the camera.
+ *   (then [hiddenCount] is 0 and no count is shown). Toggling does not re-frame the camera — except,
+ *   without file bounds and pins, when the filter hid **every** point (the lines go empty ↔ non-empty,
+ *   which [TrackMapView] treats as data arriving).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,25 +115,30 @@ fun MapScreen(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            if (availability == MapAvailability.NoMapForRace) {
-                NoMapBanner(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-            }
-
-            if (showAllPoints || hiddenCount > 0) {
-                ShowAllPointsChip(
-                    selected = showAllPoints,
-                    hiddenCount = hiddenCount,
-                    onClick = onToggleShowAll,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        // The NoMapBanner spans most of the width at TopCenter — sit below it.
-                        .padding(top = if (availability == MapAvailability.NoMapForRace) 62.dp else 6.dp)
-                        .padding(horizontal = 12.dp),
-                )
+            // Banner and chip stack in one top column so the chip always sits below the banner,
+            // whatever its height (font scale / wrapping).
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (availability == MapAvailability.NoMapForRace) {
+                    NoMapBanner(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 4.dp),
+                    )
+                }
+                if (showAllPoints || hiddenCount > 0) {
+                    ShowAllPointsChip(
+                        selected = showAllPoints,
+                        hiddenCount = hiddenCount,
+                        onClick = onToggleShowAll,
+                    )
+                }
             }
 
             Column(

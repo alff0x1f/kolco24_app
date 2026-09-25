@@ -43,6 +43,15 @@ class TrackLinesTest {
         segmentId = seg,
     )
 
+    /** A point [eastM] meters east of the base (along the base parallel), [tSec] seconds in. */
+    private fun ptEast(id: String, tSec: Long, eastM: Double, acc: Float = 10f) = Pt(
+        id = id,
+        lat = baseLat,
+        lon = baseLon + eastM / (mPerDeg * Math.cos(Math.toRadians(baseLat))),
+        accuracy = acc,
+        wallMs = tSec * 1000L,
+    )
+
     /** A walking chain: [n] points every 15 s, 20 m apart, starting at [startSec]/[startM]. */
     private fun walk(prefix: String, n: Int, startSec: Long, startM: Double, acc: Float = 10f) =
         (0 until n).map { i -> pt("$prefix$i", startSec + 15L * i, startM + 20.0 * i, acc) }
@@ -59,6 +68,47 @@ class TrackLinesTest {
     @Test
     fun haversine_oneDegreeOfLongitudeAtEquator() {
         assertEquals(mPerDeg, haversineMeters(0.0, 10.0, 0.0, 11.0), 0.01)
+    }
+
+    @Test
+    fun haversine_oneDegreeOfLongitudeAtMidLatitude() {
+        // Along the 55° parallel the great circle is ~0.2 m shorter than the parallel arc — within 1 m.
+        assertEquals(mPerDeg * Math.cos(Math.toRadians(55.0)), haversineMeters(55.0, 37.0, 55.0, 38.0), 1.0)
+    }
+
+    @Test
+    fun haversine_symmetricAcrossDifferentLatitudes() {
+        val there = haversineMeters(55.0, 37.0, 56.5, 39.0)
+        assertEquals(there, haversineMeters(56.5, 39.0, 55.0, 37.0), 1e-6)
+        // Moscow → Saint Petersburg (≈ 634 km great-circle on the 6371 km sphere).
+        assertEquals(634_000.0, haversineMeters(55.7558, 37.6173, 59.9343, 30.3351), 3_000.0)
+    }
+
+    // ---- isReachable ----
+
+    @Test
+    fun isReachable_speedBoundaryAround14mps() {
+        val a = pt("a", 0, 0.0, acc = 0f)
+        // 10 s: 139.9 m → 13.99 m/s reachable, 140.1 m → 14.01 m/s not.
+        assertTrue(isReachable(a, pt("b", 10, 139.9, acc = 0f)))
+        assertFalse(isReachable(a, pt("b", 10, 140.1, acc = 0f)))
+    }
+
+    @Test
+    fun isReachable_subtractsTheBetterAccuracyAsNoiseAllowance() {
+        // 250 m in 15 s: raw 16.7 m/s; minus min(acc) = 60 → 12.7 m/s reachable.
+        assertTrue(isReachable(pt("a", 0, 0.0, acc = 60f), pt("b", 15, 250.0, acc = 90f)))
+        // Same step with the better accuracy 10 → (250 − 10) / 15 = 16 m/s unreachable (min, not max).
+        assertFalse(isReachable(pt("a", 0, 0.0, acc = 10f), pt("b", 15, 250.0, acc = 90f)))
+    }
+
+    @Test
+    fun isReachable_usesTrustedTimeOverWallTime() {
+        // 1000 m: by trusted time 100 s apart → 9.9 m/s reachable; by wall time 15 s → 66 m/s.
+        val a = pt("a", 0, 0.0).copy(trustedMs = 0L)
+        val b = pt("b", 15, 1000.0).copy(trustedMs = 100_000L)
+        assertTrue(isReachable(a, b))
+        assertFalse(isReachable(a.copy(trustedMs = null), b.copy(trustedMs = null)))
     }
 
     @Test
@@ -114,6 +164,53 @@ class TrackLinesTest {
     }
 
     @Test
+    fun noisyJitterNeedingNoiseAllowance_keptAsOneLine() {
+        // Every step 250 m in 15 s (raw 16.7 m/s) is reachable only thanks to acc ≥ 60 m.
+        val points = (0 until 6).map { i -> pt("j$i", 15L * i, if (i % 2 == 0) 0.0 else 250.0, acc = 60f + i) }
+        assertEquals(listOf(points.map { it.id }), ids(trackLines(points, filter = true)))
+    }
+
+    @Test
+    fun eastWestStep_measuredWithLongitudeCosine_oneLine() {
+        // 200 m east in 15 s: (200 − 10) / 15 = 12.7 m/s reachable (≈ 349 m without the cos(55°) factor).
+        val points = listOf(ptEast("a", 0, 0.0), ptEast("b", 15, 200.0))
+        assertEquals(listOf(listOf("a", "b")), ids(trackLines(points, filter = true)))
+    }
+
+    @Test
+    fun eastWestSpikeBetweenLongChains_dropped() {
+        val first = (0 until 5).map { i -> ptEast("a$i", 15L * i, 20.0 * i) }
+        val spike = ptEast("S", 75, 80.0 + 800.0)
+        val second = (0 until 5).map { i -> ptEast("b$i", 90 + 15L * i, 120.0 + 20.0 * i) }
+        assertEquals(
+            listOf((first + second).map { it.id }),
+            ids(trackLines(first + spike + second, filter = true)),
+        )
+    }
+
+    @Test
+    fun twoMutuallyUnreachableSpikesInARow_bothKeptEachOwnLine() {
+        // Documented accepted miss: neither bypass (L→Y, X→R) is reachable, so both spikes stay.
+        val l = walk("l", 5, 0, 0.0)
+        val x = pt("X", 75, 3000.0)
+        val y = pt("Y", 90, -3000.0)
+        val r = walk("r", 5, 105, 120.0)
+        assertEquals(
+            listOf(l.map { it.id }, listOf("X"), listOf("Y"), r.map { it.id }),
+            ids(trackLines(l + x + y + r, filter = true)),
+        )
+    }
+
+    @Test
+    fun liveTail_keptUntilNextFixMakesItABypassableInteriorChain() {
+        val gps = walk("g", 5, 0, 0.0) // ends at 80 m, 60 s
+        val jump = pt("X", 75, 2000.0)
+        assertEquals(listOf(gps.map { it.id }, listOf("X")), ids(trackLines(gps + jump, filter = true)))
+        val next = pt("g5", 90, 100.0)
+        assertEquals(listOf((gps + next).map { it.id }), ids(trackLines(gps + jump + next, filter = true)))
+    }
+
+    @Test
     fun headNetworkClusterBeforeLongChain_dropped() {
         val cluster = listOf(
             pt("n0", 0, 3000.0, acc = 300f),
@@ -149,6 +246,60 @@ class TrackLinesTest {
             listOf(gps.map { it.id }, listOf("t0", "t1")),
             ids(trackLines(gps + tail, filter = true)),
         )
+    }
+
+    /** A long chain (5 points, 60 s, 20 m steps) with the given accuracies; median of (5,5,10,50,50) = 10. */
+    private fun longWithAccs(accs: List<Float> = listOf(5f, 50f, 10f, 50f, 5f)) =
+        accs.mapIndexed { i, acc -> pt("g$i", 15L * i, 20.0 * i, acc = acc) }
+
+    private fun farTail(vararg accs: Float) =
+        accs.mapIndexed { i, acc -> pt("t$i", 75 + 15L * i, 2000.0 + 20.0 * i, acc = acc) }
+
+    @Test
+    fun tail_exactlyThreeTimesWorseMedian_dropped() {
+        // Tail median 30 = 3 × 10 (the long chain's median; its mean is 24, its max 50).
+        val gps = longWithAccs()
+        assertEquals(listOf(gps.map { it.id }), ids(trackLines(gps + farTail(30f, 30f), filter = true)))
+    }
+
+    @Test
+    fun tail_justUnderThreeTimesWorseMedian_kept() {
+        // 29 < 3 × 10 → kept (it would be dropped against the long chain's minimum, 5).
+        val gps = longWithAccs()
+        val tail = farTail(29f, 29f)
+        assertEquals(listOf(gps.map { it.id }, tail.map { it.id }), ids(trackLines(gps + tail, filter = true)))
+    }
+
+    @Test
+    fun tail_evenSizeMedianIsMeanOfTheMiddles() {
+        val gps = longWithAccs()
+        // (29, 31) → 30 → dropped (the lower middle 29 alone would keep it).
+        assertEquals(listOf(gps.map { it.id }), ids(trackLines(gps + farTail(29f, 31f), filter = true)))
+        // (20, 38) → 29 → kept (the upper middle 38 alone would drop it).
+        val tail = farTail(20f, 38f)
+        assertEquals(listOf(gps.map { it.id }, tail.map { it.id }), ids(trackLines(gps + tail, filter = true)))
+    }
+
+    @Test
+    fun tail_afterShortChain_keptEvenWhenMuchWorse() {
+        // L, then S (interior, bypass L→T unreachable → kept), then a 30× worse short tail T: the tail
+        // rule only fires right after a kept long chain.
+        val l = walk("l", 5, 0, 0.0, acc = 10f)
+        val s = listOf(pt("s0", 75, 2000.0, acc = 10f), pt("s1", 90, 2020.0, acc = 10f))
+        val t = listOf(pt("t0", 105, 6000.0, acc = 300f), pt("t1", 120, 6020.0, acc = 300f))
+        assertEquals(
+            listOf(l.map { it.id }, s.map { it.id }, t.map { it.id }),
+            ids(trackLines(l + s + t, filter = true)),
+        )
+    }
+
+    @Test
+    fun tail_referenceMedianZeroIsFlooredAtOneMeter() {
+        val gps = longWithAccs(List(5) { 0f })
+        // 2 < 3 × max(0, 1) → kept; 3 ≥ 3 → dropped.
+        val kept = farTail(2f, 2f)
+        assertEquals(listOf(gps.map { it.id }, kept.map { it.id }), ids(trackLines(gps + kept, filter = true)))
+        assertEquals(listOf(gps.map { it.id }), ids(trackLines(gps + farTail(3f, 3f), filter = true)))
     }
 
     @Test
@@ -207,6 +358,36 @@ class TrackLinesTest {
             pt("fine", 30, 20.0, acc = 10f),
         )
         assertEquals(listOf(listOf("at", "fine")), ids(trackLines(points, filter = true)))
+    }
+
+    @Test
+    fun hardCap_allOverCap_empty() {
+        val points = listOf(pt("a", 0, 0.0, acc = 600f), pt("b", 15, 20.0, acc = 900f))
+        assertTrue(trackLines(points, filter = true).isEmpty())
+    }
+
+    @Test
+    fun hardCap_removesSpikesThatWouldOtherwiseSplitTheTrack() {
+        // Without the cap the two mutually unreachable spikes would both stay (see the two-spikes test).
+        val l = walk("l", 5, 0, 0.0)
+        val x = pt("X", 75, 3000.0, acc = 501f)
+        val y = pt("Y", 90, -3000.0, acc = 600f)
+        val r = walk("r", 5, 105, 120.0)
+        assertEquals(listOf((l + r).map { it.id }), ids(trackLines(l + x + y + r, filter = true)))
+    }
+
+    @Test
+    fun filterOn_eachSegmentRunFilteredOnItsOwn() {
+        val a = walk("a", 3, 0, 0.0).map { it.copy(segmentId = "a") }
+        // Run b: a short network head far away, then a long GPS chain → the head is dropped.
+        val bHead = listOf(pt("bn0", 60, 5000.0, acc = 300f, seg = "b"), pt("bn1", 75, 5050.0, acc = 300f, seg = "b"))
+        val bGps = walk("b", 5, 90, 100.0).map { it.copy(segmentId = "b") }
+        // Run a again (non-consecutive): its own line, never merged into the first run a.
+        val a2 = walk("c", 2, 180, 200.0).map { it.copy(segmentId = "a") }
+        assertEquals(
+            listOf(a.map { it.id }, bGps.map { it.id }, a2.map { it.id }),
+            ids(trackLines(a + bHead + bGps + a2, filter = true)),
+        )
     }
 
     @Test

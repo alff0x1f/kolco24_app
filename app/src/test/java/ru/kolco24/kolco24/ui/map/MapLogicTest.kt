@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.map
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -180,8 +181,8 @@ class MapLogicTest {
     }
 
     @Test
-    fun trackGeoJsonSkipsSinglePointLine() {
-        val geometry = geometryOf(
+    fun trackGeoJsonSinglePointLinesBecomeOneDotMultiPointAfterTheLines() {
+        val features = Json.parseToJsonElement(
             trackGeoJson(
                 listOf(
                     listOf(Pt(54.0, 36.0)),
@@ -189,15 +190,42 @@ class MapLogicTest {
                     listOf(Pt(57.0, 39.0)),
                 ),
             ),
-        )
-        val parts = geometry["coordinates"]!!.jsonArray
+        ).jsonObject["features"]!!.jsonArray
+        assertEquals(2, features.size)
+        val lines = features[0].jsonObject
+        assertTrue(lines["properties"]!!.jsonObject.isEmpty())
+        val lineGeometry = lines["geometry"]!!.jsonObject
+        assertEquals("MultiLineString", lineGeometry["type"]!!.jsonPrimitive.content)
+        val parts = lineGeometry["coordinates"]!!.jsonArray
         assertEquals(1, parts.size)
         assertEquals(37.0, parts[0].jsonArray[0].jsonArray[0].jsonPrimitive.double, 0.0)
+        val dots = features[1].jsonObject
+        assertTrue(dots["properties"]!!.jsonObject[TRACK_DOT_PROPERTY]!!.jsonPrimitive.boolean)
+        val dotGeometry = dots["geometry"]!!.jsonObject
+        assertEquals("MultiPoint", dotGeometry["type"]!!.jsonPrimitive.content)
+        val points = dotGeometry["coordinates"]!!.jsonArray
+        assertEquals(2, points.size)
+        assertEquals(36.0, points[0].jsonArray[0].jsonPrimitive.double, 0.0)
+        assertEquals(54.0, points[0].jsonArray[1].jsonPrimitive.double, 0.0)
+        assertEquals(39.0, points[1].jsonArray[0].jsonPrimitive.double, 0.0)
+        assertEquals(57.0, points[1].jsonArray[1].jsonPrimitive.double, 0.0)
     }
 
     @Test
-    fun trackGeoJsonWithoutDrawableLineIsEmptyCollection() {
-        for (lines in listOf(emptyList(), listOf(listOf(Pt(55.0, 37.0))), listOf(emptyList(), listOf(Pt(55.0, 37.0))))) {
+    fun trackGeoJsonOnlySinglePointLinesIsOnlyTheDotFeature() {
+        val features = Json.parseToJsonElement(
+            trackGeoJson(listOf(emptyList(), listOf(Pt(55.0, 37.0)))),
+        ).jsonObject["features"]!!.jsonArray
+        val dots = features.single().jsonObject
+        assertTrue(dots["properties"]!!.jsonObject[TRACK_DOT_PROPERTY]!!.jsonPrimitive.boolean)
+        val geometry = dots["geometry"]!!.jsonObject
+        assertEquals("MultiPoint", geometry["type"]!!.jsonPrimitive.content)
+        assertEquals(1, geometry["coordinates"]!!.jsonArray.size)
+    }
+
+    @Test
+    fun trackGeoJsonWithoutPointsIsEmptyCollection() {
+        for (lines in listOf(emptyList(), listOf(emptyList<Pt>()))) {
             val json = Json.parseToJsonElement(trackGeoJson(lines)).jsonObject
             assertEquals("FeatureCollection", json["type"]!!.jsonPrimitive.content)
             assertTrue(json["features"]!!.jsonArray.isEmpty())
