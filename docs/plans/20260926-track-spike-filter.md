@@ -191,11 +191,11 @@ Integration in `MainActivity`:
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/map/MapScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add params `showAllPoints: Boolean`, `hiddenCount: Int`, `onToggleShowAll: () -> Unit`
-- [ ] add a `FilterChip` in its own `TopStart` slot (leave `NoMapBanner` at `TopCenter`; if the banner is shown, offset the chip below it): label `"Все точки" + if (hiddenCount > 0) " · +$hiddenCount" else ""`, semi-transparent background like the OSM attribution
-- [ ] hide the chip when `!showAllPoints && hiddenCount == 0`; with `showAllPoints` on, show it selected (so the user can switch back)
-- [ ] pass the new params from the `PAGE_MAP` call site (line ~1669); `frameKey` unchanged (no camera reframe)
-- [ ] run `./gradlew assembleDebug` — must pass
+- [x] add params `showAllPoints: Boolean`, `hiddenCount: Int`, `onToggleShowAll: () -> Unit`
+- [x] add a `FilterChip` in its own `TopStart` slot (leave `NoMapBanner` at `TopCenter`; if the banner is shown, offset the chip below it): label `"Все точки" + if (hiddenCount > 0) " · +$hiddenCount" else ""`, semi-transparent background like the OSM attribution
+- [x] hide the chip when `!showAllPoints && hiddenCount == 0`; with `showAllPoints` on, show it selected (so the user can switch back)
+- [x] pass the new params from the `PAGE_MAP` call site (line ~1669); `frameKey` unchanged (no camera reframe)
+- [x] run `./gradlew assembleDebug` — must pass
 
 ### Task 7: TrackCard «на карте N»
 

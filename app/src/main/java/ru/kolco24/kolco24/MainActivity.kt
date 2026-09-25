@@ -1691,6 +1691,9 @@ private fun Kolco24AppRoot(
                         pins = mapPinsNow,
                         frameKey = selectedTeamId,
                         locationPermitted = activity?.locationGranted ?: false,
+                        showAllPoints = showAllTrackPoints,
+                        hiddenCount = trackHiddenCount,
+                        onToggleShowAll = { onShowAllTrackPointsChange(!showAllTrackPoints) },
                         onDownload = {
                             val rid = selectedRaceId
                             val url = selectedMapUrl
