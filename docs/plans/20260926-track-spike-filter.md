@@ -161,10 +161,10 @@ Integration in `MainActivity`:
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/TrackFilterPreferenceTest.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] write tests: initial value comes from `load`; setter updates the flow and calls `save`
-- [ ] implement `TrackFilterPreference` modeled on `TrackProfilePreference`
-- [ ] add `trackFilterPreference by lazy` to `AppContainer`
-- [ ] run `./gradlew testDebugUnitTest` — must pass
+- [x] write tests: initial value comes from `load`; setter updates the flow and calls `save`
+- [x] implement `TrackFilterPreference` modeled on `TrackProfilePreference`
+- [x] add `trackFilterPreference by lazy` to `AppContainer`
+- [x] run `./gradlew testDebugUnitTest` — must pass
 
 ### Task 4: Wire the toggle into MainActivity
 
