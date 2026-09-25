@@ -59,8 +59,8 @@ private const val LAST_LOCATION_ZOOM = 14.0
 private const val SINGLE_POINT_ZOOM = 15.0
 private const val TRACK_LINE_WIDTH_DP = 3f
 
-/** Nothing to frame at all: Moscow region at a regional zoom. */
-private val DEFAULT_CENTER = LatLng(55.75, 37.62)
+/** Nothing to frame at all: Ufa region at a regional zoom. */
+private val DEFAULT_CENTER = LatLng(54.74, 55.96)
 private const val DEFAULT_ZOOM = 8.0
 
 /**
