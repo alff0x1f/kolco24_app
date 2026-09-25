@@ -42,9 +42,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -124,6 +126,14 @@ import java.io.File
 import ru.kolco24.kolco24.data.marks.PhotoTarget
 import ru.kolco24.kolco24.data.marks.decidePhotoTarget
 import ru.kolco24.kolco24.ui.legend.LegendScreen
+import ru.kolco24.kolco24.ui.map.MapBase
+import ru.kolco24.kolco24.ui.map.MapScreen
+import ru.kolco24.kolco24.ui.map.MapStyleSource
+import ru.kolco24.kolco24.ui.map.mapAvailability
+import ru.kolco24.kolco24.ui.map.mapPins
+import ru.kolco24.kolco24.ui.map.pinsGeoJson
+import ru.kolco24.kolco24.ui.map.trackGeoJson
+import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.ui.marks.MarksScreen
 import ru.kolco24.kolco24.ui.marks.PhotoLightboxOverlay
 import ru.kolco24.kolco24.ui.photo.PhotoCaptureScreen
@@ -506,7 +516,7 @@ private fun Kolco24AppRoot(
     economyMode: Boolean,
     onEconomyModeChange: (Boolean) -> Unit,
 ) {
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
     var showScan by rememberSaveable { mutableStateOf(false) }
     // One-shot celebration hand-off from ScanScreen's completion auto-close to MarksScreen; plain
@@ -1149,6 +1159,42 @@ private fun Kolco24AppRoot(
         pickerRaceId?.let { teamRepo.categoriesForRace(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
 
+    // «Карта» tab. mapRepository is lazy (first access lists the maps dir) — touch it once.
+    val mapRepo = remember { container.mapRepository }
+    val mapDownloadState by mapRepo.state.collectAsState()
+    val mapDownloaded by mapRepo.downloaded.collectAsState()
+    val selectedMapUrl = races.firstOrNull { it.id == selectedRaceId }?.mapUrl
+    val mapAvailabilityNow = selectedRaceId?.let {
+        mapAvailability(it, selectedMapUrl, mapDownloaded, mapDownloadState)
+    }
+    val mapFileReady = selectedRaceId != null && selectedRaceId in mapDownloaded
+    // Base layer + MBTiles metadata, read off-main (SQLite). The previous value is kept while a new
+    // one loads (no reset to null) so a finished download swaps the base without tearing the view down.
+    val mapBase by produceState<MapBase?>(initialValue = null, selectedRaceId, mapFileReady) {
+        val rid = selectedRaceId
+        value = if (rid != null && mapFileReady) {
+            val (path, metadata) = withContext(Dispatchers.IO) { mapRepo.path(rid) to mapRepo.metadata(rid) }
+            MapBase(MapStyleSource.Offline(path), metadata)
+        } else {
+            MapBase(MapStyleSource.Online, null)
+        }
+    }
+    // The MapView lives only on the settled «Карта» page (never off-screen / mid-animation).
+    val mapActive = pagerState.settledPage == 2
+    // GeoJSON is rebuilt only while the tab is shown — the track grows every GPS fix.
+    val mapTrackGeoJson = remember(trackUsable, mapActive) { if (mapActive) trackGeoJson(trackUsable) else "" }
+    val mapPinsNow = remember(safeMarks, checkpointCosts, mapActive) {
+        if (mapActive) mapPins(safeMarks, checkpointCosts) else emptyList()
+    }
+    val mapPinsGeoJson = remember(mapPinsNow) { pinsGeoJson(mapPinsNow) }
+    // A failed download surfaces once as a snackbar (on any tab). Consume first; the snackbar runs on
+    // the composition scope so the state change (which restarts this effect) doesn't cancel it.
+    LaunchedEffect(mapDownloadState) {
+        val failed = mapDownloadState as? MapDownloadState.Failed ?: return@LaunchedEffect
+        mapRepo.consumeFailure()
+        scope.launch { snackbarHostState.showSnackbar("Не удалось скачать карту: ${failed.message}") }
+    }
+
     val navItemColors = NavigationBarItemDefaults.colors(
         indicatorColor = Color.Transparent,
         selectedIconColor = OrangeCta,
@@ -1197,7 +1243,19 @@ private fun Kolco24AppRoot(
                         onClick = { switchToTab(2) },
                         icon = {
                             Icon(
-                                if (activePage == 2) Icons.Filled.Groups else Icons.Outlined.Groups,
+                                if (activePage == 2) Icons.Filled.Place else Icons.Outlined.Place,
+                                contentDescription = null,
+                            )
+                        },
+                        label = { Text("Карта") },
+                        colors = navItemColors,
+                    )
+                    NavigationBarItem(
+                        selected = activePage == 3,
+                        onClick = { switchToTab(3) },
+                        icon = {
+                            Icon(
+                                if (activePage == 3) Icons.Filled.Groups else Icons.Outlined.Groups,
                                 contentDescription = null,
                             )
                         },
@@ -1244,7 +1302,7 @@ private fun Kolco24AppRoot(
                         trackRecording = (trackState as? TrackState.Recording)?.teamId == selectedTeamId,
                         locationGranted = activity?.locationGranted ?: false,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
-                        onBindChips = { scope.launch { pagerState.animateScrollToPage(2) } },
+                        onBindChips = { scope.launch { pagerState.animateScrollToPage(3) } },
                         onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
                         onStartTrack = onStartTrack,
                         onRequestLocation = onRequestMarkLocation,
@@ -1270,7 +1328,25 @@ private fun Kolco24AppRoot(
                         },
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
-                    2 -> TeamScreen(
+                    2 -> MapScreen(
+                        hasTeam = teamState !is SelectedTeamState.None,
+                        onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
+                        isActive = mapActive,
+                        availability = mapAvailabilityNow,
+                        base = mapBase,
+                        trackGeoJson = mapTrackGeoJson,
+                        pins = mapPinsNow,
+                        pinsGeoJson = mapPinsGeoJson,
+                        locationPermitted = activity?.locationGranted ?: false,
+                        onDownload = {
+                            val rid = selectedRaceId
+                            val url = selectedMapUrl
+                            if (rid != null && !url.isNullOrBlank()) mapRepo.download(rid, url)
+                        },
+                        onCancelDownload = { mapRepo.cancel() },
+                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                    )
+                    3 -> TeamScreen(
                         team = teamForTab,
                         category = tabCategory,
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
