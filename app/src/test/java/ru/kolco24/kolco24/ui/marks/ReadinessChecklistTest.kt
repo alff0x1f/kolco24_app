@@ -36,7 +36,7 @@ class ReadinessChecklistTest {
 
     @Test
     fun `no team blocks team and chips, chips has no action`() {
-        val input = ready.copy(team = TeamReadiness.None, teamTitle = "", memberCount = 0, boundCount = 0)
+        val input = ready.copy(team = TeamReadiness.None, teamTitle = null, memberCount = 0, boundCount = 0)
         val team = item(input, ReadinessItemId.Team)
         val chips = item(input, ReadinessItemId.Chips)
         assertEquals(ReadinessStatus.Blocked, team.status)
@@ -56,6 +56,8 @@ class ReadinessChecklistTest {
         assertEquals(ReadinessAction.ChooseTeam, team.action)
         val chips = item(input, ReadinessItemId.Chips)
         assertEquals(ReadinessStatus.Blocked, chips.status)
+        assertEquals("Чипы не привязаны", chips.title)
+        assertEquals("Сначала выберите команду", chips.detail)
         assertNull(chips.action)
     }
 
@@ -63,7 +65,24 @@ class ReadinessChecklistTest {
     fun `present team is done with team title`() {
         val team = item(ready, ReadinessItemId.Team)
         assertEquals(ReadinessStatus.Done, team.status)
+        assertEquals("Команда выбрана", team.title)
         assertEquals("Ф-мажор · 101", team.detail)
+    }
+
+    @Test
+    fun `more bound than members is done capped at member count`() {
+        val chips = item(ready.copy(boundCount = 5), ReadinessItemId.Chips)
+        assertEquals(ReadinessStatus.Done, chips.status)
+        assertEquals("4 из 4", chips.detail)
+    }
+
+    @Test
+    fun `no chips bound is blocked with zero count`() {
+        val chips = item(ready.copy(boundCount = 0), ReadinessItemId.Chips)
+        assertEquals(ReadinessStatus.Blocked, chips.status)
+        assertEquals("Чипы привязаны не все", chips.title)
+        assertEquals("0 из 4", chips.detail)
+        assertEquals(ReadinessAction.BindChips, chips.action)
     }
 
     @Test
@@ -95,6 +114,8 @@ class ReadinessChecklistTest {
     fun `nfc disabled is blocked with settings action`() {
         val nfc = item(ready.copy(nfc = NfcState.Disabled), ReadinessItemId.Nfc)
         assertEquals(ReadinessStatus.Blocked, nfc.status)
+        assertEquals("NFC выключен", nfc.title)
+        assertEquals("Включите NFC в настройках телефона", nfc.detail)
         assertEquals(ReadinessAction.OpenNfcSettings, nfc.action)
     }
 
@@ -134,14 +155,26 @@ class ReadinessChecklistTest {
     fun `empty legend is a warning with refresh`() {
         val legend = item(ready.copy(legendCount = 0), ReadinessItemId.Legend)
         assertEquals(ReadinessStatus.Warning, legend.status)
+        assertEquals("Легенда не загружена", legend.title)
+        assertEquals("Обновите данные, пока есть сеть", legend.detail)
         assertEquals(ReadinessAction.Refresh, legend.action)
     }
 
     @Test
     fun `empty legend without team has no action`() {
-        val legend = item(ready.copy(team = TeamReadiness.None, legendCount = 0), ReadinessItemId.Legend)
-        assertEquals(ReadinessStatus.Warning, legend.status)
-        assertNull(legend.action)
+        for (team in listOf(TeamReadiness.None, TeamReadiness.Missing)) {
+            val legend = item(ready.copy(team = team, legendCount = 0), ReadinessItemId.Legend)
+            assertEquals("$team", ReadinessStatus.Warning, legend.status)
+            assertEquals("$team", "Сначала выберите команду", legend.detail)
+            assertNull("$team", legend.action)
+        }
+    }
+
+    @Test
+    fun `loaded legend is done even without team`() {
+        val legend = item(ready.copy(team = TeamReadiness.None, legendCount = 12), ReadinessItemId.Legend)
+        assertEquals(ReadinessStatus.Done, legend.status)
+        assertEquals("КП в легенде: 12", legend.detail)
     }
 
     @Test
@@ -173,6 +206,14 @@ class ReadinessChecklistTest {
     }
 
     @Test
+    fun `downloading percent is clamped and rounded`() {
+        for ((progress, expected) in listOf(1.2f to "100%", -0.1f to "0%", 0.995f to "100%", 0.004f to "0%")) {
+            val row = item(ready.copy(map = MapAvailability.Downloading(progress)), ReadinessItemId.Map)
+            assertEquals("$progress", "Скачивается · $expected", row.detail)
+        }
+    }
+
+    @Test
     fun `indeterminate downloading has no percent`() {
         val row = item(ready.copy(map = MapAvailability.Downloading(null)), ReadinessItemId.Map)
         assertEquals("Скачивается", row.detail)
@@ -192,9 +233,19 @@ class ReadinessChecklistTest {
         assertEquals(ReadinessStatus.Warning, noSync.status)
         assertEquals(ReadinessStatus.Warning, skewed.status)
         assertNotEquals(noSync.detail, skewed.detail)
+        assertEquals("Часы не синхронизированы", noSync.title)
+        assertEquals("Время не подтверждено — подключитесь к сети", noSync.detail)
         assertTrue(skewed.detail, skewed.detail.contains("2 мин"))
+        assertTrue(skewed.detail, skewed.detail.startsWith("Расходятся с сервером на "))
         assertNull(noSync.action)
         assertNull(skewed.action)
+    }
+
+    @Test
+    fun `positive skew is a warning naming the minutes`() {
+        val skewed = item(ready.copy(clock = ClockStatus.Skewed(300_000)), ReadinessItemId.Clock)
+        assertEquals(ReadinessStatus.Warning, skewed.status)
+        assertTrue(skewed.detail, skewed.detail.contains("5 мин"))
     }
 
     @Test
@@ -229,14 +280,36 @@ class ReadinessChecklistTest {
     fun `power save on is a warning with battery saver settings action`() {
         val row = item(ready.copy(powerSaveMode = true), ReadinessItemId.Power)
         assertEquals(ReadinessStatus.Warning, row.status)
+        assertEquals("Включено энергосбережение", row.title)
+        assertEquals("Трек и фоновая загрузка могут прерываться", row.detail)
         assertEquals(ReadinessAction.OpenBatterySaverSettings, row.action)
+    }
+
+    @Test
+    fun `done rows keep only team chips and map actions`() {
+        val expected = mapOf(
+            ReadinessItemId.Team to ReadinessAction.ChooseTeam,
+            ReadinessItemId.Chips to ReadinessAction.BindChips,
+            ReadinessItemId.Nfc to null,
+            ReadinessItemId.Location to null,
+            ReadinessItemId.Legend to null,
+            ReadinessItemId.Map to ReadinessAction.OpenMap,
+            ReadinessItemId.Clock to null,
+            ReadinessItemId.Notifications to null,
+        )
+        val items = readinessItems(ready)
+        assertEquals(expected.keys.toList(), items.map { it.id })
+        for (row in items) {
+            assertEquals("${row.id}", ReadinessStatus.Done, row.status)
+            assertEquals("${row.id}", expected[row.id], row.action)
+        }
     }
 
     // --- invariants ---
 
     private val worstInput = ReadinessInput(
         team = TeamReadiness.None,
-        teamTitle = "",
+        teamTitle = null,
         memberCount = 0,
         boundCount = 0,
         nfc = NfcState.Disabled,
@@ -269,19 +342,28 @@ class ReadinessChecklistTest {
     @Test
     fun `blocked only on team chips and nfc`() {
         val allowed = setOf(ReadinessItemId.Team, ReadinessItemId.Chips, ReadinessItemId.Nfc)
-        val inputs = listOf(
-            worstInput,
-            worstInput.copy(team = TeamReadiness.Missing),
-            worstInput.copy(team = TeamReadiness.Present, memberCount = 4, boundCount = 1),
-            worstInput.copy(nfc = NfcState.NoHardware, location = LocationAccess.Approximate),
-            worstInput.copy(map = MapAvailability.Downloading(0.5f), clock = ClockStatus.Skewed(600_000)),
-            ready,
+        val maps = listOf(
+            MapAvailability.NoMapForRace, MapAvailability.Ready, MapAvailability.NotDownloaded,
+            MapAvailability.BusyOtherRace, MapAvailability.Downloading(0.5f), MapAvailability.Downloading(null),
         )
-        for (input in inputs) {
-            for (row in readinessItems(input).filter { it.status == ReadinessStatus.Blocked }) {
-                assertTrue("${row.id} blocked", row.id in allowed)
-            }
-        }
+        val clocks = listOf(ClockStatus.Ok, ClockStatus.NoSync, ClockStatus.Skewed(600_000))
+        val counts = listOf(Triple(0, 0, 0), Triple(4, 1, 30), Triple(4, 4, 0))
+        var cases = 0
+        var blockedSeen = 0
+        for (team in TeamReadiness.entries) for (nfc in NfcState.entries) for (loc in LocationAccess.entries)
+            for (map in maps) for (clock in clocks) for (notif in listOf(null, true, false))
+                for (power in listOf(false, true)) for ((members, bound, legend) in counts) {
+                    val input = ReadinessInput(
+                        team, "T", members, bound, nfc, loc, legend, map, clock, notif, power,
+                    )
+                    cases++
+                    for (row in readinessItems(input).filter { it.status == ReadinessStatus.Blocked }) {
+                        blockedSeen++
+                        assertTrue("${row.id} blocked for $input", row.id in allowed)
+                    }
+                }
+        assertTrue(cases > 1000)
+        assertTrue("no Blocked row was ever produced", blockedSeen > 0)
     }
 
     @Test
@@ -318,10 +400,79 @@ class ReadinessChecklistTest {
     }
 
     @Test
-    fun `gate opens only when all three signals resolved`() {
-        assertTrue(readinessVisible(marksLoading = false, legendLoaded = true, mapResolved = true))
-        assertFalse(readinessVisible(marksLoading = true, legendLoaded = true, mapResolved = true))
-        assertFalse(readinessVisible(marksLoading = false, legendLoaded = false, mapResolved = true))
-        assertFalse(readinessVisible(marksLoading = false, legendLoaded = true, mapResolved = false))
+    fun `summary worst is blocked with blocked and done rows only`() {
+        val s = readinessSummary(readinessItems(ready.copy(nfc = NfcState.Disabled)))
+        assertEquals(ReadinessStatus.Blocked, s.worst)
+        assertEquals(s.total - 1, s.done)
+        assertFalse(s.allDone)
+    }
+
+    @Test
+    fun `summary of empty list is all done`() {
+        val s = readinessSummary(emptyList())
+        assertEquals(0, s.total)
+        assertEquals(ReadinessStatus.Done, s.worst)
+        assertTrue(s.allDone)
+    }
+
+    @Test
+    fun `gate opens only when all signals resolved`() {
+        assertTrue(readinessVisible(marksLoading = false, legendLoaded = true, mapResolved = true, teamMatches = true))
+        assertFalse(readinessVisible(marksLoading = true, legendLoaded = true, mapResolved = true, teamMatches = true))
+        assertFalse(readinessVisible(marksLoading = false, legendLoaded = false, mapResolved = true, teamMatches = true))
+        assertFalse(readinessVisible(marksLoading = false, legendLoaded = true, mapResolved = false, teamMatches = true))
+        assertFalse(readinessVisible(marksLoading = false, legendLoaded = true, mapResolved = true, teamMatches = false))
+    }
+
+    @Test
+    fun `team matches only when the resolved team is the selected one`() {
+        assertTrue(readinessTeamMatches(selectedTeamId = 7, resolvedTeamId = 7))
+        assertTrue(readinessTeamMatches(selectedTeamId = null, resolvedTeamId = null))
+        // Mid-switch: the roster collector still holds team 7 while bindings are already keyed on 8.
+        assertFalse(readinessTeamMatches(selectedTeamId = 8, resolvedTeamId = 7))
+        // Selection cleared/set while the other collector lags behind.
+        assertFalse(readinessTeamMatches(selectedTeamId = null, resolvedTeamId = 7))
+        assertFalse(readinessTeamMatches(selectedTeamId = 8, resolvedTeamId = null))
+    }
+
+    // --- host-side derivations ---
+
+    @Test
+    fun `team title appends start number unless blank`() {
+        assertEquals("Ф-мажор · №101", readinessTeamTitle("Ф-мажор", "101"))
+        assertEquals("Ф-мажор", readinessTeamTitle("Ф-мажор", ""))
+        assertEquals("Ф-мажор", readinessTeamTitle("Ф-мажор", "  "))
+        assertEquals("Ф-мажор", readinessTeamTitle("Ф-мажор", null))
+    }
+
+    @Test
+    fun `bound count counts member slots with a binding, not bindings`() {
+        assertEquals(2, readinessBoundCount(listOf(1, 2, 3, 4), setOf(1, 3, 7)))
+        assertEquals(0, readinessBoundCount(emptyList(), setOf(1, 2)))
+    }
+
+    @Test
+    fun `location access from grants`() {
+        assertEquals(LocationAccess.Precise, locationAccessOf(fineGranted = true, coarseGranted = true))
+        assertEquals(LocationAccess.Precise, locationAccessOf(fineGranted = true, coarseGranted = false))
+        assertEquals(LocationAccess.Approximate, locationAccessOf(fineGranted = false, coarseGranted = true))
+        assertEquals(LocationAccess.None, locationAccessOf(fineGranted = false, coarseGranted = false))
+    }
+
+    @Test
+    fun `map resolved waits for listing and catalog emission, not race presence`() {
+        assertTrue(readinessMapResolved(selectedRaceId = null, mapListingKnown = false, catalogEmitted = false))
+        assertTrue(readinessMapResolved(selectedRaceId = 3, mapListingKnown = true, catalogEmitted = true))
+        assertFalse(readinessMapResolved(selectedRaceId = 3, mapListingKnown = false, catalogEmitted = true))
+        assertFalse(readinessMapResolved(selectedRaceId = 3, mapListingKnown = true, catalogEmitted = false))
+    }
+
+    @Test
+    fun `legend loaded only for the selected race's own emission`() {
+        assertTrue(readinessLegendLoaded(selectedRaceId = null, taggedCount = null))
+        assertFalse(readinessLegendLoaded(selectedRaceId = 3, taggedCount = null))
+        // Race switch 2 → 3: the previous race's count must not open the gate.
+        assertFalse(readinessLegendLoaded(selectedRaceId = 3, taggedCount = 2 to 30))
+        assertTrue(readinessLegendLoaded(selectedRaceId = 3, taggedCount = 3 to 0))
     }
 }

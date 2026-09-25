@@ -3,6 +3,7 @@ package ru.kolco24.kolco24.ui.marks
 import ru.kolco24.kolco24.NfcState
 import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.ui.common.formatSkewMinutes
+import ru.kolco24.kolco24.ui.common.valueForKey
 import ru.kolco24.kolco24.ui.map.MapAvailability
 
 /*
@@ -15,7 +16,10 @@ import ru.kolco24.kolco24.ui.map.MapAvailability
 
 enum class ReadinessStatus { Done, Warning, Blocked }
 
-/** Fixed display order — rows never re-sort (jumping rows read worse than a stable list). */
+/**
+ * Row identity (the view's list key and the tests' handle). The display order itself is fixed by
+ * [readinessItems]' build order — rows never re-sort (jumping rows read worse than a stable list).
+ */
 enum class ReadinessItemId { Team, Chips, Nfc, Location, Legend, Map, Clock, Notifications, Power }
 
 enum class ReadinessAction {
@@ -39,8 +43,8 @@ data class ReadinessItem(
 
 data class ReadinessInput(
     val team: TeamReadiness,
-    /** Team name (+ start number) of the selected team; `""` without a team. */
-    val teamTitle: String,
+    /** Team name (+ start number) of the selected team; `null` without a team. */
+    val teamTitle: String?,
     val memberCount: Int,
     val boundCount: Int,
     val nfc: NfcState,
@@ -58,13 +62,14 @@ data class ReadinessSummary(
     val done: Int,
     val total: Int,
     val worst: ReadinessStatus,
-    val allDone: Boolean,
-)
+) {
+    val allDone: Boolean get() = done == total
+}
 
 private const val NEED_TEAM = "Сначала выберите команду"
 
 /**
- * Checklist rows in the fixed [ReadinessItemId] order. Map is hidden on [MapAvailability.NoMapForRace],
+ * Checklist rows in a fixed order (Team, Chips, Nfc, Location, Legend, Map, Clock, Notifications, Power). Map is hidden on [MapAvailability.NoMapForRace],
  * Notifications when [ReadinessInput.notificationsGranted] is `null`, Power unless power-save is on.
  * Only Team / Chips / Nfc can be [ReadinessStatus.Blocked] — without them an NFC take cannot work.
  */
@@ -91,7 +96,7 @@ fun readinessItems(input: ReadinessInput): List<ReadinessItem> = buildList {
 
 private fun teamItem(input: ReadinessInput): ReadinessItem = when (input.team) {
     TeamReadiness.Present -> ReadinessItem(
-        ReadinessItemId.Team, ReadinessStatus.Done, "Команда выбрана", input.teamTitle,
+        ReadinessItemId.Team, ReadinessStatus.Done, "Команда выбрана", input.teamTitle.orEmpty(),
         ReadinessAction.ChooseTeam,
     )
     TeamReadiness.Missing -> ReadinessItem(
@@ -221,13 +226,54 @@ fun readinessSummary(items: List<ReadinessItem>): ReadinessSummary {
         items.any { it.status == ReadinessStatus.Warning } -> ReadinessStatus.Warning
         else -> ReadinessStatus.Done
     }
-    return ReadinessSummary(done = done, total = items.size, worst = worst, allDone = done == items.size)
+    return ReadinessSummary(done = done, total = items.size, worst = worst)
 }
 
 /**
  * First-render gate: hold the card until marks/team/bindings, the legend count and the map
  * availability have all resolved — otherwise a cold start flashes false «0 из N» / «Легенда не
- * загружена» / a collapsed «Всё готово» that then expands.
+ * загружена» / a collapsed «Всё готово» that then expands. [teamMatches] = [readinessTeamMatches]:
+ * the resolved team state belongs to the currently selected team.
  */
-fun readinessVisible(marksLoading: Boolean, legendLoaded: Boolean, mapResolved: Boolean): Boolean =
-    !marksLoading && legendLoaded && mapResolved
+fun readinessVisible(
+    marksLoading: Boolean,
+    legendLoaded: Boolean,
+    mapResolved: Boolean,
+    teamMatches: Boolean,
+): Boolean = !marksLoading && legendLoaded && mapResolved && teamMatches
+
+/**
+ * The host's team state (roster) and `selectedTeamId` (which keys the teamId-tagged bindings/marks)
+ * come from independent collectors: on a team switch one can lead the other, pairing team A's roster
+ * with team B's bindings (a false «N из N»). `true` only when the id the team state resolved for
+ * ([resolvedTeamId], `null` for "no team") equals [selectedTeamId].
+ */
+fun readinessTeamMatches(selectedTeamId: Int?, resolvedTeamId: Int?): Boolean = selectedTeamId == resolvedTeamId
+
+// --- host-side input derivations (MainActivity feeds these; pure so the anti-flash gate is tested) ---
+
+/** «name · №startNumber»; the number is omitted when null/blank. */
+fun readinessTeamTitle(teamName: String, startNumber: String?): String =
+    startNumber?.takeIf { it.isNotBlank() }?.let { "$teamName · №$it" } ?: teamName
+
+/** Members with a chip bound to their slot (not `bindings.size` — a stale slot must not count). */
+fun readinessBoundCount(memberSlots: List<Int>, boundSlots: Set<Int>): Int = memberSlots.count { it in boundSlots }
+
+fun locationAccessOf(fineGranted: Boolean, coarseGranted: Boolean): LocationAccess = when {
+    fineGranted -> LocationAccess.Precise
+    coarseGranted -> LocationAccess.Approximate
+    else -> LocationAccess.None
+}
+
+/**
+ * Map row resolved: no race selected, or both the map-files disk listing ([mapListingKnown]) and the
+ * races catalog ([catalogEmitted], the map URL's source) have landed. Deliberately *not* "the race is
+ * in the catalog": a race missing from it (unpublished server-side, LAN-only catalog while pinned)
+ * would keep the gate shut forever — its map URL is simply `null` → `NoMapForRace` → row hidden.
+ */
+fun readinessMapResolved(selectedRaceId: Int?, mapListingKnown: Boolean, catalogEmitted: Boolean): Boolean =
+    selectedRaceId == null || (mapListingKnown && catalogEmitted)
+
+/** Legend count resolved: no race selected, or this race's (key-tagged) count query has emitted. */
+fun readinessLegendLoaded(selectedRaceId: Int?, taggedCount: Pair<Int, Int>?): Boolean =
+    selectedRaceId == null || valueForKey(taggedCount, selectedRaceId) != null

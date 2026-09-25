@@ -23,6 +23,7 @@ import ru.kolco24.kolco24.data.LegendRepository
 import ru.kolco24.kolco24.data.MarkRepository
 import ru.kolco24.kolco24.data.MemberChipBindingRepository
 import ru.kolco24.kolco24.data.MemberTagsRepository
+import ru.kolco24.kolco24.data.PermissionRequestLog
 import ru.kolco24.kolco24.data.PhotoFrameReader
 import ru.kolco24.kolco24.data.PhotoFrameUploader
 import kotlinx.coroutines.flow.first
@@ -473,6 +474,9 @@ class AppContainer(private val context: Context) {
 
     /** User-controlled app theme preference (System/Light/Dark), persisted in SharedPreferences. */
     val themePreference: ThemePreference by lazy { ThemePreference.fromSharedPreferences(context) }
+
+    /** Persisted "ever requested" runtime-permission flags (`kolco24.permissions.xml`, excluded from backup). */
+    val permissionRequestLog: PermissionRequestLog by lazy { PermissionRequestLog.fromSharedPreferences(context) }
 
     /** User-controlled GPS-track recording profile (Precise/Economy), persisted in SharedPreferences. */
     val trackProfilePreference: TrackProfilePreference by lazy {

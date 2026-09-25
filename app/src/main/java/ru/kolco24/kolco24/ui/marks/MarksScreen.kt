@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -317,6 +318,8 @@ fun MarksScreen(
     // closed (marks/bindings, legend or map not resolved yet) → render nothing, so a cold start never
     // flashes false «0 из N» / «Легенда не загружена» rows.
     readiness: List<ReadinessItem>? = null,
+    // A checklist «Обновить» (Refresh action) sync is in flight → its rows show a spinner, not a chevron.
+    readinessRefreshing: Boolean = false,
     onReadinessAction: (ReadinessAction) -> Unit = {},
     onOpenNfcSettings: () -> Unit = {},
     onPhotoClick: () -> Unit = {},
@@ -444,6 +447,7 @@ fun MarksScreen(
                     if (readiness != null) item("readiness") {
                         ReadinessCard(
                             items = readiness,
+                            refreshing = readinessRefreshing,
                             onAction = onReadinessAction,
                             modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
                         )
@@ -530,18 +534,11 @@ internal fun PhotoLightboxOverlay(
 @Composable
 private fun ReadinessCard(
     items: List<ReadinessItem>,
+    refreshing: Boolean,
     onAction: (ReadinessAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val summary = readinessSummary(items)
-    val dark = isDarkScheme()
-    val colorOf: @Composable (ReadinessStatus) -> Color = { status ->
-        when (status) {
-            ReadinessStatus.Blocked -> MaterialTheme.colorScheme.error
-            ReadinessStatus.Warning -> if (dark) WarningAmberDark else WarningAmber
-            ReadinessStatus.Done -> MaterialTheme.colorScheme.tertiary
-        }
-    }
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -549,7 +546,6 @@ private fun ReadinessCard(
     ) {
         if (summary.allDone) {
             ReadinessRow(
-                glyphColor = colorOf(ReadinessStatus.Done),
                 status = ReadinessStatus.Done,
                 title = "Всё готово к старту",
                 detail = "Приложите телефон к метке КП",
@@ -559,7 +555,7 @@ private fun ReadinessCard(
             return@Surface
         }
         Column {
-            val worstColor = colorOf(summary.worst)
+            val worstColor = readinessColor(summary.worst)
             Row(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -582,7 +578,7 @@ private fun ReadinessCard(
                 )
             }
             // Flat 3dp progress bar (a plain Box pair, not LinearProgressIndicator — no stop dot/gap).
-            val fraction = if (summary.total > 0) summary.done.toFloat() / summary.total else 0f
+            val fraction = summary.done.toFloat() / summary.total
             Box(
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
@@ -601,12 +597,12 @@ private fun ReadinessCard(
             Spacer(Modifier.height(6.dp))
             items.forEach { item ->
                 ReadinessRow(
-                    glyphColor = colorOf(item.status),
                     status = item.status,
                     title = item.title,
                     detail = item.detail,
                     muted = item.status == ReadinessStatus.Done,
                     onClick = item.action?.let { action -> { onAction(action) } },
+                    busy = refreshing && item.action == ReadinessAction.Refresh,
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -614,15 +610,26 @@ private fun ReadinessCard(
     }
 }
 
-/** One checklist row: status glyph, title + detail, and a trailing chevron when it has an action. */
+/** Status colour: `Blocked` → `error`, `Warning` → [WarningAmber] (dark: [WarningAmberDark]), `Done` → `tertiary`. */
+@Composable
+private fun readinessColor(status: ReadinessStatus): Color = when (status) {
+    ReadinessStatus.Blocked -> MaterialTheme.colorScheme.error
+    ReadinessStatus.Warning -> if (isDarkScheme()) WarningAmberDark else WarningAmber
+    ReadinessStatus.Done -> MaterialTheme.colorScheme.tertiary
+}
+
+/**
+ * One checklist row: status glyph, title + detail, and a trailing chevron when it has an action
+ * ([busy] swaps the chevron for a small spinner while that action's work is in flight).
+ */
 @Composable
 private fun ReadinessRow(
-    glyphColor: Color,
     status: ReadinessStatus,
     title: String,
     detail: String,
     muted: Boolean,
     onClick: (() -> Unit)?,
+    busy: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -639,7 +646,7 @@ private fun ReadinessRow(
                 ReadinessStatus.Blocked -> Icons.Filled.Close
             },
             contentDescription = null,
-            tint = glyphColor,
+            tint = readinessColor(status),
             modifier = Modifier.size(20.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
@@ -658,7 +665,13 @@ private fun ReadinessRow(
                 )
             }
         }
-        if (onClick != null) {
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (onClick != null) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
