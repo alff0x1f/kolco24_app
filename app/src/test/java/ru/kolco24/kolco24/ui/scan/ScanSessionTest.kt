@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.marks.CheckMethod
+import ru.kolco24.kolco24.data.track.UploadTarget
 
 class ScanSessionTest {
 
@@ -250,5 +251,87 @@ class ScanSessionTest {
         assertTrue(s.present.isEmpty())
         assertTrue(s.bufferedBeforeKp.isEmpty())
         assertEquals(300L, s.lastScanAt)
+    }
+
+    // --- completionOnTransition: the scan overlay's confirm-mode entry decision ---
+
+    /** Fold [events] from a fresh session, returning the (wasComplete, session) of the LAST tap. */
+    private fun lastTap(rosterSize: Int, vararg events: ScanEvent): Pair<Boolean, ScanSession?> {
+        var s: ScanSession? = null
+        var was = false
+        events.forEachIndexed { i, e ->
+            was = isComplete(s, rosterSize)
+            s = reduce(s, e, now = i * 100L)
+        }
+        return was to s
+    }
+
+    private fun completion(rosterSize: Int, vararg events: ScanEvent): Completion {
+        val (was, s) = lastTap(rosterSize, *events)
+        return completionOnTransition(was, s, rosterSize)
+    }
+
+    @Test
+    fun completion_offlineTakeCompletingOnMember_isCounted() {
+        assertEquals(Completion.Counted, completion(2, kp(), ScanEvent.Member(1), ScanEvent.Member(2)))
+    }
+
+    @Test
+    fun completion_cloudTakeCompletingOnMember_confirmsCloud() {
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        assertEquals(
+            Completion.Confirm(UploadTarget.Cloud),
+            completion(2, cloud, ScanEvent.Member(1), ScanEvent.Member(2)),
+        )
+    }
+
+    @Test
+    fun completion_onKpEvent_whenBufferedMembersDrain_confirmsLocal() {
+        val local = kp().copy(checkMethod = CheckMethod.Local)
+        assertEquals(
+            Completion.Confirm(UploadTarget.Local),
+            completion(2, ScanEvent.Member(1), ScanEvent.Member(2), local),
+        )
+    }
+
+    @Test
+    fun completion_stillCollecting_isNone() {
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        assertEquals(Completion.None, completion(3, cloud, ScanEvent.Member(1)))
+    }
+
+    @Test
+    fun completion_repeatKpAfterCompletion_isNone() {
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        assertEquals(Completion.None, completion(1, cloud, ScanEvent.Member(1), cloud))
+    }
+
+    @Test
+    fun completion_cloudKpReplacedByOfflineKp_followsLatestRule() {
+        // Members buffered, cloud КП 42 lands (complete → confirm), then a different offline КП: present
+        // resets, so completing it again follows the NEW (offline) rule.
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        val offline = kp(point = 43, number = 8)
+        assertEquals(
+            Completion.Counted,
+            completion(1, cloud, offline, ScanEvent.Member(1)),
+        )
+    }
+
+    @Test
+    fun completion_offlineKpReplacedByCloudKp_confirms() {
+        val offline = kp()
+        val cloud = kp(point = 43, number = 8).copy(checkMethod = CheckMethod.Cloud)
+        assertEquals(
+            Completion.Confirm(UploadTarget.Cloud),
+            completion(2, offline, ScanEvent.Member(1), cloud, ScanEvent.Member(1), ScanEvent.Member(2)),
+        )
+    }
+
+    @Test
+    fun completion_nullSessionOrEmptyRoster_isNone() {
+        assertEquals(Completion.None, completionOnTransition(false, null, 2))
+        val s = reduce(null, kp().copy(checkMethod = CheckMethod.Cloud), now = 0L)
+        assertEquals(Completion.None, completionOnTransition(false, s, 0))
     }
 }

@@ -647,6 +647,11 @@ class MarkRepositoryTest {
         assertEquals(1, takenPointCount(marks))
         assertEquals(setOf(11), takenPoints(marks))
         assertEquals(8, totalScore(marks))
+        // The live-cost overloads apply the same isCounted filter.
+        assertEquals(1, takenPointCount(marks) { it.cost })
+        assertEquals(8, totalScore(marks) { it.cost })
+        assertEquals(0, takenPointCount(marks.take(1)) { it.cost }) // unconfirmed alone scores nothing
+        assertEquals(0, totalScore(marks.take(1)) { it.cost })
     }
 
     @Test

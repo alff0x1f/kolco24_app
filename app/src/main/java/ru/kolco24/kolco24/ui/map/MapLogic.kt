@@ -34,7 +34,8 @@ data class MapPin(
 /**
  * Pins for the map: only **complete** takes **with** a GPS fix (a take without a fix is deliberately
  * not shown), one pin per `checkpointId` — the earliest take by `trustedTakenAt ?: takenAt`. The cost
- * prefers the legend's current [checkpointCosts] over the cost captured on the mark.
+ * prefers the legend's current [checkpointCosts] over the cost captured on the mark. Deliberately
+ * `complete`, not `isCounted`: an unconfirmed `cloud`/`local` take is still a real visit, so it is pinned.
  */
 fun mapPins(marks: List<MarkEntity>, checkpointCosts: Map<Int, Int>): List<MapPin> =
     marks.asSequence()

@@ -610,6 +610,58 @@ class MarkRepositoryUploadTest {
     }
 
     @Test
+    fun confirm_local_gpsArrivesDuringPost_confirmedButUploadedLocalStaysFalse() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val local = FakeUploader { marks ->
+            dao.simulateGpsArrival(marks.first().id)
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val r = repo(dao, local = local)
+
+        val kind = r.confirm("mark-0", UploadTarget.Local, now = 9L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        val row = dao.rowById("mark-0")
+        assertEquals(9L, row.confirmedAt)
+        assertFalse(row.uploadedLocal)
+    }
+
+    @Test
+    fun confirm_rowUpdatedDuringPost_confirmedButUploadedCloudStaysFalse() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val cloud = FakeUploader { marks ->
+            dao.simulateMemberAdded(marks.first().id) // updatedAt bumped mid-POST → version guard skips
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val r = repo(dao, cloud = cloud)
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 9L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        val row = dao.rowById("mark-0")
+        assertEquals(9L, row.confirmedAt) // the accept still confirms the take
+        assertFalse(row.uploadedCloud) // but the drain re-sends the newer row
+    }
+
+    @Test
+    fun confirm_backfillsTrustedMsOnTheWire() = runTest {
+        val dao = FakeMarkUploadDao()
+        // A take logged while the clock was NoSync: no stored trusted time, but a monotonic mark.
+        dao.seedTimed(raceId = 1, teamId = 7, trustedTakenAt = null, elapsedAt = 5_000L, bootCount = 42)
+        var sent: MarkDto? = null
+        val cloud = FakeUploader { marks -> sent = marks.single(); PostResult.Success(MarkUploadResponse(marks.map { it.id })) }
+        val r = repo(dao, cloud = cloud, trustedAt = { e, b -> if (e == 5_000L && b == 42) 111_000L else null })
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 9L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        assertEquals(111_000L, sent!!.trustedMs)
+        assertNull(dao.rowById("mark-0").trustedTakenAt) // wire-only backfill, row stays write-once
+    }
+
+    @Test
     fun photoMark_metadataDrainedAlongsideNfcMark() = runTest {
         // Phase 2: photo-mark metadata now shares the drain with NFC marks (the method != 'photo'
         // filter is dropped); the real SQL is guarded by the instrumented MarkDaoTest.

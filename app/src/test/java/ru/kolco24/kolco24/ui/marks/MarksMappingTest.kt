@@ -579,6 +579,15 @@ class MarksMappingTest {
     }
 
     @Test
+    fun `unconfirmedTokens marks a still-locked КП with a question-mark cost`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 7, cost = 0, checkMethod = "cloud", takenAt = 2_000L),
+            mark("b", point = 2, number = 8, cost = 3, checkMethod = "local", takenAt = 1_000L),
+        )
+        assertEquals(listOf("3-08", "?-07"), unconfirmedTokens(marks, lockedIds = setOf(1)))
+    }
+
+    @Test
     fun `hiddenTakenTokens ignores unconfirmed takes`() {
         val marks = listOf(
             mark("a", point = 1, number = 4, cost = 0, checkMethod = "cloud", takenAt = 2_000L),

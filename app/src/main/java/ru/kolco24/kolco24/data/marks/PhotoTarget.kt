@@ -32,7 +32,10 @@ sealed interface PhotoTarget {
  * The newest **complete** take whose effective time (`trustedTakenAt ?: takenAt`, mirroring the marks
  * gallery) is within [PHOTO_ATTACH_WINDOW_MS] of [nowMs] yields [PhotoTarget.AttachTo]; otherwise
  * [PhotoTarget.AskNumber]. Incomplete takes are ignored (they are kept only for the server log). The
- * window boundary is inclusive (exactly 3 minutes still attaches).
+ * window boundary is inclusive (exactly 3 minutes still attaches). The filter is deliberately `complete`,
+ * not `isCounted` (check-method plan, iOS parity): an unconfirmed `cloud`/`local` take still attracts a
+ * photo taken within the window, which then attaches as evidence and does NOT make the КП count
+ * (guarded by `PhotoTargetTest`).
  */
 fun decidePhotoTarget(marks: List<MarkEntity>, nowMs: Long): PhotoTarget {
     val latest = marks

@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew assembleRelease            # build release APK
 ./gradlew lintDebug                  # run lint (must pass before merging)
 ./gradlew testDebugUnitTest          # run unit tests
-./gradlew connectedDebugAndroidTest  # run instrumented tests (requires emulator/device) — guards CheckpointDao preserve-on-resync + MIGRATION_1_2/MIGRATION_2_3/MIGRATION_3_4/MIGRATION_4_5/MIGRATION_5_6/MIGRATION_6_7/MIGRATION_7_8 + MarkDaoTest frame-drain queries + attachPhotos column-scope + uploadCountsMetadata/photoFrameRows + setConfirmedAt/addMember-keeps-confirm + JudgeScanDaoTest
+./gradlew connectedDebugAndroidTest  # run instrumented tests (requires emulator/device) — guards CheckpointDao preserve-on-resync + MIGRATION_1_2/MIGRATION_2_3/MIGRATION_3_4/MIGRATION_4_5/MIGRATION_5_6/MIGRATION_6_7/MIGRATION_7_8 + MarkDaoTest frame-drain queries + attachPhotos column-scope + uploadCountsMetadata/photoFrameRows + setConfirmedAt/addMember-keeps-confirm/checkMethod SQL default + JudgeScanDaoTest
 ```
 
 ## Architecture

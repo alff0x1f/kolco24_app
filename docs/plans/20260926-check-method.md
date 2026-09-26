@@ -224,7 +224,7 @@ confirmAttemptFor = { target ->
 - [x] build to export `schemas/8.json`; check `checkMethod` has `"defaultValue": "'offline'"`; commit it
 - [x] instrumented test: `7 → 8` migration keeps old rows with `checkMethod == "offline"`, `confirmedAt == null`, via `runMigrationsAndValidate(testDb, 8, true, MIGRATION_7_8)` (pattern at MigrationTest.kt:256)
 - [x] instrumented tests: `addMember` resets `uploaded*` but keeps `checkMethod`/`confirmedAt`; `setConfirmedAt` round-trip, does not bump `updatedAt`; missing id is a no-op
-- [x] run `./gradlew testDebugUnitTest` + `connectedDebugAndroidTest` — must pass before next task (unit tests + lint pass; instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
+- [x] ⚠️ instrumented run pending on device/emulator — run `./gradlew testDebugUnitTest` + `connectedDebugAndroidTest` — must pass before next task (unit tests + lint pass; instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
 
 ### Task 2: CheckMethod + isCounted in metrics
 
@@ -341,7 +341,7 @@ confirmAttemptFor = { target ->
 - [x] verify all requirements from Overview are implemented
 - [x] verify edge cases: a confirmed retake counts the КП and drops it from the notice; legend method change doesn't affect old takes; unknown method = offline; photo takes = offline; closing during Sending leaves the take unconfirmed, and a late accepted POST still sets `confirmedAt`
 - [x] run full suite: `./gradlew testDebugUnitTest lintDebug assembleDebug`
-- [x] run instrumented: `./gradlew connectedDebugAndroidTest` (instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
+- [x] ⚠️ instrumented run pending on device/emulator — run instrumented: `./gradlew connectedDebugAndroidTest` (instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
 
 ### Task 10: [Final] Update documentation
 - [x] `docs/design/DATA-NOTES.md`: Room v8, `checkMethod`/`confirmedAt`, `setConfirmedAt`, `confirm()` without the mutex, `isCounted`

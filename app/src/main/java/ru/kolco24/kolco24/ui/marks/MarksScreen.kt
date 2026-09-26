@@ -156,8 +156,8 @@ enum class MarkKind { NFC, PHOTO }
  * Pure mapping of the local take events into display tiles — **one tile per completed event** (a repeat
  * take of the same checkpoint shows as a separate tile). Only `complete` takes are shown: a КП scanned
  * without scanning the whole team (e.g. КП chip only, or a partial collect) leaves a `complete=false`
- * row that is kept in the DB for the future server log but never tiled here, matching the
- * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
+ * row that is kept in the DB for the future server log but never tiled here (the «ВЗЯТО»/«СУММА» metrics
+ * are stricter still — `isCounted`, see below). [marks] arrives newest-first (as `observeMarks` delivers);
  * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
  * front. [costOf] resolves a take's **live** checkpoint cost (checkpoint id → current cost) so a tile
  * reflects an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
@@ -219,10 +219,10 @@ fun lightboxPhotos(tiles: List<Mark>): List<LightboxPhoto> =
 internal data class PhotoReviewSummary(val count: Int, val points: Int, val tokens: List<String>)
 
 /**
- * Pure summary of the **checkpoints** that need judge review — scored (`complete`) only by photo takes
+ * Pure summary of the **checkpoints** that need judge review — scored (`isCounted`) only by photo takes
  * (`method == "photo"`: no КП chip was read, so the photo is the only proof). Checkpoint-level, mirroring
  * the metrics' `distinctBy { checkpointId }` semantics: a repeat photo take of the same КП counts once,
- * and a КП that *also* has a complete NFC take is excluded entirely — the chip already proves the visit
+ * and a КП that *also* has a counted NFC take is excluded entirely — the chip already proves the visit
  * (its score comes from the NFC take), so judges have nothing to gate. Likewise an NFC take that merely
  * *attached* photo evidence never counts. Points go through the same live [costOf] the metrics use, so
  * an organizer's cost edit (or a legend reveal — a photo take of a still-locked КП snapshots `cost = 0`
@@ -235,10 +235,10 @@ internal fun photoReviewSummary(
     marks: List<MarkEntity>,
     costOf: (MarkEntity) -> Int = { it.cost },
 ): PhotoReviewSummary? {
-    val complete = marks.filter { it.isCounted() }
-    val chipVerified = complete.filterNot { it.method == "photo" }.mapTo(HashSet()) { it.checkpointId }
+    val counted = marks.filter { it.isCounted() }
+    val chipVerified = counted.filterNot { it.method == "photo" }.mapTo(HashSet()) { it.checkpointId }
     // [marks] arrives newest-first; reverse to oldest-first so the token list follows the tile grid.
-    val photoOnly = complete
+    val photoOnly = counted
         .filter { it.method == "photo" && it.checkpointId !in chipVerified }
         .distinctBy { it.checkpointId }
         .asReversed()
@@ -264,7 +264,7 @@ internal fun tokensLabel(tokens: List<String>, max: Int = 3): String =
     else tokens.take(max).joinToString(", ") + ", …"
 
 /**
- * Pure tokens of the **taken-but-still-hidden** checkpoints — `complete` takes whose checkpoint is
+ * Pure tokens of the **taken-but-still-hidden** checkpoints — counted (`isCounted`) takes whose checkpoint is
  * still locked in the legend ([lockedIds]), so its cost is unknown client-side and the take contributes
  * 0 to СУММА until reveal (the «сорвали метку» photo take of a locked КП; an NFC take reveals the КП
  * as part of the scan, so it never lands here). Checkpoint-level (`distinctBy { checkpointId }`, like
@@ -285,10 +285,13 @@ internal fun hiddenTakenTokens(marks: List<MarkEntity>, lockedIds: Set<Int>): Li
  * offline take, a photo take) is excluded: it already scores. Checkpoint-level (one token per КП, the
  * newest unconfirmed take wins the dedupe), oldest-first like the grid. Token = «стоимость-номер» through
  * the live [costOf], or the bare zero-padded number for a zero-cost КП (the [photoReviewSummary] grammar).
+ * A КП still locked in the legend ([lockedIds]) renders «?-NN» (the [hiddenTakenTokens] grammar) — its
+ * live cost is unknown, so the bare number would misread as a free КП.
  * [marks] arrives newest-first. Empty list = no notice.
  */
 internal fun unconfirmedTokens(
     marks: List<MarkEntity>,
+    lockedIds: Set<Int> = emptySet(),
     costOf: (MarkEntity) -> Int = { it.cost },
 ): List<String> {
     val counted = marks.filter { it.isCounted() }.mapTo(HashSet()) { it.checkpointId }
@@ -299,7 +302,11 @@ internal fun unconfirmedTokens(
         .map { m ->
             val cost = costOf(m)
             val number = m.checkpointNumber.toString().padStart(2, '0')
-            if (cost > 0) "$cost-$number" else number
+            when {
+                m.checkpointId in lockedIds -> "?-$number"
+                cost > 0 -> "$cost-$number"
+                else -> number
+            }
         }
 }
 
@@ -395,7 +402,7 @@ fun MarksScreen(
     val takenScore = totalScore(marks, costOf)
     val photoReview = photoReviewSummary(marks, costOf)
     val hiddenTaken = hiddenTakenTokens(marks, lockedCheckpointIds)
-    val unconfirmed = unconfirmedTokens(marks, costOf)
+    val unconfirmed = unconfirmedTokens(marks, lockedCheckpointIds, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
     val listState = rememberLazyListState()
@@ -1134,7 +1141,6 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(tf.fill)
             // Only a tile that actually carries photos is tappable (opens the lightbox); a plain NFC
             // tile keeps its current inert behaviour.
             .then(if (hasPhotos) Modifier.clickable { onPhotoTileClick(mark.photoPaths) } else Modifier),
@@ -1146,9 +1152,11 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
         // told apart from a pure photo take.
         // An unconfirmed cloud/local take ([Mark.unconfirmed]) keeps its tile but is dimmed to ~45% and
         // flagged with a full-opacity cloud-off glyph at the top-right — free on every such tile, since the
-        // camera chip is photo-kind only and photo takes are always offline (never unconfirmed).
+        // camera chip is photo-kind only and photo takes are always offline (never unconfirmed). The color
+        // fill lives INSIDE the dimmed box (the outer tile has no background), so the whole square fades
+        // toward the grid background — not just the token text.
         val bodyAlpha = if (mark.unconfirmed) UNCONFIRMED_TILE_ALPHA else 1f
-        Box(modifier = Modifier.fillMaxSize().alpha(bodyAlpha)) {
+        Box(modifier = Modifier.fillMaxSize().alpha(bodyAlpha).background(tf.fill)) {
             if (hasPhotos) {
                 PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
             } else {

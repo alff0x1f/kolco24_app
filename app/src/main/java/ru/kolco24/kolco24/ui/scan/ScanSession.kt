@@ -4,6 +4,7 @@ import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.db.CheckpointEntity
 import ru.kolco24.kolco24.data.marks.CheckMethod
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
+import ru.kolco24.kolco24.data.track.UploadTarget
 
 /** Sliding scan-window duration in milliseconds. Shared by ScanScreen's UI timer and MainActivity's DB-side expiry. */
 internal const val SCAN_WINDOW_MS = 20_000L
@@ -193,3 +194,28 @@ fun classifyTag(
  */
 fun isComplete(session: ScanSession?, rosterSize: Int): Boolean =
     session?.checkpointId != null && rosterSize > 0 && session.present.size >= rosterSize
+
+/** What a processed tap did to take completion — decided purely by [completionOnTransition]. */
+sealed interface Completion {
+    /** No incomplete → complete transition (still collecting, or a repeat tap after completion). */
+    data object None : Completion
+
+    /** An `offline` take just completed: it counts now (fanfare + success beat + auto-close). */
+    data object Counted : Completion
+
+    /** A `cloud`/`local` take just completed: enter confirm mode against [target]; nothing counts yet. */
+    data class Confirm(val target: UploadTarget) : Completion
+}
+
+/**
+ * The scan overlay's completion decision for one tap: [wasComplete] is [isComplete] of the session the
+ * tap was folded into (after the window-expiry reset), [session] the reduced result. Only the incomplete →
+ * complete edge fires; its kind follows the session's **current** [ScanSession.checkMethod] (the last КП
+ * scanned wins — a КП switch mid-session replaces the rule). Also covers completion arriving on a
+ * [ScanEvent.Kp] when pre-КП buffered members drain into `present`.
+ */
+fun completionOnTransition(wasComplete: Boolean, session: ScanSession?, rosterSize: Int): Completion {
+    if (wasComplete || !isComplete(session, rosterSize)) return Completion.None
+    val target = session?.checkMethod?.uploadTarget ?: return Completion.Counted
+    return Completion.Confirm(target)
+}

@@ -17,11 +17,7 @@ enum class CheckMethod {
 
     /** The server/DB string for this method (`marks.checkMethod`); round-trips through [parse]. */
     val wire: String
-        get() = when (this) {
-            Offline -> "offline"
-            Cloud -> "cloud"
-            Local -> "local"
-        }
+        get() = name.lowercase()
 
     /** The server that must confirm the take, or null for [Offline] (no confirmation needed). */
     val uploadTarget: UploadTarget?

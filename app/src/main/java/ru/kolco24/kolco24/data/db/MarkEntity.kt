@@ -32,8 +32,10 @@ data class MarkMemberSnapshot(
  *
  * A row is created the moment the КП chip is scanned (so the take survives process death), then
  * [present] accumulates the `numberInTeam` of each member scanned within the rolling window. [complete]
- * (= counts for score) is set once `present` covers the whole roster ([expectedCount]); a partial
- * collect is stored for the server log but not scored. A repeat take of the same checkpoint produces a
+ * is set once `present` covers the whole roster ([expectedCount]); a partial collect is stored for the
+ * server log but not scored. A complete take counts for score per
+ * [ru.kolco24.kolco24.data.marks.isCounted] — `offline` takes always, `cloud`/`local` only once
+ * [confirmedAt] is set. A repeat take of the same checkpoint produces a
  * **new** row (history for the server-side order). Dual upload flags ([uploadedLocal]/[uploadedCloud])
  * are indexed by `raceId` and drained by [ru.kolco24.kolco24.data.MarkRepository]'s batch upload loop.
  */
@@ -55,7 +57,7 @@ data class MarkEntity(
     /**
      * Per-member snapshots ([MarkMemberSnapshot]) captured at scan time — the source for the upload
      * `present[]` array (`nfc_uid`/`code`/`number`/`number_in_team`). Runs **parallel** to [present]
-     * (which stays the scoring truth — `present.size` vs [expectedCount] drives [complete]) and is
+     * (which stays the roster truth — `present.size` vs [expectedCount] drives [complete]) and is
      * filled with set-semantics by `numberInTeam` on every bracelet scan. NULL on legacy rows written
      * before this column existed; the upload mapper merges over [present] so no member is ever lost.
      */

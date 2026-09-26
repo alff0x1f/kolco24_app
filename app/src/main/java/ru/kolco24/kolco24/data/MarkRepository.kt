@@ -70,13 +70,14 @@ fun interface PhotoFrameReader {
  * A take is a two-phase row: [startKpTake] is called the moment the КП chip is scanned (creating a
  * row with a client UUID so the take survives process death and merges cleanly across two servers),
  * then [addMember] accumulates each member's `numberInTeam` within the rolling scan window. Whenever a
- * row's `present` set covers the whole roster ([MarkEntity.expectedCount]) it becomes [MarkEntity.complete]
- * (= scored). A partial collect is stored for the future server log but not scored, and a repeat take of
- * the same checkpoint produces a **new** row.
+ * row's `present` set covers the whole roster ([MarkEntity.expectedCount]) it becomes [MarkEntity.complete];
+ * it scores per [isCounted] (an `offline` take on completion, a `cloud`/`local` take only once [confirm]
+ * set `confirmedAt`). A partial collect is stored for the future server log but not scored, and a repeat
+ * take of the same checkpoint produces a **new** row.
  *
  * "Взято" is **not** written back onto the checkpoint row: it is team-scoped (a checkpoint shared by a
  * race's teams would otherwise leak one team's progress onto another's), so the legend derives it from
- * this team's complete marks via [takenPoints].
+ * this team's counted (`isCounted`) marks via [takenPoints].
  */
 class MarkRepository(
     private val markDao: MarkDao,
@@ -148,7 +149,8 @@ class MarkRepository(
         expectedCount: Int,
         bufferedMembers: Collection<MarkMemberSnapshot>,
         sample: TimeSample,
-        checkMethod: CheckMethod = CheckMethod.Offline,
+        // Required (no default): a new call site must decide the tag's rule, never silently fall back to offline.
+        checkMethod: CheckMethod,
     ): String {
         val id = UUID.randomUUID().toString()
         // Both present (scoring truth) and presentDetails (upload snapshots) come from one distinct pass.

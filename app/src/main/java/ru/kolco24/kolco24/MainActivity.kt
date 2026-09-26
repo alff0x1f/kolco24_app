@@ -909,7 +909,7 @@ private fun Kolco24AppRoot(
     // Guard: collectAsState does not reset on key change — filter stale marks from the prior team
     // during the brief window before the new flow emits (mirrors the scanRoster/scanBindings guard).
     val safeMarks = if (selectedTeamId != null) marks.filter { it.teamId == selectedTeamId } else emptyList()
-    // "Взято" is team-scoped: derive it from THIS team's complete marks, never off the race-shared
+    // "Взято" is team-scoped: derive it from THIS team's counted (isCounted) marks, never off the race-shared
     // checkpoint row — otherwise switching teams within a race would show the prior team's progress.
     val takenIds = remember(safeMarks) { takenPoints(safeMarks) }
 
@@ -1924,20 +1924,19 @@ private fun Kolco24AppRoot(
                 },
                 onClose = closeScanOverlay,
                 onCompleted = { pendingCelebration = true; switchToTab(PAGE_MARKS) },
-                confirmAttemptFor = { target ->
-                    // Called once by ScanScreen under scanMutex on the completing transition, right after
-                    // onScanTag returned: snapshot the take id now so every retry re-POSTs this take. The
-                    // POST runs on applicationScope so a request in flight when the overlay closes still
-                    // lands (and writes confirmedAt if accepted).
+                confirm = { target ->
+                    // One attempt per call; the take id is read now — stable for the whole loop, since
+                    // confirm mode drops every tap before onScanTag. The POST runs on applicationScope so a
+                    // request in flight when the overlay closes still lands (and writes confirmedAt if
+                    // accepted). A null id is unreachable (confirm mode follows a completed take); it
+                    // maps to Error rather than crashing.
                     val id = scanTake.markId
-                    suspend {
-                        if (id == null) {
-                            UploadResultKind.Error
-                        } else {
-                            container.applicationScope.async {
-                                markRepo.confirm(id, target, System.currentTimeMillis())
-                            }.await()
-                        }
+                    if (id == null) {
+                        UploadResultKind.Error
+                    } else {
+                        container.applicationScope.async {
+                            markRepo.confirm(id, target, System.currentTimeMillis())
+                        }.await()
                     }
                 },
                 modifier = Modifier.fillMaxSize(),

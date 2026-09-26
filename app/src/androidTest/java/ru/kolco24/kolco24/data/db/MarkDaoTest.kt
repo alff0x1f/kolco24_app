@@ -345,8 +345,15 @@ class MarkDaoTest {
     }
 
     @Test
-    fun upsert_defaultsCheckMethodToOffline() = runBlocking {
-        dao.upsert(mark("m1", method = "nfc"))
+    fun rawInsertWithoutCheckMethod_getsDbDefaultOffline() = runBlocking {
+        // Exercise the SQL column DEFAULT (not the Kotlin default): a raw INSERT that omits
+        // checkMethod/confirmedAt must read back as "offline" / NULL.
+        db.openHelper.writableDatabase.execSQL(
+            "INSERT INTO marks (id, raceId, teamId, checkpointId, checkpointNumber, cost, method, cpUid, " +
+                "cpCode, present, expectedCount, complete, takenAt, updatedAt, uploadedLocal, uploadedCloud, " +
+                "photosUploadedLocal, photosUploadedCloud) " +
+                "VALUES ('m1', 1, 7, 10, 10, 5, 'nfc', 'CPUID', 'CODE', '[1]', 1, 1, 1000, 1000, 0, 0, 0, 0)",
+        )
         val row = dao.getById("m1")!!
         assertEquals("offline", row.checkMethod)
         assertNull(row.confirmedAt)
