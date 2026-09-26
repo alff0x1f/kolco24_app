@@ -7,6 +7,14 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
 /**
+ * The `marks.checkMethod` column default — single source for `@ColumnInfo(defaultValue)`, the Kotlin
+ * default of [MarkEntity.checkMethod] and `AppDatabase.MIGRATION_7_8`'s DDL. Equals
+ * `CheckMethod.Offline.wire` (asserted by `CheckMethodTest`); must stay `"offline"` — it is baked into
+ * the committed `schemas/8.json`.
+ */
+const val CHECK_METHOD_OFFLINE = "offline"
+
+/**
  * Snapshot of one team member captured at the moment of a checkpoint take — the source for the
  * `present[]` array in the marks upload contract. Parallel to [MarkEntity.present] (which stays the
  * scoring truth): [numberInTeam] is the slot, [nfcUid] is the bracelet uid read at scan time (may be
@@ -133,9 +141,9 @@ data class MarkEntity(
      * by `CheckMethod.parse`, unknown → offline). Copied onto the take so a later legend change never
      * re-scores old takes. `"offline"` (the default, and every pre-v8 row) = a complete take counts as
      * before; `"cloud"`/`"local"` = the take counts only once [confirmedAt] is set. Photo takes are
-     * always `"offline"`. The `@ColumnInfo(defaultValue)` matches `MIGRATION_7_8`'s DDL.
+     * always `"offline"`. Default = [CHECK_METHOD_OFFLINE] (shared with `MIGRATION_7_8`'s DDL).
      */
-    @ColumnInfo(defaultValue = "offline") val checkMethod: String = "offline",
+    @ColumnInfo(defaultValue = CHECK_METHOD_OFFLINE) val checkMethod: String = CHECK_METHOD_OFFLINE,
     /**
      * Wall ms at which the [checkMethod] target (cloud or LAN) accepted this take **while the scan
      * overlay was open** (`MarkRepository.confirm`). NULL = not confirmed. Never set by the background

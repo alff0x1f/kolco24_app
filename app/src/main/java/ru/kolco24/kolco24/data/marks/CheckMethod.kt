@@ -39,7 +39,9 @@ enum class CheckMethod {
 /**
  * Scoring rule: a take counts when it is [MarkEntity.complete] **and** either needs no server
  * confirmation ([CheckMethod.Offline]) or was confirmed from the open scan overlay
- * ([MarkEntity.confirmedAt] set). Replaces the bare `complete` check in every "taken"/score derivation.
+ * ([MarkEntity.confirmedAt] set). Replaces the bare `complete` check in every "taken"/score
+ * derivation. [CheckMethod.parse] (not a `== "offline"` compare) keeps unknown/legacy values scored
+ * as offline.
  */
 fun MarkEntity.isCounted(): Boolean =
     complete && (CheckMethod.parse(checkMethod) == CheckMethod.Offline || confirmedAt != null)
@@ -48,5 +50,4 @@ fun MarkEntity.isCounted(): Boolean =
  * A complete cloud/local take the server has not confirmed — shown (dimmed tile + notice) but not
  * counted. Partial takes are never "unconfirmed" (they don't count regardless).
  */
-fun MarkEntity.isUnconfirmed(): Boolean =
-    complete && CheckMethod.parse(checkMethod) != CheckMethod.Offline && confirmedAt == null
+fun MarkEntity.isUnconfirmed(): Boolean = complete && !isCounted()

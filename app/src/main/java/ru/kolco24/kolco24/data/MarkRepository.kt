@@ -331,8 +331,9 @@ class MarkRepository(
      * de-dupes by client UUID). The drain itself never sets `confirmedAt`. Does not report through
      * `onUploadOutcome` — the overlay shows its own status.
      *
-     * Returns [UploadResultKind.Ok] on acceptance; [UploadResultKind.Error] (no POST) for a missing or incomplete row, or for a
-     * `Success` without the id; otherwise the mapped [uploadResultKind] (`Offline` / `Error`).
+     * Returns [UploadResultKind.Ok] on acceptance; [UploadResultKind.Error] (no POST) for a missing or
+     * incomplete row, or for a `Success` without the id; otherwise the mapped [uploadResultKind]
+     * (`Offline` / `Error`).
      */
     suspend fun confirm(markId: String, target: UploadTarget, now: Long): UploadResultKind {
         val mark = markDao.getById(markId) ?: return UploadResultKind.Error
@@ -340,22 +341,32 @@ class MarkRepository(
         // shrank after the КП scan, while this row's expectedCount was snapshotted then and it stays
         // incomplete (never counts). Confirming it would show «Готово!» for a take that scores nothing.
         if (!mark.complete) return UploadResultKind.Error
-        val uploader = when (target) {
-            UploadTarget.Cloud -> cloudUploader
-            UploadTarget.Local -> localUploader
-        }
         val dto = backfillTrustedMs(mark).toDto()
-        val result = uploader.upload(mark.raceId, mark.teamId, sourceInstallId, listOf(dto))
+        val result = uploaderFor(target).upload(mark.raceId, mark.teamId, sourceInstallId, listOf(dto))
         if (result !is PostResult.Success) return uploadResultKind(result)
         if (markId !in result.data.accepted) return UploadResultKind.Error
         markDao.setConfirmedAt(markId, now)
-        val batch = listOf(mark)
-        val ids = listOf(markId)
-        when (target) {
-            UploadTarget.Cloud -> markCloudGpsAware(batch, ids)
-            UploadTarget.Local -> markLocalGpsAware(batch, ids)
-        }
+        markUploadedGpsAware(target, listOf(mark), listOf(markId))
         return UploadResultKind.Ok
+    }
+
+    /** The metadata uploader for [target] — shared by [confirm] and [flushScope]. */
+    private fun uploaderFor(target: UploadTarget): MarkUploader = when (target) {
+        UploadTarget.Cloud -> cloudUploader
+        UploadTarget.Local -> localUploader
+    }
+
+    /**
+     * Flip [target]'s `uploaded*` flag through its GPS-aware version guard ([markCloudGpsAware] /
+     * [markLocalGpsAware]) — shared by [confirm] and [flushScope].
+     */
+    private suspend fun markUploadedGpsAware(
+        target: UploadTarget,
+        batch: List<MarkEntity>,
+        ids: List<String>,
+    ) = when (target) {
+        UploadTarget.Cloud -> markCloudGpsAware(batch, ids)
+        UploadTarget.Local -> markLocalGpsAware(batch, ids)
     }
 
     /**
@@ -372,8 +383,8 @@ class MarkRepository(
 
         val localMeta = uploadLoop(
             fetch = { markDao.unuploadedLocal(raceId, teamId, UPLOAD_BATCH) },
-            upload = { localUploader.upload(raceId, teamId, sourceInstallId, it) },
-            mark = { batch, ids -> markLocalGpsAware(batch, ids) },
+            upload = { uploaderFor(UploadTarget.Local).upload(raceId, teamId, sourceInstallId, it) },
+            mark = { batch, ids -> markUploadedGpsAware(UploadTarget.Local, batch, ids) },
         )
         val localFrame = frameDrainLoop(
             fetch = { markDao.framePendingLocal(raceId, teamId, UPLOAD_BATCH) },
@@ -384,8 +395,8 @@ class MarkRepository(
 
         val cloudMeta = uploadLoop(
             fetch = { markDao.unuploadedCloud(raceId, teamId, UPLOAD_BATCH) },
-            upload = { cloudUploader.upload(raceId, teamId, sourceInstallId, it) },
-            mark = { batch, ids -> markCloudGpsAware(batch, ids) },
+            upload = { uploaderFor(UploadTarget.Cloud).upload(raceId, teamId, sourceInstallId, it) },
+            mark = { batch, ids -> markUploadedGpsAware(UploadTarget.Cloud, batch, ids) },
         )
         val cloudFrame = frameDrainLoop(
             fetch = { markDao.framePendingCloud(raceId, teamId, UPLOAD_BATCH) },
@@ -603,7 +614,10 @@ fun foldPhotoFrameCounts(rows: List<PhotoFrameRow>): UploadCounts {
     return UploadCounts(total = total, local = local, cloud = cloud)
 }
 
-/** Distinct checkpoints scored ([isCounted]: complete and, for cloud/local, server-confirmed) across the given take events. */
+/**
+ * Distinct checkpoints scored ([isCounted]: complete and, for cloud/local, server-confirmed) across
+ * the given take events.
+ */
 fun takenPointCount(marks: List<MarkEntity>): Int =
     marks.filter { it.isCounted() }.map { it.checkpointId }.distinct().size
 
@@ -617,17 +631,19 @@ fun takenPointCount(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int =
 
 /**
  * The set of checkpoint ids (points) scored by these marks — i.e. the team's "взято" checkpoints,
- * derived from its own counted takes ([isCounted] — an unconfirmed cloud/local take is not "взято"). The legend uses this instead of a persisted per-checkpoint flag
- * so that switching teams within a race shows each team's own progress.
+ * derived from its own counted takes ([isCounted] — an unconfirmed cloud/local take is not "взято").
+ * The legend uses this instead of a persisted per-checkpoint flag so that switching teams within a
+ * race shows each team's own progress.
  */
 fun takenPoints(marks: List<MarkEntity>): Set<Int> =
     marks.filter { it.isCounted() }.mapTo(HashSet()) { it.checkpointId }
 
 /**
- * Sum of cost over distinct scored ([isCounted]) checkpoints — a repeat take of the same point does not double-count.
- * Uses the cost snapshotted onto the mark row at take time. Prefer the [costOf] overload for any
- * user-facing total: the snapshot goes stale if the organizer edits a КП cost after it was taken (a
- * 0→5 edit leaves the snapshot at 0), which makes the «Отметки» СУММА diverge from the «Легенда» score.
+ * Sum of cost over distinct scored ([isCounted]) checkpoints — a repeat take of the same point does
+ * not double-count. Uses the cost snapshotted onto the mark row at take time. Prefer the [costOf]
+ * overload for any user-facing total: the snapshot goes stale if the organizer edits a КП cost after
+ * it was taken (a 0→5 edit leaves the snapshot at 0), which makes the «Отметки» СУММА diverge from
+ * the «Легенда» score.
  */
 fun totalScore(marks: List<MarkEntity>): Int = totalScore(marks) { it.cost }
 

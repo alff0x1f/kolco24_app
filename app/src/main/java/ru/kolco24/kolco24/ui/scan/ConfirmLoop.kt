@@ -6,10 +6,10 @@ import ru.kolco24.kolco24.data.track.UploadTarget
 
 /**
  * Scan-overlay confirmation state for a `cloud`/`local` take: the overlay stays open while the mark
- * is POSTed to [target] and only a server accept counts the КП. Both states carry the [target], so the
- * overlay derives it once (on the completing transition) and reads it back for the loop and «Повторить».
- * There is no "confirmed" state — [runConfirm] reports success through its return value. Pure so the
- * loop is JVM-tested.
+ * is POSTed to [target] and only a server accept counts the КП. Both states carry the [target], so
+ * the overlay derives it once (on the completing transition) and reads it back for the loop and
+ * «Повторить». There is no "confirmed" state — [runConfirm] reports success through its return
+ * value. Pure so the loop is JVM-tested.
  */
 sealed interface ConfirmState {
     val target: UploadTarget
@@ -18,11 +18,14 @@ sealed interface ConfirmState {
     data class Failed(override val target: UploadTarget, val offline: Boolean) : ConfirmState
 }
 
-/** Total retry window measured from the first attempt; the last attempt may overrun by one request timeout. */
-const val CONFIRM_TIMEOUT_MS = 20_000L
+/**
+ * Total retry window measured from the first attempt; the last attempt may overrun by one request
+ * timeout.
+ */
+internal const val CONFIRM_TIMEOUT_MS = 20_000L
 
 /** Pause between a failed attempt and the next one. */
-const val CONFIRM_RETRY_MS = 3_000L
+internal const val CONFIRM_RETRY_MS = 3_000L
 
 /**
  * Retry [attempt] until it returns [UploadResultKind.Ok] (returns `true`) or [timeoutMs] has elapsed
@@ -62,5 +65,6 @@ fun confirmStatusText(state: ConfirmState): String = when (state) {
         UploadTarget.Local -> "Отправка на локальный сервер…"
     } + " (попытка ${state.attempt})"
     is ConfirmState.Failed ->
-        if (state.offline) "Нет связи — КП не подтверждён" else "Сервер не принял — КП не подтверждён"
+        if (state.offline) "Нет связи — КП не подтверждён"
+        else "Сервер не принял — КП не подтверждён"
 }

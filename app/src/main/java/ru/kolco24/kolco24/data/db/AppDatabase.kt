@@ -170,7 +170,7 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE marks ADD COLUMN checkMethod TEXT NOT NULL DEFAULT 'offline'")
+                db.execSQL("ALTER TABLE marks ADD COLUMN checkMethod TEXT NOT NULL DEFAULT '$CHECK_METHOD_OFFLINE'")
                 db.execSQL("ALTER TABLE marks ADD COLUMN confirmedAt INTEGER")
             }
         }

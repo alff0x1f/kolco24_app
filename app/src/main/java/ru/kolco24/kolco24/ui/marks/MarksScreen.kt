@@ -246,12 +246,22 @@ internal fun photoReviewSummary(
     return PhotoReviewSummary(
         count = photoOnly.size,
         points = photoOnly.sumOf(costOf),
-        tokens = photoOnly.map { m ->
-            val cost = costOf(m)
-            val number = m.checkpointNumber.toString().padStart(2, '0')
-            if (cost > 0) "$cost-$number" else number
-        },
+        tokens = photoOnly.map { m -> kpToken(m.checkpointNumber, costOf(m)) },
     )
+}
+
+/**
+ * One КП token in the tile's «стоимость-номер» grammar: «cost-NN», the bare zero-padded «NN» for a
+ * zero-cost КП, or «?-NN» when [locked] (cost unknown until the legend reveal). Shared by the
+ * [photoReviewSummary], [hiddenTakenTokens] and [unconfirmedTokens] notices.
+ */
+private fun kpToken(number: Int, cost: Int, locked: Boolean = false): String {
+    val nn = number.toString().padStart(2, '0')
+    return when {
+        locked -> "?-$nn"
+        cost > 0 -> "$cost-$nn"
+        else -> nn
+    }
 }
 
 /**
@@ -264,30 +274,31 @@ internal fun tokensLabel(tokens: List<String>, max: Int = 3): String =
     else tokens.take(max).joinToString(", ") + ", …"
 
 /**
- * Pure tokens of the **taken-but-still-hidden** checkpoints — counted (`isCounted`) takes whose checkpoint is
- * still locked in the legend ([lockedIds]), so its cost is unknown client-side and the take contributes
- * 0 to СУММА until reveal (the «сорвали метку» photo take of a locked КП; an NFC take reveals the КП
- * as part of the scan, so it never lands here). Checkpoint-level (`distinctBy { checkpointId }`, like
- * the metrics), oldest-first like the grid. The token is «?-NN» — the `?` sits exactly where the cost
- * digit would in the tile's «стоимость-номер» grammar, saying "points unknown" in one character.
- * Only counted takes (`isCounted`) — an unconfirmed cloud/local take scores nothing, so it has no
- * "points unknown" either (it shows in [unconfirmedTokens] instead). Empty list = no notice.
+ * Pure tokens of the **taken-but-still-hidden** checkpoints — counted (`isCounted`) takes whose
+ * checkpoint is still locked in the legend ([lockedIds]), so its cost is unknown client-side and the
+ * take contributes 0 to СУММА until reveal (the «сорвали метку» photo take of a locked КП; an NFC take
+ * reveals the КП as part of the scan, so it never lands here). Checkpoint-level
+ * (`distinctBy { checkpointId }`, like the metrics), oldest-first like the grid. The token is «?-NN» —
+ * the `?` sits exactly where the cost digit would in the tile's «стоимость-номер» grammar, saying
+ * "points unknown" in one character. Only counted takes (`isCounted`) — an unconfirmed cloud/local
+ * take scores nothing, so it has no "points unknown" either (it shows in [unconfirmedTokens] instead).
+ * Empty list = no notice.
  */
 internal fun hiddenTakenTokens(marks: List<MarkEntity>, lockedIds: Set<Int>): List<String> =
     marks.filter { it.isCounted() && it.checkpointId in lockedIds }
         .distinctBy { it.checkpointId }
         .asReversed()
-        .map { "?-${it.checkpointNumber.toString().padStart(2, '0')}" }
+        .map { kpToken(it.checkpointNumber, cost = 0, locked = true) }
 
 /**
- * Pure tokens of the checkpoints taken **only** by unconfirmed cloud/local takes (`isUnconfirmed`) — the
- * «не подтверждены сервером» notice. A КП that has any counted take (`isCounted`: a confirmed retake, an
- * offline take, a photo take) is excluded: it already scores. Checkpoint-level (one token per КП, the
- * newest unconfirmed take wins the dedupe), oldest-first like the grid. Token = «стоимость-номер» through
- * the live [costOf], or the bare zero-padded number for a zero-cost КП (the [photoReviewSummary] grammar).
- * A КП still locked in the legend ([lockedIds]) renders «?-NN» (the [hiddenTakenTokens] grammar) — its
- * live cost is unknown, so the bare number would misread as a free КП.
- * [marks] arrives newest-first. Empty list = no notice.
+ * Pure tokens of the checkpoints taken **only** by unconfirmed cloud/local takes (`isUnconfirmed`) —
+ * the «не подтверждены сервером» notice. A КП that has any counted take (`isCounted`: a confirmed
+ * retake, an offline take, a photo take) is excluded: it already scores. Checkpoint-level (one token
+ * per КП, the newest unconfirmed take wins the dedupe), oldest-first like the grid. Token =
+ * «стоимость-номер» through the live [costOf], or the bare zero-padded number for a zero-cost КП (the
+ * [photoReviewSummary] grammar). A КП still locked in the legend ([lockedIds]) renders «?-NN» (the
+ * [hiddenTakenTokens] grammar) — its live cost is unknown, so the bare number would misread as a free
+ * КП. [marks] arrives newest-first. Empty list = no notice.
  */
 internal fun unconfirmedTokens(
     marks: List<MarkEntity>,
@@ -299,15 +310,7 @@ internal fun unconfirmedTokens(
         .filter { it.isUnconfirmed() && it.checkpointId !in counted }
         .distinctBy { it.checkpointId }
         .asReversed()
-        .map { m ->
-            val cost = costOf(m)
-            val number = m.checkpointNumber.toString().padStart(2, '0')
-            when {
-                m.checkpointId in lockedIds -> "?-$number"
-                cost > 0 -> "$cost-$number"
-                else -> number
-            }
-        }
+        .map { m -> kpToken(m.checkpointNumber, costOf(m), locked = m.checkpointId in lockedIds) }
 }
 
 // Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
@@ -1376,7 +1379,10 @@ private fun LightboxPage(file: File, mark: Mark, modifier: Modifier = Modifier) 
                     scale = 1.7f,
                 )
                 // A frame attached to an unconfirmed cloud/local take: the photo is evidence, but the take
-                // itself does not count — say so right under the КП chip.
+                // itself does not count — say so right under the КП chip. Deliberately *not* scaled with
+                // the chip's 1.7×: it is a secondary caption at plain body-caption size (12.sp), echoing
+                // the chip only in its 9.dp bottom-end corner; the black 0.6 scrim is the same one the
+                // thumbnail's bottom gradient fades to, so the white text stays legible on any photo.
                 if (mark.unconfirmed) {
                     Text(
                         text = "не подтверждён сервером",

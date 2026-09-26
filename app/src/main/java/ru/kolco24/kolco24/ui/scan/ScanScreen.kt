@@ -128,11 +128,12 @@ fun ScanScreen(
     scanFeedback: ScanFeedbackPlayer,
     onScanTag: suspend (ScanInput, TimeSample) -> ScanEvent,
     onClose: () -> Unit,
-    onCompleted: () -> Unit = {},
     // One confirm attempt for the current `cloud`/`local` take (POST to [UploadTarget]). The host reads
     // its take id per call — stable for the whole confirm loop, since confirm mode drops every tap before
-    // onScanTag. The default (previews) never confirms.
-    confirm: suspend (UploadTarget) -> UploadResultKind = { UploadResultKind.Error },
+    // onScanTag. Required (no default): a call site that forgot it would retry 20 s and then show
+    // «Сервер не принял» for every cloud/local take.
+    confirm: suspend (UploadTarget) -> UploadResultKind,
+    onCompleted: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current as? MainActivity

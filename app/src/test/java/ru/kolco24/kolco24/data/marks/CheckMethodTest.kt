@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.kolco24.kolco24.data.db.CHECK_METHOD_OFFLINE
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.track.UploadTarget
 
@@ -28,6 +29,13 @@ class CheckMethodTest {
         checkMethod = method,
         confirmedAt = confirmedAt,
     )
+
+    @Test
+    fun offlineWire_matchesColumnDefault() {
+        // The DB column default (schemas/8.json, MIGRATION_7_8) must be the Offline wire string.
+        assertEquals("offline", CHECK_METHOD_OFFLINE)
+        assertEquals(CheckMethod.Offline.wire, CHECK_METHOD_OFFLINE)
+    }
 
     @Test
     fun parse_knownValues() {
