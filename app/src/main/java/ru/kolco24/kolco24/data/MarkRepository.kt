@@ -318,6 +318,41 @@ class MarkRepository(
     }
 
     /**
+     * Confirm one `cloud`/`local` take from the open scan overlay: POST a one-mark batch to [target]
+     * only and, when the server's `accepted` list contains [markId], set [MarkEntity.confirmedAt] to
+     * [now] and flip that target's `uploaded*` flag through the same GPS-aware version guards the
+     * drain uses (a fix attached mid-request leaves the flag unset, so the drain re-sends it with GPS;
+     * `confirmedAt` is written regardless — the server did accept the take).
+     *
+     * Deliberately does **not** take [uploadMutex]: a running background drain must never make the
+     * confirm a silent no-op. A duplicate POST of an id the drain already sent is safe (the server
+     * de-dupes by client UUID). The drain itself never sets `confirmedAt`. Does not report through
+     * `onUploadOutcome` — the overlay shows its own status.
+     *
+     * Returns [UploadResultKind.Ok] on acceptance; [UploadResultKind.Error] for a missing row or a
+     * `Success` without the id; otherwise the mapped [uploadResultKind] (`Offline` / `Error`).
+     */
+    suspend fun confirm(markId: String, target: UploadTarget, now: Long): UploadResultKind {
+        val mark = markDao.getById(markId) ?: return UploadResultKind.Error
+        val uploader = when (target) {
+            UploadTarget.Cloud -> cloudUploader
+            UploadTarget.Local -> localUploader
+        }
+        val dto = backfillTrustedMs(mark).toDto()
+        val result = uploader.upload(mark.raceId, mark.teamId, sourceInstallId, listOf(dto))
+        if (result !is PostResult.Success) return uploadResultKind(result)
+        if (markId !in result.data.accepted) return UploadResultKind.Error
+        markDao.setConfirmedAt(markId, now)
+        val batch = listOf(mark)
+        val ids = listOf(markId)
+        when (target) {
+            UploadTarget.Cloud -> markCloudGpsAware(batch, ids)
+            UploadTarget.Local -> markLocalGpsAware(batch, ids)
+        }
+        return UploadResultKind.Ok
+    }
+
+    /**
      * Flush one scope to both targets in turn; each target's loop is independent of the other's. Per
      * target, the metadata loop ([uploadLoop]) runs first, then the frame drain ([frameDrainLoop]) —
      * metadata-first ordering (the frame-pending DAO queries already gate on `uploadedX = 1`, so this

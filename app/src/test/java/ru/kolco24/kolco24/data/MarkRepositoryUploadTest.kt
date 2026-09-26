@@ -1,9 +1,12 @@
 package ru.kolco24.kolco24.data
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -434,6 +437,176 @@ class MarkRepositoryUploadTest {
 
         assertNull(sent!!.trustedMs)
         assertEquals(0, seamCalls) // no elapsedRealtimeAt → seam never invoked
+    }
+
+    // --- confirm (single-mark POST from the open scan overlay) ---
+
+    @Test
+    fun confirm_cloud_onlyCloudUploaderCalled_setsConfirmedAtAndUploadedCloud() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 42_000L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        assertEquals(1, cloud.calls)
+        assertEquals(0, local.calls)
+        assertEquals("install-1", cloud.lastInstallId)
+        val row = dao.rowById("mark-0")
+        assertEquals(42_000L, row.confirmedAt)
+        assertTrue(row.uploadedCloud)
+        assertFalse(row.uploadedLocal)
+    }
+
+    @Test
+    fun confirm_local_onlyLocalUploaderCalled_setsConfirmedAtAndUploadedLocal() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        val kind = r.confirm("mark-0", UploadTarget.Local, now = 42_000L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        assertEquals(0, cloud.calls)
+        assertEquals(1, local.calls)
+        val row = dao.rowById("mark-0")
+        assertEquals(42_000L, row.confirmedAt)
+        assertTrue(row.uploadedLocal)
+        assertFalse(row.uploadedCloud)
+    }
+
+    @Test
+    fun confirm_sendsOnlyThatMark() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(3, raceId = 1, teamId = 7)
+        var sent: List<String> = emptyList()
+        val cloud = FakeUploader { marks ->
+            sent = marks.map { it.id }
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val r = repo(dao, cloud = cloud)
+
+        r.confirm("mark-1", UploadTarget.Cloud, now = 1L)
+
+        assertEquals(listOf("mark-1"), sent)
+        assertNull(dao.rowById("mark-0").confirmedAt)
+        assertNull(dao.rowById("mark-2").confirmedAt)
+    }
+
+    @Test
+    fun confirm_offline_notConfirmed_returnsOffline() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val r = repo(dao, cloud = FakeUploader { PostResult.Offline })
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 1L)
+
+        assertEquals(UploadResultKind.Offline, kind)
+        assertNull(dao.rowById("mark-0").confirmedAt)
+        assertFalse(dao.rowById("mark-0").uploadedCloud)
+    }
+
+    @Test
+    fun confirm_serverError_notConfirmed_returnsError() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val r = repo(dao, local = FakeUploader { PostResult.Error(503) })
+
+        val kind = r.confirm("mark-0", UploadTarget.Local, now = 1L)
+
+        assertEquals(UploadResultKind.Error, kind)
+        assertNull(dao.rowById("mark-0").confirmedAt)
+        assertFalse(dao.rowById("mark-0").uploadedLocal)
+    }
+
+    @Test
+    fun confirm_successWithoutId_notConfirmed_returnsError() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val r = repo(dao, cloud = FakeUploader { PostResult.Success(MarkUploadResponse(listOf("other"))) })
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 1L)
+
+        assertEquals(UploadResultKind.Error, kind)
+        assertNull(dao.rowById("mark-0").confirmedAt)
+        assertFalse(dao.rowById("mark-0").uploadedCloud)
+    }
+
+    @Test
+    fun confirm_missingMark_returnsError_noPost() = runTest {
+        val dao = FakeMarkUploadDao()
+        val cloud = FakeUploader()
+        val r = repo(dao, cloud = cloud)
+
+        val kind = r.confirm("nope", UploadTarget.Cloud, now = 1L)
+
+        assertEquals(UploadResultKind.Error, kind)
+        assertEquals(0, cloud.calls)
+    }
+
+    @Test
+    fun confirm_whileDrainHoldsMutex_stillPosts() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val gate = CompletableDeferred<Unit>()
+        // The drain runs the local target first; its POST parks on the gate, holding uploadMutex.
+        val local = FakeUploader { marks ->
+            gate.await()
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val cloud = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        val drain = launch { r.uploadPending(raceId = 1, teamId = 7) }
+        runCurrent()
+        assertEquals(1, local.calls) // drain is parked mid-POST with the mutex held
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 5L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        assertEquals(1, cloud.calls)
+        assertEquals(5L, dao.rowById("mark-0").confirmedAt)
+
+        gate.complete(Unit)
+        drain.join()
+    }
+
+    @Test
+    fun drainAlone_neverSetsConfirmedAt() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(2, raceId = 1, teamId = 7)
+        val r = repo(dao, cloud = FakeUploader(), local = FakeUploader())
+
+        r.uploadPending(raceId = 1, teamId = 7)
+        r.uploadAllPending()
+
+        val rows = dao.observeForTeam(7).first()
+        assertTrue(rows.all { it.uploadedCloud && it.uploadedLocal })
+        assertTrue(rows.all { it.confirmedAt == null })
+    }
+
+    @Test
+    fun confirm_gpsArrivesDuringPost_confirmedButUploadedCloudStaysFalse() = runTest {
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7)
+        val cloud = FakeUploader { marks ->
+            dao.simulateGpsArrival(marks.first().id) // fix attached between fetch and mark
+            PostResult.Success(MarkUploadResponse(marks.map { it.id }))
+        }
+        val r = repo(dao, cloud = cloud)
+
+        val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 9L)
+
+        assertEquals(UploadResultKind.Ok, kind)
+        assertEquals(1, cloud.calls)
+        val row = dao.rowById("mark-0")
+        assertEquals(9L, row.confirmedAt)
+        assertFalse(row.uploadedCloud) // GPS guard failed → the drain re-sends it with the fix
     }
 
     @Test

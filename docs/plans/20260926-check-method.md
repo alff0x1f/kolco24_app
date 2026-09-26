@@ -285,15 +285,15 @@ confirmAttemptFor = { target ->
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/MarkRepository.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryUploadTest.kt`
 
-- [ ] add `confirm(markId, target, now)` per Technical Details (no `uploadMutex`)
-- [ ] on accept: `setConfirmedAt` + the GPS-aware `uploaded*` setter for that target only
-- [ ] tests: cloud → only the cloud uploader is called, `confirmedAt` + `uploadedCloud` set, `Ok`
-- [ ] tests: local → only the local uploader is called, `confirmedAt` + `uploadedLocal` set
-- [ ] tests: offline, 5xx, 200 without the id → `confirmedAt == null`, correct kind; missing mark → `Error`
-- [ ] tests: confirm while a drain holds `uploadMutex` (gated fake uploader) still POSTs
-- [ ] tests: the background drain alone never sets `confirmedAt`
-- [ ] tests: GPS fix attached between fetch and mark during confirm → `confirmedAt` set, `uploadedCloud` stays false (GPS guard fails, row re-uploads later)
-- [ ] run tests — must pass before next task
+- [x] add `confirm(markId, target, now)` per Technical Details (no `uploadMutex`)
+- [x] on accept: `setConfirmedAt` + the GPS-aware `uploaded*` setter for that target only
+- [x] tests: cloud → only the cloud uploader is called, `confirmedAt` + `uploadedCloud` set, `Ok`
+- [x] tests: local → only the local uploader is called, `confirmedAt` + `uploadedLocal` set
+- [x] tests: offline, 5xx, 200 without the id → `confirmedAt == null`, correct kind; missing mark → `Error`
+- [x] tests: confirm while a drain holds `uploadMutex` (gated fake uploader) still POSTs
+- [x] tests: the background drain alone never sets `confirmedAt`
+- [x] tests: GPS fix attached between fetch and mark during confirm → `confirmedAt` set, `uploadedCloud` stays false (GPS guard fails, row re-uploads later)
+- [x] run tests — must pass before next task
 
 ### Task 6: Pure confirm loop
 
