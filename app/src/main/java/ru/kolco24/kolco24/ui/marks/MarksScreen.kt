@@ -107,6 +107,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.marks.isCounted
+import ru.kolco24.kolco24.data.marks.isUnconfirmed
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.marks.thumbPathOf
 import ru.kolco24.kolco24.data.pluralRu
@@ -136,6 +138,9 @@ data class Mark(
     // at the `AsyncImage` site, never here. Carried on **any** take (an NFC take can also carry photo
     // evidence) so the photo-count badge is driven by [photoCount], independent of the tile [kind].
     val photoPaths: List<String> = emptyList(),
+    // A complete cloud/local take the server has not confirmed (`isUnconfirmed`): the tile stays in the
+    // grid (dimmed + cloud-off icon) but the take does not count toward the metrics.
+    val unconfirmed: Boolean = false,
 ) {
     val photoCount: Int get() = photoPaths.size
 }
@@ -156,6 +161,8 @@ enum class MarkKind { NFC, PHOTO }
  * map. The tile time is the **trusted** take time (`trustedTakenAt`) when present, falling back to the
  * raw wall `takenAt` for untrusted/legacy rows — so a phone clock reset doesn't shift displayed times.
  * Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ * The tile filter stays `complete` (not `isCounted`): an unconfirmed cloud/local take keeps its tile,
+ * flagged via [Mark.unconfirmed], so the team sees what it took but the server hasn't confirmed.
  */
 fun marksToTiles(
     marks: List<MarkEntity>,
@@ -180,6 +187,7 @@ fun marksToTiles(
                 dateTime = fmtDateTime.format(Date(effectiveTakenAt)),
                 color = colorOf(m),
                 photoPaths = photoPaths(m.photoPath),
+                unconfirmed = m.isUnconfirmed(),
             )
         }
 }
@@ -214,13 +222,15 @@ internal data class PhotoReviewSummary(val count: Int, val points: Int, val toke
  * *attached* photo evidence never counts. Points go through the same live [costOf] the metrics use, so
  * an organizer's cost edit (or a legend reveal — a photo take of a still-locked КП snapshots `cost = 0`
  * and self-corrects on reveal) is reflected. Returns `null` when no checkpoint is photo-only, so the
- * notice disappears entirely rather than rendering a zero state.
+ * notice disappears entirely rather than rendering a zero state. Uses `isCounted` (not bare `complete`):
+ * an unconfirmed cloud/local NFC take does not chip-verify its КП, so a photo take of the same КП is
+ * back under review (photo takes are always `offline`, so for them `isCounted == complete`).
  */
 internal fun photoReviewSummary(
     marks: List<MarkEntity>,
     costOf: (MarkEntity) -> Int = { it.cost },
 ): PhotoReviewSummary? {
-    val complete = marks.filter { it.complete }
+    val complete = marks.filter { it.isCounted() }
     val chipVerified = complete.filterNot { it.method == "photo" }.mapTo(HashSet()) { it.checkpointId }
     // [marks] arrives newest-first; reverse to oldest-first so the token list follows the tile grid.
     val photoOnly = complete
@@ -255,13 +265,38 @@ internal fun tokensLabel(tokens: List<String>, max: Int = 3): String =
  * as part of the scan, so it never lands here). Checkpoint-level (`distinctBy { checkpointId }`, like
  * the metrics), oldest-first like the grid. The token is «?-NN» — the `?` sits exactly where the cost
  * digit would in the tile's «стоимость-номер» grammar, saying "points unknown" in one character.
- * Empty list = no notice.
+ * Only counted takes (`isCounted`) — an unconfirmed cloud/local take scores nothing, so it has no
+ * "points unknown" either (it shows in [unconfirmedTokens] instead). Empty list = no notice.
  */
 internal fun hiddenTakenTokens(marks: List<MarkEntity>, lockedIds: Set<Int>): List<String> =
-    marks.filter { it.complete && it.checkpointId in lockedIds }
+    marks.filter { it.isCounted() && it.checkpointId in lockedIds }
         .distinctBy { it.checkpointId }
         .asReversed()
         .map { "?-${it.checkpointNumber.toString().padStart(2, '0')}" }
+
+/**
+ * Pure tokens of the checkpoints taken **only** by unconfirmed cloud/local takes (`isUnconfirmed`) — the
+ * «не подтверждены сервером» notice. A КП that has any counted take (`isCounted`: a confirmed retake, an
+ * offline take, a photo take) is excluded: it already scores. Checkpoint-level (one token per КП, the
+ * newest unconfirmed take wins the dedupe), oldest-first like the grid. Token = «стоимость-номер» through
+ * the live [costOf], or the bare zero-padded number for a zero-cost КП (the [photoReviewSummary] grammar).
+ * [marks] arrives newest-first. Empty list = no notice.
+ */
+internal fun unconfirmedTokens(
+    marks: List<MarkEntity>,
+    costOf: (MarkEntity) -> Int = { it.cost },
+): List<String> {
+    val counted = marks.filter { it.isCounted() }.mapTo(HashSet()) { it.checkpointId }
+    return marks
+        .filter { it.isUnconfirmed() && it.checkpointId !in counted }
+        .distinctBy { it.checkpointId }
+        .asReversed()
+        .map { m ->
+            val cost = costOf(m)
+            val number = m.checkpointNumber.toString().padStart(2, '0')
+            if (cost > 0) "$cost-$number" else number
+        }
+}
 
 // Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
 // light & dark, echoing the physical checkpoint markers.

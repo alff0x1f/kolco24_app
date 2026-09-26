@@ -248,15 +248,15 @@ confirmAttemptFor = { target ->
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt` (pure functions only in this task)
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/marks/MarksMappingTest.kt`
 
-- [ ] `photoReviewSummary`, `hiddenTakenTokens`: use `isCounted` where they use `complete`
-- [ ] `Mark.unconfirmed: Boolean = false`; `marksToTiles` keeps all `complete` takes and sets the flag
-- [ ] add `unconfirmedTokens(marks, costOf)` per Technical Details
-- [ ] tests: `marksToTiles` keeps the unconfirmed tile and sets the flag; confirmed/offline → false
-- [ ] tests: `unconfirmedTokens` dedupe per КП, excludes КП with a counted take, oldest-first, cost-0 token
-- [ ] tests: `hiddenTakenTokens` ignores unconfirmed takes
-- [ ] tests (cross-case): КП with an unconfirmed cloud NFC take **plus** a photo take → the photo take is no longer "chip-verified", so the КП shows in `photoReviewSummary` (and counts via the photo), and is **not** in `unconfirmedTokens`
-- [ ] existing tests stay green
-- [ ] run tests — must pass before next task
+- [x] `photoReviewSummary`, `hiddenTakenTokens`: use `isCounted` where they use `complete`
+- [x] `Mark.unconfirmed: Boolean = false`; `marksToTiles` keeps all `complete` takes and sets the flag
+- [x] add `unconfirmedTokens(marks, costOf)` per Technical Details
+- [x] tests: `marksToTiles` keeps the unconfirmed tile and sets the flag; confirmed/offline → false
+- [x] tests: `unconfirmedTokens` dedupe per КП, excludes КП with a counted take, oldest-first, cost-0 token
+- [x] tests: `hiddenTakenTokens` ignores unconfirmed takes
+- [x] tests (cross-case): КП with an unconfirmed cloud NFC take **plus** a photo take → the photo take is no longer "chip-verified", so the КП shows in `photoReviewSummary` (and counts via the photo), and is **not** in `unconfirmedTokens`
+- [x] existing tests stay green
+- [x] run tests — must pass before next task
 
 ### Task 4: Tag method flows into the take
 
