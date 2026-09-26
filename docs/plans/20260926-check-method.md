@@ -317,14 +317,14 @@ confirmAttemptFor = { target ->
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ScanScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `confirmAttemptFor` param (via `rememberUpdatedState`), `confirmState`, `confirmAttempt`, `confirmCycle`, `confirmJob`; reset in `finalizeSession`
-- [ ] `process()`: drop taps while `confirmState != null`, checked **inside** `scanMutex.withLock`
-- [ ] completing transition under the lock: cloud/local → tick only, `confirmState = Sending(target, 1)`, snapshot `confirmAttempt`; offline unchanged
-- [ ] `LaunchedEffect(confirmCycle)` runs `runConfirm` as `confirmJob`; `Confirmed` → fanfare, «Готово!», hold, `onCompleted`, `onClose`; `Failed` → stay; `LaunchedEffect(allScanned)` skips auto-close in confirm mode
-- [ ] window-expiry loop: check `confirmState` inside its `scanMutex.withLock`, `break` without finalize/close; hide `ScanTimerStrip` while `confirmState != null`
-- [ ] `ConfirmStatus` composable (spinner / texts / «Повторить» / «Закрыть»); hide «Готово!» and disable the top-bar «Готово» in Sending/Failed; no BackHandler in ScanScreen
-- [ ] `MainActivity`: wire `confirmAttemptFor` (id snapshot once, POST via `applicationScope.async { markRepo.confirm(...) }.await()`)
-- [ ] no new unit tests (Compose UI, untested by convention; logic covered in Tasks 4–6); `./gradlew assembleDebug lintDebug testDebugUnitTest` must pass
+- [x] add `confirmAttemptFor` param (via `rememberUpdatedState`), `confirmState`, `confirmAttempt`, `confirmCycle`, `confirmJob`; reset in `finalizeSession`
+- [x] `process()`: drop taps while `confirmState != null`, checked **inside** `scanMutex.withLock`
+- [x] completing transition under the lock: cloud/local → tick only, `confirmState = Sending(target, 1)`, snapshot `confirmAttempt`; offline unchanged
+- [x] `LaunchedEffect(confirmCycle)` runs `runConfirm` as `confirmJob`; `Confirmed` → fanfare, «Готово!», hold, `onCompleted`, `onClose`; `Failed` → stay; `LaunchedEffect(allScanned)` skips auto-close in confirm mode
+- [x] window-expiry loop: check `confirmState` inside its `scanMutex.withLock`, `break` without finalize/close; hide `ScanTimerStrip` while `confirmState != null`
+- [x] `ConfirmStatus` composable (spinner / texts / «Повторить» / «Закрыть»); hide «Готово!» and disable the top-bar «Готово» in Sending/Failed; no BackHandler in ScanScreen
+- [x] `MainActivity`: wire `confirmAttemptFor` (id snapshot once, POST via `applicationScope.async { markRepo.confirm(...) }.await()`)
+- [x] no new unit tests (Compose UI, untested by convention; logic covered in Tasks 4–6); `./gradlew assembleDebug lintDebug testDebugUnitTest` must pass
 
 ### Task 8: Marks tab UI (tile, notice, lightbox)
 

@@ -36,6 +36,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +51,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -85,6 +89,8 @@ import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
+import ru.kolco24.kolco24.data.track.UploadResultKind
+import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.ui.common.ScanClockBanner
 import ru.kolco24.kolco24.ui.theme.BrandRed
 import ru.kolco24.kolco24.ui.theme.CpColorBlue
@@ -124,6 +130,10 @@ fun ScanScreen(
     onScanTag: suspend (ScanInput, TimeSample) -> ScanEvent,
     onClose: () -> Unit,
     onCompleted: () -> Unit = {},
+    // Factory for a `cloud`/`local` take's confirm attempt. Called once, under scanMutex, on the
+    // completing transition — the host snapshots the take id there and the returned closure re-POSTs
+    // that same take on every retry. The default (previews) never confirms.
+    confirmAttemptFor: (UploadTarget) -> (suspend () -> UploadResultKind) = { { UploadResultKind.Error } },
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current as? MainActivity
@@ -139,18 +149,33 @@ fun ScanScreen(
     val currentOnScanTag by rememberUpdatedState(onScanTag)
     val currentOnClose by rememberUpdatedState(onClose)
     val currentOnCompleted by rememberUpdatedState(onCompleted)
+    val currentConfirmAttemptFor by rememberUpdatedState(confirmAttemptFor)
     var session by remember { mutableStateOf<ScanSession?>(null) }
     var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
     // Set true once the КП + full roster have all been scanned; drives the green "Готово!" success
     // beat before the overlay auto-closes. Reset on finalize so a fresh open starts clean.
     var completed by remember { mutableStateOf(false) }
+    // Confirm mode (a completed `cloud`/`local` take waiting for the server accept). Non-null from the
+    // completing transition (entered synchronously under scanMutex) until finalize; while non-null
+    // every tap is dropped, the window timer never closes the overlay and the auto-close is skipped.
+    var confirmState by remember { mutableStateOf<ConfirmState?>(null) }
+    // The attempt closure snapshotted once on the completing transition (same take id on «Повторить»).
+    var confirmAttempt by remember { mutableStateOf<(suspend () -> UploadResultKind)?>(null) }
+    // Bumped on entering confirm mode and on «Повторить»; keys the LaunchedEffect running runConfirm.
+    var confirmCycle by remember { mutableIntStateOf(0) }
+    var confirmJob by remember { mutableStateOf<Job?>(null) }
 
     fun finalizeSession() {
         session = null
         remainingMillis = SCAN_WINDOW_MS
         diagnostic = null
         completed = false
+        confirmJob?.cancel()
+        confirmJob = null
+        confirmState = null
+        confirmAttempt = null
+        confirmCycle = 0
     }
 
     // Shared scan-processing body for both the live in-overlay hook and the opening-tap drain. Keeps
@@ -159,6 +184,9 @@ fun ScanScreen(
     suspend fun process(input: ScanInput, sample: TimeSample) {
         val now = sample.elapsedMs
         scanMutex.withLock {
+            // Confirm mode: drop the tap before it can touch the DB. Checked inside the lock so a tap
+            // queued behind the completing tap sees the confirm state that tap set. No feedback.
+            if (confirmState != null) return@withLock
             val event = currentOnScanTag(input, sample)
             when (event) {
                 ScanEvent.UnboundChip -> {
@@ -184,7 +212,16 @@ fun ScanScreen(
                     // The completing tap still gets the ordinary scan feedback first. The fanfare
                     // follows only on the incomplete to complete transition, including completion
                     // arriving on a Kp event when pre-КП buffered members drain into present.
-                    if (!wasComplete && isComplete(session, roster.size)) {
+                    val confirmTarget = session?.checkMethod?.uploadTarget
+                    if (!wasComplete && isComplete(session, roster.size) && confirmTarget != null) {
+                        // A `cloud`/`local` take counts only once the server accepts it: tick only (the
+                        // fanfare waits for Confirmed), enter confirm mode synchronously under the lock
+                        // and snapshot the attempt — the only place the take id is captured.
+                        scanFeedback.play(feedbackFor(event))
+                        confirmAttempt = currentConfirmAttemptFor(confirmTarget)
+                        confirmState = ConfirmState.Sending(confirmTarget, 1)
+                        confirmCycle++
+                    } else if (!wasComplete && isComplete(session, roster.size)) {
                         scanFeedback.play(feedbackFor(event))
                         delay(COMPLETE_FANFARE_DELAY_MS)
                         scanFeedback.checkpointCompleteFanfare()
@@ -243,6 +280,9 @@ fun ScanScreen(
                 // LaunchedEffect will pick it up.
                 var finalized = false
                 scanMutex.withLock {
+                    // Confirm mode owns the overlay's lifetime: the window expiring must neither
+                    // finalize nor close it (the confirm loop / «Закрыть» does).
+                    if (confirmState != null) return@withLock
                     if (session?.lastScanAt == lastScanAt) {
                         finalizeSession()
                         finalized = true
@@ -262,7 +302,9 @@ fun ScanScreen(
     // during the hold can't trigger a second close.
     val allScanned = isComplete(session, roster.size)
     LaunchedEffect(allScanned) {
-        if (allScanned && !completed) {
+        // In confirm mode the confirm path closes the overlay itself (confirmState is set in the same
+        // snapshot as the completing session, so it is already non-null here).
+        if (allScanned && !completed && confirmState == null) {
             completed = true
             delay(SUCCESS_HOLD_MS)
             // Re-validate under the mutex after the hold: a КП switch may have arrived during the
@@ -287,6 +329,32 @@ fun ScanScreen(
             // Reset completed so the next full-roster scan can trigger the beat again.
             completed = false
         }
+    }
+
+    // Confirm loop for a completed `cloud`/`local` take. Runs in composition scope: leaving the overlay
+    // cancels it, while an attempt already in flight on applicationScope still finishes (a late accept
+    // still writes confirmedAt, by design).
+    LaunchedEffect(confirmCycle) {
+        if (confirmCycle == 0) return@LaunchedEffect
+        val attempt = confirmAttempt ?: return@LaunchedEffect
+        val target = session?.checkMethod?.uploadTarget ?: return@LaunchedEffect
+        confirmJob = coroutineContext[Job]
+        runConfirm(
+            target = target,
+            attempt = attempt,
+            onState = { confirmState = it },
+            elapsedNow = { SystemClock.elapsedRealtime() },
+        )
+        if (confirmState == ConfirmState.Confirmed) {
+            scanFeedback.checkpointCompleteFanfare()
+            completed = true
+            delay(SUCCESS_HOLD_MS)
+            confirmJob = null
+            finalizeSession()
+            currentOnCompleted()
+            currentOnClose()
+        }
+        // Failed: stay open with «Повторить» / «Закрыть».
     }
 
     val chips = roster.map { member ->
@@ -314,7 +382,8 @@ fun ScanScreen(
         ) {
             item("top_bar") {
                 ScanTopBar(
-                    canFinish = session?.checkpointId != null,
+                    canFinish = session?.checkpointId != null &&
+                        confirmState !is ConfirmState.Sending && confirmState !is ConfirmState.Failed,
                     onClose = {
                         finalizeSession()
                         onClose()
@@ -340,7 +409,20 @@ fun ScanScreen(
                     CheckpointSheetCard(session = session)
                 }
             }
-            if (!completed && session != null) {
+            val pendingConfirm = confirmState?.takeIf { it !is ConfirmState.Confirmed }
+            if (pendingConfirm != null) {
+                item("confirm_status") {
+                    ConfirmStatus(
+                        state = pendingConfirm,
+                        onRetry = { confirmCycle++ },
+                        onClose = {
+                            finalizeSession()
+                            onClose()
+                        },
+                    )
+                }
+            }
+            if (!completed && session != null && confirmState == null) {
                 item("timer_strip") {
                     ScanTimerStrip(
                         seconds = remainingMillis / 1_000f,
@@ -481,6 +563,51 @@ private data class ConfettiPiece(
     val wobble: Float,        // sway amplitude, fraction of width
     val circle: Boolean,      // circle vs rectangle
 )
+
+/**
+ * Confirm-mode status under the КП card: a spinner + «Отправка…» line while [ConfirmState.Sending],
+ * or the failure line with «Повторить» / «Закрыть» on [ConfirmState.Failed]. Texts come from the pure
+ * [confirmStatusText].
+ */
+@Composable
+private fun ConfirmStatus(state: ConfirmState, onRetry: () -> Unit, onClose: () -> Unit) {
+    val failed = state is ConfirmState.Failed
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
+        shape = MaterialTheme.shapes.large,
+        color = if (failed) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!failed) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+                Text(
+                    text = confirmStatusText(state),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (failed) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = if (failed) 0.dp else 12.dp),
+                )
+            }
+            if (failed) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
+                    TextButton(onClick = onClose) { Text("Закрыть") }
+                    Button(onClick = onRetry) { Text("Повторить") }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ScanTopBar(canFinish: Boolean, onClose: () -> Unit, onFinish: () -> Unit) {
