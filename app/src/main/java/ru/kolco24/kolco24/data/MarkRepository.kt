@@ -331,11 +331,15 @@ class MarkRepository(
      * de-dupes by client UUID). The drain itself never sets `confirmedAt`. Does not report through
      * `onUploadOutcome` — the overlay shows its own status.
      *
-     * Returns [UploadResultKind.Ok] on acceptance; [UploadResultKind.Error] for a missing row or a
+     * Returns [UploadResultKind.Ok] on acceptance; [UploadResultKind.Error] (no POST) for a missing or incomplete row, or for a
      * `Success` without the id; otherwise the mapped [uploadResultKind] (`Offline` / `Error`).
      */
     suspend fun confirm(markId: String, target: UploadTarget, now: Long): UploadResultKind {
         val mark = markDao.getById(markId) ?: return UploadResultKind.Error
+        // Only a complete take can be confirmed: the overlay may judge completion from a roster that
+        // shrank after the КП scan, while this row's expectedCount was snapshotted then and it stays
+        // incomplete (never counts). Confirming it would show «Готово!» for a take that scores nothing.
+        if (!mark.complete) return UploadResultKind.Error
         val uploader = when (target) {
             UploadTarget.Cloud -> cloudUploader
             UploadTarget.Local -> localUploader

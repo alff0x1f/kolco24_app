@@ -550,6 +550,28 @@ class MarkRepositoryUploadTest {
     }
 
     @Test
+    fun confirm_incompleteMark_returnsError_noPost_notConfirmed() = runTest {
+        // The overlay can judge a session complete from a roster that shrank after the КП scan while
+        // the DB take (expectedCount snapshotted at the КП scan) stays incomplete; such a take never
+        // counts, so confirm must not POST it nor report «Готово!».
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7, complete = false)
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        assertEquals(UploadResultKind.Error, r.confirm("mark-0", UploadTarget.Cloud, now = 1L))
+        assertEquals(UploadResultKind.Error, r.confirm("mark-0", UploadTarget.Local, now = 1L))
+
+        assertEquals(0, cloud.calls)
+        assertEquals(0, local.calls)
+        val row = dao.rowById("mark-0")
+        assertNull(row.confirmedAt)
+        assertFalse(row.uploadedCloud)
+        assertFalse(row.uploadedLocal)
+    }
+
+    @Test
     fun confirm_whileDrainHoldsMutex_stillPosts() = runTest {
         val dao = FakeMarkUploadDao()
         dao.seed(1, raceId = 1, teamId = 7)
@@ -1016,7 +1038,7 @@ private class FakeMarkUploadDao : MarkDao {
     private var seq = 0
 
     /** Seed [n] fresh take rows for one scope (newest-last by id). */
-    fun seed(n: Int, raceId: Int, teamId: Int) {
+    fun seed(n: Int, raceId: Int, teamId: Int, complete: Boolean = true) {
         val fresh = (0 until n).map {
             val i = seq++
             MarkEntity(
@@ -1031,7 +1053,7 @@ private class FakeMarkUploadDao : MarkDao {
                 cpCode = "CODE",
                 present = listOf(1),
                 expectedCount = 1,
-                complete = true,
+                complete = complete,
                 takenAt = 1_000L + i,
                 updatedAt = 1_000L + i,
             )
