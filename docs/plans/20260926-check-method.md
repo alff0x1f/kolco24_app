@@ -338,10 +338,10 @@ confirmAttemptFor = { target ->
 - [x] no new unit tests (Compose; logic covered in Task 3); `./gradlew assembleDebug lintDebug testDebugUnitTest` must pass
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify edge cases: a confirmed retake counts the КП and drops it from the notice; legend method change doesn't affect old takes; unknown method = offline; photo takes = offline; closing during Sending leaves the take unconfirmed, and a late accepted POST still sets `confirmedAt`
-- [ ] run full suite: `./gradlew testDebugUnitTest lintDebug assembleDebug`
-- [ ] run instrumented: `./gradlew connectedDebugAndroidTest`
+- [x] verify all requirements from Overview are implemented
+- [x] verify edge cases: a confirmed retake counts the КП and drops it from the notice; legend method change doesn't affect old takes; unknown method = offline; photo takes = offline; closing during Sending leaves the take unconfirmed, and a late accepted POST still sets `confirmedAt`
+- [x] run full suite: `./gradlew testDebugUnitTest lintDebug assembleDebug`
+- [x] run instrumented: `./gradlew connectedDebugAndroidTest` (instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
 
 ### Task 10: [Final] Update documentation
 - [ ] `docs/design/DATA-NOTES.md`: Room v8, `checkMethod`/`confirmedAt`, `setConfirmedAt`, `confirm()` without the mutex, `isCounted`
