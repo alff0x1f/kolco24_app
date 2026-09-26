@@ -25,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.track.LocationEngine
@@ -158,10 +159,20 @@ class TrackRecordingService : Service() {
         createChannel()
         // Must be called within ~5 s of the start; do it first with a 0-count notification. The
         // 3-arg type overload exists from API 29; on 24–28 the 2-arg form is the only one.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, buildNotification(0), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        } else {
-            startForeground(NOTIF_ID, buildNotification(0))
+        // An auto-start (КП take) can land after the app went to the background: 14+ then rejects the
+        // location type here with a SecurityException, 12+ may throw ForegroundServiceStartNotAllowed-
+        // Exception (an IllegalStateException). Bail instead of crashing the process; a running
+        // session (re-entry) keeps its engine, a fresh one is dropped.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, buildNotification(0), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIF_ID, buildNotification(0))
+            }
+        } catch (e: SecurityException) {
+            return abortForegroundStart(e)
+        } catch (e: IllegalStateException) {
+            return abortForegroundStart(e)
         }
 
         container.trackRecordingState.value = TrackState.Recording(teamId, 0)
@@ -174,7 +185,11 @@ class TrackRecordingService : Service() {
         countJob?.cancel()
         countJob = serviceScope.launch {
             container.trackRepository.countForTeam(teamId, raceId).collectLatest { count ->
-                container.trackRecordingState.value = TrackState.Recording(teamId, count)
+                // Keep a teardown's stopping flag: a flushed batch landing mid-teardown must not
+                // re-announce an active recording (auto-control would swallow a restart).
+                container.trackRecordingState.update { cur ->
+                    TrackState.Recording(teamId, count, stopping = (cur as? TrackState.Recording)?.stopping == true)
+                }
                 notificationManager.notify(NOTIF_ID, buildNotification(count))
             }
         }
@@ -210,6 +225,21 @@ class TrackRecordingService : Service() {
             }
         }
 
+        return START_NOT_STICKY
+    }
+
+    /**
+     * startForeground was rejected: keep a running session as is, otherwise stop the fresh service.
+     * Residual risk (accepted, see DATA-NOTES): some Android versions still post the "did not then call
+     * startForeground" crash for a service stopped before reaching foreground; there is no other
+     * declared FGS type to fall back to, and the window (backgrounded between take and start) is tiny.
+     */
+    private fun abortForegroundStart(e: RuntimeException): Int {
+        Log.w(TAG, "startForeground rejected; not recording.", e)
+        if (engine == null) {
+            segmentId = null
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
@@ -283,6 +313,9 @@ class TrackRecordingService : Service() {
     /** Stop updates, flip state back to Idle, drop the foreground notification, and stop the service. */
     private fun teardown() {
         isTearingDown = true
+        // Mark the running state as stopping for the flush window (finishTeardown flips it to Idle; a
+        // start arriving meanwhile resets it to a fresh non-stopping Recording in onStartCommand).
+        container.trackRecordingState.update { (it as? TrackState.Recording)?.copy(stopping = true) ?: it }
         val e = engine ?: return finishTeardown()
         // Flush the buffered batch (delivered/enqueued to applicationScope) before stopping — else the
         // last ≤maxDelay of fixes are lost (field-tested bug). Always stop the old engine after flush;
