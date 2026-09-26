@@ -234,13 +234,13 @@ confirmAttemptFor = { target ->
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/marks/CheckMethodTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryTest.kt`
 
-- [ ] create `CheckMethod` (`parse`, `uploadTarget`), `isCounted`, `isUnconfirmed`
-- [ ] `takenPointCount` (both), `takenPoints`, `totalScore`: use `isCounted` instead of `complete`; update KDoc
-- [ ] confirm `MainActivity.kt:913` (`takenIds`) needs no change (goes through `takenPoints`)
-- [ ] tests: parse `"offline"`, `"cloud"`, `"local"`, `"online"`, `"local_server"`, `""`, `null` (unknown → Offline); `uploadTarget` mapping
-- [ ] tests: `isCounted`/`isUnconfirmed` matrix (complete × method × confirmedAt)
-- [ ] tests: metrics exclude an unconfirmed cloud take, include a confirmed one, offline unchanged
-- [ ] run tests — must pass before next task
+- [x] create `CheckMethod` (`parse`, `uploadTarget`), `isCounted`, `isUnconfirmed`
+- [x] `takenPointCount` (both), `takenPoints`, `totalScore`: use `isCounted` instead of `complete`; update KDoc
+- [x] confirm `MainActivity.kt:913` (`takenIds`) needs no change (goes through `takenPoints`) — confirmed, no change
+- [x] tests: parse `"offline"`, `"cloud"`, `"local"`, `"online"`, `"local_server"`, `""`, `null` (unknown → Offline); `uploadTarget` mapping
+- [x] tests: `isCounted`/`isUnconfirmed` matrix (complete × method × confirmedAt)
+- [x] tests: metrics exclude an unconfirmed cloud take, include a confirmed one, offline unchanged
+- [x] run tests — must pass before next task
 
 ### Task 3: Marks display (tiles flag, tokens, notices)
 

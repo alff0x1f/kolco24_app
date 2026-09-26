@@ -17,6 +17,7 @@ import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.marks.encodePhotoPaths
 import ru.kolco24.kolco24.data.marks.frameIdOf
+import ru.kolco24.kolco24.data.marks.isCounted
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
@@ -555,28 +556,28 @@ fun foldPhotoFrameCounts(rows: List<PhotoFrameRow>): UploadCounts {
     return UploadCounts(total = total, local = local, cloud = cloud)
 }
 
-/** Distinct checkpoints scored (complete) across the given take events. */
+/** Distinct checkpoints scored ([isCounted]: complete and, for cloud/local, server-confirmed) across the given take events. */
 fun takenPointCount(marks: List<MarkEntity>): Int =
-    marks.filter { it.complete }.map { it.checkpointId }.distinct().size
+    marks.filter { it.isCounted() }.map { it.checkpointId }.distinct().size
 
 /**
- * Distinct checkpoints scored (complete) with a **live** cost resolver, counting only scoring
+ * Distinct checkpoints scored ([isCounted]) with a **live** cost resolver, counting only scoring
  * (`cost > 0`) checkpoints — technical checkpoints (cost 0: test point, transfer zone) don't
  * count toward the «ВЗЯТО» total. [costOf] mirrors the [totalScore] overload's live-cost resolver.
  */
 fun takenPointCount(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int =
-    marks.filter { it.complete }.distinctBy { it.checkpointId }.count { costOf(it) > 0 }
+    marks.filter { it.isCounted() }.distinctBy { it.checkpointId }.count { costOf(it) > 0 }
 
 /**
  * The set of checkpoint ids (points) scored by these marks — i.e. the team's "взято" checkpoints,
- * derived from its own complete takes. The legend uses this instead of a persisted per-checkpoint flag
+ * derived from its own counted takes ([isCounted] — an unconfirmed cloud/local take is not "взято"). The legend uses this instead of a persisted per-checkpoint flag
  * so that switching teams within a race shows each team's own progress.
  */
 fun takenPoints(marks: List<MarkEntity>): Set<Int> =
-    marks.filter { it.complete }.mapTo(HashSet()) { it.checkpointId }
+    marks.filter { it.isCounted() }.mapTo(HashSet()) { it.checkpointId }
 
 /**
- * Sum of cost over distinct scored checkpoints — a repeat take of the same point does not double-count.
+ * Sum of cost over distinct scored ([isCounted]) checkpoints — a repeat take of the same point does not double-count.
  * Uses the cost snapshotted onto the mark row at take time. Prefer the [costOf] overload for any
  * user-facing total: the snapshot goes stale if the organizer edits a КП cost after it was taken (a
  * 0→5 edit leaves the snapshot at 0), which makes the «Отметки» СУММА diverge from the «Легенда» score.
@@ -590,4 +591,4 @@ fun totalScore(marks: List<MarkEntity>): Int = totalScore(marks) { it.cost }
  * legend. This keeps the «Отметки» СУММА in step with the «Легенда» score after a server cost edit.
  */
 fun totalScore(marks: List<MarkEntity>, costOf: (MarkEntity) -> Int): Int =
-    marks.filter { it.complete }.distinctBy { it.checkpointId }.sumOf { costOf(it) }
+    marks.filter { it.isCounted() }.distinctBy { it.checkpointId }.sumOf { costOf(it) }
