@@ -205,6 +205,28 @@
 (upsert-нутых) клиентских `id`. Приложение помечает ровно их `uploadedLocal=1` /
 `uploadedCloud=1` (по цели) и шлёт следующую пачку.
 
+### Подтверждение взятия из экрана скана (`check_method` = `cloud` / `local`)
+
+Отдельного эндпоинта нет — это тот же `POST /marks/` с батчем из **одной**
+отметки. Если у метки КП `check_method` = `cloud` / `local` (снимок в
+`marks.checkMethod` на момент скана), взятие засчитывается только когда
+соответствующий сервер (облако / LAN) принял его, **пока открыт экран скана**.
+
+- Когда состав полный, `ScanScreen` в режиме подтверждения вызывает
+  `MarkRepository.confirm(markId, target, now)`: POST одной строки
+  (`backfillTrustedMs(...).toDto()`, тот же `source_install_id`) **только** в
+  цель метода. Ретраи каждые 3 с, окно 20 с (`runConfirm`), затем «Повторить».
+- `id` в `accepted` → `marks.confirmedAt = now` (колоночный `setConfirmedAt`,
+  без бампа `updatedAt`) + флаг `uploaded*` этой цели через те же GPS-aware
+  version-guard'ы, что у дренажа. `200` без `id` → ошибка; остальные ответы
+  маппятся `uploadResultKind` (`Offline` / `Error`).
+- **В обход мьютекса дренажа** (`uploadMutex.tryLock`): идущая фоновая выгрузка
+  не должна превращать подтверждение в тихий no-op. Повторный POST уже
+  выгруженного `id` безопасен — сервер дедупит по UUID.
+- Фоновый дренаж отметку **отправляет, но не подтверждает** — `confirmedAt` ставит
+  только `confirm`. В теле `/marks/` метод и `confirmedAt` не передаются (контракт
+  не менялся): сервер знает `check_method` своей метки сам.
+
 ---
 
 ## `POST /app/race/<race_id>/mark/<mark_id>/photo/<frame_id>` — кадр фото-отметки

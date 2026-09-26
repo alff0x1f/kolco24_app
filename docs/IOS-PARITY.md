@@ -9,26 +9,7 @@ iOS-приложение (`~/src/kolco24_ios/kolco24`) — порт этого �
 
 ## Фичи
 
-### 1. Способ проверки КП (`check_method`: offline / cloud / local)
-
-План: `20260924-check-method.md`. iOS: `Core/Marks/CheckMethod`, `ScanModel`, `ScanSheet`,
-`MarkUploadRepository.confirm`, `MarksView`, `PhotoLightboxView`.
-
-- Android хранит `TagEntity.checkMethod`, но показывает его только в админской проверке чипа; на счёт не влияет.
-- Правило: `offline` — как сейчас. `cloud` / `local` — взятие засчитывается, только если облачный / LAN-сервер
-  принял отметку **пока открыт экран скана**. Фоновая выгрузка отметку отправляет, но не подтверждает.
-- Схема: `marks.checkMethod` + `marks.confirmedAt` (wall ms, `NULL` = не подтверждено). `confirmedAt` ставит
-  только confirm из экрана скана; `addMember`/upsert его не сбрасывают.
-- «Взято»/очки считаются через `isCounted` = `complete && (offline || confirmedAt != null)`, а не голый `complete`.
-- Экран скана: когда состав полный, для cloud/local — режим подтверждения: POST одной отметки
-  (в обход `tryLock` дренажа), ретраи каждые 3 с, таймаут 20 с; статусы «отправка / подтверждено / ошибка».
-  Фанфары и «Готово!» — только после подтверждения.
-- Вкладка «Отметки»: неподтверждённые взятия видны (приглушённая плитка + иконка), но не считаются;
-  отдельная карточка-уведомление; статус в лайтбоксе.
-- Фото-отметки всегда `offline`. Неизвестное значение → `offline`. Сервер переименовывает значения
-  (`online` → `cloud`, `local_server` → `local`); до этого старые значения парсятся как `offline`.
-
-### 2. Запись кодов на браслеты участников (админка)
+### 1. Запись кодов на браслеты участников (админка)
 
 План: `20260923-member-chip-provisioning.md`. iOS: `MemberProvisioningView`, `App/MemberProvisioningModel`,
 `Core/Admin/MemberProvisioningLogic`, `Net/Dto/MemberTagBind`.

@@ -344,13 +344,13 @@ confirmAttemptFor = { target ->
 - [x] run instrumented: `./gradlew connectedDebugAndroidTest` (instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
 
 ### Task 10: [Final] Update documentation
-- [ ] `docs/design/DATA-NOTES.md`: Room v8, `checkMethod`/`confirmedAt`, `setConfirmedAt`, `confirm()` without the mutex, `isCounted`
-- [ ] `docs/design/UI-NOTES.md`: ScanScreen confirm mode, `ConfirmLoop`, marks tile/notice/lightbox
-- [ ] `CLAUDE.md` (compact): Room **v8**, `MIGRATION_7_8` in the `connectedDebugAndroidTest` line, `CheckMethod` in the pure-models list, one line: "`isCounted` replaces `complete` for scoring; `confirmedAt` is set only from the open scan overlay"
-- [ ] `docs/design/UPLOAD.md`: single-mark confirm POST from the scan overlay, bypasses the drain mutex, sets `confirmedAt`
-- [ ] `CLAUDE.md` «Dual-target upload loop» bullet: note that `MarkRepository.confirm` is the one marks POST outside `tryLock`
-- [ ] `docs/IOS-PARITY.md`: remove item 1
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `docs/design/DATA-NOTES.md`: Room v8, `checkMethod`/`confirmedAt`, `setConfirmedAt`, `confirm()` without the mutex, `isCounted`
+- [x] `docs/design/UI-NOTES.md`: ScanScreen confirm mode, `ConfirmLoop`, marks tile/notice/lightbox
+- [x] `CLAUDE.md` (compact): Room **v8**, `MIGRATION_7_8` in the `connectedDebugAndroidTest` line, `CheckMethod` in the pure-models list, one line: "`isCounted` replaces `complete` for scoring; `confirmedAt` is set only from the open scan overlay"
+- [x] `docs/design/UPLOAD.md`: single-mark confirm POST from the scan overlay, bypasses the drain mutex, sets `confirmedAt`
+- [x] `CLAUDE.md` «Dual-target upload loop» bullet: note that `MarkRepository.confirm` is the one marks POST outside `tryLock`
+- [x] `docs/IOS-PARITY.md`: remove item 1
+- [x] move this plan to `docs/plans/completed/` (done by the orchestrator at completion)
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
