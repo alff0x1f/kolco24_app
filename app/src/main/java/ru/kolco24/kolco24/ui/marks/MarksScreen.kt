@@ -12,6 +12,14 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
@@ -317,6 +325,24 @@ internal fun unconfirmedTokens(
 // light & dark, echoing the physical checkpoint markers.
 private val PhotoTileTop = Color(0xFF1D242D)
 private val PhotoTileBottom = Color(0xFF2A323C)
+
+// NFC «chip card» body — fixed-dark in both themes.
+private val ChipCardTop = Color(0xFF171D25)
+private val ChipCardBottom = Color(0xFF232A33)
+private val ChipCardStripe = Color.White.copy(alpha = 0.075f)
+
+/**
+ * Discipline color of the tile's top-left corner. Brighter than the [tileFill] shades: the tile is
+ * fixed-dark, so the corner must pop on graphite rather than carry white text.
+ */
+private fun cornerColor(color: CheckpointColor): Color = when (color) {
+    CheckpointColor.RED -> Color(0xFFE53935)
+    CheckpointColor.BLUE -> Color(0xFF1E88E5)
+    CheckpointColor.GREEN -> Color(0xFF34C759)
+    CheckpointColor.YELLOW -> Color(0xFFF4B400)
+    CheckpointColor.ORANGE -> Color(0xFFF0763C)
+    CheckpointColor.PURPLE -> Color(0xFF8E44AD)
+}
 
 // Muted whole-tile fill palette for the color-fill grid (screen-scoped — deliberately distinct from
 // the bright `CpColor*`/`Tertiary`/`OrangeCta` bar shades in `LegendScreen.kt`/`ProvisioningScreen.kt`,
@@ -983,10 +1009,9 @@ private fun MetricsCard(
             // Show the «/total» only once the legend has loaded (total > 0), so a cold start
             // doesn't flash a «8/0».
             MetricItem(
-                label = "ВЗЯТО",
+                label = "ВЗЯТО КП",
                 value = "$takenKp",
                 total = totalKp.takeIf { it > 0 }?.toString(),
-                unit = "КП",
                 modifier = Modifier.weight(1f),
             )
             VerticalDivider(
@@ -994,10 +1019,9 @@ private fun MetricsCard(
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
             MetricItem(
-                label = "СУММА",
+                label = "БАЛЛОВ",
                 value = "$takenScore",
                 total = totalCost.takeIf { it > 0 }?.toString(),
-                unit = "бал.",
                 modifier = Modifier.weight(1f),
             )
             VerticalDivider(
@@ -1017,7 +1041,7 @@ private fun MetricsCard(
 
 /**
  * One metric column: the caption sits **above** the value (per the Отметки design), and an optional
- * «/total» denominator (e.g. «8/15 КП») mirrors the Легенда's score progress so взято/сумма read as
+ * «/total» denominator (e.g. «8/15») mirrors the Легенда's score progress so взято/сумма read as
  * fractions of the race total rather than bare counts. [total] is null until the legend has loaded.
  */
 @Composable
@@ -1025,7 +1049,6 @@ private fun MetricItem(
     label: String,
     value: String,
     total: String? = null,
-    unit: String? = null,
     mono: Boolean = false,
     isError: Boolean = false,
     modifier: Modifier = Modifier,
@@ -1053,14 +1076,6 @@ private fun MetricItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
-                )
-            }
-            if (unit != null) {
-                Text(
-                    text = unit,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 2.dp, bottom = 3.dp),
                 )
             }
         }
@@ -1131,14 +1146,14 @@ private fun TileGrid(
 private fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
 /**
- * One taken checkpoint as a flat color-fill tile: the КП discipline color fills the whole square
- * (0dp radius, no border/elevation) so a same-color cluster reads as one tiled region. The
- * `<стоимость>-<номер>` token sits centered (NFC takes) or as a caption over the photo scrim. The
- * fill + readable text are resolved by the pure [tileFill] against the [isDarkScheme] result.
+ * One taken checkpoint as a square tile, fixed-dark in both themes (the iOS «chip card»): a plain NFC
+ * take draws the charcoal striped [NfcTileBody], a take that carries photos shows its first frame
+ * ([PhotoTileBody], shaded so white text reads on any shot). Both carry the same big centered
+ * [TileKpToken], the take time bottom-end, and the КП discipline color as a top-left [TileColorCorner]
+ * triangle (no corner for a colorless КП).
  */
 @Composable
 private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
-    val tf = tileFill(mark.color, isDarkScheme())
     val hasPhotos = mark.photoCount > 0
     Box(
         modifier = Modifier
@@ -1149,32 +1164,36 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
             .then(if (hasPhotos) Modifier.clickable { onPhotoTileClick(mark.photoPaths) } else Modifier),
     ) {
         // A take that carries photos shows its first frame as the tile background regardless of how it
-        // was marked — a PHOTO take, or an NFC take that also captured evidence. Only a plain NFC take
-        // with no photos keeps the flat color-fill token body. The top-right camera chip stays exclusive
-        // to PHOTO-kind takes (see [PhotoTileBody.showCameraChip]) so an NFC-with-photos tile is still
-        // told apart from a pure photo take.
+        // was marked — a PHOTO take, or an NFC take that also captured evidence. The top-right camera
+        // glyph stays exclusive to PHOTO-kind takes so an NFC-with-photos tile is still told apart from
+        // a pure photo take.
         // An unconfirmed cloud/local take ([Mark.unconfirmed]) keeps its tile but is dimmed to ~45% and
         // flagged with a full-opacity cloud-off glyph at the top-right — free on every such tile, since the
-        // camera chip is photo-kind only and photo takes are always offline (never unconfirmed). The color
-        // fill lives INSIDE the dimmed box (the outer tile has no background), so the whole square fades
+        // camera glyph is photo-kind only and photo takes are always offline (never unconfirmed). The body
+        // lives INSIDE the dimmed box (the outer tile has no background), so the whole square fades
         // toward the grid background — not just the token text.
         val bodyAlpha = if (mark.unconfirmed) UNCONFIRMED_TILE_ALPHA else 1f
-        Box(modifier = Modifier.fillMaxSize().alpha(bodyAlpha).background(tf.fill)) {
-            if (hasPhotos) {
-                PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
-            } else {
-                NfcTileBody(mark, tf.text)
+        Box(modifier = Modifier.fillMaxSize().alpha(bodyAlpha)) {
+            if (hasPhotos) PhotoTileBody(mark) else NfcTileBody()
+            TileKpToken(mark, Modifier.align(Alignment.Center))
+            Text(
+                text = mark.time,
+                fontFamily = RobotoMono,
+                fontWeight = FontWeight.Medium,
+                fontSize = 10.5.sp,
+                color = Color.White.copy(alpha = 0.82f),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
+            )
+            mark.color?.let { TileColorCorner(it, Modifier.align(Alignment.TopStart)) }
+            if (hasPhotos && mark.kind == MarkKind.PHOTO) {
+                TileCornerGlyph(Icons.Filled.CameraAlt, null, Modifier.align(Alignment.TopEnd))
             }
         }
         if (mark.unconfirmed) {
-            Icon(
+            TileCornerGlyph(
                 Icons.Outlined.CloudOff,
                 contentDescription = "Не подтверждён сервером",
-                tint = if (hasPhotos) Color.White else tf.text,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 6.dp, end = 6.dp)
-                    .size(16.dp),
+                modifier = Modifier.align(Alignment.TopEnd),
             )
         }
         // The «+N» extra-photo badge. The first frame IS the tile background, so it's never counted —
@@ -1415,42 +1434,96 @@ private fun LightboxPage(file: File, mark: Mark, modifier: Modifier = Modifier) 
     }
 }
 
+/**
+ * The plain NFC take's body: a charcoal gradient (~155°) under faint diagonal «/» stripes running
+ * parallel to the [TileColorCorner] hypotenuse, plus a hairline edge. Fixed shades in both themes.
+ */
 @Composable
-private fun NfcTileBody(mark: Mark, textColor: Color) {
-    // Per-element placement (not a shared inset) so the «стоимость-номер» token centers on the WHOLE
-    // tile while the take time hugs the bottom-right like a chat-message timestamp.
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = tokenAnnotated(mark, textColor),
-            color = textColor,
-            maxLines = 1,
-            // includeFontPadding=false + centered/trimmed line height so the digits sit optically
-            // centered — without it the font's top padding makes the token look pushed down.
-            style = TextStyle(
-                fontFamily = RobotoMono,
-                fontWeight = FontWeight.Bold,
-                fontSize = 23.sp,
-                lineHeight = 23.sp,
-                letterSpacing = (-0.8).sp,
-                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 6.dp),
-        )
-        Text(
-            text = mark.time,
+private fun NfcTileBody() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val bg = Brush.linearGradient(
+                    listOf(ChipCardTop, ChipCardBottom),
+                    start = Offset(size.width * 0.29f, 0f),
+                    end = Offset(size.width * 0.71f, size.height),
+                )
+                val step = 7.dp.toPx()
+                val stroke = 1.dp.toPx()
+                onDrawBehind {
+                    drawRect(bg)
+                    clipRect {
+                        var x = 0f
+                        while (x < size.width + size.height) {
+                            drawLine(ChipCardStripe, Offset(x, 0f), Offset(x - size.height, size.height), stroke)
+                            x += step
+                        }
+                    }
+                }
+            }
+            .border(0.5.dp, Color.White.copy(alpha = 0.06f)),
+    )
+}
+
+/**
+ * The tile's «стоимость-номер» token, identical on NFC and photo tiles: big white mono, centered on the
+ * whole tile, with a hard 1dp drop shadow so it reads on a bright photo too.
+ */
+@Composable
+private fun TileKpToken(mark: Mark, modifier: Modifier = Modifier) {
+    val shadowY = with(LocalDensity.current) { 1.dp.toPx() }
+    Text(
+        text = tokenAnnotated(mark, Color.White),
+        color = Color.White,
+        maxLines = 1,
+        // includeFontPadding=false + centered/trimmed line height so the digits sit optically
+        // centered — without it the font's top padding makes the token look pushed down.
+        style = TextStyle(
             fontFamily = RobotoMono,
-            fontWeight = FontWeight.Medium,
-            fontSize = 10.5.sp,
-            color = textColor.copy(alpha = 0.78f),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
-        )
+            fontWeight = FontWeight.Bold,
+            fontSize = 23.sp,
+            lineHeight = 23.sp,
+            letterSpacing = (-0.8).sp,
+            shadow = Shadow(Color.Black.copy(alpha = 0.5f), offset = Offset(0f, shadowY)),
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both,
+            ),
+        ),
+        modifier = modifier.padding(horizontal = 6.dp),
+    )
+}
+
+/** Top-left discipline-color triangle (22dp legs). */
+@Composable
+private fun TileColorCorner(color: CheckpointColor, modifier: Modifier = Modifier) {
+    val fill = cornerColor(color)
+    Canvas(modifier = modifier.size(22.dp)) {
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            lineTo(size.width, 0f)
+            lineTo(0f, size.height)
+            close()
+        }
+        drawPath(path, fill)
     }
+}
+
+/** White glyph on a translucent dark plate for a tile's top-right corner (camera / cloud-off). */
+@Composable
+private fun TileCornerGlyph(icon: ImageVector, contentDescription: String?, modifier: Modifier = Modifier) {
+    Icon(
+        icon,
+        contentDescription = contentDescription,
+        tint = Color.White,
+        modifier = modifier
+            .padding(4.dp)
+            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+            .padding(4.dp)
+            .size(12.dp),
+    )
 }
 
 /**
@@ -1474,16 +1547,13 @@ private fun tokenAnnotated(
 }
 
 /**
- * A photo take's tile: the captured photo fills the whole square edge-to-edge — the КП discipline color
- * no longer washes over it or frames it. Tiles are separated purely by the grid grout; the discipline
- * color survives in the corner chips ([PhotoKpChip] top-left carrying the `<стоимость>-<номер>` token,
- * plus the top-right camera glyph on photo takes). The take time stays **bottom-end** inside the bottom
- * scrim (transparent → ~60% black) so it reads as a legible caption over bright imagery. Shared by PHOTO
- * takes and NFC takes that carry photos; [showCameraChip] gates the top-right glyph so only a genuine
- * photo take flags it.
+ * A photo-carrying take's body: the first captured frame fills the square edge-to-edge over a charcoal
+ * seat, evenly shaded with the chip-card graphite so the centered white [TileKpToken] reads on any shot
+ * (bright sky, snow), plus a bottom scrim under the take time. Shared by PHOTO takes and NFC takes that
+ * carry photos.
  */
 @Composable
-private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean = true) {
+private fun PhotoTileBody(mark: Mark) {
     val context = LocalContext.current
     Box(
         modifier = Modifier
@@ -1509,8 +1579,9 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        // Bottom scrim so the take time stays legible over real imagery (the placeholder is dark already,
-        // but a photo's lower edge can be bright).
+        // Graphite, not pure black: keeps warm shots from going muddy grey and puts photo tiles in the
+        // same register as the dark NFC tiles.
+        Box(modifier = Modifier.fillMaxSize().background(ChipCardTop.copy(alpha = 0.45f)))
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1520,37 +1591,7 @@ private fun PhotoTileBody(mark: Mark, stageColor: Color, showCameraChip: Boolean
                     Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))),
                 ),
         )
-        Text(
-            text = mark.time,
-            fontFamily = RobotoMono,
-            fontWeight = FontWeight.Medium,
-            fontSize = 10.5.sp,
-            color = Color.White.copy(alpha = 0.82f),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp, end = 8.dp),
-        )
-        PhotoKpChip(mark = mark, color = stageColor, modifier = Modifier.align(Alignment.TopStart))
-        if (showCameraChip) {
-            PhotoCameraChip(color = stageColor, modifier = Modifier.align(Alignment.TopEnd))
-        }
     }
-}
-
-/**
- * The camera glyph pinned to a photo tile's top-RIGHT corner, mirroring [PhotoKpChip]'s backing: solid
- * discipline [color], only the inner floating corner (bottom-start) rounded to 9dp so the two flush edges
- * stay square and the top-trailing corner coincides with the tile's. Marks a photo (not NFC) take at a glance.
- */
-@Composable
-private fun PhotoCameraChip(color: Color, modifier: Modifier = Modifier) {
-    Icon(
-        Icons.Filled.CameraAlt,
-        contentDescription = null,
-        tint = Color.White,
-        modifier = modifier
-            .background(color, RoundedCornerShape(bottomStart = 9.dp))
-            .padding(horizontal = 6.dp, vertical = 5.dp)
-            .size(15.dp),
-    )
 }
 
 /**
