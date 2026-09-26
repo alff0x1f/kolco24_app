@@ -301,15 +301,15 @@ confirmAttemptFor = { target ->
 - Create: `app/src/main/java/ru/kolco24/kolco24/ui/scan/ConfirmLoop.kt`
 - Create: `app/src/test/java/ru/kolco24/kolco24/ui/scan/ConfirmLoopTest.kt`
 
-- [ ] add `ConfirmState`, `CONFIRM_TIMEOUT_MS`, `CONFIRM_RETRY_MS`, `runConfirm`, `confirmStatusText`
-- [ ] tests (`runTest`, `elapsedNow = { testScheduler.currentTime }`): first-try `Ok` → `Sending(1)`, `Confirmed`
-- [ ] tests: fail once then `Ok` → `Sending(1)`, `Sending(2)`, `Confirmed`; retry spacing = 3 s
-- [ ] tests: always `Offline` → `Failed(offline = true)` after 20 s; always `Error` → `Failed(offline = false)`
-- [ ] tests: cancel during the retry delay → no more attempts, no terminal state
-- [ ] tests: cancel during an in-flight (suspended fake) `attempt()` → no terminal state, no further attempts
-- [ ] tests: an attempt that starts before and returns `Ok` after the deadline → `Confirmed`, not `Failed`
-- [ ] tests: `confirmStatusText` for Sending(Cloud/Local, n) and both Failed variants
-- [ ] run tests — must pass before next task
+- [x] add `ConfirmState`, `CONFIRM_TIMEOUT_MS`, `CONFIRM_RETRY_MS`, `runConfirm`, `confirmStatusText`
+- [x] tests (`runTest`, `elapsedNow = { testScheduler.currentTime }`): first-try `Ok` → `Sending(1)`, `Confirmed`
+- [x] tests: fail once then `Ok` → `Sending(1)`, `Sending(2)`, `Confirmed`; retry spacing = 3 s
+- [x] tests: always `Offline` → `Failed(offline = true)` after 20 s; always `Error` → `Failed(offline = false)`
+- [x] tests: cancel during the retry delay → no more attempts, no terminal state
+- [x] tests: cancel during an in-flight (suspended fake) `attempt()` → no terminal state, no further attempts
+- [x] tests: an attempt that starts before and returns `Ok` after the deadline → `Confirmed`, not `Failed`
+- [x] tests: `confirmStatusText` for Sending(Cloud/Local, n) and both Failed variants
+- [x] run tests — must pass before next task
 
 ### Task 7: ScanScreen confirm mode + MainActivity wiring
 
