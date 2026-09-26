@@ -332,7 +332,8 @@ class MarkRepository(
      * `onUploadOutcome` — the overlay shows its own status.
      *
      * Returns [UploadResultKind.Ok] on acceptance; [UploadResultKind.Error] (no POST) for a missing or
-     * incomplete row, or for a `Success` without the id; otherwise the mapped [uploadResultKind]
+     * incomplete row or a [target] that does not match the row's snapshotted `checkMethod` (including
+     * any target for an `offline` row), or for a `Success` without the id; otherwise the mapped [uploadResultKind]
      * (`Offline` / `Error`).
      */
     suspend fun confirm(markId: String, target: UploadTarget, now: Long): UploadResultKind {
@@ -341,6 +342,9 @@ class MarkRepository(
         // shrank after the КП scan, while this row's expectedCount was snapshotted then and it stays
         // incomplete (never counts). Confirming it would show «Готово!» for a take that scores nothing.
         if (!mark.complete) return UploadResultKind.Error
+        // The target must match the take's persisted method snapshot (offline takes have none): the
+        // overlay could otherwise confirm a `cloud` take through LAN (or vice versa) and award it.
+        if (CheckMethod.parse(mark.checkMethod).uploadTarget != target) return UploadResultKind.Error
         val dto = backfillTrustedMs(mark).toDto()
         val result = uploaderFor(target).upload(mark.raceId, mark.teamId, sourceInstallId, listOf(dto))
         if (result !is PostResult.Success) return uploadResultKind(result)

@@ -31,8 +31,11 @@ fun isWindowExpired(lastScanAt: Long?, now: Long): Boolean =
  * drained into [present] (see [reduce]). [lastScanAt] is the **monotonic** `elapsedRealtime` ms of the
  * most recent **accepted** scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and
  * does **not** advance it. (Monotonic, not wall-clock, so translating the phone clock can't skew it.)
- * [checkMethod] is the КП tag's verification rule, set by [reduce] on [ScanEvent.Kp] (defaults to
- * [CheckMethod.Offline] until a КП lands).
+ * [checkMethod] is the КП tag's verification rule and [expectedCount] the roster size, both snapshotted by
+ * [reduce] when a [ScanEvent.Kp] **opens** the take (a new КП / fresh session) and kept on a same-КП
+ * re-scan — exactly like the host's DB take row (`MarkRepository.startKpTake` snapshots `checkMethod` and
+ * `expectedCount` once; a same-КП re-scan reuses the row). [checkMethod] defaults to
+ * [CheckMethod.Offline] and [expectedCount] to 0 (never complete) until a КП lands.
  */
 data class ScanSession(
     val checkpointId: Int?,
@@ -44,6 +47,7 @@ data class ScanSession(
     val bufferedBeforeKp: Set<Int>,
     val lastScanAt: Long,
     val checkMethod: CheckMethod = CheckMethod.Offline,
+    val expectedCount: Int = 0,
 ) {
     companion object {
         /** A fresh session with no KP and no members yet, stamped with the first scan's [now]. */
@@ -94,9 +98,14 @@ sealed interface ScanEvent {
  * Folds one [event] into the [session] at time [now] (monotonic `elapsedRealtime` ms). Pure; the only
  * state machine of the scan flow.
  *
- * - [ScanEvent.Kp] sets the KP fields (including [ScanSession.checkMethod]) and **drains** [ScanSession.bufferedBeforeKp] into
- *   [ScanSession.present] (members scanned before the chip count once the chip lands). A repeat KP
- *   scan just re-stamps the window.
+ * - [ScanEvent.Kp] sets the KP fields and **drains** [ScanSession.bufferedBeforeKp] into
+ *   [ScanSession.present] (members scanned before the chip count once the chip lands). A КП that opens
+ *   a take (no КП yet, or a different КП) snapshots [ScanSession.checkMethod] from the tag and
+ *   [ScanSession.expectedCount] from [rosterSize]; a repeat scan of the same КП just re-stamps the
+ *   window and keeps both snapshots (the host reuses the persisted take row with its original method
+ *   and expected count, even if this physical tag carries a different method or the roster changed).
+ *   [rosterSize] (the live roster size at this tap) is only read on such a take-opening КП; its 0
+ *   default (a take that never completes) only keeps member-only test calls short.
  * - [ScanEvent.Member] goes to the buffer while [ScanSession.checkpointId] is null, otherwise straight into
  *   `present`; set-semantics make a repeated member idempotent. A member scanned with no session yet
  *   starts one (so pre-KP bracelets are not lost). Re-scanning a member who is **already** counted
@@ -108,19 +117,22 @@ sealed interface ScanEvent {
  * Any scan that adds new information (a KP or a not-yet-counted member) refreshes
  * [ScanSession.lastScanAt] to [now]; an idempotent re-scan leaves the window untouched.
  */
-fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = when (event) {
+fun reduce(session: ScanSession?, event: ScanEvent, now: Long, rosterSize: Int = 0): ScanSession? = when (event) {
     is ScanEvent.Kp -> {
         val base = session ?: ScanSession.empty(now)
         // When switching to a different КП, discard the prior KP's members — they were present at a
-        // different checkpoint. A repeat scan of the same КП preserves accumulated members.
-        val priorPresent = if (session?.checkpointId == event.checkpointId) base.present else emptySet()
+        // different checkpoint. A repeat scan of the same КП preserves accumulated members and the
+        // take's method / expected-count snapshots (mirrors the host reusing the persisted row).
+        val sameTake = session?.checkpointId == event.checkpointId
+        val priorPresent = if (sameTake) base.present else emptySet()
         base.copy(
             checkpointId = event.checkpointId,
             checkpointNumber = event.number,
             cost = event.cost,
             cpUid = event.cpUid,
             cpCode = event.cpCode,
-            checkMethod = event.checkMethod,
+            checkMethod = if (sameTake) base.checkMethod else event.checkMethod,
+            expectedCount = if (sameTake) base.expectedCount else rosterSize,
             present = priorPresent + base.bufferedBeforeKp,
             bufferedBeforeKp = emptySet(),
             lastScanAt = now,
@@ -185,15 +197,17 @@ fun classifyTag(
 }
 
 /**
- * UI-close decision: is the take "complete" — a КП identified and every roster member present?
+ * UI-close decision: is the take "complete" — a КП identified and every member expected **when the take
+ * opened** ([ScanSession.expectedCount]) present?
  *
- * Mirrors the **shape** of `MarkRepository`'s `complete = present.size >= expectedCount`, but for a
- * purely cosmetic overlay-close decision: scoring is persisted incrementally and is independent of
- * this. Requires [ScanSession.checkpointId] != null (pre-КП members live in [ScanSession.bufferedBeforeKp]
- * and are drained into [ScanSession.present] only once the КП lands) and a non-empty roster.
+ * Mirrors `MarkRepository`'s `complete = present.size >= expectedCount` on the same snapshotted count, so
+ * the overlay's completion (and its confirm-mode entry) agrees with the persisted row even if the roster
+ * grows or shrinks mid-take. Requires [ScanSession.checkpointId] != null (pre-КП members live in
+ * [ScanSession.bufferedBeforeKp] and are drained into [ScanSession.present] only once the КП lands) and
+ * a non-zero expected count.
  */
-fun isComplete(session: ScanSession?, rosterSize: Int): Boolean =
-    session?.checkpointId != null && rosterSize > 0 && session.present.size >= rosterSize
+fun isComplete(session: ScanSession?): Boolean =
+    session?.checkpointId != null && session.expectedCount > 0 && session.present.size >= session.expectedCount
 
 /** What a processed tap did to take completion — decided purely by [completionOnTransition]. */
 sealed interface Completion {
@@ -210,12 +224,12 @@ sealed interface Completion {
 /**
  * The scan overlay's completion decision for one tap: [wasComplete] is [isComplete] of the session the
  * tap was folded into (after the window-expiry reset), [session] the reduced result. Only the incomplete →
- * complete edge fires; its kind follows the session's **current** [ScanSession.checkMethod] (the last КП
- * scanned wins — a КП switch mid-session replaces the rule). Also covers completion arriving on a
+ * complete edge fires; its kind follows the take's snapshotted [ScanSession.checkMethod] (a switch to a
+ * different КП opens a new take and replaces the rule; a same-КП re-scan keeps it). Also covers completion arriving on a
  * [ScanEvent.Kp] when pre-КП buffered members drain into `present`.
  */
-fun completionOnTransition(wasComplete: Boolean, session: ScanSession?, rosterSize: Int): Completion {
-    if (wasComplete || !isComplete(session, rosterSize)) return Completion.None
+fun completionOnTransition(wasComplete: Boolean, session: ScanSession?): Completion {
+    if (wasComplete || !isComplete(session)) return Completion.None
     val target = session?.checkMethod?.uploadTarget ?: return Completion.Counted
     return Completion.Confirm(target)
 }

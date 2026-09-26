@@ -150,6 +150,10 @@ fun ScanScreen(
     val currentOnClose by rememberUpdatedState(onClose)
     val currentOnCompleted by rememberUpdatedState(onCompleted)
     val currentConfirm by rememberUpdatedState(confirm)
+    // process() is captured once by the first-composition tag hooks below, so it must read the roster
+    // through this holder: the КП tap snapshots the live size into the session (as the host does into
+    // the DB take's expectedCount) — a stale captured roster would disagree with the persisted row.
+    val currentRoster by rememberUpdatedState(roster)
     var session by remember { mutableStateOf<ScanSession?>(null) }
     var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
@@ -208,16 +212,16 @@ fun ScanScreen(
                     // also starts fresh instead of extending the stale one.
                     val effectiveSession =
                         if (isWindowExpired(session?.lastScanAt, now)) null else session
-                    val wasComplete = isComplete(effectiveSession, roster.size)
+                    val wasComplete = isComplete(effectiveSession)
                     // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
                     // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
                     // so the ring must keep counting down rather than flash back to full.
-                    session = reduce(effectiveSession, event, now)
+                    session = reduce(effectiveSession, event, now, rosterSize = currentRoster.size)
                     // The completing tap still gets the ordinary scan feedback first. The fanfare
                     // follows only on the incomplete to complete transition, including completion
                     // arriving on a Kp event when pre-КП buffered members drain into present.
                     scanFeedback.play(feedbackFor(event))
-                    when (val completion = completionOnTransition(wasComplete, session, roster.size)) {
+                    when (val completion = completionOnTransition(wasComplete, session)) {
                         // A `cloud`/`local` take counts only once the server accepts it: tick only (the
                         // fanfare waits for the accept), enter confirm mode synchronously under the lock.
                         is Completion.Confirm -> enterConfirm(completion.target)
@@ -299,17 +303,18 @@ fun ScanScreen(
     // Auto-close on completion: КП identified + all roster members present. Show a brief green
     // "Готово!" beat, then finalize and close. `completed` is set before the delay so a recomposition
     // during the hold can't trigger a second close.
-    val allScanned = isComplete(session, roster.size)
+    val allScanned = isComplete(session)
     LaunchedEffect(allScanned) {
         // In confirm mode the confirm path closes the overlay itself (confirmState is set in the same
         // snapshot as the completing session, so it is already non-null here).
         if (allScanned && !completed && confirmState == null) {
-            // Completion without a completing tap (the roster shrank mid-session on a team sync): a
-            // `cloud`/`local` take must still go through the server confirm, never the offline beat.
+            // Completion is judged on the take's snapshotted expectedCount, so it only ever flips on a
+            // tap (process() enters confirm mode for cloud/local there). Defensive: a `cloud`/`local`
+            // take must never get the offline beat.
             val target = session?.checkMethod?.uploadTarget
             if (target != null) {
                 scanMutex.withLock {
-                    if (confirmState == null && isComplete(session, roster.size)) enterConfirm(target)
+                    if (confirmState == null && isComplete(session)) enterConfirm(target)
                 }
                 return@LaunchedEffect
             }
@@ -321,7 +326,7 @@ fun ScanScreen(
             // Mirrors the expiry handler pattern: finalize+close only if still complete.
             var shouldClose = false
             scanMutex.withLock {
-                if (isComplete(session, roster.size)) {
+                if (isComplete(session)) {
                     finalizeSession()
                     shouldClose = true
                 } else {

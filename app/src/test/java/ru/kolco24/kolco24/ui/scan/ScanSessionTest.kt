@@ -138,16 +138,16 @@ class ScanSessionTest {
 
     @Test
     fun isComplete_kpAndFullRoster_isTrue() {
-        var s = reduce(null, kp(), now = 0L)
+        var s = reduce(null, kp(), now = 0L, rosterSize = 3)
         s = reduce(s, ScanEvent.Member(1), now = 10L)
         s = reduce(s, ScanEvent.Member(2), now = 20L)
         s = reduce(s, ScanEvent.Member(3), now = 30L)
-        assertTrue(isComplete(s, rosterSize = 3))
+        assertTrue(isComplete(s))
     }
 
     @Test
     fun isComplete_nullSession_isFalse() {
-        assertFalse(isComplete(null, rosterSize = 3))
+        assertFalse(isComplete(null))
     }
 
     @Test
@@ -156,30 +156,30 @@ class ScanSessionTest {
         s = reduce(s, ScanEvent.Member(2), now = 10L)
         s = reduce(s, ScanEvent.Member(3), now = 20L)
         // КП not yet scanned — members are buffered, present is empty, so not complete.
-        assertFalse(isComplete(s, rosterSize = 3))
+        assertFalse(isComplete(s))
     }
 
     @Test
     fun isComplete_partialRoster_isFalse() {
-        var s = reduce(null, kp(), now = 0L)
+        var s = reduce(null, kp(), now = 0L, rosterSize = 3)
         s = reduce(s, ScanEvent.Member(1), now = 10L)
         s = reduce(s, ScanEvent.Member(2), now = 20L)
-        assertFalse(isComplete(s, rosterSize = 3))
+        assertFalse(isComplete(s))
     }
 
     @Test
     fun isComplete_rosterZero_isFalse() {
-        val s = reduce(null, kp(), now = 0L)
-        assertFalse(isComplete(s, rosterSize = 0))
+        val s = reduce(null, kp(), now = 0L, rosterSize = 0)
+        assertFalse(isComplete(s))
     }
 
     @Test
     fun isComplete_presentLargerThanRoster_isTrue() {
-        var s = reduce(null, kp(), now = 0L)
+        var s = reduce(null, kp(), now = 0L, rosterSize = 2)
         s = reduce(s, ScanEvent.Member(1), now = 10L)
         s = reduce(s, ScanEvent.Member(2), now = 20L)
         s = reduce(s, ScanEvent.Member(3), now = 30L)
-        assertTrue(isComplete(s, rosterSize = 2))
+        assertTrue(isComplete(s))
     }
 
     @Test
@@ -189,19 +189,19 @@ class ScanSessionTest {
         var s = reduce(null, ScanEvent.Member(1), now = 0L)
         s = reduce(s, ScanEvent.Member(2), now = 10L)
         s = reduce(s, ScanEvent.Member(3), now = 20L)
-        s = reduce(s, kp(), now = 30L)
-        assertTrue(isComplete(s, rosterSize = 3))
+        s = reduce(s, kp(), now = 30L, rosterSize = 3)
+        assertTrue(isComplete(s))
     }
 
     @Test
     fun isComplete_afterKpSwitch_isFalse() {
         // Switching to a different КП resets present to empty; isComplete must return false.
-        var s = reduce(null, kp(), now = 0L)
+        var s = reduce(null, kp(), now = 0L, rosterSize = 2)
         s = reduce(s, ScanEvent.Member(1), now = 10L)
         s = reduce(s, ScanEvent.Member(2), now = 20L)
         val kpB = ScanEvent.Kp(checkpointId = 99, number = 12, cost = 80, cpUid = "04BBBBBB", cpCode = "CAFEBABE")
-        s = reduce(s, kpB, now = 30L)
-        assertFalse(isComplete(s, rosterSize = 2))
+        s = reduce(s, kpB, now = 30L, rosterSize = 2)
+        assertFalse(isComplete(s))
     }
 
     // --- Window expiry (isWindowExpired) ---
@@ -260,15 +260,15 @@ class ScanSessionTest {
         var s: ScanSession? = null
         var was = false
         events.forEachIndexed { i, e ->
-            was = isComplete(s, rosterSize)
-            s = reduce(s, e, now = i * 100L)
+            was = isComplete(s)
+            s = reduce(s, e, now = i * 100L, rosterSize = rosterSize)
         }
         return was to s
     }
 
     private fun completion(rosterSize: Int, vararg events: ScanEvent): Completion {
         val (was, s) = lastTap(rosterSize, *events)
-        return completionOnTransition(was, s, rosterSize)
+        return completionOnTransition(was, s)
     }
 
     @Test
@@ -330,8 +330,68 @@ class ScanSessionTest {
 
     @Test
     fun completion_nullSessionOrEmptyRoster_isNone() {
-        assertEquals(Completion.None, completionOnTransition(false, null, 2))
-        val s = reduce(null, kp().copy(checkMethod = CheckMethod.Cloud), now = 0L)
-        assertEquals(Completion.None, completionOnTransition(false, s, 0))
+        assertEquals(Completion.None, completionOnTransition(false, null))
+        val s = reduce(null, kp().copy(checkMethod = CheckMethod.Cloud), now = 0L, rosterSize = 0)
+        assertEquals(Completion.None, completionOnTransition(false, s))
+    }
+
+    // --- Take snapshots: a same-КП re-scan keeps the method / expected count the take opened with ---
+
+    @Test
+    fun kp_sameKpRescan_keepsMethodAndExpectedCountSnapshot() {
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        var s = reduce(null, cloud, now = 0L, rosterSize = 2)
+        // Same КП, a different physical tag now says `local`, and the roster grew meanwhile.
+        s = reduce(s, kp().copy(checkMethod = CheckMethod.Local), now = 100L, rosterSize = 3)
+        assertEquals(CheckMethod.Cloud, s!!.checkMethod)
+        assertEquals(2, s.expectedCount)
+        assertEquals(100L, s.lastScanAt)
+    }
+
+    @Test
+    fun kp_differentKp_replacesMethodAndExpectedCount() {
+        var s = reduce(null, kp().copy(checkMethod = CheckMethod.Cloud), now = 0L, rosterSize = 2)
+        s = reduce(s, kp(point = 43, number = 8).copy(checkMethod = CheckMethod.Local), now = 100L, rosterSize = 3)
+        assertEquals(CheckMethod.Local, s!!.checkMethod)
+        assertEquals(3, s.expectedCount)
+    }
+
+    @Test
+    fun completion_sameKpRescanWithChangedMethod_confirmsOriginalTarget() {
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        val local = kp().copy(checkMethod = CheckMethod.Local)
+        assertEquals(
+            Completion.Confirm(UploadTarget.Cloud),
+            completion(1, cloud, local, ScanEvent.Member(1)),
+        )
+    }
+
+    @Test
+    fun completion_rosterGrewBeforeKp_waitsForSnapshottedCount() {
+        // Session opened by a member tap while the roster had one member; it grew to two before the КП
+        // tap. The take (like the DB row) expects two, so the first member alone must not complete it.
+        var s = reduce(null, ScanEvent.Member(1), now = 0L, rosterSize = 1)
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        var was = isComplete(s)
+        s = reduce(s, cloud, now = 100L, rosterSize = 2)
+        assertEquals(Completion.None, completionOnTransition(was, s))
+        was = isComplete(s)
+        s = reduce(s, ScanEvent.Member(2), now = 200L, rosterSize = 2)
+        assertEquals(Completion.Confirm(UploadTarget.Cloud), completionOnTransition(was, s))
+    }
+
+    @Test
+    fun completion_rosterChangesAfterKp_followsSnapshot() {
+        // Roster shrinks 3 → 1 after the КП tap: the take still needs all three (as the DB row does).
+        var s = reduce(null, kp(), now = 0L, rosterSize = 3)
+        var was = isComplete(s)
+        s = reduce(s, ScanEvent.Member(1), now = 100L, rosterSize = 1)
+        assertEquals(Completion.None, completionOnTransition(was, s))
+        was = isComplete(s)
+        s = reduce(s, ScanEvent.Member(2), now = 200L, rosterSize = 1)
+        assertEquals(Completion.None, completionOnTransition(was, s))
+        was = isComplete(s)
+        s = reduce(s, ScanEvent.Member(3), now = 300L, rosterSize = 1)
+        assertEquals(Completion.Counted, completionOnTransition(was, s))
     }
 }

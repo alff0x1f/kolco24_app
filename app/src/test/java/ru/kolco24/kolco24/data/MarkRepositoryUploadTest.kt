@@ -444,7 +444,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_cloud_onlyCloudUploaderCalled_setsConfirmedAtAndUploadedCloud() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
         val cloud = FakeUploader()
         val local = FakeUploader()
         val r = repo(dao, cloud = cloud, local = local)
@@ -464,7 +464,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_local_onlyLocalUploaderCalled_setsConfirmedAtAndUploadedLocal() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "local")
         val cloud = FakeUploader()
         val local = FakeUploader()
         val r = repo(dao, cloud = cloud, local = local)
@@ -483,7 +483,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_sendsOnlyThatMark() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(3, raceId = 1, teamId = 7)
+        dao.seed(3, raceId = 1, teamId = 7, checkMethod = "cloud")
         var sent: List<String> = emptyList()
         val cloud = FakeUploader { marks ->
             sent = marks.map { it.id }
@@ -501,7 +501,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_offline_notConfirmed_returnsOffline() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
         val r = repo(dao, cloud = FakeUploader { PostResult.Offline })
 
         val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 1L)
@@ -514,7 +514,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_serverError_notConfirmed_returnsError() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "local")
         val r = repo(dao, local = FakeUploader { PostResult.Error(503) })
 
         val kind = r.confirm("mark-0", UploadTarget.Local, now = 1L)
@@ -527,7 +527,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_successWithoutId_notConfirmed_returnsError() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
         val r = repo(dao, cloud = FakeUploader { PostResult.Success(MarkUploadResponse(listOf("other"))) })
 
         val kind = r.confirm("mark-0", UploadTarget.Cloud, now = 1L)
@@ -555,7 +555,7 @@ class MarkRepositoryUploadTest {
         // the DB take (expectedCount snapshotted at the КП scan) stays incomplete; such a take never
         // counts, so confirm must not POST it nor report «Готово!».
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7, complete = false)
+        dao.seed(1, raceId = 1, teamId = 7, complete = false, checkMethod = "cloud")
         val cloud = FakeUploader()
         val local = FakeUploader()
         val r = repo(dao, cloud = cloud, local = local)
@@ -572,9 +572,37 @@ class MarkRepositoryUploadTest {
     }
 
     @Test
+    fun confirm_targetMismatchingStoredMethod_returnsError_noPost_notConfirmed() = runTest {
+        // A same-КП re-scan of a tag whose method changed reuses the persisted take: the confirm target
+        // must follow the row's snapshotted method, so a `cloud` take is never awarded through LAN (and
+        // vice versa), and an `offline` take is never confirmed at all.
+        val dao = FakeMarkUploadDao()
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "local")
+        dao.seed(1, raceId = 1, teamId = 7) // offline
+        val cloud = FakeUploader()
+        val local = FakeUploader()
+        val r = repo(dao, cloud = cloud, local = local)
+
+        assertEquals(UploadResultKind.Error, r.confirm("mark-0", UploadTarget.Local, now = 1L))
+        assertEquals(UploadResultKind.Error, r.confirm("mark-1", UploadTarget.Cloud, now = 1L))
+        assertEquals(UploadResultKind.Error, r.confirm("mark-2", UploadTarget.Cloud, now = 1L))
+        assertEquals(UploadResultKind.Error, r.confirm("mark-2", UploadTarget.Local, now = 1L))
+
+        assertEquals(0, cloud.calls)
+        assertEquals(0, local.calls)
+        listOf("mark-0", "mark-1", "mark-2").forEach { id ->
+            val row = dao.rowById(id)
+            assertNull(row.confirmedAt)
+            assertFalse(row.uploadedCloud)
+            assertFalse(row.uploadedLocal)
+        }
+    }
+
+    @Test
     fun confirm_whileDrainHoldsMutex_stillPosts() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
         val gate = CompletableDeferred<Unit>()
         // The drain runs the local target first; its POST parks on the gate, holding uploadMutex.
         val local = FakeUploader { marks ->
@@ -601,7 +629,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun drainAlone_neverSetsConfirmedAt() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(2, raceId = 1, teamId = 7)
+        dao.seed(2, raceId = 1, teamId = 7, checkMethod = "cloud")
         val r = repo(dao, cloud = FakeUploader(), local = FakeUploader())
 
         r.uploadPending(raceId = 1, teamId = 7)
@@ -615,7 +643,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_gpsArrivesDuringPost_confirmedButUploadedCloudStaysFalse() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
         val cloud = FakeUploader { marks ->
             dao.simulateGpsArrival(marks.first().id) // fix attached between fetch and mark
             PostResult.Success(MarkUploadResponse(marks.map { it.id }))
@@ -634,7 +662,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_local_gpsArrivesDuringPost_confirmedButUploadedLocalStaysFalse() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "local")
         val local = FakeUploader { marks ->
             dao.simulateGpsArrival(marks.first().id)
             PostResult.Success(MarkUploadResponse(marks.map { it.id }))
@@ -652,7 +680,7 @@ class MarkRepositoryUploadTest {
     @Test
     fun confirm_rowUpdatedDuringPost_confirmedButUploadedCloudStaysFalse() = runTest {
         val dao = FakeMarkUploadDao()
-        dao.seed(1, raceId = 1, teamId = 7)
+        dao.seed(1, raceId = 1, teamId = 7, checkMethod = "cloud")
         val cloud = FakeUploader { marks ->
             dao.simulateMemberAdded(marks.first().id) // updatedAt bumped mid-POST → version guard skips
             PostResult.Success(MarkUploadResponse(marks.map { it.id }))
@@ -671,7 +699,9 @@ class MarkRepositoryUploadTest {
     fun confirm_backfillsTrustedMsOnTheWire() = runTest {
         val dao = FakeMarkUploadDao()
         // A take logged while the clock was NoSync: no stored trusted time, but a monotonic mark.
-        dao.seedTimed(raceId = 1, teamId = 7, trustedTakenAt = null, elapsedAt = 5_000L, bootCount = 42)
+        dao.seedTimed(
+            raceId = 1, teamId = 7, trustedTakenAt = null, elapsedAt = 5_000L, bootCount = 42, checkMethod = "cloud",
+        )
         var sent: MarkDto? = null
         val cloud = FakeUploader { marks -> sent = marks.single(); PostResult.Success(MarkUploadResponse(marks.map { it.id })) }
         val r = repo(dao, cloud = cloud, trustedAt = { e, b -> if (e == 5_000L && b == 42) 111_000L else null })
@@ -1038,7 +1068,7 @@ private class FakeMarkUploadDao : MarkDao {
     private var seq = 0
 
     /** Seed [n] fresh take rows for one scope (newest-last by id). */
-    fun seed(n: Int, raceId: Int, teamId: Int, complete: Boolean = true) {
+    fun seed(n: Int, raceId: Int, teamId: Int, complete: Boolean = true, checkMethod: String = "offline") {
         val fresh = (0 until n).map {
             val i = seq++
             MarkEntity(
@@ -1054,6 +1084,7 @@ private class FakeMarkUploadDao : MarkDao {
                 present = listOf(1),
                 expectedCount = 1,
                 complete = complete,
+                checkMethod = checkMethod,
                 takenAt = 1_000L + i,
                 updatedAt = 1_000L + i,
             )
@@ -1062,7 +1093,14 @@ private class FakeMarkUploadDao : MarkDao {
     }
 
     /** Seed one nfc take with explicit time columns — for the upload-time trusted_ms backfill tests. */
-    fun seedTimed(raceId: Int, teamId: Int, trustedTakenAt: Long?, elapsedAt: Long?, bootCount: Int?) {
+    fun seedTimed(
+        raceId: Int,
+        teamId: Int,
+        trustedTakenAt: Long?,
+        elapsedAt: Long?,
+        bootCount: Int?,
+        checkMethod: String = "offline",
+    ) {
         val i = seq++
         rows.value = rows.value + MarkEntity(
             id = "mark-$i",
@@ -1082,6 +1120,7 @@ private class FakeMarkUploadDao : MarkDao {
             trustedTakenAt = trustedTakenAt,
             elapsedRealtimeAt = elapsedAt,
             bootCount = bootCount,
+            checkMethod = checkMethod,
         )
     }
 
