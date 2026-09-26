@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -68,6 +69,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.isSpecified
@@ -123,6 +125,9 @@ import ru.kolco24.kolco24.ui.theme.WarningAmberDark
 
 private val marksFabListBottomPadding = 128.dp
 private val marksFabScrollClearance = 104.dp
+
+// Dim level of an unconfirmed cloud/local take's tile body (the cloud-off glyph stays opaque).
+private const val UNCONFIRMED_TILE_ALPHA = 0.45f
 
 data class Mark(
     val number: String,
@@ -390,6 +395,7 @@ fun MarksScreen(
     val takenScore = totalScore(marks, costOf)
     val photoReview = photoReviewSummary(marks, costOf)
     val hiddenTaken = hiddenTakenTokens(marks, lockedCheckpointIds)
+    val unconfirmed = unconfirmedTokens(marks, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
     val listState = rememberLazyListState()
@@ -486,6 +492,14 @@ fun MarksScreen(
                     item("hidden_taken") {
                         HiddenKpNotice(
                             tokens = hiddenTaken,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
+                        )
+                    }
+                }
+                if (unconfirmed.isNotEmpty()) {
+                    item("unconfirmed") {
+                        UnconfirmedNotice(
+                            tokens = unconfirmed,
                             modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
                         )
                     }
@@ -845,6 +859,55 @@ private fun HiddenKpNotice(tokens: List<String>, modifier: Modifier = Modifier) 
 }
 
 /**
+ * The not-confirmed warning under the metrics (after [HiddenKpNotice] when several show): a cloud/local
+ * КП was taken, but the server did not accept the mark while the scan overlay was open, so the take does
+ * not count — «Не подтверждены сервером (2): 3-04, 07 / Отметьтесь на КП ещё раз при наличии связи».
+ * [tokens] come from the pure [unconfirmedTokens] (a КП with any counted take is already excluded, so a
+ * confirmed retake drops it from here). Same warning anatomy and palette as the photo/hidden cards
+ * («duplicate, don't couple»), told apart by the [CloudOff][Icons.Outlined.CloudOff] badge — the glyph
+ * the dimmed grid tile carries.
+ */
+@Composable
+private fun UnconfirmedNotice(tokens: List<String>, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.error),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onError,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Не подтверждены сервером (${tokens.size}): ${tokensLabel(tokens)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(
+                    text = "Отметьтесь на КП ещё раз при наличии связи",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                )
+            }
+        }
+    }
+}
+
+/**
  * [MetricsCard] with a live КВ cell. The minute tick lives here so only the metrics card recomposes,
  * not the whole screen. `now` is re-sampled synchronously whenever the inputs change (a fresh start
  * take must not be measured against a stale `now` from a non-ticking state), when the [nowMs] seam
@@ -1081,10 +1144,27 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
         // with no photos keeps the flat color-fill token body. The top-right camera chip stays exclusive
         // to PHOTO-kind takes (see [PhotoTileBody.showCameraChip]) so an NFC-with-photos tile is still
         // told apart from a pure photo take.
-        if (hasPhotos) {
-            PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
-        } else {
-            NfcTileBody(mark, tf.text)
+        // An unconfirmed cloud/local take ([Mark.unconfirmed]) keeps its tile but is dimmed to ~45% and
+        // flagged with a full-opacity cloud-off glyph at the top-right — free on every such tile, since the
+        // camera chip is photo-kind only and photo takes are always offline (never unconfirmed).
+        val bodyAlpha = if (mark.unconfirmed) UNCONFIRMED_TILE_ALPHA else 1f
+        Box(modifier = Modifier.fillMaxSize().alpha(bodyAlpha)) {
+            if (hasPhotos) {
+                PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
+            } else {
+                NfcTileBody(mark, tf.text)
+            }
+        }
+        if (mark.unconfirmed) {
+            Icon(
+                Icons.Outlined.CloudOff,
+                contentDescription = "Не подтверждён сервером",
+                tint = if (hasPhotos) Color.White else tf.text,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 6.dp, end = 6.dp)
+                    .size(16.dp),
+            )
         }
         // The «+N» extra-photo badge. The first frame IS the tile background, so it's never counted —
         // only the *hidden* remainder shows (2 photos → «+1», N → «+(N-1)»); a single-photo tile shows
@@ -1280,13 +1360,27 @@ private fun LightboxPage(file: File, mark: Mark, modifier: Modifier = Modifier) 
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
-            PhotoKpChip(
-                mark = mark,
-                color = tileFill(mark.color, isDarkScheme()).fill,
-                modifier = Modifier.align(Alignment.TopStart),
-                // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
-                scale = 1.7f,
-            )
+            Column(modifier = Modifier.align(Alignment.TopStart)) {
+                PhotoKpChip(
+                    mark = mark,
+                    color = tileFill(mark.color, isDarkScheme()).fill,
+                    // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
+                    scale = 1.7f,
+                )
+                // A frame attached to an unconfirmed cloud/local take: the photo is evidence, but the take
+                // itself does not count — say so right under the КП chip.
+                if (mark.unconfirmed) {
+                    Text(
+                        text = "не подтверждён сервером",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(bottomEnd = 9.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
         }
         // The take's «дата · время», echoing the tile's mono time caption but scaled up and pinned to the
         // black margin at the very bottom of the page — outside the photo (the КП chip owns the photo

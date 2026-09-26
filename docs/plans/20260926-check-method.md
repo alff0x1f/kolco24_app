@@ -332,10 +332,10 @@ confirmAttemptFor = { target ->
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/marks/MarksScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt` (only if the notice input is computed there)
 
-- [ ] tile: ~45% alpha + `Icons.Outlined.CloudOff` corner icon when `unconfirmed`
-- [ ] `UnconfirmedNotice` (copy of `PhotoReviewNotice` structure), fed by `unconfirmedTokens` with live `costOf`; hidden when empty
-- [ ] lightbox `PhotoKpChip`: caption «не подтверждён сервером» for unconfirmed takes
-- [ ] no new unit tests (Compose; logic covered in Task 3); `./gradlew assembleDebug lintDebug testDebugUnitTest` must pass
+- [x] tile: ~45% alpha + `Icons.Outlined.CloudOff` corner icon when `unconfirmed`
+- [x] `UnconfirmedNotice` (copy of `PhotoReviewNotice` structure), fed by `unconfirmedTokens` with live `costOf`; hidden when empty
+- [x] lightbox `PhotoKpChip`: caption «не подтверждён сервером» for unconfirmed takes
+- [x] no new unit tests (Compose; logic covered in Task 3); `./gradlew assembleDebug lintDebug testDebugUnitTest` must pass
 
 ### Task 9: Verify acceptance criteria
 - [ ] verify all requirements from Overview are implemented
