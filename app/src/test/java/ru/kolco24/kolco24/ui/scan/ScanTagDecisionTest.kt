@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.data.marks.CheckMethod
 
 class ScanTagDecisionTest {
 
@@ -31,7 +32,7 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.Revealed(checkpointId = 42, checkpointIds = listOf(42)),
+            unlock = UnlockOutcome.Revealed(checkpointId = 42, checkpointIds = listOf(42), checkMethod = "offline"),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
@@ -43,7 +44,7 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.IdentityOnly(checkpointId = 42),
+            unlock = UnlockOutcome.IdentityOnly(checkpointId = 42, checkMethod = "offline"),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
@@ -67,7 +68,7 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.Revealed(checkpointId = 99, checkpointIds = listOf(99)),
+            unlock = UnlockOutcome.Revealed(checkpointId = 99, checkpointIds = listOf(99), checkMethod = "offline"),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
@@ -79,7 +80,7 @@ class ScanTagDecisionTest {
         val event = classifyTag(
             code = code,
             uid = uid,
-            unlock = UnlockOutcome.Revealed(checkpointId = 777, checkpointIds = listOf(777)),
+            unlock = UnlockOutcome.Revealed(checkpointId = 777, checkpointIds = listOf(777), checkMethod = "offline"),
             bindings = emptyMap(),
             checkpointsById = checkpoints,
         )
@@ -108,6 +109,19 @@ class ScanTagDecisionTest {
             checkpointsById = checkpoints,
         )
         assertEquals(ScanEvent.UnboundChip, event)
+    }
+
+    private fun kpMethod(unlock: UnlockOutcome): CheckMethod =
+        (classifyTag(code, uid, unlock, emptyMap(), checkpoints) as ScanEvent.Kp).checkMethod
+
+    @Test
+    fun code_carriesParsedCheckMethod() {
+        assertEquals(CheckMethod.Cloud, kpMethod(UnlockOutcome.Revealed(42, listOf(42), "cloud")))
+        assertEquals(CheckMethod.Local, kpMethod(UnlockOutcome.IdentityOnly(42, "local")))
+        assertEquals(CheckMethod.Offline, kpMethod(UnlockOutcome.IdentityOnly(42, "offline")))
+        // Unknown / legacy values degrade to Offline.
+        assertEquals(CheckMethod.Offline, kpMethod(UnlockOutcome.Revealed(42, listOf(42), "nfc")))
+        assertEquals(CheckMethod.Offline, kpMethod(UnlockOutcome.IdentityOnly(42, "")))
     }
 
     @Test

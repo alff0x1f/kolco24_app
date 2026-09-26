@@ -124,6 +124,7 @@ import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
+import ru.kolco24.kolco24.data.track.UploadResultKind
 import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.gpxFileName
@@ -908,7 +909,7 @@ private fun Kolco24AppRoot(
     // Guard: collectAsState does not reset on key change — filter stale marks from the prior team
     // during the brief window before the new flow emits (mirrors the scanRoster/scanBindings guard).
     val safeMarks = if (selectedTeamId != null) marks.filter { it.teamId == selectedTeamId } else emptyList()
-    // "Взято" is team-scoped: derive it from THIS team's complete marks, never off the race-shared
+    // "Взято" is team-scoped: derive it from THIS team's counted (isCounted) marks, never off the race-shared
     // checkpoint row — otherwise switching teams within a race would show the prior team's progress.
     val takenIds = remember(safeMarks) { takenPoints(safeMarks) }
 
@@ -1851,6 +1852,8 @@ private fun Kolco24AppRoot(
                                         // fields, captured before scope.launch so slow NFC/Room work
                                         // can't stale the take time.
                                         sample = sample,
+                                        // Snapshot the tag's verification rule onto the take row.
+                                        checkMethod = event.checkMethod,
                                     )
                                 }.await()
                                 scanTake.markId = id
@@ -1917,10 +1920,29 @@ private fun Kolco24AppRoot(
                         // Diagnostics never open a take or advance the window.
                         ScanEvent.UnboundChip, is ScanEvent.BadKp -> Unit
                     }
-                    event
+                    // Hand the overlay the expectedCount actually persisted on the take row (a new row's
+                    // roster snapshot, or the reused row's original count on a same-КП re-stamp): the
+                    // overlay's completion reads it from the event, never the live roster, so it can't
+                    // diverge from the DB `complete` flag if a sync changed the roster mid-callback.
+                    if (event is ScanEvent.Kp) event.copy(expectedCount = scanTake.expectedCount) else event
                 },
                 onClose = closeScanOverlay,
                 onCompleted = { pendingCelebration = true; switchToTab(PAGE_MARKS) },
+                confirm = { target ->
+                    // One attempt per call; the take id is read now — stable for the whole loop, since
+                    // confirm mode drops every tap before onScanTag. The POST runs on applicationScope so a
+                    // request in flight when the overlay closes still lands (and writes confirmedAt if
+                    // accepted). A null id is unreachable (confirm mode follows a completed take); it
+                    // maps to Error rather than crashing.
+                    val id = scanTake.markId
+                    if (id == null) {
+                        UploadResultKind.Error
+                    } else {
+                        container.applicationScope.async {
+                            markRepo.confirm(id, target, System.currentTimeMillis())
+                        }.await()
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

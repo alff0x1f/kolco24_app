@@ -20,6 +20,7 @@ import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.PhotoFrameRow
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.marks.CheckMethod
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
@@ -52,6 +53,7 @@ class MarkRepositoryTest {
         buffered: Set<Int> = emptySet(),
         bufferedSnapshots: Collection<MarkMemberSnapshot> = buffered.map { mem(it) },
         sample: TimeSample = sample(),
+        checkMethod: CheckMethod = CheckMethod.Offline,
     ): String = repository.startKpTake(
         raceId = 1,
         teamId = 7,
@@ -63,6 +65,7 @@ class MarkRepositoryTest {
         expectedCount = expectedCount,
         bufferedMembers = bufferedSnapshots,
         sample = sample,
+        checkMethod = checkMethod,
     )
 
     @Test
@@ -84,6 +87,24 @@ class MarkRepositoryTest {
         assertEquals("CODE10", mark.cpCode)
         assertEquals(listOf(1), mark.present)
         assertFalse(mark.complete)
+    }
+
+    @Test
+    fun startKpTake_persistsCheckMethod_unconfirmed() = runTest {
+        assertEquals("offline", markDao.getById(startTake(point = 10))!!.checkMethod)
+        val cloud = markDao.getById(startTake(point = 11, checkMethod = CheckMethod.Cloud))!!
+        assertEquals("cloud", cloud.checkMethod)
+        assertNull(cloud.confirmedAt)
+        assertEquals("local", markDao.getById(startTake(point = 12, checkMethod = CheckMethod.Local))!!.checkMethod)
+    }
+
+    @Test
+    fun addMember_keepsCheckMethod() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, checkMethod = CheckMethod.Cloud)
+        repository.addMember(id, checkpointId = 10, member = mem(1), expectedCount = 1, sample = sample())
+        val mark = markDao.getById(id)!!
+        assertTrue(mark.complete)
+        assertEquals("cloud", mark.checkMethod)
     }
 
     @Test
@@ -415,6 +436,7 @@ class MarkRepositoryTest {
         )
         val mark = markDao.getById("photo-1")!!
         assertEquals("photo", mark.method)
+        assertEquals("offline", mark.checkMethod)
         assertTrue(mark.complete)
         assertEquals(emptyList<Int>(), mark.present)
         assertEquals("", mark.cpUid)
@@ -562,6 +584,88 @@ class MarkRepositoryTest {
         assertEquals(13, totalScore(marks))
     }
 
+    private fun metricMark(
+        id: String,
+        point: Int,
+        cost: Int,
+        checkMethod: String = "offline",
+        confirmedAt: Long? = null,
+        complete: Boolean = true,
+    ) = MarkEntity(
+        id = id,
+        raceId = 1,
+        teamId = 7,
+        checkpointId = point,
+        checkpointNumber = point,
+        cost = cost,
+        method = "nfc",
+        cpUid = "U$point",
+        cpCode = "C$point",
+        present = listOf(1),
+        expectedCount = 1,
+        complete = complete,
+        takenAt = 1_000L,
+        updatedAt = 1_000L,
+        checkMethod = checkMethod,
+        confirmedAt = confirmedAt,
+    )
+
+    @Test
+    fun derivation_unconfirmedCloudTakeIsNotCounted() {
+        val marks = listOf(
+            metricMark("a", point = 10, cost = 5),                        // offline — counts
+            metricMark("b", point = 11, cost = 8, checkMethod = "cloud"), // unconfirmed — excluded
+            metricMark("c", point = 12, cost = 3, checkMethod = "local"), // unconfirmed — excluded
+        )
+        assertEquals(1, takenPointCount(marks))
+        assertEquals(1, takenPointCount(marks) { it.cost })
+        assertEquals(setOf(10), takenPoints(marks))
+        assertEquals(5, totalScore(marks))
+        assertEquals(5, totalScore(marks) { it.cost })
+    }
+
+    @Test
+    fun derivation_confirmedCloudAndLocalTakesAreCounted() {
+        val marks = listOf(
+            metricMark("a", point = 10, cost = 5),
+            metricMark("b", point = 11, cost = 8, checkMethod = "cloud", confirmedAt = 2_000L),
+            metricMark("c", point = 12, cost = 3, checkMethod = "local", confirmedAt = 2_000L),
+        )
+        assertEquals(3, takenPointCount(marks))
+        assertEquals(3, takenPointCount(marks) { it.cost })
+        assertEquals(setOf(10, 11, 12), takenPoints(marks))
+        assertEquals(16, totalScore(marks))
+    }
+
+    @Test
+    fun derivation_confirmedRetakeCountsPointOnce() {
+        // First take unconfirmed, retake confirmed — the КП counts exactly once.
+        val marks = listOf(
+            metricMark("a", point = 11, cost = 8, checkMethod = "cloud"),
+            metricMark("b", point = 11, cost = 8, checkMethod = "cloud", confirmedAt = 2_000L),
+        )
+        assertEquals(1, takenPointCount(marks))
+        assertEquals(setOf(11), takenPoints(marks))
+        assertEquals(8, totalScore(marks))
+        // The live-cost overloads apply the same isCounted filter.
+        assertEquals(1, takenPointCount(marks) { it.cost })
+        assertEquals(8, totalScore(marks) { it.cost })
+        assertEquals(0, takenPointCount(marks.take(1)) { it.cost }) // unconfirmed alone scores nothing
+        assertEquals(0, totalScore(marks.take(1)) { it.cost })
+    }
+
+    @Test
+    fun derivation_offlineAndUnknownMethodUnchanged() {
+        val marks = listOf(
+            metricMark("a", point = 10, cost = 5),
+            metricMark("b", point = 11, cost = 8, checkMethod = "online"), // unknown → offline
+            metricMark("c", point = 12, cost = 13, complete = false),     // partial — never counted
+        )
+        assertEquals(2, takenPointCount(marks))
+        assertEquals(setOf(10, 11), takenPoints(marks))
+        assertEquals(13, totalScore(marks))
+    }
+
     @Test
     fun uploadCountsMetadata_delegatesToDaoIgnoringPhotoFrames() = runTest {
         val id = startTake(point = 10, expectedCount = 1, buffered = setOf(1))
@@ -694,6 +798,11 @@ private class FakeMarkDao : MarkDao {
         rows.value = rows.value.map {
             if (it.id == id && it.updatedAt == updatedAt) it.copy(photosUploadedCloud = true) else it
         }
+    }
+
+    // Column-scoped like the real DAO: only confirmedAt, updatedAt untouched; missing id is a no-op.
+    override suspend fun setConfirmedAt(id: String, at: Long) {
+        rows.value = rows.value.map { if (it.id == id) it.copy(confirmedAt = at) else it }
     }
 
     override suspend fun updatePhotoPath(id: String, photoPath: String, now: Long) {

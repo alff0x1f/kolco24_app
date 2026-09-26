@@ -76,6 +76,14 @@ class MapLogicTest {
     }
 
     @Test
+    fun unconfirmedCloudTakeIsStillPinned() {
+        // Deliberate (check-method plan): the map shows where the team WAS — an unconfirmed cloud/local
+        // take is still a real visit with a GPS fix, so pins stay on `complete`, not `isCounted`.
+        val unconfirmed = mark(checkpointId = 5).copy(checkMethod = "cloud", confirmedAt = null)
+        assertEquals(listOf(5), mapPins(listOf(unconfirmed), emptyMap()).map { it.checkpointId })
+    }
+
+    @Test
     fun incompleteMarkIsNotPinned() {
         assertTrue(mapPins(listOf(mark(complete = false)), emptyMap()).isEmpty())
     }

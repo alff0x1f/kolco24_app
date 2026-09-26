@@ -326,8 +326,8 @@ class LegendRepositoryTest {
         assertEquals("IV", tags.single { it.bid == "def456" }.iv)
     }
 
-    @Test
-    fun unlock_revealsAndPersistsCheckpointPlaintext() = runTest {
+    /** Seeds one locked checkpoint 102 behind a sealed tag whose `check_method` is [method]; returns the chip code. */
+    private suspend fun seedRevealFixture(method: String): ByteArray {
         val code = ByteArray(16) { (it * 5).toByte() }
         val cpId = 102
         val contentKey = ByteArray(32) { (it + 2).toByte() }
@@ -345,20 +345,34 @@ class LegendRepositoryTest {
                     bid = LegendCrypto.bid(code),
                     raceId = 8,
                     checkpointId = cpId,
-                    checkMethod = "nfc",
+                    checkMethod = method,
                     iv = bundle.iv,
                     ct = bundle.ct,
                 ),
             ),
         )
+        return code
+    }
+
+    @Test
+    fun unlock_revealsAndPersistsCheckpointPlaintext() = runTest {
+        val code = seedRevealFixture("nfc")
 
         val outcome = repository.unlock(8, code)
 
-        assertEquals(UnlockOutcome.Revealed(cpId, listOf(cpId)), outcome)
+        assertEquals(UnlockOutcome.Revealed(102, listOf(102), "nfc"), outcome)
         val cp = repository.checkpointsForRace(8).first().single()
         assertEquals(7, cp.cost)
         assertEquals("Грот", cp.description)
         assertFalse("reveal must clear locked", cp.locked)
+    }
+
+    @Test
+    fun unlock_revealedCarriesCloudAndLocalCheckMethod() = runTest {
+        for (method in listOf("cloud", "local")) {
+            val code = seedRevealFixture(method)
+            assertEquals(UnlockOutcome.Revealed(102, listOf(102), method), repository.unlock(8, code))
+        }
     }
 
     @Test
@@ -383,7 +397,26 @@ class LegendRepositoryTest {
             ),
         )
 
-        assertEquals(UnlockOutcome.IdentityOnly(101), repository.unlock(8, code))
+        assertEquals(UnlockOutcome.IdentityOnly(101, "nfc"), repository.unlock(8, code))
+    }
+
+    @Test
+    fun unlock_identityOnlyCarriesTagCheckMethod() = runTest {
+        val code = ByteArray(16) { 5 }
+        tagDao.setTags(
+            listOf(
+                TagEntity(
+                    bid = LegendCrypto.bid(code),
+                    raceId = 8,
+                    checkpointId = 102,
+                    checkMethod = "cloud",
+                    iv = null,
+                    ct = null,
+                ),
+            ),
+        )
+
+        assertEquals(UnlockOutcome.IdentityOnly(102, "cloud"), repository.unlock(8, code))
     }
 
     @Test

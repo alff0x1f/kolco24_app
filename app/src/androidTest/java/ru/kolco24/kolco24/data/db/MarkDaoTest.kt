@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -300,5 +301,61 @@ class MarkDaoTest {
         assertFalse(row.photosUploadedCloud)
         assertTrue(row.uploadedLocal)
         assertTrue(row.uploadedCloud)
+    }
+
+    @Test
+    fun addMember_resetsUploadedFlagsButKeepsCheckMethodAndConfirmedAt() = runBlocking {
+        dao.upsert(
+            mark("m1", method = "nfc", uploadedLocal = true, uploadedCloud = true)
+                .copy(checkMethod = "cloud", confirmedAt = 5_000L, complete = false, expectedCount = 2),
+        )
+
+        dao.addMember("m1", numberInTeam = 2, nfcUid = "U2", number = 102, code = null, now = 2_000L, expectedCount = 2)
+
+        val row = dao.getById("m1")!!
+        assertEquals(listOf(1, 2), row.present)
+        assertTrue(row.complete)
+        assertFalse(row.uploadedLocal)
+        assertFalse(row.uploadedCloud)
+        assertEquals("cloud", row.checkMethod)
+        assertEquals(5_000L, row.confirmedAt)
+    }
+
+    @Test
+    fun setConfirmedAt_roundTripsWithoutBumpingUpdatedAt() = runBlocking {
+        dao.upsert(mark("m1", method = "nfc", updatedAt = 1_000L).copy(checkMethod = "local"))
+        assertNull(dao.getById("m1")!!.confirmedAt)
+
+        dao.setConfirmedAt("m1", at = 9_000L)
+
+        val row = dao.getById("m1")!!
+        assertEquals(9_000L, row.confirmedAt)
+        assertEquals(1_000L, row.updatedAt)
+        assertEquals("local", row.checkMethod)
+    }
+
+    @Test
+    fun setConfirmedAt_missingIdIsNoOp() = runBlocking {
+        dao.upsert(mark("m1", method = "nfc"))
+
+        dao.setConfirmedAt("nope", at = 9_000L)
+
+        assertNull(dao.getById("m1")!!.confirmedAt)
+        assertEquals(listOf("m1"), dao.allIds())
+    }
+
+    @Test
+    fun rawInsertWithoutCheckMethod_getsDbDefaultOffline() = runBlocking {
+        // Exercise the SQL column DEFAULT (not the Kotlin default): a raw INSERT that omits
+        // checkMethod/confirmedAt must read back as "offline" / NULL.
+        db.openHelper.writableDatabase.execSQL(
+            "INSERT INTO marks (id, raceId, teamId, checkpointId, checkpointNumber, cost, method, cpUid, " +
+                "cpCode, present, expectedCount, complete, takenAt, updatedAt, uploadedLocal, uploadedCloud, " +
+                "photosUploadedLocal, photosUploadedCloud) " +
+                "VALUES ('m1', 1, 7, 10, 10, 5, 'nfc', 'CPUID', 'CODE', '[1]', 1, 1, 1000, 1000, 0, 0, 0, 0)",
+        )
+        val row = dao.getById("m1")!!
+        assertEquals("offline", row.checkMethod)
+        assertNull(row.confirmedAt)
     }
 }

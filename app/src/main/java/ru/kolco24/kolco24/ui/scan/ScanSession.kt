@@ -2,7 +2,9 @@ package ru.kolco24.kolco24.ui.scan
 
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.data.marks.CheckMethod
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
+import ru.kolco24.kolco24.data.track.UploadTarget
 
 /** Sliding scan-window duration in milliseconds. Shared by ScanScreen's UI timer and MainActivity's DB-side expiry. */
 internal const val SCAN_WINDOW_MS = 20_000L
@@ -29,6 +31,12 @@ fun isWindowExpired(lastScanAt: Long?, now: Long): Boolean =
  * drained into [present] (see [reduce]). [lastScanAt] is the **monotonic** `elapsedRealtime` ms of the
  * most recent **accepted** scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and
  * does **not** advance it. (Monotonic, not wall-clock, so translating the phone clock can't skew it.)
+ * [checkMethod] is the КП tag's verification rule, snapshotted by [reduce] when a [ScanEvent.Kp] **opens**
+ * the take (a new КП / fresh session) and kept on a same-КП re-scan — exactly like the host's DB take row
+ * (`MarkRepository.startKpTake` snapshots `checkMethod` once; a same-КП re-scan reuses the row).
+ * [expectedCount] is always copied from [ScanEvent.Kp.expectedCount] — the count the host actually
+ * persisted on the take row — so UI completion and the DB `complete` flag share one source of truth.
+ * [checkMethod] defaults to [CheckMethod.Offline] and [expectedCount] to 0 (never complete) until a КП lands.
  */
 data class ScanSession(
     val checkpointId: Int?,
@@ -39,6 +47,8 @@ data class ScanSession(
     val present: Set<Int>,
     val bufferedBeforeKp: Set<Int>,
     val lastScanAt: Long,
+    val checkMethod: CheckMethod = CheckMethod.Offline,
+    val expectedCount: Int = 0,
 ) {
     companion object {
         /** A fresh session with no KP and no members yet, stamped with the first scan's [now]. */
@@ -61,13 +71,22 @@ data class ScanSession(
  * window.
  */
 sealed interface ScanEvent {
-    /** The checkpoint chip: identifies [checkpointId] with its resolved [number]/[cost] and anti-cheat log. */
+    /**
+     * The checkpoint chip: identifies [checkpointId] with its resolved [number]/[cost] and anti-cheat log.
+     * [checkMethod] is the tag's parsed verification rule ([classifyTag] always passes it; the default
+     * only keeps test literals short). [expectedCount] is the persisted take row's expected count,
+     * stamped by the host after it opens (or reuses) the row — [classifyTag] cannot know it and leaves
+     * 0 (a take that never completes). Carrying it on the event (rather than re-reading the roster after
+     * the host's NFC/Room suspension) keeps UI completion and the DB `complete` flag in lockstep.
+     */
     data class Kp(
         val checkpointId: Int,
         val number: Int,
         val cost: Int,
         val cpUid: String,
         val cpCode: String,
+        val checkMethod: CheckMethod = CheckMethod.Offline,
+        val expectedCount: Int = 0,
     ) : ScanEvent
 
     /** A bound team-member bracelet ([numberInTeam] is the member's slot within the roster). */
@@ -85,8 +104,13 @@ sealed interface ScanEvent {
  * state machine of the scan flow.
  *
  * - [ScanEvent.Kp] sets the KP fields and **drains** [ScanSession.bufferedBeforeKp] into
- *   [ScanSession.present] (members scanned before the chip count once the chip lands). A repeat KP
- *   scan just re-stamps the window.
+ *   [ScanSession.present] (members scanned before the chip count once the chip lands). A КП that opens
+ *   a take (no КП yet, or a different КП) snapshots [ScanSession.checkMethod] from the tag; a repeat
+ *   scan of the same КП re-stamps the window and keeps it (the host reuses the persisted take row with
+ *   its original method, even if this physical tag carries a different method).
+ *   [ScanSession.expectedCount] is always taken from [ScanEvent.Kp.expectedCount] — the host stamps the
+ *   persisted row's count (a new row's snapshot, or the reused row's original count), so the session can
+ *   never disagree with the DB even if the roster changed while the host was suspended.
  * - [ScanEvent.Member] goes to the buffer while [ScanSession.checkpointId] is null, otherwise straight into
  *   `present`; set-semantics make a repeated member idempotent. A member scanned with no session yet
  *   starts one (so pre-KP bracelets are not lost). Re-scanning a member who is **already** counted
@@ -102,14 +126,19 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
     is ScanEvent.Kp -> {
         val base = session ?: ScanSession.empty(now)
         // When switching to a different КП, discard the prior KP's members — they were present at a
-        // different checkpoint. A repeat scan of the same КП preserves accumulated members.
-        val priorPresent = if (session?.checkpointId == event.checkpointId) base.present else emptySet()
+        // different checkpoint. A repeat scan of the same КП preserves accumulated members and the
+        // take's method snapshot (mirrors the host reusing the persisted row). The expected count is the
+        // host's persisted value, carried on the event.
+        val sameTake = session?.checkpointId == event.checkpointId
+        val priorPresent = if (sameTake) base.present else emptySet()
         base.copy(
             checkpointId = event.checkpointId,
             checkpointNumber = event.number,
             cost = event.cost,
             cpUid = event.cpUid,
             cpCode = event.cpCode,
+            checkMethod = if (sameTake) base.checkMethod else event.checkMethod,
+            expectedCount = event.expectedCount,
             present = priorPresent + base.bufferedBeforeKp,
             bufferedBeforeKp = emptySet(),
             lastScanAt = now,
@@ -140,7 +169,8 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
  * [checkpointsById] for the [number]/[cost] snapshot ([UnlockOutcome.unlock] only returns the id).
  * A still-`null` cost (legend not synced) downgrades to [ScanEvent.BadKp]. A null [code] is a
  * bracelet: looked up in [bindings] (uid → numberInTeam) for [ScanEvent.Member] or
- * [ScanEvent.UnboundChip].
+ * [ScanEvent.UnboundChip]. The tag's raw `check_method` is parsed into [ScanEvent.Kp.checkMethod]
+ * (unknown → [CheckMethod.Offline]).
  */
 fun classifyTag(
     code: ByteArray?,
@@ -150,9 +180,9 @@ fun classifyTag(
     checkpointsById: Map<Int, CheckpointEntity>,
 ): ScanEvent {
     if (code != null) {
-        val checkpointId = when (unlock) {
-            is UnlockOutcome.Revealed -> unlock.checkpointId
-            is UnlockOutcome.IdentityOnly -> unlock.checkpointId
+        val (checkpointId, rawMethod) = when (unlock) {
+            is UnlockOutcome.Revealed -> unlock.checkpointId to unlock.checkMethod
+            is UnlockOutcome.IdentityOnly -> unlock.checkpointId to unlock.checkMethod
             is UnlockOutcome.Failed -> return ScanEvent.BadKp(unlock.reason)
             UnlockOutcome.Unknown -> return ScanEvent.BadKp("неизвестный чип")
             null -> return ScanEvent.BadKp("не удалось расшифровать")
@@ -165,6 +195,7 @@ fun classifyTag(
             cost = cost,
             cpUid = uid,
             cpCode = chipCodeHex(code),
+            checkMethod = CheckMethod.parse(rawMethod),
         )
     }
     val numberInTeam = bindings[uid] ?: return ScanEvent.UnboundChip
@@ -172,12 +203,39 @@ fun classifyTag(
 }
 
 /**
- * UI-close decision: is the take "complete" — a КП identified and every roster member present?
+ * UI-close decision: is the take "complete" — a КП identified and every member expected **when the take
+ * opened** ([ScanSession.expectedCount]) present?
  *
- * Mirrors the **shape** of `MarkRepository`'s `complete = present.size >= expectedCount`, but for a
- * purely cosmetic overlay-close decision: scoring is persisted incrementally and is independent of
- * this. Requires [ScanSession.checkpointId] != null (pre-КП members live in [ScanSession.bufferedBeforeKp]
- * and are drained into [ScanSession.present] only once the КП lands) and a non-empty roster.
+ * Mirrors `MarkRepository`'s `complete = present.size >= expectedCount` on the same snapshotted count, so
+ * the overlay's completion (and its confirm-mode entry) agrees with the persisted row even if the roster
+ * grows or shrinks mid-take. Requires [ScanSession.checkpointId] != null (pre-КП members live in
+ * [ScanSession.bufferedBeforeKp] and are drained into [ScanSession.present] only once the КП lands) and
+ * a non-zero expected count.
  */
-fun isComplete(session: ScanSession?, rosterSize: Int): Boolean =
-    session?.checkpointId != null && rosterSize > 0 && session.present.size >= rosterSize
+fun isComplete(session: ScanSession?): Boolean =
+    session?.checkpointId != null && session.expectedCount > 0 && session.present.size >= session.expectedCount
+
+/** What a processed tap did to take completion — decided purely by [completionOnTransition]. */
+sealed interface Completion {
+    /** No incomplete → complete transition (still collecting, or a repeat tap after completion). */
+    data object None : Completion
+
+    /** An `offline` take just completed: it counts now (fanfare + success beat + auto-close). */
+    data object Counted : Completion
+
+    /** A `cloud`/`local` take just completed: enter confirm mode against [target]; nothing counts yet. */
+    data class Confirm(val target: UploadTarget) : Completion
+}
+
+/**
+ * The scan overlay's completion decision for one tap: [wasComplete] is [isComplete] of the session the
+ * tap was folded into (after the window-expiry reset), [session] the reduced result. Only the incomplete →
+ * complete edge fires; its kind follows the take's snapshotted [ScanSession.checkMethod] (a switch to a
+ * different КП opens a new take and replaces the rule; a same-КП re-scan keeps it). Also covers completion arriving on a
+ * [ScanEvent.Kp] when pre-КП buffered members drain into `present`.
+ */
+fun completionOnTransition(wasComplete: Boolean, session: ScanSession?): Completion {
+    if (wasComplete || !isComplete(session)) return Completion.None
+    val target = session?.checkMethod?.uploadTarget ?: return Completion.Counted
+    return Completion.Confirm(target)
+}

@@ -155,12 +155,13 @@ class LegendRepository(
      * @return an [UnlockOutcome]: [UnlockOutcome.Unknown] when no tag matches the `bid`,
      *   [UnlockOutcome.IdentityOnly] for an open-CP tag (nothing to decrypt),
      *   [UnlockOutcome.Revealed] (with the persisted CP ids) on success, or [UnlockOutcome.Failed] on
-     *   any crypto/parse error.
+     *   any crypto/parse error. Both success outcomes carry the tag's raw `check_method`
+     *   ([TagEntity.checkMethod]) so the take can snapshot it.
      */
     suspend fun unlock(raceId: Int, code: ByteArray): UnlockOutcome {
         val bid = LegendCrypto.bid(code)
         val tagEntity = tagDao.getByBid(bid, raceId) ?: return UnlockOutcome.Unknown
-        if (tagEntity.iv == null && tagEntity.ct == null) return UnlockOutcome.IdentityOnly(tagEntity.checkpointId)
+        if (tagEntity.iv == null && tagEntity.ct == null) return UnlockOutcome.IdentityOnly(tagEntity.checkpointId, tagEntity.checkMethod)
         if (tagEntity.iv == null || tagEntity.ct == null) return UnlockOutcome.Failed("malformed tag envelope")
         val encById = checkpointDao.getCheckpointsForRace(raceId)
             .mapNotNull { cp ->
@@ -182,9 +183,9 @@ class LegendRepository(
                 for (cp in result.checkpoints) {
                     checkpointDao.reveal(cp.id, cp.cost, cp.description)
                 }
-                UnlockOutcome.Revealed(result.checkpointId, result.checkpoints.map { it.id })
+                UnlockOutcome.Revealed(result.checkpointId, result.checkpoints.map { it.id }, tagEntity.checkMethod)
             }
-            is UnlockResult.IdentityOnly -> UnlockOutcome.IdentityOnly(result.checkpointId)
+            is UnlockResult.IdentityOnly -> UnlockOutcome.IdentityOnly(result.checkpointId, tagEntity.checkMethod)
             is UnlockResult.Failed -> UnlockOutcome.Failed(result.reason)
         }
     }
@@ -195,11 +196,14 @@ class LegendRepository(
  * [UnlockResult]). [Unknown] has no engine counterpart — it means the scanned `bid` matched no tag.
  */
 sealed interface UnlockOutcome {
-    /** Revealed [checkpointIds] were decrypted and persisted; the tag belongs to [checkpointId]. */
-    data class Revealed(val checkpointId: Int, val checkpointIds: List<Int>) : UnlockOutcome
+    /**
+     * Revealed [checkpointIds] were decrypted and persisted; the tag belongs to [checkpointId].
+     * [checkMethod] is the tag's raw server `check_method` (parsed by `CheckMethod.parse`).
+     */
+    data class Revealed(val checkpointId: Int, val checkpointIds: List<Int>, val checkMethod: String) : UnlockOutcome
 
-    /** Open-CP tag: only identifies its [checkpointId], nothing to decrypt. */
-    data class IdentityOnly(val checkpointId: Int) : UnlockOutcome
+    /** Open-CP tag: only identifies its [checkpointId] (and raw [checkMethod]), nothing to decrypt. */
+    data class IdentityOnly(val checkpointId: Int, val checkMethod: String) : UnlockOutcome
 
     /** No tag matched the scanned `bid` (unknown tag for this race set). */
     data object Unknown : UnlockOutcome

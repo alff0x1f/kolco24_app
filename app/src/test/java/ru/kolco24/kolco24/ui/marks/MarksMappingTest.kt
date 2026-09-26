@@ -4,6 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
@@ -24,6 +25,8 @@ class MarksMappingTest {
         takenAt: Long = 1_000L,
         trustedTakenAt: Long? = null,
         photoPath: String? = null,
+        checkMethod: String = "offline",
+        confirmedAt: Long? = null,
     ) = MarkEntity(
         id = id,
         raceId = 1,
@@ -41,6 +44,8 @@ class MarksMappingTest {
         updatedAt = takenAt,
         trustedTakenAt = trustedTakenAt,
         photoPath = photoPath,
+        checkMethod = checkMethod,
+        confirmedAt = confirmedAt,
     )
 
     private fun hhmm(epoch: Long) = SimpleDateFormat("HH:mm", Locale.US).format(Date(epoch))
@@ -479,5 +484,141 @@ class MarksMappingTest {
             "1-02, 2-03, 5-04, …",
             tokensLabel(listOf("1-02", "2-03", "5-04", "3-05", "4-06")),
         )
+    }
+
+    // --- check method: unconfirmed cloud/local takes ---
+
+    @Test
+    fun `marksToTiles keeps an unconfirmed cloud take and flags it`() {
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 2, checkMethod = "cloud")),
+        )
+        assertEquals(1, tiles.size)
+        assertTrue(tiles.single().unconfirmed)
+    }
+
+    @Test
+    fun `marksToTiles flags an unconfirmed local take`() {
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 2, checkMethod = "local")),
+        )
+        assertTrue(tiles.single().unconfirmed)
+    }
+
+    @Test
+    fun `marksToTiles leaves confirmed and offline takes unflagged`() {
+        val tiles = marksToTiles(
+            listOf(
+                mark("a", point = 1, number = 1, cost = 2, checkMethod = "cloud", confirmedAt = 5L, takenAt = 3_000L),
+                mark("b", point = 2, number = 2, cost = 2, checkMethod = "offline", takenAt = 2_000L),
+                mark("c", point = 3, number = 3, cost = 2, checkMethod = "bogus", takenAt = 1_000L),
+            ),
+        )
+        assertEquals(3, tiles.size)
+        assertTrue(tiles.none { it.unconfirmed })
+    }
+
+    @Test
+    fun `marksToTiles still drops an incomplete cloud take`() {
+        val tiles = marksToTiles(
+            listOf(mark("a", point = 1, number = 1, cost = 2, checkMethod = "cloud", complete = false)),
+        )
+        assertTrue(tiles.isEmpty())
+    }
+
+    @Test
+    fun `unconfirmedTokens dedupes per КП oldest-first with live cost`() {
+        // Newest-first input.
+        val marks = listOf(
+            mark("a", point = 2, number = 5, cost = 3, checkMethod = "local", takenAt = 4_000L),
+            mark("b", point = 1, number = 2, cost = 1, checkMethod = "cloud", takenAt = 3_000L),
+            mark("c", point = 2, number = 5, cost = 3, checkMethod = "local", takenAt = 2_000L), // repeat
+            mark("d", point = 1, number = 2, cost = 1, checkMethod = "cloud", takenAt = 1_000L), // repeat
+        )
+        // Newest take per КП wins the dedupe: КП1 (b, 3_000) is older than КП2 (a, 4_000).
+        assertEquals(listOf("1-02", "3-05"), unconfirmedTokens(marks))
+        val live = mapOf(1 to 4)
+        assertEquals(
+            listOf("4-02", "3-05"),
+            unconfirmedTokens(marks) { live[it.checkpointId] ?: it.cost },
+        )
+    }
+
+    @Test
+    fun `unconfirmedTokens excludes a КП with a counted take`() {
+        val marks = listOf(
+            // Confirmed retake of КП1 → counted, so its earlier unconfirmed take is not listed.
+            mark("a", point = 1, number = 1, cost = 2, checkMethod = "cloud", confirmedAt = 9L, takenAt = 4_000L),
+            mark("b", point = 1, number = 1, cost = 2, checkMethod = "cloud", takenAt = 3_000L),
+            // Offline take of КП2 counts too.
+            mark("c", point = 2, number = 2, cost = 2, checkMethod = "offline", takenAt = 2_000L),
+            mark("d", point = 2, number = 2, cost = 2, checkMethod = "local", takenAt = 1_000L),
+            // КП3 only unconfirmed.
+            mark("e", point = 3, number = 3, cost = 2, checkMethod = "local", takenAt = 500L),
+        )
+        assertEquals(listOf("2-03"), unconfirmedTokens(marks))
+    }
+
+    @Test
+    fun `unconfirmedTokens drops the cost prefix on a zero-cost КП and ignores incomplete takes`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 7, cost = 0, checkMethod = "cloud", takenAt = 2_000L),
+            mark("b", point = 2, number = 8, cost = 2, checkMethod = "cloud", complete = false, takenAt = 1_000L),
+        )
+        assertEquals(listOf("07"), unconfirmedTokens(marks))
+    }
+
+    @Test
+    fun `unconfirmedTokens is empty for offline and confirmed takes`() {
+        assertTrue(unconfirmedTokens(emptyList()).isEmpty())
+        val marks = listOf(
+            mark("a", point = 1, number = 1, cost = 2),
+            mark("b", point = 2, number = 2, cost = 2, checkMethod = "local", confirmedAt = 1L),
+        )
+        assertTrue(unconfirmedTokens(marks).isEmpty())
+    }
+
+    @Test
+    fun `unconfirmedTokens marks a still-locked КП with a question-mark cost`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 7, cost = 0, checkMethod = "cloud", takenAt = 2_000L),
+            mark("b", point = 2, number = 8, cost = 3, checkMethod = "local", takenAt = 1_000L),
+        )
+        assertEquals(listOf("3-08", "?-07"), unconfirmedTokens(marks, lockedIds = setOf(1)))
+    }
+
+    @Test
+    fun `hiddenTakenTokens ignores unconfirmed takes`() {
+        val marks = listOf(
+            mark("a", point = 1, number = 4, cost = 0, checkMethod = "cloud", takenAt = 2_000L),
+            mark("b", point = 2, number = 5, cost = 0, checkMethod = "cloud", confirmedAt = 1L, takenAt = 1_000L),
+        )
+        assertEquals(listOf("?-05"), hiddenTakenTokens(marks, lockedIds = setOf(1, 2)))
+    }
+
+    @Test
+    fun `unconfirmed cloud NFC take plus a photo take puts the КП under photo review not in unconfirmed`() {
+        val marks = listOf(
+            mark("p", point = 1, number = 3, cost = 2, method = "photo", takenAt = 2_000L),
+            mark("n", point = 1, number = 3, cost = 2, method = "nfc", checkMethod = "cloud", takenAt = 1_000L),
+        )
+        // The NFC take no longer chip-verifies the КП → the photo take needs judge review.
+        assertEquals(PhotoReviewSummary(1, 2, listOf("2-03")), photoReviewSummary(marks))
+        // The photo take counts the КП, so it is not listed as unconfirmed.
+        assertTrue(unconfirmedTokens(marks).isEmpty())
+        assertEquals(1, takenPointCount(marks))
+        // The NFC tile is still shown, flagged.
+        val tiles = marksToTiles(marks)
+        assertTrue(tiles.first { it.kind == MarkKind.NFC }.unconfirmed)
+        assertFalse(tiles.first { it.kind == MarkKind.PHOTO }.unconfirmed)
+    }
+
+    @Test
+    fun `photoReviewSummary still excludes a КП with a confirmed cloud NFC take`() {
+        val marks = listOf(
+            mark("p", point = 1, number = 3, cost = 2, method = "photo", takenAt = 2_000L),
+            mark("n", point = 1, number = 3, cost = 2, method = "nfc", checkMethod = "cloud", confirmedAt = 5L, takenAt = 1_000L),
+        )
+        assertEquals(null, photoReviewSummary(marks))
     }
 }

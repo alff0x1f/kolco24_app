@@ -236,6 +236,15 @@ interface MarkDao {
     @Query("UPDATE marks SET photosUploadedCloud = 1 WHERE id = :id AND updatedAt = :updatedAt")
     suspend fun setPhotosUploadedCloudIfUnchanged(id: String, updatedAt: Long)
 
+    /**
+     * Records the in-overlay server confirm of a cloud/local take (`MarkRepository.confirm`).
+     * **Column-scoped**: writes only `confirmedAt` — no `updatedAt` bump (the take's content did not
+     * change, so an in-flight upload's version guard must not fail) and no version guard (a confirm is
+     * true regardless of later member/location writes). A missing row is a silent no-op.
+     */
+    @Query("UPDATE marks SET confirmedAt = :at WHERE id = :id")
+    suspend fun setConfirmedAt(id: String, at: Long)
+
     // Every (raceId, teamId) pair that still has a row not yet fully delivered to one of the targets —
     // the opportunistic re-send walks all of them, not just the current selection. Phase 2 widens this
     // beyond bare metadata: a scope whose metadata is fully uploaded but whose frames are still pending

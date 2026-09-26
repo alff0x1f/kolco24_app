@@ -33,6 +33,15 @@ class PhotoTargetTest {
     )
 
     @Test
+    fun `recent unconfirmed cloud take still attaches`() {
+        // Deliberate (check-method plan): photo routing stays on `complete`, so a photo right after a
+        // failed confirm is attached as evidence to that take (not a standalone photo-mark).
+        val marks = listOf(mark("a", point = 3, number = 42, takenAt = 100_000L).copy(checkMethod = "cloud", confirmedAt = null))
+
+        assertEquals(PhotoTarget.AttachTo("a", 42, 3), decidePhotoTarget(marks, nowMs = 150_000L))
+    }
+
+    @Test
     fun `empty list asks for number`() {
         assertEquals(PhotoTarget.AskNumber, decidePhotoTarget(emptyList(), nowMs = 10_000L))
     }

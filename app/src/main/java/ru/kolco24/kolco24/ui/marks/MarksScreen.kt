@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -68,6 +69,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.isSpecified
@@ -107,6 +109,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.marks.isCounted
+import ru.kolco24.kolco24.data.marks.isUnconfirmed
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.marks.thumbPathOf
 import ru.kolco24.kolco24.data.pluralRu
@@ -122,6 +126,9 @@ import ru.kolco24.kolco24.ui.theme.WarningAmberDark
 private val marksFabListBottomPadding = 128.dp
 private val marksFabScrollClearance = 104.dp
 
+// Dim level of an unconfirmed cloud/local take's tile body (the cloud-off glyph stays opaque).
+private const val UNCONFIRMED_TILE_ALPHA = 0.45f
+
 data class Mark(
     val number: String,
     val cost: Int,
@@ -136,6 +143,9 @@ data class Mark(
     // at the `AsyncImage` site, never here. Carried on **any** take (an NFC take can also carry photo
     // evidence) so the photo-count badge is driven by [photoCount], independent of the tile [kind].
     val photoPaths: List<String> = emptyList(),
+    // A complete cloud/local take the server has not confirmed (`isUnconfirmed`): the tile stays in the
+    // grid (dimmed + cloud-off icon) but the take does not count toward the metrics.
+    val unconfirmed: Boolean = false,
 ) {
     val photoCount: Int get() = photoPaths.size
 }
@@ -146,8 +156,8 @@ enum class MarkKind { NFC, PHOTO }
  * Pure mapping of the local take events into display tiles — **one tile per completed event** (a repeat
  * take of the same checkpoint shows as a separate tile). Only `complete` takes are shown: a КП scanned
  * without scanning the whole team (e.g. КП chip only, or a partial collect) leaves a `complete=false`
- * row that is kept in the DB for the future server log but never tiled here, matching the
- * `complete`-only «ВЗЯТО»/«СУММА» metrics. [marks] arrives newest-first (as `observeMarks` delivers);
+ * row that is kept in the DB for the future server log but never tiled here (the «ВЗЯТО»/«СУММА» metrics
+ * are stricter still — `isCounted`, see below). [marks] arrives newest-first (as `observeMarks` delivers);
  * the tiles are returned **oldest-first** so a new take appends to the end of the grid rather than the
  * front. [costOf] resolves a take's **live** checkpoint cost (checkpoint id → current cost) so a tile
  * reflects an organizer's cost edit rather than the stale snapshot on the mark row (defaults to the snapshot).
@@ -156,6 +166,8 @@ enum class MarkKind { NFC, PHOTO }
  * map. The tile time is the **trusted** take time (`trustedTakenAt`) when present, falling back to the
  * raw wall `takenAt` for untrusted/legacy rows — so a phone clock reset doesn't shift displayed times.
  * Uses [SimpleDateFormat] (not `java.time`) for minSdk-24/no-desugaring compatibility.
+ * The tile filter stays `complete` (not `isCounted`): an unconfirmed cloud/local take keeps its tile,
+ * flagged via [Mark.unconfirmed], so the team sees what it took but the server hasn't confirmed.
  */
 fun marksToTiles(
     marks: List<MarkEntity>,
@@ -180,6 +192,7 @@ fun marksToTiles(
                 dateTime = fmtDateTime.format(Date(effectiveTakenAt)),
                 color = colorOf(m),
                 photoPaths = photoPaths(m.photoPath),
+                unconfirmed = m.isUnconfirmed(),
             )
         }
 }
@@ -206,24 +219,26 @@ fun lightboxPhotos(tiles: List<Mark>): List<LightboxPhoto> =
 internal data class PhotoReviewSummary(val count: Int, val points: Int, val tokens: List<String>)
 
 /**
- * Pure summary of the **checkpoints** that need judge review — scored (`complete`) only by photo takes
+ * Pure summary of the **checkpoints** that need judge review — scored (`isCounted`) only by photo takes
  * (`method == "photo"`: no КП chip was read, so the photo is the only proof). Checkpoint-level, mirroring
  * the metrics' `distinctBy { checkpointId }` semantics: a repeat photo take of the same КП counts once,
- * and a КП that *also* has a complete NFC take is excluded entirely — the chip already proves the visit
+ * and a КП that *also* has a counted NFC take is excluded entirely — the chip already proves the visit
  * (its score comes from the NFC take), so judges have nothing to gate. Likewise an NFC take that merely
  * *attached* photo evidence never counts. Points go through the same live [costOf] the metrics use, so
  * an organizer's cost edit (or a legend reveal — a photo take of a still-locked КП snapshots `cost = 0`
  * and self-corrects on reveal) is reflected. Returns `null` when no checkpoint is photo-only, so the
- * notice disappears entirely rather than rendering a zero state.
+ * notice disappears entirely rather than rendering a zero state. Uses `isCounted` (not bare `complete`):
+ * an unconfirmed cloud/local NFC take does not chip-verify its КП, so a photo take of the same КП is
+ * back under review (photo takes are always `offline`, so for them `isCounted == complete`).
  */
 internal fun photoReviewSummary(
     marks: List<MarkEntity>,
     costOf: (MarkEntity) -> Int = { it.cost },
 ): PhotoReviewSummary? {
-    val complete = marks.filter { it.complete }
-    val chipVerified = complete.filterNot { it.method == "photo" }.mapTo(HashSet()) { it.checkpointId }
+    val counted = marks.filter { it.isCounted() }
+    val chipVerified = counted.filterNot { it.method == "photo" }.mapTo(HashSet()) { it.checkpointId }
     // [marks] arrives newest-first; reverse to oldest-first so the token list follows the tile grid.
-    val photoOnly = complete
+    val photoOnly = counted
         .filter { it.method == "photo" && it.checkpointId !in chipVerified }
         .distinctBy { it.checkpointId }
         .asReversed()
@@ -231,12 +246,22 @@ internal fun photoReviewSummary(
     return PhotoReviewSummary(
         count = photoOnly.size,
         points = photoOnly.sumOf(costOf),
-        tokens = photoOnly.map { m ->
-            val cost = costOf(m)
-            val number = m.checkpointNumber.toString().padStart(2, '0')
-            if (cost > 0) "$cost-$number" else number
-        },
+        tokens = photoOnly.map { m -> kpToken(m.checkpointNumber, costOf(m)) },
     )
+}
+
+/**
+ * One КП token in the tile's «стоимость-номер» grammar: «cost-NN», the bare zero-padded «NN» for a
+ * zero-cost КП, or «?-NN» when [locked] (cost unknown until the legend reveal). Shared by the
+ * [photoReviewSummary], [hiddenTakenTokens] and [unconfirmedTokens] notices.
+ */
+private fun kpToken(number: Int, cost: Int, locked: Boolean = false): String {
+    val nn = number.toString().padStart(2, '0')
+    return when {
+        locked -> "?-$nn"
+        cost > 0 -> "$cost-$nn"
+        else -> nn
+    }
 }
 
 /**
@@ -249,19 +274,44 @@ internal fun tokensLabel(tokens: List<String>, max: Int = 3): String =
     else tokens.take(max).joinToString(", ") + ", …"
 
 /**
- * Pure tokens of the **taken-but-still-hidden** checkpoints — `complete` takes whose checkpoint is
- * still locked in the legend ([lockedIds]), so its cost is unknown client-side and the take contributes
- * 0 to СУММА until reveal (the «сорвали метку» photo take of a locked КП; an NFC take reveals the КП
- * as part of the scan, so it never lands here). Checkpoint-level (`distinctBy { checkpointId }`, like
- * the metrics), oldest-first like the grid. The token is «?-NN» — the `?` sits exactly where the cost
- * digit would in the tile's «стоимость-номер» grammar, saying "points unknown" in one character.
+ * Pure tokens of the **taken-but-still-hidden** checkpoints — counted (`isCounted`) takes whose
+ * checkpoint is still locked in the legend ([lockedIds]), so its cost is unknown client-side and the
+ * take contributes 0 to СУММА until reveal (the «сорвали метку» photo take of a locked КП; an NFC take
+ * reveals the КП as part of the scan, so it never lands here). Checkpoint-level
+ * (`distinctBy { checkpointId }`, like the metrics), oldest-first like the grid. The token is «?-NN» —
+ * the `?` sits exactly where the cost digit would in the tile's «стоимость-номер» grammar, saying
+ * "points unknown" in one character. Only counted takes (`isCounted`) — an unconfirmed cloud/local
+ * take scores nothing, so it has no "points unknown" either (it shows in [unconfirmedTokens] instead).
  * Empty list = no notice.
  */
 internal fun hiddenTakenTokens(marks: List<MarkEntity>, lockedIds: Set<Int>): List<String> =
-    marks.filter { it.complete && it.checkpointId in lockedIds }
+    marks.filter { it.isCounted() && it.checkpointId in lockedIds }
         .distinctBy { it.checkpointId }
         .asReversed()
-        .map { "?-${it.checkpointNumber.toString().padStart(2, '0')}" }
+        .map { kpToken(it.checkpointNumber, cost = 0, locked = true) }
+
+/**
+ * Pure tokens of the checkpoints taken **only** by unconfirmed cloud/local takes (`isUnconfirmed`) —
+ * the «не подтверждены сервером» notice. A КП that has any counted take (`isCounted`: a confirmed
+ * retake, an offline take, a photo take) is excluded: it already scores. Checkpoint-level (one token
+ * per КП, the newest unconfirmed take wins the dedupe), oldest-first like the grid. Token =
+ * «стоимость-номер» through the live [costOf], or the bare zero-padded number for a zero-cost КП (the
+ * [photoReviewSummary] grammar). A КП still locked in the legend ([lockedIds]) renders «?-NN» (the
+ * [hiddenTakenTokens] grammar) — its live cost is unknown, so the bare number would misread as a free
+ * КП. [marks] arrives newest-first. Empty list = no notice.
+ */
+internal fun unconfirmedTokens(
+    marks: List<MarkEntity>,
+    lockedIds: Set<Int> = emptySet(),
+    costOf: (MarkEntity) -> Int = { it.cost },
+): List<String> {
+    val counted = marks.filter { it.isCounted() }.mapTo(HashSet()) { it.checkpointId }
+    return marks
+        .filter { it.isUnconfirmed() && it.checkpointId !in counted }
+        .distinctBy { it.checkpointId }
+        .asReversed()
+        .map { m -> kpToken(m.checkpointNumber, costOf(m), locked = m.checkpointId in lockedIds) }
+}
 
 // Photo-seat fill (the charcoal placeholder behind the КП photo). Fixed shades, single value for
 // light & dark, echoing the physical checkpoint markers.
@@ -355,6 +405,7 @@ fun MarksScreen(
     val takenScore = totalScore(marks, costOf)
     val photoReview = photoReviewSummary(marks, costOf)
     val hiddenTaken = hiddenTakenTokens(marks, lockedCheckpointIds)
+    val unconfirmed = unconfirmedTokens(marks, lockedCheckpointIds, costOf)
     val tiles = marksToTiles(marks, costOf) { parseCheckpointColor(checkpointColors[it.checkpointId] ?: "") }
 
     val listState = rememberLazyListState()
@@ -451,6 +502,14 @@ fun MarksScreen(
                     item("hidden_taken") {
                         HiddenKpNotice(
                             tokens = hiddenTaken,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
+                        )
+                    }
+                }
+                if (unconfirmed.isNotEmpty()) {
+                    item("unconfirmed") {
+                        UnconfirmedNotice(
+                            tokens = unconfirmed,
                             modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
                         )
                     }
@@ -810,6 +869,55 @@ private fun HiddenKpNotice(tokens: List<String>, modifier: Modifier = Modifier) 
 }
 
 /**
+ * The not-confirmed warning under the metrics (after [HiddenKpNotice] when several show): a cloud/local
+ * КП was taken, but the server did not accept the mark while the scan overlay was open, so the take does
+ * not count — «Не подтверждены сервером (2): 3-04, 07 / Отметьтесь на КП ещё раз при наличии связи».
+ * [tokens] come from the pure [unconfirmedTokens] (a КП with any counted take is already excluded, so a
+ * confirmed retake drops it from here). Same warning anatomy and palette as the photo/hidden cards
+ * («duplicate, don't couple»), told apart by the [CloudOff][Icons.Outlined.CloudOff] badge — the glyph
+ * the dimmed grid tile carries.
+ */
+@Composable
+private fun UnconfirmedNotice(tokens: List<String>, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.error),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onError,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Не подтверждены сервером (${tokens.size}): ${tokensLabel(tokens)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(
+                    text = "Отметьтесь на КП ещё раз при наличии связи",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                )
+            }
+        }
+    }
+}
+
+/**
  * [MetricsCard] with a live КВ cell. The minute tick lives here so only the metrics card recomposes,
  * not the whole screen. `now` is re-sampled synchronously whenever the inputs change (a fresh start
  * take must not be measured against a stale `now` from a non-ticking state), when the [nowMs] seam
@@ -1036,7 +1144,6 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(tf.fill)
             // Only a tile that actually carries photos is tappable (opens the lightbox); a plain NFC
             // tile keeps its current inert behaviour.
             .then(if (hasPhotos) Modifier.clickable { onPhotoTileClick(mark.photoPaths) } else Modifier),
@@ -1046,10 +1153,29 @@ private fun ColorTile(mark: Mark, onPhotoTileClick: (List<String>) -> Unit) {
         // with no photos keeps the flat color-fill token body. The top-right camera chip stays exclusive
         // to PHOTO-kind takes (see [PhotoTileBody.showCameraChip]) so an NFC-with-photos tile is still
         // told apart from a pure photo take.
-        if (hasPhotos) {
-            PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
-        } else {
-            NfcTileBody(mark, tf.text)
+        // An unconfirmed cloud/local take ([Mark.unconfirmed]) keeps its tile but is dimmed to ~45% and
+        // flagged with a full-opacity cloud-off glyph at the top-right — free on every such tile, since the
+        // camera chip is photo-kind only and photo takes are always offline (never unconfirmed). The color
+        // fill lives INSIDE the dimmed box (the outer tile has no background), so the whole square fades
+        // toward the grid background — not just the token text.
+        val bodyAlpha = if (mark.unconfirmed) UNCONFIRMED_TILE_ALPHA else 1f
+        Box(modifier = Modifier.fillMaxSize().alpha(bodyAlpha).background(tf.fill)) {
+            if (hasPhotos) {
+                PhotoTileBody(mark, tf.fill, showCameraChip = mark.kind == MarkKind.PHOTO)
+            } else {
+                NfcTileBody(mark, tf.text)
+            }
+        }
+        if (mark.unconfirmed) {
+            Icon(
+                Icons.Outlined.CloudOff,
+                contentDescription = "Не подтверждён сервером",
+                tint = if (hasPhotos) Color.White else tf.text,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 6.dp, end = 6.dp)
+                    .size(16.dp),
+            )
         }
         // The «+N» extra-photo badge. The first frame IS the tile background, so it's never counted —
         // only the *hidden* remainder shows (2 photos → «+1», N → «+(N-1)»); a single-photo tile shows
@@ -1245,13 +1371,30 @@ private fun LightboxPage(file: File, mark: Mark, modifier: Modifier = Modifier) 
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
-            PhotoKpChip(
-                mark = mark,
-                color = tileFill(mark.color, isDarkScheme()).fill,
-                modifier = Modifier.align(Alignment.TopStart),
-                // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
-                scale = 1.7f,
-            )
+            Column(modifier = Modifier.align(Alignment.TopStart)) {
+                PhotoKpChip(
+                    mark = mark,
+                    color = tileFill(mark.color, isDarkScheme()).fill,
+                    // Larger than the thumbnail's chip so it reads proportionally on the full-screen photo.
+                    scale = 1.7f,
+                )
+                // A frame attached to an unconfirmed cloud/local take: the photo is evidence, but the take
+                // itself does not count — say so right under the КП chip. Deliberately *not* scaled with
+                // the chip's 1.7×: it is a secondary caption at plain body-caption size (12.sp), echoing
+                // the chip only in its 9.dp bottom-end corner; the black 0.6 scrim is the same one the
+                // thumbnail's bottom gradient fades to, so the white text stays legible on any photo.
+                if (mark.unconfirmed) {
+                    Text(
+                        text = "не подтверждён сервером",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(bottomEnd = 9.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
         }
         // The take's «дата · время», echoing the tile's mono time caption but scaled up and pinned to the
         // black margin at the very bottom of the page — outside the photo (the КП chip owns the photo
