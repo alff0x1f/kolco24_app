@@ -53,8 +53,8 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  *   system share-sheet. When the spike filter hides points ([shownPointCount] != [pointCount]) the
  *   point metric adds a quiet «на карте N» line, so the raw count and the map/GPX count don't look
  *   contradictory.
- * - [Recording][TrackState.Recording] → a pulsing dot + «N точек» live readout and a «Остановить»
- *   button.
+ * - [Recording][TrackState.Recording] → a pulsing dot + «N точек» live readout (with « · на карте N»
+ *   under the same condition) and a «Остановить» button.
  *
  * Clearing the track lives in the Settings overlay («Запись трека» card), not here — it is a
  * destructive action and was moved out of this frequently-visited tab to avoid accidental taps.
@@ -97,7 +97,11 @@ fun TrackCard(
             Column(modifier = Modifier.padding(16.dp)) {
                 if (recording) {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                        RecordingHeader(pointCount = pointCount, modifier = Modifier.weight(1f))
+                        RecordingHeader(
+                            pointCount = pointCount,
+                            shownPointCount = shownPointCount,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                     Spacer(Modifier.height(14.dp))
                     Button(
@@ -172,7 +176,7 @@ fun TrackCard(
 }
 
 @Composable
-private fun RecordingHeader(pointCount: Int, modifier: Modifier = Modifier) {
+private fun RecordingHeader(pointCount: Int, shownPointCount: Int, modifier: Modifier = Modifier) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         PulsingDot()
         Column {
@@ -182,7 +186,8 @@ private fun RecordingHeader(pointCount: Int, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = pointsLabel(pointCount),
+                text = pointsLabel(pointCount) +
+                    if (shownPointCount != pointCount) " · на карте $shownPointCount" else "",
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
