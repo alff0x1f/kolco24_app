@@ -1009,10 +1009,9 @@ private fun MetricsCard(
             // Show the «/total» only once the legend has loaded (total > 0), so a cold start
             // doesn't flash a «8/0».
             MetricItem(
-                label = "ВЗЯТО",
+                label = "ВЗЯТО КП",
                 value = "$takenKp",
                 total = totalKp.takeIf { it > 0 }?.toString(),
-                unit = "КП",
                 modifier = Modifier.weight(1f),
             )
             VerticalDivider(
@@ -1020,10 +1019,9 @@ private fun MetricsCard(
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
             MetricItem(
-                label = "СУММА",
+                label = "БАЛЛОВ",
                 value = "$takenScore",
                 total = totalCost.takeIf { it > 0 }?.toString(),
-                unit = "бал.",
                 modifier = Modifier.weight(1f),
             )
             VerticalDivider(
@@ -1043,7 +1041,7 @@ private fun MetricsCard(
 
 /**
  * One metric column: the caption sits **above** the value (per the Отметки design), and an optional
- * «/total» denominator (e.g. «8/15 КП») mirrors the Легенда's score progress so взято/сумма read as
+ * «/total» denominator (e.g. «8/15») mirrors the Легенда's score progress so взято/сумма read as
  * fractions of the race total rather than bare counts. [total] is null until the legend has loaded.
  */
 @Composable
@@ -1051,7 +1049,6 @@ private fun MetricItem(
     label: String,
     value: String,
     total: String? = null,
-    unit: String? = null,
     mono: Boolean = false,
     isError: Boolean = false,
     modifier: Modifier = Modifier,
@@ -1079,14 +1076,6 @@ private fun MetricItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
-                )
-            }
-            if (unit != null) {
-                Text(
-                    text = unit,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 2.dp, bottom = 3.dp),
                 )
             }
         }
