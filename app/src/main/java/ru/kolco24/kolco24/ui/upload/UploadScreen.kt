@@ -43,13 +43,15 @@ import ru.kolco24.kolco24.ui.common.RefreshableList
 
 /**
  * «Загрузка данных» overlay — the single consolidated place to check upload status, reached from
- * Команда → Прочее. Renders up to four [UploadSection]s (Отметки, Фото, GPS-трек, Судейские отметки),
- * each hidden when its scope has nothing to report. Stateless; the host derives all four
- * [TrackUploadStatus] values and owns [refreshing]/[onRefresh] for the pull-to-refresh gesture on the
- * content branch — the empty state offers no gesture (nothing to upload by construction, mirrors
- * `LegendScreen`). The PTR outcome has no snackbar: the receipt lines themselves are the content that
- * updates.
- * Compose, untested by convention — only [showFinishLine] below is unit-tested.
+ * Команда → Прочее. Grouped by target: an «Интернет» card and a «Финиш» (LAN) card, each listing one
+ * row per scope (Отметки, Фото, GPS-трек, Судейские отметки) that has something recorded. The
+ * «Финиш» card hides until the LAN target reports for any scope ([showFinishSection]) — the common
+ * state away from the finish is «all on the site, nothing at the finish», which then reads as one
+ * card. Stateless; the host derives all four [TrackUploadStatus] values and owns
+ * [refreshing]/[onRefresh] for the pull-to-refresh gesture on the content branch — the empty state
+ * offers no gesture (nothing to upload by construction, mirrors `LegendScreen`). The PTR outcome has
+ * no snackbar: the receipt lines themselves are the content that updates.
+ * Compose, untested by convention — only [showFinishLine]/[showFinishSection] are unit-tested.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +71,12 @@ fun UploadScreen(
             delay(30_000L)
         }
     }
-    val hasAny = listOf(marks, photos, track, judge).any { it != null && it.total > 0 }
+    val scopes = listOf(
+        "Отметки" to marks,
+        "Фото" to photos,
+        "GPS-трек" to track,
+        "Судейские отметки" to judge,
+    ).mapNotNull { (title, status) -> if (status != null && status.total > 0) title to status else null }
 
     Column(
         modifier = modifier
@@ -90,17 +97,39 @@ fun UploadScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
             ),
         )
-        if (hasAny) {
+        if (scopes.isNotEmpty()) {
             RefreshableList(isRefreshing = refreshing, onRefresh = onRefresh) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    UploadSection(title = "Отметки", status = marks, nowMs = nowMs)
-                    UploadSection(title = "Фото", status = photos, nowMs = nowMs)
-                    UploadSection(title = "GPS-трек", status = track, nowMs = nowMs)
-                    UploadSection(title = "Судейские отметки", status = judge, nowMs = nowMs)
+                    TargetSection(title = "Интернет") {
+                        scopes.forEachIndexed { i, (label, status) ->
+                            if (i > 0) Spacer(Modifier.height(10.dp))
+                            ReceiptLine(
+                                label = label,
+                                total = status.total,
+                                line = status.cloud,
+                                nowMs = nowMs,
+                                offlineLabel = "нет интернета",
+                            )
+                        }
+                    }
+                    if (showFinishSection(scopes.map { it.second })) {
+                        TargetSection(title = "Финиш (LAN)") {
+                            scopes.forEachIndexed { i, (label, status) ->
+                                if (i > 0) Spacer(Modifier.height(10.dp))
+                                ReceiptLine(
+                                    label = label,
+                                    total = status.total,
+                                    line = status.local,
+                                    nowMs = nowMs,
+                                    offlineLabel = "сервер недоступен",
+                                )
+                            }
+                        }
+                    }
                 }
             }
         } else {
@@ -109,10 +138,9 @@ fun UploadScreen(
     }
 }
 
-/** One section card: a header, the always-shown «Интернет» line, and «Финиш» once it reports. */
+/** One target card: a header and one [ReceiptLine] per scope. */
 @Composable
-private fun UploadSection(title: String, status: TrackUploadStatus?, nowMs: Long) {
-    if (status == null || status.total <= 0) return
+private fun TargetSection(title: String, content: @Composable () -> Unit) {
     Column(modifier = Modifier.padding(bottom = 18.dp)) {
         Text(
             text = title,
@@ -128,23 +156,7 @@ private fun UploadSection(title: String, status: TrackUploadStatus?, nowMs: Long
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                ReceiptLine(
-                    label = "Интернет",
-                    total = status.total,
-                    line = status.cloud,
-                    nowMs = nowMs,
-                    offlineLabel = "нет интернета",
-                )
-                if (showFinishLine(status.local)) {
-                    Spacer(Modifier.height(10.dp))
-                    ReceiptLine(
-                        label = "Финиш",
-                        total = status.total,
-                        line = status.local,
-                        nowMs = nowMs,
-                        offlineLabel = "сервер недоступен",
-                    )
-                }
+                content()
             }
         }
     }
@@ -157,6 +169,14 @@ private fun UploadSection(title: String, status: TrackUploadStatus?, nowMs: Long
  * meaningless "0/N" line.
  */
 internal fun showFinishLine(line: TargetLine): Boolean = line.outcome != null || line.uploaded > 0
+
+/**
+ * The «Финиш» card appears once any recorded scope's LAN line reports ([showFinishLine]); it then
+ * lists every scope, since a "0/N" next to a reporting sibling is meaningful — the finish server is
+ * reachable and that scope still has to get there.
+ */
+internal fun showFinishSection(statuses: List<TrackUploadStatus>): Boolean =
+    statuses.any { it.total > 0 && showFinishLine(it.local) }
 
 /**
  * One target's receipt row: a leading tick (green double-check = done, red cloud-off = problem,
