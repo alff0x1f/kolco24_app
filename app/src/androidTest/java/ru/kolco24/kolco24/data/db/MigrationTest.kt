@@ -278,4 +278,39 @@ class MigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun migrate7To8_oldMarksBecomeOfflineAndUnconfirmed() {
+        // Seed a v7 complete NFC take (no checkMethod/confirmedAt columns exist yet).
+        helper.createDatabase(testDb, 7).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO marks (
+                    id, raceId, teamId, checkpointId, checkpointNumber, cost, method,
+                    cpUid, cpCode, present, presentDetails, expectedCount, complete, takenAt, updatedAt,
+                    uploadedLocal, uploadedCloud, photosUploadedLocal, photosUploadedCloud
+                ) VALUES (
+                    'm1', 7, 42, 100, 1, 10, 'nfc',
+                    'UID', 'CODE', '[1,2]', NULL, 2, 1, 1000, 1000,
+                    1, 1, 0, 0
+                )
+                """.trimIndent(),
+            )
+        }
+
+        // Run the migration; MigrationTestHelper validates the result against schemas/8.json
+        // (including checkMethod's DEFAULT 'offline').
+        val db = helper.runMigrationsAndValidate(testDb, 8, true, AppDatabase.MIGRATION_7_8)
+
+        db.query("SELECT COUNT(*), checkMethod, confirmedAt, complete, uploadedCloud FROM marks WHERE id = 'm1'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertEquals("offline", c.getString(1))
+            assertTrue(c.isNull(2))
+            assertEquals(1, c.getInt(3))
+            assertEquals(1, c.getInt(4))
+        }
+
+        db.close()
+    }
 }

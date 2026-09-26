@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrackPointEntity::class,
         JudgeScanEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(
@@ -161,13 +161,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7→v8 (per-tag check method): adds `marks.checkMethod` (snapshot of the tag's method at scan
+         * time, `DEFAULT 'offline'` — declared both here and in `@ColumnInfo(defaultValue)` on
+         * [MarkEntity.checkMethod], so fresh install and upgrade match) and the nullable
+         * `marks.confirmedAt` (wall ms of the in-overlay server confirm). Old rows become `offline`,
+         * unconfirmed — i.e. scored exactly as before.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE marks ADD COLUMN checkMethod TEXT NOT NULL DEFAULT 'offline'")
+                db.execSQL("ALTER TABLE marks ADD COLUMN confirmedAt INTEGER")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "kolco24.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }

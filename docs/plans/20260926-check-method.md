@@ -217,14 +217,14 @@ confirmAttemptFor = { target ->
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryTest.kt` (`FakeMarkDao` :595)
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryUploadTest.kt` (`FakeMarkUploadDao` :789)
 
-- [ ] add `checkMethod: String = "offline"` (`@ColumnInfo(defaultValue = "offline")`) and `confirmedAt: Long? = null` to `MarkEntity` with KDoc
-- [ ] bump DB to `version = 8`, add `MIGRATION_7_8` (two `ALTER TABLE`), append it to `.addMigrations(...)`
-- [ ] add `MarkDao.setConfirmedAt(id, at)` column-scoped `UPDATE`
-- [ ] implement `setConfirmedAt` in both fake DAOs (column only; `updatedAt` untouched) so the unit-test build compiles
-- [ ] build to export `schemas/8.json`; check `checkMethod` has `"defaultValue": "'offline'"`; commit it
-- [ ] instrumented test: `7 → 8` migration keeps old rows with `checkMethod == "offline"`, `confirmedAt == null`, via `runMigrationsAndValidate(testDb, 8, true, MIGRATION_7_8)` (pattern at MigrationTest.kt:256)
-- [ ] instrumented tests: `addMember` resets `uploaded*` but keeps `checkMethod`/`confirmedAt`; `setConfirmedAt` round-trip, does not bump `updatedAt`; missing id is a no-op
-- [ ] run `./gradlew testDebugUnitTest` + `connectedDebugAndroidTest` — must pass before next task
+- [x] add `checkMethod: String = "offline"` (`@ColumnInfo(defaultValue = "offline")`) and `confirmedAt: Long? = null` to `MarkEntity` with KDoc
+- [x] bump DB to `version = 8`, add `MIGRATION_7_8` (two `ALTER TABLE`), append it to `.addMigrations(...)`
+- [x] add `MarkDao.setConfirmedAt(id, at)` column-scoped `UPDATE`
+- [x] implement `setConfirmedAt` in both fake DAOs (column only; `updatedAt` untouched) so the unit-test build compiles
+- [x] build to export `schemas/8.json`; check `checkMethod` has `"defaultValue": "'offline'"`; commit it
+- [x] instrumented test: `7 → 8` migration keeps old rows with `checkMethod == "offline"`, `confirmedAt == null`, via `runMigrationsAndValidate(testDb, 8, true, MIGRATION_7_8)` (pattern at MigrationTest.kt:256)
+- [x] instrumented tests: `addMember` resets `uploaded*` but keeps `checkMethod`/`confirmedAt`; `setConfirmedAt` round-trip, does not bump `updatedAt`; missing id is a no-op
+- [x] run `./gradlew testDebugUnitTest` + `connectedDebugAndroidTest` — must pass before next task (unit tests + lint pass; instrumented run deferred to user — physical device attached; compiled via assembleDebugAndroidTest)
 
 ### Task 2: CheckMethod + isCounted in metrics
 

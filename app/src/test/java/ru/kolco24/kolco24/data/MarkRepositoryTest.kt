@@ -696,6 +696,11 @@ private class FakeMarkDao : MarkDao {
         }
     }
 
+    // Column-scoped like the real DAO: only confirmedAt, updatedAt untouched; missing id is a no-op.
+    override suspend fun setConfirmedAt(id: String, at: Long) {
+        rows.value = rows.value.map { if (it.id == id) it.copy(confirmedAt = at) else it }
+    }
+
     override suspend fun updatePhotoPath(id: String, photoPath: String, now: Long) {
         rows.value = rows.value.map {
             if (it.id == id) it.copy(photoPath = photoPath, updatedAt = now) else it

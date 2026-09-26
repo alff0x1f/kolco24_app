@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -125,4 +126,19 @@ data class MarkEntity(
      * anti-cheat signal (a stale fix is suspect). NULL when no fix.
      */
     val locElapsedRealtimeAt: Long? = null,
+    /**
+     * Snapshot of the КП tag's `check_method` at scan time (`"offline"` / `"cloud"` / `"local"`, parsed
+     * by `CheckMethod.parse`, unknown → offline). Copied onto the take so a later legend change never
+     * re-scores old takes. `"offline"` (the default, and every pre-v8 row) = a complete take counts as
+     * before; `"cloud"`/`"local"` = the take counts only once [confirmedAt] is set. Photo takes are
+     * always `"offline"`. The `@ColumnInfo(defaultValue)` matches `MIGRATION_7_8`'s DDL.
+     */
+    @ColumnInfo(defaultValue = "offline") val checkMethod: String = "offline",
+    /**
+     * Wall ms at which the [checkMethod] target (cloud or LAN) accepted this take **while the scan
+     * overlay was open** (`MarkRepository.confirm`). NULL = not confirmed. Never set by the background
+     * upload drain; preserved by `MarkDao.addMember` (row rebuilt via `copy`). Written only through the
+     * column-scoped `MarkDao.setConfirmedAt`.
+     */
+    val confirmedAt: Long? = null,
 )
