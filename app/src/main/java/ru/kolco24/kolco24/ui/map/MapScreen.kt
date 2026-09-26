@@ -23,6 +23,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +56,13 @@ import java.util.TimeZone
  *   LocationComponent) never lives off-screen or during a tab animation through this page.
  * - [availability]/[base] `null` → still resolving (team/race/disk listing/metadata) → plain background.
  * - [frameKey] (the selected team) re-frames the camera when it changes.
+ * - «Все точки» chip (top-start, stacked below [NoMapBanner] in one top column when that is shown —
+ *   no fixed offset, so a tall banner at a large font scale never overlaps it): [onToggleShowAll] flips the
+ *   same persisted preference as the Settings row. Hidden while filtering hides nothing
+ *   (`!showAllPoints && hiddenCount == 0`); selected while [showAllPoints] so the user can switch back
+ *   (then [hiddenCount] is 0 and no count is shown). Toggling does not re-frame the camera — except,
+ *   without file bounds and pins, when the filter hid **every** point (the lines go empty ↔ non-empty,
+ *   which [TrackMapView] treats as data arriving).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,10 +72,13 @@ fun MapScreen(
     isActive: Boolean,
     availability: MapAvailability?,
     base: MapStyleSource?,
-    track: List<TrackPointLike>,
+    trackLines: List<List<TrackPointLike>>,
     pins: List<MapPin>,
     frameKey: Any?,
     locationPermitted: Boolean,
+    showAllPoints: Boolean,
+    hiddenCount: Int,
+    onToggleShowAll: () -> Unit,
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     modifier: Modifier = Modifier,
@@ -95,7 +107,7 @@ fun MapScreen(
 
             TrackMapView(
                 styleSource = base,
-                track = track,
+                trackLines = trackLines,
                 pins = pins,
                 frameKey = frameKey,
                 locationPermitted = locationPermitted,
@@ -103,12 +115,30 @@ fun MapScreen(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            if (availability == MapAvailability.NoMapForRace) {
-                NoMapBanner(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
+            // Banner and chip stack in one top column so the chip always sits below the banner,
+            // whatever its height (font scale / wrapping).
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (availability == MapAvailability.NoMapForRace) {
+                    NoMapBanner(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 4.dp),
+                    )
+                }
+                if (showAllPoints || hiddenCount > 0) {
+                    ShowAllPointsChip(
+                        selected = showAllPoints,
+                        hiddenCount = hiddenCount,
+                        onClick = onToggleShowAll,
+                    )
+                }
             }
 
             Column(
@@ -172,6 +202,26 @@ private fun NoMapBanner(modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+@Composable
+private fun ShowAllPointsChip(
+    selected: Boolean,
+    hiddenCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text("Все точки" + if (hiddenCount > 0) " · +$hiddenCount" else "") },
+        modifier = modifier,
+        // Semi-transparent over the map, like the OSM attribution.
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+        ),
+    )
 }
 
 @Composable

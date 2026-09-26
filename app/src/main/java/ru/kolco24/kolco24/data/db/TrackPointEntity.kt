@@ -42,7 +42,7 @@ data class TrackPointEntity(
     override val bootCount: Int?,
     override val wallMs: Long,
     override val trustedMs: Long?,
-    val segmentId: String,
+    override val segmentId: String,
     val uploadedLocal: Boolean = false,
     val uploadedCloud: Boolean = false,
 ) : TrackPointLike

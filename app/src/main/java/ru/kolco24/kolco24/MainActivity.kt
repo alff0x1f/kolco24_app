@@ -118,6 +118,7 @@ import ru.kolco24.kolco24.data.time.ClockStatus
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.time.TrustedClock
 import ru.kolco24.kolco24.data.todayIso
+import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
@@ -125,9 +126,9 @@ import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
-import ru.kolco24.kolco24.data.track.filterPoints
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
+import ru.kolco24.kolco24.data.track.trackLines
 import java.io.File
 import ru.kolco24.kolco24.data.map.MapDownloadState
 import ru.kolco24.kolco24.data.marks.PhotoTarget
@@ -387,6 +388,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             val container = remember { (applicationContext as Kolco24App).container }
             val mode by container.themePreference.mode.collectAsState()
             val trackProfile by container.trackProfilePreference.profile.collectAsState()
+            val showAllTrackPoints by container.trackFilterPreference.showAllPoints.collectAsState()
             Kolco24Theme(darkTheme = mode.isDark(isSystemInDarkTheme())) {
                 Kolco24AppRoot(
                     themeMode = mode,
@@ -397,6 +399,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                             if (it) TrackProfile.Economy else TrackProfile.Precise,
                         )
                     },
+                    showAllTrackPoints = showAllTrackPoints,
+                    onShowAllTrackPointsChange = { container.trackFilterPreference.setShowAllPoints(it) },
                 )
             }
         }
@@ -612,6 +616,9 @@ private sealed interface SelectedTeamState {
     data class Present(val team: TeamEntity) : SelectedTeamState
 }
 
+/** Spike-filtered track lines plus how many raw points the filter hid (see `trackFiltered`). */
+private data class FilteredTrack(val lines: List<List<TrackPointEntity>>, val hiddenCount: Int)
+
 private data class PickerTeamsState(
     val raceId: Int? = null,
     val teams: List<TeamEntity> = emptyList(),
@@ -624,6 +631,8 @@ private fun Kolco24AppRoot(
     onThemeModeChange: (ThemeMode) -> Unit,
     economyMode: Boolean,
     onEconomyModeChange: (Boolean) -> Unit,
+    showAllTrackPoints: Boolean,
+    onShowAllTrackPointsChange: (Boolean) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
     val scope = rememberCoroutineScope()
@@ -910,14 +919,37 @@ private fun Kolco24AppRoot(
         val rid = selectedRaceId
         if (tid != null && rid != null) trackRepo.observeTrack(tid, rid) else flowOf(emptyList())
     }.collectAsState(initial = emptyList())
-    val safeTrack = if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
-    // Time span uses the accuracy-filtered, reboot-safe ordered points (raw count stays full).
-    val trackUsable = remember(safeTrack) { sortedTrackPoints(filterPoints(safeTrack)) }
+    // Remembered so an unchanged track keeps the same list instance (keys below compare by identity fast).
+    val safeTrack = remember(track, selectedTeamId) {
+        if (selectedTeamId != null) track.filter { it.teamId == selectedTeamId } else emptyList()
+    }
+    // Spike-filtered lines (trackLines) over reboot-safe ordered points: the map draws them as separate
+    // parts; the time span uses their flattened points (raw count stays full). «Все точки»
+    // (showAllTrackPoints) disables the filter — lines are then just the recording segments.
+    // Sort + filter run off the main thread (a day-long track is ~17k points, re-run every GPS fix).
+    // The result is tagged with the team it was computed for: until the new team's lines land, the
+    // previous team's never leak through (valueForKey → empty); within a team the last lines stay up
+    // while the next fix is being filtered. The hidden count is derived from the same input.
+    val trackFiltered by produceState<Pair<Int, FilteredTrack>?>(
+        null, safeTrack, showAllTrackPoints, selectedTeamId,
+    ) {
+        val tid = selectedTeamId ?: return@produceState
+        value = tid to withContext(Dispatchers.Default) {
+            val lines = trackLines(sortedTrackPoints(safeTrack), filter = !showAllTrackPoints)
+            FilteredTrack(lines, hiddenCount = safeTrack.size - lines.sumOf { it.size })
+        }
+    }
+    val trackFilteredNow = valueForKey(trackFiltered, selectedTeamId)
+    val trackLinesNow = trackFilteredNow?.lines ?: emptyList()
+    val trackUsable = remember(trackLinesNow) { trackLinesNow.flatten() }
+    // Points the filter hid from the map/GPX (always 0 with «Все точки» on — the selected map chip
+    // then shows no count, by design). Every kept point is drawn (1-point lines as dots).
+    val trackHiddenCount = trackFilteredNow?.hiddenCount ?: 0
     val trackFirstTime = remember(trackUsable) { trackUsable.firstOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     val trackLastTime = remember(trackUsable) { trackUsable.lastOrNull()?.let { formatPointTime(it.trustedMs ?: it.wallMs) } }
     // Recording sessions = distinct segmentIds (one per «Начать запись» tap). Counted over the raw
-    // points so a session of only coarse fixes — dropped by filterPoints — still counts, matching the
-    // raw «Точек» count rather than the accuracy-filtered span.
+    // points so a session whose fixes are all dropped by the trackLines spike filter still counts,
+    // matching the raw «Точек» count rather than the filtered span.
     val trackSegmentCount = remember(safeTrack) { safeTrack.mapTo(HashSet()) { it.segmentId }.size }
     // Degraded accuracy = network is available but GPS is not enabled (no chip or toggle off) — the
     // track will be coarse but recording is still allowed (the engine falls back to network).
@@ -1180,16 +1212,17 @@ private fun Kolco24AppRoot(
             val label = teamForTab?.startNumber?.takeIf { it.isNotBlank() } ?: tid.toString()
             val fileName = gpxFileName(label, today)
             container.applicationScope.launch {
-                val points = filterPoints(
-                    trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid },
-                ).let(::sortedTrackPoints)
-                if (points.isEmpty()) {
+                val lines = trackLines(
+                    sortedTrackPoints(trackRepo.observeTrack(tid, rid).first().filter { it.teamId == tid }),
+                    filter = !showAllTrackPoints,
+                )
+                if (lines.isEmpty()) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Нет точных точек для экспорта", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Нет точек для экспорта", Toast.LENGTH_SHORT).show()
                     }
                     return@launch
                 }
-                val gpx = buildGpx(points, teamForTab?.teamname ?: "Команда $label")
+                val gpx = buildGpx(lines, teamForTab?.teamname ?: "Команда $label")
                 val dir = File(context.cacheDir, "tracks").apply { mkdirs() }
                 val file = File(dir, fileName)
                 withContext(Dispatchers.IO) { file.writeText(gpx) }
@@ -1673,10 +1706,13 @@ private fun Kolco24AppRoot(
                         availability = mapAvailabilityNow,
                         base = mapBase,
                         // The track GeoJSON is built off-main inside the map view, only while it is shown.
-                        track = trackUsable,
+                        trackLines = trackLinesNow,
                         pins = mapPinsNow,
                         frameKey = selectedTeamId,
                         locationPermitted = activity?.locationGranted ?: false,
+                        showAllPoints = showAllTrackPoints,
+                        hiddenCount = trackHiddenCount,
+                        onToggleShowAll = { onShowAllTrackPointsChange(!showAllTrackPoints) },
                         onDownload = {
                             val rid = selectedRaceId
                             val url = selectedMapUrl
@@ -1703,6 +1739,7 @@ private fun Kolco24AppRoot(
                         onRefresh = { pullRefresh({ teamRefreshing = it }, container.syncCoordinator::refreshAll) },
                         trackState = if ((trackState as? TrackState.Recording)?.teamId == selectedTeamId) trackState else TrackState.Idle,
                         trackPointCount = safeTrack.size,
+                        trackShownPointCount = safeTrack.size - trackHiddenCount,
                         trackSegmentCount = trackSegmentCount,
                         trackDegradedAccuracy = degradedAccuracy,
                         trackFirstPointTime = trackFirstTime,
@@ -1908,6 +1945,8 @@ private fun Kolco24AppRoot(
                 onThemeModeChange = onThemeModeChange,
                 economyMode = economyMode,
                 onEconomyModeChange = onEconomyModeChange,
+                showAllTrackPoints = showAllTrackPoints,
+                onShowAllTrackPointsChange = onShowAllTrackPointsChange,
                 trackPointCount = safeTrack.size,
                 // Clearing is allowed only when a track exists and is NOT recording for this team
                 // (same Recording-for-this-team check the TeamScreen TrackCard uses). The confirm

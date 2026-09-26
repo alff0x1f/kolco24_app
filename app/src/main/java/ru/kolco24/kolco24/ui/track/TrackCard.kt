@@ -50,9 +50,11 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
  *   [degradedAccuracy] (no GPS provider, only network) the start is **not** disabled — instead a quiet
  *   hint warns the track will be coarse. If a track already exists ([pointCount] > 0) the metrics show
  *   below, plus a secondary «Поделиться GPX» [OutlinedButton] ([onShare]) that exports the track via the
- *   system share-sheet.
- * - [Recording][TrackState.Recording] → a pulsing dot + «N точек» live readout and a «Остановить»
- *   button.
+ *   system share-sheet. When the spike filter hides points ([shownPointCount] != [pointCount]) the
+ *   point metric adds a quiet «на карте N» line, so the raw count and the map/GPX count don't look
+ *   contradictory.
+ * - [Recording][TrackState.Recording] → a pulsing dot + «N точек» live readout (with « · на карте N»
+ *   under the same condition) and a «Остановить» button.
  *
  * Clearing the track lives in the Settings overlay («Запись трека» card), not here — it is a
  * destructive action and was moved out of this frequently-visited tab to avoid accidental taps.
@@ -65,6 +67,7 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
 fun TrackCard(
     state: TrackState,
     pointCount: Int,
+    shownPointCount: Int,
     segmentCount: Int,
     hasTeam: Boolean,
     degradedAccuracy: Boolean,
@@ -94,7 +97,11 @@ fun TrackCard(
             Column(modifier = Modifier.padding(16.dp)) {
                 if (recording) {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                        RecordingHeader(pointCount = pointCount, modifier = Modifier.weight(1f))
+                        RecordingHeader(
+                            pointCount = pointCount,
+                            shownPointCount = shownPointCount,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                     Spacer(Modifier.height(14.dp))
                     Button(
@@ -114,6 +121,7 @@ fun TrackCard(
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                             TrackMetrics(
                                 pointCount = pointCount,
+                                shownPointCount = shownPointCount,
                                 segmentCount = segmentCount,
                                 firstPointTime = firstPointTime,
                                 lastPointTime = lastPointTime,
@@ -168,7 +176,7 @@ fun TrackCard(
 }
 
 @Composable
-private fun RecordingHeader(pointCount: Int, modifier: Modifier = Modifier) {
+private fun RecordingHeader(pointCount: Int, shownPointCount: Int, modifier: Modifier = Modifier) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         PulsingDot()
         Column {
@@ -178,7 +186,8 @@ private fun RecordingHeader(pointCount: Int, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = pointsLabel(pointCount),
+                text = pointsLabel(pointCount) +
+                    if (shownPointCount != pointCount) " · на карте $shownPointCount" else "",
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -211,6 +220,7 @@ private fun PulsingDot() {
 @Composable
 private fun TrackMetrics(
     pointCount: Int,
+    shownPointCount: Int,
     segmentCount: Int,
     firstPointTime: String?,
     lastPointTime: String?,
@@ -218,7 +228,12 @@ private fun TrackMetrics(
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         // Labels decline by their count so the value+label reads grammatically (82 точки, 3 сегмента).
-        Metric(label = pointsWord(pointCount).replaceFirstChar { it.uppercase() }, value = pointCount.toString())
+        // Raw count stays the headline; «на карте N» appears only when the filter hid something.
+        Metric(
+            label = pointsWord(pointCount).replaceFirstChar { it.uppercase() },
+            value = pointCount.toString(),
+            note = if (shownPointCount != pointCount) "на карте $shownPointCount" else null,
+        )
         Metric(label = segmentsWord(segmentCount).replaceFirstChar { it.uppercase() }, value = segmentCount.toString())
         val span = when {
             firstPointTime != null && lastPointTime != null -> "$firstPointTime–$lastPointTime"
@@ -230,7 +245,7 @@ private fun TrackMetrics(
 }
 
 @Composable
-private fun Metric(label: String, value: String) {
+private fun Metric(label: String, value: String, note: String? = null) {
     Column {
         Text(
             text = value,
@@ -243,5 +258,12 @@ private fun Metric(label: String, value: String) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (note != null) {
+            Text(
+                text = note,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

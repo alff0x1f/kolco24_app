@@ -46,12 +46,11 @@ class GpxExportTest {
     }
 
     @Test
-    fun distinctSegmentIds_produceSeparateTrksegs() {
+    fun eachLine_isOneTrkseg() {
         val gpx = buildGpx(
             listOf(
-                point("a", 55.0, 37.0, segmentId = "s1"),
-                point("b", 55.1, 37.1, segmentId = "s1"),
-                point("c", 55.2, 37.2, segmentId = "s2"),
+                listOf(point("a", 55.0, 37.0, segmentId = "s1"), point("b", 55.1, 37.1, segmentId = "s1")),
+                listOf(point("c", 55.2, 37.2, segmentId = "s2")),
             ),
             "T",
         )
@@ -61,17 +60,42 @@ class GpxExportTest {
     }
 
     @Test
-    fun callerSideRebootSafeSorting_preventsAlternatingOnePointSegments() {
+    fun linesSplitWithinOneSegmentId_stayAsSeparateTrksegs() {
+        // A spike-filter break inside one recording session: two lines, same segmentId → two <trkseg>.
+        val gpx = buildGpx(
+            listOf(
+                listOf(point("a", 55.0, 37.0, segmentId = "s"), point("b", 55.1, 37.1, segmentId = "s")),
+                listOf(point("c", 56.0, 38.0, segmentId = "s"), point("d", 56.1, 38.1, segmentId = "s")),
+            ),
+            "T",
+        )
+        assertEquals(2, Regex("<trkseg>").findAll(gpx).count())
+        assertEquals(4, Regex("<trkpt").findAll(gpx).count())
+    }
+
+    @Test
+    fun oneLineAcrossSegmentIds_isNotRegrouped() {
+        // The serializer no longer groups by segmentId: the caller's lines are the segments.
+        val gpx = buildGpx(
+            listOf(listOf(point("a", 55.0, 37.0, segmentId = "s1"), point("b", 55.1, 37.1, segmentId = "s2"))),
+            "T",
+        )
+        assertEquals(1, Regex("<trkseg>").findAll(gpx).count())
+        assertEquals(2, Regex("<trkpt").findAll(gpx).count())
+    }
+
+    @Test
+    fun trackLinesOfRebootSortedPoints_giveOneTrksegPerSession() {
         val points = sortedTrackPoints(
             listOf(
                 point("old-1", 55.0, 37.0, segmentId = "old", wallMs = 1_000L, elapsedRealtimeAt = 100_000L, bootCount = 7),
-                point("new-1", 56.0, 38.0, segmentId = "new", wallMs = 10_000L, elapsedRealtimeAt = 101_000L, bootCount = 8),
-                point("old-2", 55.1, 37.1, segmentId = "old", wallMs = 2_000L, elapsedRealtimeAt = 102_000L, bootCount = 7),
-                point("new-2", 56.1, 38.1, segmentId = "new", wallMs = 11_000L, elapsedRealtimeAt = 103_000L, bootCount = 8),
+                point("new-1", 55.0001, 37.0001, segmentId = "new", wallMs = 10_000L, elapsedRealtimeAt = 101_000L, bootCount = 8),
+                point("old-2", 55.00001, 37.00001, segmentId = "old", wallMs = 2_000L, elapsedRealtimeAt = 102_000L, bootCount = 7),
+                point("new-2", 55.00011, 37.00011, segmentId = "new", wallMs = 11_000L, elapsedRealtimeAt = 103_000L, bootCount = 8),
             ),
         )
 
-        val gpx = buildGpx(points, "T")
+        val gpx = buildGpx(trackLines(points, filter = false), "T")
 
         assertEquals(listOf("old-1", "old-2", "new-1", "new-2"), points.map { it.id })
         assertEquals(2, Regex("<trkseg>").findAll(gpx).count())
@@ -82,8 +106,10 @@ class GpxExportTest {
     fun altitude_omittedWhenNull_presentWhenSet() {
         val gpx = buildGpx(
             listOf(
-                point("a", 55.0, 37.0, segmentId = "s", altitude = null),
-                point("b", 55.1, 37.1, segmentId = "s", altitude = 187.5),
+                listOf(
+                    point("a", 55.0, 37.0, segmentId = "s", altitude = null),
+                    point("b", 55.1, 37.1, segmentId = "s", altitude = 187.5),
+                ),
             ),
             "T",
         )
@@ -96,8 +122,10 @@ class GpxExportTest {
         // 2024-06-20T18:53:20Z = 1_718_909_600_000 ms.
         val gpx = buildGpx(
             listOf(
-                point("a", 55.0, 37.0, segmentId = "s", trustedMs = 1_718_909_600_000L, wallMs = 0L),
-                point("b", 55.1, 37.1, segmentId = "s", trustedMs = null, wallMs = 1_718_909_600_000L),
+                listOf(
+                    point("a", 55.0, 37.0, segmentId = "s", trustedMs = 1_718_909_600_000L, wallMs = 0L),
+                    point("b", 55.1, 37.1, segmentId = "s", trustedMs = null, wallMs = 1_718_909_600_000L),
+                ),
             ),
             "T",
         )
@@ -106,7 +134,7 @@ class GpxExportTest {
 
     @Test
     fun coordinates_useDotDecimalSeparator() {
-        val gpx = buildGpx(listOf(point("a", 55.751244, 37.618423, segmentId = "s")), "T")
+        val gpx = buildGpx(listOf(listOf(point("a", 55.751244, 37.618423, segmentId = "s"))), "T")
         assertTrue(gpx.contains("lat=\"55.751244\""))
         assertTrue(gpx.contains("lon=\"37.618423\""))
     }

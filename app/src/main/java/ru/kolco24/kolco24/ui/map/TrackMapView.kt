@@ -39,6 +39,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.module.http.HttpRequestUtil
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -52,12 +53,15 @@ import ru.kolco24.kolco24.ui.theme.OrangeCta
 
 private const val TRACK_SOURCE = "track"
 private const val TRACK_LAYER = "track-layer"
+private const val TRACK_DOT_LAYER = "track-dot-layer"
 private const val PINS_SOURCE = "pins"
 private const val PINS_LAYER = "pins-layer"
 private const val FIT_PADDING_DP = 48
 private const val LAST_LOCATION_ZOOM = 14.0
 private const val SINGLE_POINT_ZOOM = 15.0
 private const val TRACK_LINE_WIDTH_DP = 3f
+/** A lone kept fix (1-point line) — a touch bigger than the line's half-width so it stays visible. */
+private const val TRACK_DOT_RADIUS_DP = 3f
 
 /** Nothing to frame at all: Ufa region at a regional zoom. */
 private val DEFAULT_CENTER = LatLng(54.74, 55.96)
@@ -88,7 +92,8 @@ private object MapLibreInit {
 }
 
 /**
- * MapLibre map with the team's [track] and taken-КП [pins] over [styleSource]. Must only be composed
+ * MapLibre map with the team's [trackLines] (one drawn part per line; a 1-point line is drawn as a dot
+ * by a circle layer on the same source) and taken-КП [pins] over [styleSource]. Must only be composed
  * while the map tab is the settled pager page — each composition owns a native `MapView`
  * (+ a GPS client via the location component when [locationPermitted]).
  *
@@ -103,7 +108,7 @@ private object MapLibreInit {
 @Composable
 fun TrackMapView(
     styleSource: MapStyleSource,
-    track: List<TrackPointLike>,
+    trackLines: List<List<TrackPointLike>>,
     pins: List<MapPin>,
     frameKey: Any?,
     locationPermitted: Boolean,
@@ -120,13 +125,13 @@ fun TrackMapView(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
 
-    val trackJson by produceState(trackGeoJson(emptyList()), track) {
-        value = withContext(Dispatchers.Default) { trackGeoJson(track) }
+    val trackJson by produceState(trackGeoJson(emptyList()), trackLines) {
+        value = withContext(Dispatchers.Default) { trackGeoJson(trackLines) }
     }
     val pinsJson = remember(pins) { pinsGeoJson(pins) }
     val pinNumbers = remember(pins) { pins.mapTo(HashSet()) { it.number } }
 
-    val latestTrack by rememberUpdatedState(track)
+    val latestTrackLines by rememberUpdatedState(trackLines)
     val latestPins by rememberUpdatedState(pins)
     val latestTrackGeoJson by rememberUpdatedState(trackJson)
     val latestPinsGeoJson by rememberUpdatedState(pinsJson)
@@ -199,6 +204,16 @@ fun TrackMapView(
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 ),
             )
+            // 1-point lines (trackGeoJson's dot feature): same colour as the line. Filtered to the dot
+            // feature — a circle layer would otherwise also draw a circle at every line vertex.
+            style.addLayer(
+                CircleLayer(TRACK_DOT_LAYER, TRACK_SOURCE)
+                    .withFilter(Expression.has(TRACK_DOT_PROPERTY))
+                    .withProperties(
+                        PropertyFactory.circleColor(OrangeCta.toArgb()),
+                        PropertyFactory.circleRadius(TRACK_DOT_RADIUS_DP),
+                    ),
+            )
             style.addSource(GeoJsonSource(PINS_SOURCE, latestPinsGeoJson))
             style.addLayer(
                 SymbolLayer(PINS_LAYER, PINS_SOURCE).withProperties(
@@ -233,13 +248,16 @@ fun TrackMapView(
 
     // Camera: on every style load, on a team switch, and (without file bounds) when the first track
     // point / pin arrives after a no-data frame. With file bounds the data never moves the camera.
+    // hasData follows the (filtered) lines on purpose: they arrive asynchronously, so framing on the
+    // raw track would fit an empty frame. Accepted edge: with no file bounds and no pins, toggling
+    // «Все точки» when the filter hid every point flips hasData and re-frames once.
     val metadata = (styleSource as? MapStyleSource.Offline)?.metadata
-    val hasData = track.isNotEmpty() || pins.isNotEmpty()
+    val hasData = trackLines.isNotEmpty() || pins.isNotEmpty()
     val dataKey = if (metadata?.bounds == null) hasData else null
     LaunchedEffect(loadedStyle, frameKey, dataKey) {
         val m = map ?: return@LaunchedEffect
         if (loadedStyle == null) return@LaunchedEffect
-        applyCamera(context, m, metadata, dataBounds(latestTrack, latestPins))
+        applyCamera(context, m, metadata, dataBounds(latestTrackLines.flatten(), latestPins))
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
