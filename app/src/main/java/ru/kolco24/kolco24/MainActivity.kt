@@ -1816,6 +1816,7 @@ private fun Kolco24AppRoot(
                         controlMinutes = controlMinutes,
                         markTime = markTime,
                         nowMs = controlTimeNow,
+                        isActive = pagerState.settledPage == PAGE_MARKS,
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                     )
                     PAGE_LEGEND -> LegendScreen(

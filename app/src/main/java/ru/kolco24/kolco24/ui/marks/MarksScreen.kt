@@ -105,6 +105,10 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.compose.ui.MotionDurationScale
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import java.io.File
@@ -419,6 +423,8 @@ fun MarksScreen(
     controlMinutes: Int = 0,
     markTime: (MarkEntity) -> Long,
     nowMs: () -> Long,
+    // The pager keeps the neighbour page composed; the КВ colon blinks only on the settled Отметки page.
+    isActive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // Score off the live checkpoint cost (joined by checkpoint id), falling back to the mark's snapshot
@@ -510,6 +516,7 @@ fun MarksScreen(
                         controlMinutes = controlMinutes,
                         markTime = markTime,
                         nowMs = nowMs,
+                        isActive = isActive,
                         takenKp = takenKp,
                         totalKp = totalKp,
                         takenScore = takenScore,
@@ -959,6 +966,7 @@ private fun ControlTimeMetrics(
     controlMinutes: Int,
     markTime: (MarkEntity) -> Long,
     nowMs: () -> Long,
+    isActive: Boolean,
     takenKp: Int,
     totalKp: Int,
     takenScore: Int,
@@ -984,6 +992,7 @@ private fun ControlTimeMetrics(
         takenScore = takenScore,
         totalCost = totalCost,
         controlTime = controlTimeLabel(kv),
+        controlTimeTicking = isActive && (kv is ControlTimeState.Running || kv is ControlTimeState.Overtime),
     )
 }
 
@@ -994,6 +1003,7 @@ private fun MetricsCard(
     takenScore: Int,
     totalCost: Int,
     controlTime: ControlTimeLabel,
+    controlTimeTicking: Boolean,
 ) {
     Surface(
         modifier = Modifier
@@ -1033,6 +1043,7 @@ private fun MetricsCard(
                 value = controlTime.value,
                 mono = true,
                 isError = controlTime.isError,
+                blinkColon = controlTimeTicking,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -1044,6 +1055,8 @@ private fun MetricsCard(
  * «/total» denominator (e.g. «8/15») mirrors the Легенда's score progress so взято/сумма read as
  * fractions of the race total rather than bare counts. [total] is null until the legend has loaded.
  */
+private const val COLON_BLINK_MS = 1_000L
+
 @Composable
 private fun MetricItem(
     label: String,
@@ -1051,8 +1064,27 @@ private fun MetricItem(
     total: String? = null,
     mono: Boolean = false,
     isError: Boolean = false,
+    blinkColon: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    var colonVisible by remember { mutableStateOf(true) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(blinkColon, lifecycle) {
+        colonVisible = true
+        if (!blinkColon) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            try {
+                while (true) {
+                    delay(COLON_BLINK_MS)
+                    // Re-read each tick: the system "remove animations" setting can change at runtime.
+                    val animationsOn = (coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) > 0f
+                    colonVisible = !colonVisible || !animationsOn
+                }
+            } finally {
+                colonVisible = true
+            }
+        }
+    }
     Column(modifier = modifier.padding(vertical = 10.dp)) {
         Text(
             text = label,
@@ -1065,7 +1097,12 @@ private fun MetricItem(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = value,
+                // The hidden colon is drawn transparent, not removed, so the digits don't shift.
+                text = if (colonVisible) AnnotatedString(value) else buildAnnotatedString {
+                    value.forEach { c ->
+                        if (c == ':') withStyle(SpanStyle(color = Color.Transparent)) { append(c) } else append(c)
+                    }
+                },
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium),
                 fontFamily = if (mono) RobotoMono else null,
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
