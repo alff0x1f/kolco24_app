@@ -94,35 +94,35 @@ fun trackAutoAction(cpType: String?, recording: Boolean, finishTaken: Boolean): 
 - Create: `app/src/test/java/ru/kolco24/kolco24/data/track/TrackAutoControlTest.kt`
 - Create: `app/src/main/java/ru/kolco24/kolco24/data/track/TrackAutoControl.kt`
 
-- [ ] write `TrackAutoControlTest` first: `test` → None во всех комбинациях; `null` → None
-- [ ] tests: `start`/`kp`/unknown type → Start когда не пишет и финиш не взят; None когда пишет; None когда финиш взят
-- [ ] tests: `finish` → Stop когда пишет; None когда не пишет (с `finishTaken` true/false); повторный финиш после ручного рестарта (`recording = true`, `finishTaken = true`) → Stop
-- [ ] implement `TrackAutoAction` + `trackAutoAction` (KDoc: правило и причина игнора `test`)
-- [ ] run `./gradlew testDebugUnitTest` - must pass before task 2
+- [x] write `TrackAutoControlTest` first: `test` → None во всех комбинациях; `null` → None
+- [x] tests: `start`/`kp`/unknown type → Start когда не пишет и финиш не взят; None когда пишет; None когда финиш взят
+- [x] tests: `finish` → Stop когда пишет; None когда не пишет (с `finishTaken` true/false); повторный финиш после ручного рестарта (`recording = true`, `finishTaken = true`) → Stop
+- [x] implement `TrackAutoAction` + `trackAutoAction` (KDoc: правило и причина игнора `test`)
+- [x] run `./gradlew testDebugUnitTest` - must pass before task 2
 
 ### Task 2: Wire auto-start/stop into MainActivity
 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] add `pendingTrackAutoStart` (`rememberSaveable`) state; clear it in the `LaunchedEffect(selectedTeamId)` reset list
-- [ ] add `trackAutoDecide(cpType, finishTaken)` (Main: reads `recording`, calls `trackAutoAction`, handles missing permission → pending, Stop → clears pending) and `applyTrackAuto(action, raceId, teamId)` near `onStartTrack`
-- [ ] NFC call site, new-take-row branch only (not re-stamp / `addMember`): before `applicationScope.async`, decide with `cpType = localCheckpointsById[event.checkpointId]?.type` and `finishTaken` from `safeMarks` + `localCheckpointsById`; inside the async block, after `startKpTake`, call `applyTrackAuto`
-- [ ] photo call site: in `onCommit`, standalone branch (`!attach && photoCp != null`, race/team non-null) decide on Main with `photoCp.type` + `checkpointTypes`, apply inside `applicationScope.launch` after `createPhotoMark`; `attach` branch does not call it
-- [ ] add `LaunchedEffect(showScan, photoCaptureMarkId, pendingTrackAutoStart, locationAutoAskInFlight)`: when pending, overlays closed and no ask in flight → clear flag; permission granted → `TrackRecordingService.start`; else if `!hasRequestedLocation` → `onStartTrack`; else skip
-- [ ] no new unit tests (Compose wiring is untested by convention); re-run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` - must pass before task 3
+- [x] add `pendingTrackAutoStart` (`rememberSaveable`) state; clear it in the `LaunchedEffect(selectedTeamId)` reset list
+- [x] add `trackAutoDecide(cpType, finishTaken)` (Main: reads `recording`, calls `trackAutoAction`, handles missing permission → pending, Stop → clears pending) and `applyTrackAuto(action, raceId, teamId)` near `onStartTrack`
+- [x] NFC call site, new-take-row branch only (not re-stamp / `addMember`): before `applicationScope.async`, decide with `cpType = localCheckpointsById[event.checkpointId]?.type` and `finishTaken` from `safeMarks` + `localCheckpointsById`; inside the async block, after `startKpTake`, call `applyTrackAuto`
+- [x] photo call site: in `onCommit`, standalone branch (`!attach && photoCp != null`, race/team non-null) decide on Main with `photoCp.type` + `checkpointTypes`, apply inside `applicationScope.launch` after `createPhotoMark`; `attach` branch does not call it
+- [x] add `LaunchedEffect(showScan, photoCaptureMarkId, pendingTrackAutoStart, locationAutoAskInFlight)`: when pending, overlays closed and no ask in flight → clear flag; permission granted → `TrackRecordingService.start`; else if `!hasRequestedLocation` → `onStartTrack`; else skip
+- [x] no new unit tests (Compose wiring is untested by convention); re-run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` - must pass before task 3
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented (start, any-KP fallback, finish stop, test ignored, no auto-start after finish, photo marks)
-- [ ] verify edge cases: re-scan same KP in window, `attachPhotos`, legend not loaded (`null` type), permission missing
-- [ ] run full test suite: `./gradlew testDebugUnitTest`
-- [ ] run lint: `./gradlew lintDebug`
+- [x] verify all requirements from Overview are implemented (start, any-KP fallback, finish stop, test ignored, no auto-start after finish, photo marks)
+- [x] verify edge cases: re-scan same KP in window, `attachPhotos`, legend not loaded (`null` type), permission missing
+- [x] run full test suite: `./gradlew testDebugUnitTest`
+- [x] run lint: `./gradlew lintDebug`
 
 ### Task 4: [Final] Update documentation
-- [ ] `docs/design/DATA-NOTES.md`: add `TrackAutoControl` to the `data/track/` bullet (rule, `test` ignored, finish latch, tested by `TrackAutoControlTest`)
-- [ ] `docs/design/UI-NOTES.md`: MainActivity wiring — `onTrackAutoTake` call sites (new NFC take row, standalone photo mark), deferred permission request after overlays close, once per session
-- [ ] `CLAUDE.md`: add `TrackAutoControl` to the Pure models list; mention auto start/stop in the `data/track/` or `TrackRecordingService` module-map line
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `docs/design/DATA-NOTES.md`: add `TrackAutoControl` to the `data/track/` bullet (rule, `test` ignored, finish latch, tested by `TrackAutoControlTest`)
+- [x] `docs/design/UI-NOTES.md`: MainActivity wiring — `onTrackAutoTake` call sites (new NFC take row, standalone photo mark), deferred permission request after overlays close, once per session
+- [x] `CLAUDE.md`: add `TrackAutoControl` to the Pure models list; mention auto start/stop in the `data/track/` or `TrackRecordingService` module-map line
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual verification on device*

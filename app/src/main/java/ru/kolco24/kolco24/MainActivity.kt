@@ -122,6 +122,7 @@ import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
+import ru.kolco24.kolco24.data.track.TrackAutoAction
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.UploadResultKind
@@ -129,6 +130,7 @@ import ru.kolco24.kolco24.data.track.UploadTarget
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.gpxFileName
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
+import ru.kolco24.kolco24.data.track.trackAutoAction
 import ru.kolco24.kolco24.data.track.trackLines
 import java.io.File
 import ru.kolco24.kolco24.data.map.MapDownloadState
@@ -1072,6 +1074,8 @@ private fun Kolco24AppRoot(
     // Session-only "the first-scan auto-ask already ran" flag (at most one unprompted location request
     // per session). The permanent-denial routing uses the persisted permissionLog instead.
     var hasRequestedLocation by rememberSaveable { mutableStateOf(false) }
+    // A КП take asked to auto-start the track but location permission was missing; see trackAutoDecide.
+    var pendingTrackAutoStart by rememberSaveable { mutableStateOf(false) }
     // "Denied before" flags for LOCATION / NOTIFICATIONS, persisted across process restarts. Requests
     // are always launched; every launcher callback updates the flags from the RESULT (pure
     // locationDenialLogUpdate / notificationDenialLogUpdate — a dismissed dialog records nothing, a
@@ -1122,6 +1126,7 @@ private fun Kolco24AppRoot(
         showLocationDisabledDialog = false; showLocationDeniedDialog = false; showPreciseLocationDialog = false
         showNotificationsDeniedDialog = false
         pendingCelebration = false
+        pendingTrackAutoStart = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
             TrackRecordingService.stop(context)
@@ -1202,6 +1207,53 @@ private fun Kolco24AppRoot(
             }
         }
         trackPermissionLauncher.launch(perms.toTypedArray())
+    }
+    // Auto start/stop of the track on a fresh КП take (pure trackAutoAction). Decide runs on Main from
+    // Compose state before the take's write; apply is a plain Context call, safe on any thread, and runs
+    // right after the write so a closing overlay (cancelled scope) can't skip it. A Start without
+    // location permission is parked in pendingTrackAutoStart until the scan/photo overlays close.
+    val locationPermitted: () -> Boolean = {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+    val trackAutoDecide: (cpType: String?, finishTaken: Boolean) -> TrackAutoAction = { cpType, finishTaken ->
+        val rec = container.trackRecordingState.value as? TrackState.Recording
+        val recording = rec != null && rec.teamId == selectedTeamId
+        when (val action = trackAutoAction(cpType, recording, finishTaken)) {
+            TrackAutoAction.Start -> if (locationPermitted()) {
+                action
+            } else {
+                pendingTrackAutoStart = true
+                TrackAutoAction.None
+            }
+            TrackAutoAction.Stop -> {
+                pendingTrackAutoStart = false
+                action
+            }
+            TrackAutoAction.None -> action
+        }
+    }
+    val applyTrackAuto: (TrackAutoAction, Int, Int) -> Unit = { action, raceId, teamId ->
+        when (action) {
+            TrackAutoAction.Start -> TrackRecordingService.start(context, raceId, teamId)
+            TrackAutoAction.Stop -> TrackRecordingService.stop(context)
+            TrackAutoAction.None -> Unit
+        }
+    }
+    // Waits for the scan overlay's own first-open location ask to settle: a parallel launch would get an
+    // instant empty result that trackPermissionLauncher records as a real denial. Granted meanwhile →
+    // start directly; otherwise ask only if nothing asked this session (a second denial is permanent).
+    LaunchedEffect(showScan, photoCaptureMarkId, pendingTrackAutoStart, locationAutoAskInFlight) {
+        if (!pendingTrackAutoStart || showScan || photoCaptureMarkId != null || locationAutoAskInFlight) return@LaunchedEffect
+        pendingTrackAutoStart = false
+        val raceId = selectedRaceId
+        val teamId = selectedTeamId
+        if (raceId == null || teamId == null) return@LaunchedEffect
+        if (locationPermitted()) {
+            TrackRecordingService.start(context, raceId, teamId)
+        } else if (!hasRequestedLocation) {
+            onStartTrack()
+        }
     }
     // Export the selected team's track as GPX and hand it to the system share-sheet. Reads the points
     // off the IO dispatcher, writes the file into cacheDir/tracks/ (exposed via FileProvider), then
@@ -1829,6 +1881,12 @@ private fun Kolco24AppRoot(
                                 if (expired) { scanTake.buffer.clear(); scanTake.snapshots.clear() }
                                 val buffered = scanTake.buffer.toSet()
                                 val rosterSize = scanRoster.size
+                                // Types from the fresh DAO snapshot: on a cold start the Compose legend
+                                // may still be empty, and a КП after the finish must not restart the track.
+                                val trackAuto = trackAutoDecide(
+                                    localCheckpointsById[event.checkpointId]?.type,
+                                    safeMarks.any { localCheckpointsById[it.checkpointId]?.type == "finish" },
+                                )
                                 // applicationScope.async: the write survives the overlay closing, yet
                                 // await() still hands the id back for the in-session addMember chain.
                                 val id = container.applicationScope.async {
@@ -1854,7 +1912,7 @@ private fun Kolco24AppRoot(
                                         sample = sample,
                                         // Snapshot the tag's verification rule onto the take row.
                                         checkMethod = event.checkMethod,
-                                    )
+                                    ).also { applyTrackAuto(trackAuto, raceId, teamId) }
                                 }.await()
                                 scanTake.markId = id
                                 // Anti-fraud: capture a fresh one-shot GPS fix for THIS new take row
@@ -2660,6 +2718,11 @@ private fun Kolco24AppRoot(
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
                     val rosterSize = teamForTab?.members?.size ?: 0
+                    val trackAuto = if (!attach && photoCp != null && raceId != null && teamId != null) {
+                        trackAutoDecide(photoCp.type, safeMarks.any { checkpointTypes[it.checkpointId] == "finish" })
+                    } else {
+                        TrackAutoAction.None
+                    }
                     // applicationScope: the write must outlive the closing overlay (mirrors selectTeam/
                     // startKpTake). AttachTo appends paths to the existing (NFC) row; AskNumber creates a
                     // standalone hybrid photo-mark and fires a one-shot anti-cheat GPS fix for it.
@@ -2684,6 +2747,7 @@ private fun Kolco24AppRoot(
                                 expectedCount = rosterSize,
                                 sample = firstSample,
                             )
+                            applyTrackAuto(trackAuto, raceId, teamId)
                             markRepo.attachLocation(
                                 activePhotoMarkId,
                                 container.currentLocationProvider.current(),
