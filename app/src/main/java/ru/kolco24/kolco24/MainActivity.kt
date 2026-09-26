@@ -1920,7 +1920,11 @@ private fun Kolco24AppRoot(
                         // Diagnostics never open a take or advance the window.
                         ScanEvent.UnboundChip, is ScanEvent.BadKp -> Unit
                     }
-                    event
+                    // Hand the overlay the expectedCount actually persisted on the take row (a new row's
+                    // roster snapshot, or the reused row's original count on a same-КП re-stamp): the
+                    // overlay's completion reads it from the event, never the live roster, so it can't
+                    // diverge from the DB `complete` flag if a sync changed the roster mid-callback.
+                    if (event is ScanEvent.Kp) event.copy(expectedCount = scanTake.expectedCount) else event
                 },
                 onClose = closeScanOverlay,
                 onCompleted = { pendingCelebration = true; switchToTab(PAGE_MARKS) },

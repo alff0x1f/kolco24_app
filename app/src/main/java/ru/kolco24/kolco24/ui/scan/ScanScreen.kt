@@ -150,10 +150,6 @@ fun ScanScreen(
     val currentOnClose by rememberUpdatedState(onClose)
     val currentOnCompleted by rememberUpdatedState(onCompleted)
     val currentConfirm by rememberUpdatedState(confirm)
-    // process() is captured once by the first-composition tag hooks below, so it must read the roster
-    // through this holder: the КП tap snapshots the live size into the session (as the host does into
-    // the DB take's expectedCount) — a stale captured roster would disagree with the persisted row.
-    val currentRoster by rememberUpdatedState(roster)
     var session by remember { mutableStateOf<ScanSession?>(null) }
     var remainingMillis by remember { mutableLongStateOf(SCAN_WINDOW_MS) }
     var diagnostic by remember { mutableStateOf<String?>(null) }
@@ -216,7 +212,10 @@ fun ScanScreen(
                     // Let the lastScanAt-keyed LaunchedEffect drive the timer. Don't reset
                     // remainingMillis here: an idempotent re-scan leaves lastScanAt unchanged,
                     // so the ring must keep counting down rather than flash back to full.
-                    session = reduce(effectiveSession, event, now, rosterSize = currentRoster.size)
+                    // A Kp event carries the expectedCount the host persisted on the take row, so the
+                    // session's completion can't diverge from the DB even if the roster changed while
+                    // onScanTag was suspended on NFC/Room work.
+                    session = reduce(effectiveSession, event, now)
                     // The completing tap still gets the ordinary scan feedback first. The fanfare
                     // follows only on the incomplete to complete transition, including completion
                     // arriving on a Kp event when pre-КП buffered members drain into present.

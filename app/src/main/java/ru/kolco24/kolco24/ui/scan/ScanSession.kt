@@ -31,11 +31,12 @@ fun isWindowExpired(lastScanAt: Long?, now: Long): Boolean =
  * drained into [present] (see [reduce]). [lastScanAt] is the **monotonic** `elapsedRealtime` ms of the
  * most recent **accepted** scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and
  * does **not** advance it. (Monotonic, not wall-clock, so translating the phone clock can't skew it.)
- * [checkMethod] is the КП tag's verification rule and [expectedCount] the roster size, both snapshotted by
- * [reduce] when a [ScanEvent.Kp] **opens** the take (a new КП / fresh session) and kept on a same-КП
- * re-scan — exactly like the host's DB take row (`MarkRepository.startKpTake` snapshots `checkMethod` and
- * `expectedCount` once; a same-КП re-scan reuses the row). [checkMethod] defaults to
- * [CheckMethod.Offline] and [expectedCount] to 0 (never complete) until a КП lands.
+ * [checkMethod] is the КП tag's verification rule, snapshotted by [reduce] when a [ScanEvent.Kp] **opens**
+ * the take (a new КП / fresh session) and kept on a same-КП re-scan — exactly like the host's DB take row
+ * (`MarkRepository.startKpTake` snapshots `checkMethod` once; a same-КП re-scan reuses the row).
+ * [expectedCount] is always copied from [ScanEvent.Kp.expectedCount] — the count the host actually
+ * persisted on the take row — so UI completion and the DB `complete` flag share one source of truth.
+ * [checkMethod] defaults to [CheckMethod.Offline] and [expectedCount] to 0 (never complete) until a КП lands.
  */
 data class ScanSession(
     val checkpointId: Int?,
@@ -73,7 +74,10 @@ sealed interface ScanEvent {
     /**
      * The checkpoint chip: identifies [checkpointId] with its resolved [number]/[cost] and anti-cheat log.
      * [checkMethod] is the tag's parsed verification rule ([classifyTag] always passes it; the default
-     * only keeps test literals short).
+     * only keeps test literals short). [expectedCount] is the persisted take row's expected count,
+     * stamped by the host after it opens (or reuses) the row — [classifyTag] cannot know it and leaves
+     * 0 (a take that never completes). Carrying it on the event (rather than re-reading the roster after
+     * the host's NFC/Room suspension) keeps UI completion and the DB `complete` flag in lockstep.
      */
     data class Kp(
         val checkpointId: Int,
@@ -82,6 +86,7 @@ sealed interface ScanEvent {
         val cpUid: String,
         val cpCode: String,
         val checkMethod: CheckMethod = CheckMethod.Offline,
+        val expectedCount: Int = 0,
     ) : ScanEvent
 
     /** A bound team-member bracelet ([numberInTeam] is the member's slot within the roster). */
@@ -100,12 +105,12 @@ sealed interface ScanEvent {
  *
  * - [ScanEvent.Kp] sets the KP fields and **drains** [ScanSession.bufferedBeforeKp] into
  *   [ScanSession.present] (members scanned before the chip count once the chip lands). A КП that opens
- *   a take (no КП yet, or a different КП) snapshots [ScanSession.checkMethod] from the tag and
- *   [ScanSession.expectedCount] from [rosterSize]; a repeat scan of the same КП just re-stamps the
- *   window and keeps both snapshots (the host reuses the persisted take row with its original method
- *   and expected count, even if this physical tag carries a different method or the roster changed).
- *   [rosterSize] (the live roster size at this tap) is only read on such a take-opening КП; its 0
- *   default (a take that never completes) only keeps member-only test calls short.
+ *   a take (no КП yet, or a different КП) snapshots [ScanSession.checkMethod] from the tag; a repeat
+ *   scan of the same КП re-stamps the window and keeps it (the host reuses the persisted take row with
+ *   its original method, even if this physical tag carries a different method).
+ *   [ScanSession.expectedCount] is always taken from [ScanEvent.Kp.expectedCount] — the host stamps the
+ *   persisted row's count (a new row's snapshot, or the reused row's original count), so the session can
+ *   never disagree with the DB even if the roster changed while the host was suspended.
  * - [ScanEvent.Member] goes to the buffer while [ScanSession.checkpointId] is null, otherwise straight into
  *   `present`; set-semantics make a repeated member idempotent. A member scanned with no session yet
  *   starts one (so pre-KP bracelets are not lost). Re-scanning a member who is **already** counted
@@ -117,12 +122,13 @@ sealed interface ScanEvent {
  * Any scan that adds new information (a KP or a not-yet-counted member) refreshes
  * [ScanSession.lastScanAt] to [now]; an idempotent re-scan leaves the window untouched.
  */
-fun reduce(session: ScanSession?, event: ScanEvent, now: Long, rosterSize: Int = 0): ScanSession? = when (event) {
+fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = when (event) {
     is ScanEvent.Kp -> {
         val base = session ?: ScanSession.empty(now)
         // When switching to a different КП, discard the prior KP's members — they were present at a
         // different checkpoint. A repeat scan of the same КП preserves accumulated members and the
-        // take's method / expected-count snapshots (mirrors the host reusing the persisted row).
+        // take's method snapshot (mirrors the host reusing the persisted row). The expected count is the
+        // host's persisted value, carried on the event.
         val sameTake = session?.checkpointId == event.checkpointId
         val priorPresent = if (sameTake) base.present else emptySet()
         base.copy(
@@ -132,7 +138,7 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long, rosterSize: Int =
             cpUid = event.cpUid,
             cpCode = event.cpCode,
             checkMethod = if (sameTake) base.checkMethod else event.checkMethod,
-            expectedCount = if (sameTake) base.expectedCount else rosterSize,
+            expectedCount = event.expectedCount,
             present = priorPresent + base.bufferedBeforeKp,
             bufferedBeforeKp = emptySet(),
             lastScanAt = now,
