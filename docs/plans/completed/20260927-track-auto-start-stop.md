@@ -40,7 +40,7 @@
 ## Solution Overview
 Подход A: явный вызов в двух местах взятия + чистая функция-решение.
 - Чистая функция `trackAutoAction(cpType, recording, finishTaken)` решает `Start | Stop | None`.
-- `MainActivity` вызывает хелпер `onTrackAutoTake(cpType)` сразу после создания **новой** отметки (NFC или фото). Повторный скан того же КП в окне, `addMember`, `attachPhotos` и перезапуск приложения не срабатывают.
+- `MainActivity` вызывает хелпер `onTrackAutoTake(cpType, finishTaken, raceId, teamId)` сразу после создания **новой** отметки (NFC или фото). Повторный скан того же КП в окне, `addMember`, `attachPhotos` и перезапуск приложения не срабатывают.
 - Отвергнуто: реакция на поток отметок из Room (трудно отличить новую отметку от старой после холодного старта → ложные старты); управление сервисом из `MarkRepository` (слой данных не должен управлять сервисом и разрешениями).
 
 ## Technical Details
@@ -67,7 +67,9 @@ fun trackAutoAction(cpType: String?, recording: Boolean, finishTaken: Boolean): 
 - **NFC-решение вычисляется до `applicationScope.async`** (на Main, `onScanTag` работает на Main через `rememberCoroutineScope`). Действие Start/Stop выполняется внутри `applicationScope.async` сразу после `startKpTake` — если оверлей закроется во время `await()` (отмена scope), запуск/остановка всё равно произойдут. `TrackRecordingService.start/stop` — обычные вызовы `Context`, потокобезопасны. Установка `pendingTrackAutoStart` — на Main, до `async` (решение уже известно).
 - Фото: решение вычисляется в `onCommit` (Main) до `applicationScope.launch`.
 
-Хелпер в `MainActivity` (рядом с `onStartTrack`) делится на две части:
+➕ После ревью (итоговая реализация, заменяет описание ниже): решение и применение объединены в `onTrackAutoTake(cpType, finishTaken, raceId, teamId)`, вызываемый **после** записи внутри `applicationScope`-блока на обоих путях (упавшая запись ничего не паркует/не запускает). Решение — чистая `trackAutoDecision(cpType, recordingTeamId, takeTeamId, finishTaken, permitted)` → `(action, pending)`: Start с разрешением сбрасывает pending, Start без разрешения паркует, любой `finish` сбрасывает. `finishTaken` на обоих путях — чистая `hasFinishTake` над свежим чтением БД (`markRepo.observeMarks(teamId).first()` + `localCheckpointsById` для NFC / `legendRepo.checkpointsSnapshot(raceId)` для фото), до записи. Типы КП нормализуются (`trim`+`lowercase`). Запуск (`startTrackAuto`, общий для обоих путей старта) ловит `IllegalStateException` из `startForegroundService` (фон на 12+); отказ `startForeground` для типа location на 14+ (`SecurityException`) ловит сам сервис (`stopSelf`). Stop тоже обёрнут. Как и ручной путь: при выключенной геолокации — `showLocationDisabledDialog`; на 13+ без `POST_NOTIFICATIONS` (не отклонённого ранее) — один запрос за сессию после закрытия оверлеев. Отложенный старт решает чистая `resolvePendingTrackStart` (Wait/StartNow/AskPermission/Drop): ждёт и при `null` race/team (ключи эффекта), не стартует повторно, если запись уже идёт.
+
+Исходный план (до ревью) — хелпер в `MainActivity` (рядом с `onStartTrack`) делится на две части:
 - `trackAutoDecide(cpType, finishTaken): TrackAutoAction` — читает `recording`, вызывает `trackAutoAction`. Если `Start` и нет разрешения (fine или coarse, `ContextCompat.checkSelfPermission`) → `pendingTrackAutoStart = true` и возвращает `None`. Если `Stop` → `pendingTrackAutoStart = false`.
 - `applyTrackAuto(action, raceId, teamId)` — `Start` → `TrackRecordingService.start(context, raceId, teamId)`; `Stop` → `TrackRecordingService.stop(context)`; `None` → ничего.
 
@@ -109,6 +111,7 @@ fun trackAutoAction(cpType: String?, recording: Boolean, finishTaken: Boolean): 
 - [x] add `trackAutoDecide(cpType, finishTaken)` (Main: reads `recording`, calls `trackAutoAction`, handles missing permission → pending, Stop → clears pending) and `applyTrackAuto(action, raceId, teamId)` near `onStartTrack`
 - [x] NFC call site, new-take-row branch only (not re-stamp / `addMember`): before `applicationScope.async`, decide with `cpType = localCheckpointsById[event.checkpointId]?.type` and `finishTaken` from `safeMarks` + `localCheckpointsById`; inside the async block, after `startKpTake`, call `applyTrackAuto`
 - [x] photo call site: in `onCommit`, standalone branch (`!attach && photoCp != null`, race/team non-null) decide on Main with `photoCp.type` + `checkpointTypes`, apply inside `applicationScope.launch` after `createPhotoMark`; `attach` branch does not call it
+- ➕ [x] review fixes: merged into `onTrackAutoTake` after the write; pure `trackAutoDecision`/`hasFinishTake`/`resolvePendingTrackStart`/`shouldAskNotificationsAfterAutoStart` + tests; service-side `startForeground` guard
 - [x] add `LaunchedEffect(showScan, photoCaptureMarkId, pendingTrackAutoStart, locationAutoAskInFlight)`: when pending, overlays closed and no ask in flight → clear flag; permission granted → `TrackRecordingService.start`; else if `!hasRequestedLocation` → `onStartTrack`; else skip
 - [x] no new unit tests (Compose wiring is untested by convention); re-run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` - must pass before task 3
 
@@ -137,3 +140,6 @@ fun trackAutoAction(cpType: String?, recording: Boolean, finishTaken: Boolean): 
 - Повторное взятие Старта после истечения окна 20 с (новая строка) после ручной остановки — запись снова пошла (по правилу «любой КП»).
 - Без разрешения на геолокацию, открытие оверлея тапом по чипу Старта: оверлей спрашивает разрешение → «разрешить» → после закрытия оверлея запись стартует без второго диалога. «Отказать» → повторно в этой сессии не спрашивает, запись не стартует.
 - Взяли Старт без разрешения, затем сменили команду до закрытия оверлея → запись для новой команды не стартует.
+- ➕ Оверлей скана закрыт во время записи отметки (Старт) → запись всё равно стартует.
+- ➕ Приложение ушло в фон между взятием и стартом (Android 12+/14+) → без краша, отметка сохранена, следующий КП запускает запись.
+- ➕ Android 13+, уведомления не разрешены: авто-старт → после закрытия оверлея один запрос уведомлений.

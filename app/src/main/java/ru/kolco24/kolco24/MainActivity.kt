@@ -96,6 +96,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.data.RefreshResult
 import ru.kolco24.kolco24.data.ScanFeedbackPlayer
@@ -121,16 +122,21 @@ import ru.kolco24.kolco24.data.todayIso
 import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.track.PendingTrackStart
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackAutoAction
 import ru.kolco24.kolco24.data.track.TrackProfile
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.data.track.UploadResultKind
 import ru.kolco24.kolco24.data.track.UploadTarget
+import ru.kolco24.kolco24.data.track.activeRecordingTeamId
 import ru.kolco24.kolco24.data.track.buildGpx
 import ru.kolco24.kolco24.data.track.gpxFileName
+import ru.kolco24.kolco24.data.track.hasFinishTake
+import ru.kolco24.kolco24.data.track.resolvePendingTrackStart
+import ru.kolco24.kolco24.data.track.shouldAskNotificationsAfterAutoStart
 import ru.kolco24.kolco24.data.track.sortedTrackPoints
-import ru.kolco24.kolco24.data.track.trackAutoAction
+import ru.kolco24.kolco24.data.track.trackAutoDecision
 import ru.kolco24.kolco24.data.track.trackLines
 import java.io.File
 import ru.kolco24.kolco24.data.map.MapDownloadState
@@ -213,6 +219,10 @@ private const val PAGE_LEGEND = 1
 private const val PAGE_MAP = 2
 private const val PAGE_TEAM = 3
 private const val PAGE_COUNT = 4
+
+// Serializes a КП take's finish-latch read, its write and the track auto start/stop decision across the
+// NFC and photo paths (process-wide so jobs outliving an Activity recreation share it).
+private val trackAutoTakeLock = Mutex()
 
 /** Foreground drain cadence for pending judge start/finish piks — dual-target, per the plan's design. */
 const val JUDGE_SCAN_UPLOAD_INTERVAL_MS = 60_000L
@@ -963,6 +973,13 @@ private fun Kolco24AppRoot(
             !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
             locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
+    // Any location provider on — checked live at each track start (manual and auto) to raise the
+    // «location services off» deep-link; declared here so trackPermissionLauncher can use it too.
+    val locationServicesEnabled: () -> Boolean = {
+        locationManager?.let {
+            it.isProviderEnabled(LocationManager.GPS_PROVIDER) || it.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        } ?: false
+    }
 
     // Upload-status derivations feeding the TrackCard row and the «Загрузка данных» page's three
     // sections. Counts are durable+reactive (Room flags); outcomes are the transient in-memory
@@ -1074,8 +1091,17 @@ private fun Kolco24AppRoot(
     // Session-only "the first-scan auto-ask already ran" flag (at most one unprompted location request
     // per session). The permanent-denial routing uses the persisted permissionLog instead.
     var hasRequestedLocation by rememberSaveable { mutableStateOf(false) }
-    // A КП take asked to auto-start the track but location permission was missing; see trackAutoDecide.
+    // A КП take asked to auto-start the track but location permission was missing; see onTrackAutoTake.
     var pendingTrackAutoStart by rememberSaveable { mutableStateOf(false) }
+    // An auto-start landed without POST_NOTIFICATIONS (13+): ask once the overlays close, at most once
+    // per session (trackNotificationsAsked); see startTrackAuto.
+    var pendingTrackNotificationsAsk by rememberSaveable { mutableStateOf(false) }
+    var trackNotificationsAsked by rememberSaveable { mutableStateOf(false) }
+    // An auto-start landed with location services off: show showLocationDisabledDialog once the
+    // overlays close (never over the live scan overlay), at most once per session
+    // (trackLocationDisabledNoticed) so every later КП take doesn't re-nag; see startTrackAuto.
+    var pendingTrackLocationDisabledNotice by rememberSaveable { mutableStateOf(false) }
+    var trackLocationDisabledNoticed by rememberSaveable { mutableStateOf(false) }
     // "Denied before" flags for LOCATION / NOTIFICATIONS, persisted across process restarts. Requests
     // are always launched; every launcher callback updates the flags from the RESULT (pure
     // locationDenialLogUpdate / notificationDenialLogUpdate — a dismissed dialog records nothing, a
@@ -1127,6 +1153,8 @@ private fun Kolco24AppRoot(
         showNotificationsDeniedDialog = false
         pendingCelebration = false
         pendingTrackAutoStart = false
+        pendingTrackNotificationsAsk = false
+        pendingTrackLocationDisabledNotice = false
         val recording = container.trackRecordingState.value as? TrackState.Recording
         if (recording != null && recording.teamId != selectedTeamId) {
             TrackRecordingService.stop(context)
@@ -1173,11 +1201,7 @@ private fun Kolco24AppRoot(
             val raceId = selectedRaceId
             val teamId = selectedTeamId
             if (raceId != null && teamId != null) {
-                val anyEnabled = locationManager?.let {
-                    it.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                        it.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-                } ?: false
-                if (!anyEnabled) showLocationDisabledDialog = true
+                if (!locationServicesEnabled()) showLocationDisabledDialog = true
                 TrackRecordingService.start(context, raceId, teamId)
             }
         } else {
@@ -1208,51 +1232,94 @@ private fun Kolco24AppRoot(
         }
         trackPermissionLauncher.launch(perms.toTypedArray())
     }
-    // Auto start/stop of the track on a fresh КП take (pure trackAutoAction). Decide runs on Main from
-    // Compose state before the take's write; apply is a plain Context call, safe on any thread, and runs
-    // right after the write so a closing overlay (cancelled scope) can't skip it. A Start without
-    // location permission is parked in pendingTrackAutoStart until the scan/photo overlays close.
+    // Auto start/stop of the track on a fresh КП take (pure trackAutoDecision). Runs right after the
+    // take's write inside its applicationScope block — never before (a failed write must not start or
+    // park anything), and not on the composition scope (a closing overlay can't skip it). Everything it
+    // touches is thread-safe (StateFlow read, checkSelfPermission, snapshot-state writes, Context calls).
+    // A Start without location permission is parked in pendingTrackAutoStart until the overlays close.
     val locationPermitted: () -> Boolean = {
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
-    val trackAutoDecide: (cpType: String?, finishTaken: Boolean) -> TrackAutoAction = { cpType, finishTaken ->
-        val rec = container.trackRecordingState.value as? TrackState.Recording
-        val recording = rec != null && rec.teamId == selectedTeamId
-        when (val action = trackAutoAction(cpType, recording, finishTaken)) {
-            TrackAutoAction.Start -> if (locationPermitted()) {
-                action
-            } else {
-                pendingTrackAutoStart = true
-                TrackAutoAction.None
+    // Shared by the take-time start and the parked start. startForegroundService throws
+    // ForegroundServiceStartNotAllowedException (an IllegalStateException) on 12+ when the app went to
+    // the background before the write landed; the 14+ location-type rejection is thrown by
+    // startForeground inside the service, which catches it itself. The mark is kept; the next КП retries.
+    val startTrackAuto: (Int, Int) -> Unit = { raceId, teamId ->
+        try {
+            TrackRecordingService.start(context, raceId, teamId)
+            // Same "location services off" deep-link as the manual start (the service still starts),
+            // deferred until the overlays close and shown at most once per session.
+            if (!locationServicesEnabled() && !trackLocationDisabledNoticed) pendingTrackLocationDisabledNotice = true
+            val notifGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (shouldAskNotificationsAfterAutoStart(
+                    runtimePermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
+                    granted = notifGranted,
+                    deniedBefore = permissionLog.wasDenied(PermissionRequestLog.NOTIFICATIONS),
+                    askedThisSession = trackNotificationsAsked,
+                )
+            ) {
+                pendingTrackNotificationsAsk = true
             }
-            TrackAutoAction.Stop -> {
-                pendingTrackAutoStart = false
-                action
-            }
-            TrackAutoAction.None -> action
+        } catch (e: IllegalStateException) {
+            Log.w("TrackAuto", "auto-start rejected", e)
         }
     }
-    val applyTrackAuto: (TrackAutoAction, Int, Int) -> Unit = { action, raceId, teamId ->
-        when (action) {
-            TrackAutoAction.Start -> TrackRecordingService.start(context, raceId, teamId)
-            TrackAutoAction.Stop -> TrackRecordingService.stop(context)
-            TrackAutoAction.None -> Unit
+    // Callers hold trackAutoTakeLock across their finish-latch read, the take write and this call, so
+    // an NFC and a photo take can't act on each other's stale latch (a photo commit resuming after an
+    // NFC finish stopped the track must see that finish). The selected team is re-read from the DB:
+    // a take landing after a team switch (whose cleanup already ran) must not start, stop or park
+    // anything for the team we left.
+    val onTrackAutoTake: suspend (cpType: String?, finishTaken: Boolean, raceId: Int, teamId: Int) -> Unit =
+        autoTake@{ cpType, finishTaken, raceId, teamId ->
+            val current = teamRepo.selectedTeam.first()
+            if (current?.raceId != raceId || current.teamId != teamId) return@autoTake
+            val decision = trackAutoDecision(
+                cpType = cpType,
+                recordingTeamId = container.trackRecordingState.value.activeRecordingTeamId(),
+                takeTeamId = teamId,
+                finishTaken = finishTaken,
+                permitted = locationPermitted(),
+            )
+            decision.pending?.let { pendingTrackAutoStart = it }
+            when (decision.action) {
+                TrackAutoAction.Start -> startTrackAuto(raceId, teamId)
+                // Goes through the service's lossless flushThen teardown. startService can still throw
+                // on a stale Recording state with the app backgrounded — nothing to stop then.
+                TrackAutoAction.Stop -> try {
+                    TrackRecordingService.stop(context)
+                } catch (e: IllegalStateException) {
+                    Log.w("TrackAuto", "auto-stop rejected", e)
+                }
+                TrackAutoAction.None -> Unit
+            }
         }
-    }
-    // Waits for the scan overlay's own first-open location ask to settle: a parallel launch would get an
-    // instant empty result that trackPermissionLauncher records as a real denial. Granted meanwhile →
-    // start directly; otherwise ask only if nothing asked this session (a second denial is permanent).
-    LaunchedEffect(showScan, photoCaptureMarkId, pendingTrackAutoStart, locationAutoAskInFlight) {
-        if (!pendingTrackAutoStart || showScan || photoCaptureMarkId != null || locationAutoAskInFlight) return@LaunchedEffect
-        pendingTrackAutoStart = false
+    // Fires the parked start once the overlays close (pure resolvePendingTrackStart). Keyed on the ids
+    // too: a transient null race/team after an Activity recreation waits instead of losing the start.
+    // Gate shared by every deferred auto-start follow-up (parked start, notifications ask, «location
+    // off» notice): no scan/photo overlay open and no scan-overlay location ask in flight. A new
+    // take overlay only needs adding here.
+    val takeOverlaysSettled = !showScan && photoCaptureMarkId == null && !locationAutoAskInFlight
+    LaunchedEffect(takeOverlaysSettled, pendingTrackAutoStart, selectedRaceId, selectedTeamId) {
         val raceId = selectedRaceId
         val teamId = selectedTeamId
-        if (raceId == null || teamId == null) return@LaunchedEffect
-        if (locationPermitted()) {
-            TrackRecordingService.start(context, raceId, teamId)
-        } else if (!hasRequestedLocation) {
-            onStartTrack()
+        val resolution = resolvePendingTrackStart(
+            pending = pendingTrackAutoStart,
+            settled = takeOverlaysSettled,
+            raceId = raceId,
+            teamId = teamId,
+            recording = teamId != null && container.trackRecordingState.value.activeRecordingTeamId() == teamId,
+            permitted = locationPermitted(),
+            askedThisSession = hasRequestedLocation,
+        )
+        // Wait keeps the flag; the id null check only smart-casts (resolve already waits on nulls).
+        if (resolution == PendingTrackStart.Wait || raceId == null || teamId == null) return@LaunchedEffect
+        pendingTrackAutoStart = false
+        when (resolution) {
+            PendingTrackStart.StartNow -> startTrackAuto(raceId, teamId)
+            PendingTrackStart.AskPermission -> onStartTrack()
+            else -> Unit
         }
     }
     // Export the selected team's track as GPX and hand it to the system share-sheet. Reads the points
@@ -1353,9 +1420,7 @@ private fun Kolco24AppRoot(
     // path) and only when not already granted. Denial never blocks the scan — the provider returns null —
     // and never raises a dialog (locationAutoAskInFlight → unprompted), even after a permanent denial.
     LaunchedEffect(showScan) {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (showScan && !hasRequestedLocation && !granted) {
+        if (showScan && !hasRequestedLocation && !locationPermitted()) {
             locationUpgradeRequest = false
             locationAutoAskInFlight = true
             scanPermissionLauncher.launch(
@@ -1405,6 +1470,22 @@ private fun Kolco24AppRoot(
     val onRequestNotifications: () -> Unit = request@{
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@request
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+    // Deferred follow-ups of an auto-start (startTrackAuto), fired once takeOverlaysSettled: the
+    // notifications ask (never a launcher race with the scan overlay's own request) and the «location
+    // services off» notice (never a modal over the scan/camera overlay mid-take).
+    LaunchedEffect(takeOverlaysSettled, pendingTrackNotificationsAsk, pendingTrackLocationDisabledNotice) {
+        if (!takeOverlaysSettled) return@LaunchedEffect
+        if (pendingTrackLocationDisabledNotice) {
+            pendingTrackLocationDisabledNotice = false
+            trackLocationDisabledNoticed = true
+            showLocationDisabledDialog = true
+        }
+        if (pendingTrackNotificationsAsk) {
+            pendingTrackNotificationsAsk = false
+            trackNotificationsAsked = true
+            onRequestNotifications()
+        }
     }
 
     // Photo-mark FAB entry point. Gated on a resolved team (else route to the picker, mirroring the
@@ -1881,38 +1962,44 @@ private fun Kolco24AppRoot(
                                 if (expired) { scanTake.buffer.clear(); scanTake.snapshots.clear() }
                                 val buffered = scanTake.buffer.toSet()
                                 val rosterSize = scanRoster.size
-                                // Types from the fresh DAO snapshot: on a cold start the Compose legend
-                                // may still be empty, and a КП after the finish must not restart the track.
-                                val trackAuto = trackAutoDecide(
-                                    localCheckpointsById[event.checkpointId]?.type,
-                                    safeMarks.any { localCheckpointsById[it.checkpointId]?.type == "finish" },
-                                )
+                                val cpType = localCheckpointsById[event.checkpointId]?.type
                                 // applicationScope.async: the write survives the overlay closing, yet
                                 // await() still hands the id back for the in-session addMember chain.
+                                // trackAutoTakeLock serializes latch read + write + auto action with photo takes.
                                 val id = container.applicationScope.async {
-                                    markRepo.startKpTake(
-                                        raceId = raceId,
-                                        teamId = teamId,
-                                        checkpointId = event.checkpointId,
-                                        number = event.number,
-                                        cost = event.cost,
-                                        cpUid = event.cpUid,
-                                        cpCode = event.cpCode,
-                                        expectedCount = rosterSize,
-                                        // Drain each buffered member's captured snapshot (bracelet uid +
-                                        // participant number); fall back to a slot-only sentinel if a
-                                        // snapshot is somehow missing, so present[] never drops a member.
-                                        bufferedMembers = buffered.map { slot ->
-                                            scanTake.snapshots[slot]
-                                                ?: MarkMemberSnapshot(numberInTeam = slot, nfcUid = null, number = 0)
-                                        },
-                                        // The touch-moment sample: monotonic window + trusted/wall/boot
-                                        // fields, captured before scope.launch so slow NFC/Room work
-                                        // can't stale the take time.
-                                        sample = sample,
-                                        // Snapshot the tag's verification rule onto the take row.
-                                        checkMethod = event.checkMethod,
-                                    ).also { applyTrackAuto(trackAuto, raceId, teamId) }
+                                    trackAutoTakeLock.withLock {
+                                        // Marks and types from fresh DB reads: on a cold start the Compose marks/
+                                        // legend may still be empty, and a КП after the finish must not restart
+                                        // the track. Read before startKpTake, so this take is not included.
+                                        val finishTaken = hasFinishTake(markRepo.observeMarks(teamId).first().map { it.checkpointId }) {
+                                            localCheckpointsById[it]?.type
+                                        }
+                                        val takeId = markRepo.startKpTake(
+                                            raceId = raceId,
+                                            teamId = teamId,
+                                            checkpointId = event.checkpointId,
+                                            number = event.number,
+                                            cost = event.cost,
+                                            cpUid = event.cpUid,
+                                            cpCode = event.cpCode,
+                                            expectedCount = rosterSize,
+                                            // Drain each buffered member's captured snapshot (bracelet uid +
+                                            // participant number); fall back to a slot-only sentinel if a
+                                            // snapshot is somehow missing, so present[] never drops a member.
+                                            bufferedMembers = buffered.map { slot ->
+                                                scanTake.snapshots[slot]
+                                                    ?: MarkMemberSnapshot(numberInTeam = slot, nfcUid = null, number = 0)
+                                            },
+                                            // The touch-moment sample: monotonic window + trusted/wall/boot
+                                            // fields, captured before scope.launch so slow NFC/Room work
+                                            // can't stale the take time.
+                                            sample = sample,
+                                            // Snapshot the tag's verification rule onto the take row.
+                                            checkMethod = event.checkMethod,
+                                        )
+                                        onTrackAutoTake(cpType, finishTaken, raceId, teamId)
+                                        takeId
+                                    }
                                 }.await()
                                 scanTake.markId = id
                                 // Anti-fraud: capture a fresh one-shot GPS fix for THIS new take row
@@ -2718,11 +2805,6 @@ private fun Kolco24AppRoot(
                     val raceId = selectedRaceId
                     val teamId = selectedTeamId
                     val rosterSize = teamForTab?.members?.size ?: 0
-                    val trackAuto = if (!attach && photoCp != null && raceId != null && teamId != null) {
-                        trackAutoDecide(photoCp.type, safeMarks.any { checkpointTypes[it.checkpointId] == "finish" })
-                    } else {
-                        TrackAutoAction.None
-                    }
                     // applicationScope: the write must outlive the closing overlay (mirrors selectTeam/
                     // startKpTake). AttachTo appends paths to the existing (NFC) row; AskNumber creates a
                     // standalone hybrid photo-mark and fires a one-shot anti-cheat GPS fix for it.
@@ -2738,16 +2820,26 @@ private fun Kolco24AppRoot(
                             // The frames are orphaned here and swept on the next cold start by sweepOrphanPhotoDirs.
                             Log.e("PhotoCapture", "raceId/teamId null at commit for id=$activePhotoMarkId — frames orphaned")
                         } else if (photoCp != null) {
-                            markRepo.createPhotoMark(
-                                markId = activePhotoMarkId,
-                                cp = photoCp,
-                                raceId = raceId,
-                                teamId = teamId,
-                                paths = paths,
-                                expectedCount = rosterSize,
-                                sample = firstSample,
-                            )
-                            applyTrackAuto(trackAuto, raceId, teamId)
+                            // Held across latch read + write + auto action (serialized with NFC takes).
+                            trackAutoTakeLock.withLock {
+                                // Finish latch from fresh DB reads (same sources as the NFC site), before
+                                // the write so this take is excluded — the Compose marks/legend captured
+                                // when the camera opened can miss a finish taken meanwhile.
+                                val cpTypes = legendRepo.checkpointsSnapshot(raceId).associate { it.id to it.type }
+                                val finishTaken = hasFinishTake(markRepo.observeMarks(teamId).first().map { it.checkpointId }) {
+                                    cpTypes[it]
+                                }
+                                markRepo.createPhotoMark(
+                                    markId = activePhotoMarkId,
+                                    cp = photoCp,
+                                    raceId = raceId,
+                                    teamId = teamId,
+                                    paths = paths,
+                                    expectedCount = rosterSize,
+                                    sample = firstSample,
+                                )
+                                onTrackAutoTake(photoCp.type, finishTaken, raceId, teamId)
+                            }
                             markRepo.attachLocation(
                                 activePhotoMarkId,
                                 container.currentLocationProvider.current(),

@@ -176,6 +176,13 @@ class ControlTimeTest {
     }
 
     @Test
+    fun `start and finish types are case and whitespace insensitive`() {
+        val marks = listOf(mark("s", 1, base), mark("f", 3, base + 2 * hour))
+        val variants = mapOf(1 to " Start", 2 to "KP", 3 to "Finish ")
+        assertEquals(ControlTimeState.Finished(2 * hour, false), state(marks, checkpointTypes = variants))
+    }
+
+    @Test
     fun `finish before start is ignored`() {
         val marks = listOf(mark("f", 3, base - min), mark("s", 1, base))
         assertEquals(ControlTimeState.Running(7 * hour), state(marks, nowMs = base + hour))

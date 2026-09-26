@@ -1,6 +1,9 @@
 package ru.kolco24.kolco24.ui.marks
 
+import ru.kolco24.kolco24.data.db.CP_TYPE_FINISH
+import ru.kolco24.kolco24.data.db.CP_TYPE_START
 import ru.kolco24.kolco24.data.db.MarkEntity
+import ru.kolco24.kolco24.data.db.normalizeCpType
 
 /**
  * Live control-time (КВ) state of the selected team — pure model behind the КВ cell of the
@@ -39,7 +42,7 @@ private const val MINUTE_MS = 60_000L
  * Only `method == "nfc"` takes with a positive [timeOf] count (mirrors the server's boundary-time
  * auto-population). Start = the earliest take on a `start`-type КП (roster completeness is irrelevant);
  * finish = the earliest take on a `finish`-type КП at or after the start. [checkpointTypes] maps
- * checkpoint id → `CheckpointEntity.type`; without a legend it is empty, so no start is ever found.
+ * checkpoint id → `CheckpointEntity.type` (compared after `normalizeCpType`, so `"Finish"` counts); without a legend it is empty, so no start is ever found.
  * [controlMinutes] is the category КВ in minutes (`0` = not set). Minutes are floored everywhere.
  */
 fun controlTimeState(
@@ -51,9 +54,9 @@ fun controlTimeState(
 ): ControlTimeState {
     val nfc = marks.filter { it.method == "nfc" }
     fun timesOf(type: String) =
-        nfc.filter { checkpointTypes[it.checkpointId] == type }.map(timeOf).filter { it > 0 }
-    val start = timesOf("start").minOrNull()
-    val finish = start?.let { s -> timesOf("finish").filter { it >= s }.minOrNull() }
+        nfc.filter { normalizeCpType(checkpointTypes[it.checkpointId]) == type }.map(timeOf).filter { it > 0 }
+    val start = timesOf(CP_TYPE_START).minOrNull()
+    val finish = start?.let { s -> timesOf(CP_TYPE_FINISH).filter { it >= s }.minOrNull() }
     val limitMs = controlMinutes * MINUTE_MS
     if (start != null && finish != null) {
         val elapsed = finish - start
