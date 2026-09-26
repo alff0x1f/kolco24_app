@@ -269,15 +269,15 @@ confirmAttemptFor = { target ->
 - Modify: `app/src/test/java/ru/kolco24/kolco24/ui/scan/ScanTagDecisionTest.kt`, `ScanSessionTest.kt`, `ScanFeedbackTest.kt`
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/MarkRepositoryTest.kt`
 
-- [ ] `UnlockOutcome.Revealed`/`IdentityOnly` gain `checkMethod: String`; `unlock` fills it from `tagEntity` at all **three** sites (LegendRepository.kt:163 early `IdentityOnly`, :185 `Revealed`, :187 engine `IdentityOnly`)
-- [ ] update test call sites: LegendRepositoryTest.kt:357, :386 (equality asserts); ScanTagDecisionTest.kt:34, 46, 70, 82
-- [ ] `ScanEvent.Kp` gains `checkMethod: CheckMethod`; `classifyTag` parses it from the outcome
-- [ ] `ScanSession.checkMethod` (default `Offline`), set by `reduce` on `Kp`
-- [ ] `MarkRepository.startKpTake(checkMethod: String)` writes it; `createPhotoMark` stays `"offline"` (entity default)
-- [ ] `MainActivity.onScanTag` passes `event.checkMethod` to `startKpTake`
-- [ ] tests: `unlock` returns the tag's method for revealed and identity-only tags
-- [ ] tests: `classifyTag` carries the method (cloud/local/unknown→offline); `reduce` sets `session.checkMethod`; `startKpTake` persists it; photo mark is `"offline"`
-- [ ] run tests — must pass before next task
+- [x] `UnlockOutcome.Revealed`/`IdentityOnly` gain `checkMethod: String`; `unlock` fills it from `tagEntity` at all **three** sites (LegendRepository.kt:163 early `IdentityOnly`, :185 `Revealed`, :187 engine `IdentityOnly`)
+- [x] update test call sites: LegendRepositoryTest.kt:357, :386 (equality asserts); ScanTagDecisionTest.kt:34, 46, 70, 82
+- [x] `ScanEvent.Kp` gains `checkMethod: CheckMethod`; `classifyTag` parses it from the outcome
+- [x] `ScanSession.checkMethod` (default `Offline`), set by `reduce` on `Kp`
+- [x] `MarkRepository.startKpTake(checkMethod: CheckMethod = Offline)` writes it (typed param + `CheckMethod.wire` instead of a raw String); `createPhotoMark` stays `"offline"` (entity default)
+- [x] `MainActivity.onScanTag` passes `event.checkMethod` to `startKpTake`
+- [x] tests: `unlock` returns the tag's method for revealed and identity-only tags
+- [x] tests: `classifyTag` carries the method (cloud/local/unknown→offline); `reduce` sets `session.checkMethod`; `startKpTake` persists it; photo mark is `"offline"`
+- [x] run tests — must pass before next task
 
 ### Task 5: MarkRepository.confirm
 

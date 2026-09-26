@@ -1851,6 +1851,8 @@ private fun Kolco24AppRoot(
                                         // fields, captured before scope.launch so slow NFC/Room work
                                         // can't stale the take time.
                                         sample = sample,
+                                        // Snapshot the tag's verification rule onto the take row.
+                                        checkMethod = event.checkMethod,
                                     )
                                 }.await()
                                 scanTake.markId = id

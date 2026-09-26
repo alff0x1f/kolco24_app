@@ -2,6 +2,7 @@ package ru.kolco24.kolco24.ui.scan
 
 import ru.kolco24.kolco24.data.UnlockOutcome
 import ru.kolco24.kolco24.data.db.CheckpointEntity
+import ru.kolco24.kolco24.data.marks.CheckMethod
 import ru.kolco24.kolco24.data.nfc.chipCodeHex
 
 /** Sliding scan-window duration in milliseconds. Shared by ScanScreen's UI timer and MainActivity's DB-side expiry. */
@@ -29,6 +30,8 @@ fun isWindowExpired(lastScanAt: Long?, now: Long): Boolean =
  * drained into [present] (see [reduce]). [lastScanAt] is the **monotonic** `elapsedRealtime` ms of the
  * most recent **accepted** scan and drives the window: an `UnboundChip`/`BadKp` scan is ignored and
  * does **not** advance it. (Monotonic, not wall-clock, so translating the phone clock can't skew it.)
+ * [checkMethod] is the КП tag's verification rule, set by [reduce] on [ScanEvent.Kp] (defaults to
+ * [CheckMethod.Offline] until a КП lands).
  */
 data class ScanSession(
     val checkpointId: Int?,
@@ -39,6 +42,7 @@ data class ScanSession(
     val present: Set<Int>,
     val bufferedBeforeKp: Set<Int>,
     val lastScanAt: Long,
+    val checkMethod: CheckMethod = CheckMethod.Offline,
 ) {
     companion object {
         /** A fresh session with no KP and no members yet, stamped with the first scan's [now]. */
@@ -61,13 +65,18 @@ data class ScanSession(
  * window.
  */
 sealed interface ScanEvent {
-    /** The checkpoint chip: identifies [checkpointId] with its resolved [number]/[cost] and anti-cheat log. */
+    /**
+     * The checkpoint chip: identifies [checkpointId] with its resolved [number]/[cost] and anti-cheat log.
+     * [checkMethod] is the tag's parsed verification rule ([classifyTag] always passes it; the default
+     * only keeps test literals short).
+     */
     data class Kp(
         val checkpointId: Int,
         val number: Int,
         val cost: Int,
         val cpUid: String,
         val cpCode: String,
+        val checkMethod: CheckMethod = CheckMethod.Offline,
     ) : ScanEvent
 
     /** A bound team-member bracelet ([numberInTeam] is the member's slot within the roster). */
@@ -84,7 +93,7 @@ sealed interface ScanEvent {
  * Folds one [event] into the [session] at time [now] (monotonic `elapsedRealtime` ms). Pure; the only
  * state machine of the scan flow.
  *
- * - [ScanEvent.Kp] sets the KP fields and **drains** [ScanSession.bufferedBeforeKp] into
+ * - [ScanEvent.Kp] sets the KP fields (including [ScanSession.checkMethod]) and **drains** [ScanSession.bufferedBeforeKp] into
  *   [ScanSession.present] (members scanned before the chip count once the chip lands). A repeat KP
  *   scan just re-stamps the window.
  * - [ScanEvent.Member] goes to the buffer while [ScanSession.checkpointId] is null, otherwise straight into
@@ -110,6 +119,7 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
             cost = event.cost,
             cpUid = event.cpUid,
             cpCode = event.cpCode,
+            checkMethod = event.checkMethod,
             present = priorPresent + base.bufferedBeforeKp,
             bufferedBeforeKp = emptySet(),
             lastScanAt = now,
@@ -140,7 +150,8 @@ fun reduce(session: ScanSession?, event: ScanEvent, now: Long): ScanSession? = w
  * [checkpointsById] for the [number]/[cost] snapshot ([UnlockOutcome.unlock] only returns the id).
  * A still-`null` cost (legend not synced) downgrades to [ScanEvent.BadKp]. A null [code] is a
  * bracelet: looked up in [bindings] (uid → numberInTeam) for [ScanEvent.Member] or
- * [ScanEvent.UnboundChip].
+ * [ScanEvent.UnboundChip]. The tag's raw `check_method` is parsed into [ScanEvent.Kp.checkMethod]
+ * (unknown → [CheckMethod.Offline]).
  */
 fun classifyTag(
     code: ByteArray?,
@@ -150,9 +161,9 @@ fun classifyTag(
     checkpointsById: Map<Int, CheckpointEntity>,
 ): ScanEvent {
     if (code != null) {
-        val checkpointId = when (unlock) {
-            is UnlockOutcome.Revealed -> unlock.checkpointId
-            is UnlockOutcome.IdentityOnly -> unlock.checkpointId
+        val (checkpointId, rawMethod) = when (unlock) {
+            is UnlockOutcome.Revealed -> unlock.checkpointId to unlock.checkMethod
+            is UnlockOutcome.IdentityOnly -> unlock.checkpointId to unlock.checkMethod
             is UnlockOutcome.Failed -> return ScanEvent.BadKp(unlock.reason)
             UnlockOutcome.Unknown -> return ScanEvent.BadKp("неизвестный чип")
             null -> return ScanEvent.BadKp("не удалось расшифровать")
@@ -165,6 +176,7 @@ fun classifyTag(
             cost = cost,
             cpUid = uid,
             cpCode = chipCodeHex(code),
+            checkMethod = CheckMethod.parse(rawMethod),
         )
     }
     val numberInTeam = bindings[uid] ?: return ScanEvent.UnboundChip

@@ -20,6 +20,7 @@ import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.PhotoFrameRow
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.marks.CheckMethod
 import ru.kolco24.kolco24.data.marks.photoPaths
 import ru.kolco24.kolco24.data.time.TimeSample
 import ru.kolco24.kolco24.data.track.RawFix
@@ -52,6 +53,7 @@ class MarkRepositoryTest {
         buffered: Set<Int> = emptySet(),
         bufferedSnapshots: Collection<MarkMemberSnapshot> = buffered.map { mem(it) },
         sample: TimeSample = sample(),
+        checkMethod: CheckMethod = CheckMethod.Offline,
     ): String = repository.startKpTake(
         raceId = 1,
         teamId = 7,
@@ -63,6 +65,7 @@ class MarkRepositoryTest {
         expectedCount = expectedCount,
         bufferedMembers = bufferedSnapshots,
         sample = sample,
+        checkMethod = checkMethod,
     )
 
     @Test
@@ -84,6 +87,24 @@ class MarkRepositoryTest {
         assertEquals("CODE10", mark.cpCode)
         assertEquals(listOf(1), mark.present)
         assertFalse(mark.complete)
+    }
+
+    @Test
+    fun startKpTake_persistsCheckMethod_unconfirmed() = runTest {
+        assertEquals("offline", markDao.getById(startTake(point = 10))!!.checkMethod)
+        val cloud = markDao.getById(startTake(point = 11, checkMethod = CheckMethod.Cloud))!!
+        assertEquals("cloud", cloud.checkMethod)
+        assertNull(cloud.confirmedAt)
+        assertEquals("local", markDao.getById(startTake(point = 12, checkMethod = CheckMethod.Local))!!.checkMethod)
+    }
+
+    @Test
+    fun addMember_keepsCheckMethod() = runTest {
+        val id = startTake(point = 10, expectedCount = 1, checkMethod = CheckMethod.Cloud)
+        repository.addMember(id, checkpointId = 10, member = mem(1), expectedCount = 1, sample = sample())
+        val mark = markDao.getById(id)!!
+        assertTrue(mark.complete)
+        assertEquals("cloud", mark.checkMethod)
     }
 
     @Test
@@ -415,6 +436,7 @@ class MarkRepositoryTest {
         )
         val mark = markDao.getById("photo-1")!!
         assertEquals("photo", mark.method)
+        assertEquals("offline", mark.checkMethod)
         assertTrue(mark.complete)
         assertEquals(emptyList<Int>(), mark.present)
         assertEquals("", mark.cpUid)

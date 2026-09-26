@@ -354,7 +354,7 @@ class LegendRepositoryTest {
 
         val outcome = repository.unlock(8, code)
 
-        assertEquals(UnlockOutcome.Revealed(cpId, listOf(cpId)), outcome)
+        assertEquals(UnlockOutcome.Revealed(cpId, listOf(cpId), "nfc"), outcome)
         val cp = repository.checkpointsForRace(8).first().single()
         assertEquals(7, cp.cost)
         assertEquals("Грот", cp.description)
@@ -383,7 +383,26 @@ class LegendRepositoryTest {
             ),
         )
 
-        assertEquals(UnlockOutcome.IdentityOnly(101), repository.unlock(8, code))
+        assertEquals(UnlockOutcome.IdentityOnly(101, "nfc"), repository.unlock(8, code))
+    }
+
+    @Test
+    fun unlock_identityOnlyCarriesTagCheckMethod() = runTest {
+        val code = ByteArray(16) { 5 }
+        tagDao.setTags(
+            listOf(
+                TagEntity(
+                    bid = LegendCrypto.bid(code),
+                    raceId = 8,
+                    checkpointId = 102,
+                    checkMethod = "cloud",
+                    iv = null,
+                    ct = null,
+                ),
+            ),
+        )
+
+        assertEquals(UnlockOutcome.IdentityOnly(102, "cloud"), repository.unlock(8, code))
     }
 
     @Test

@@ -15,6 +15,7 @@ import ru.kolco24.kolco24.data.db.MarkMemberSnapshot
 import ru.kolco24.kolco24.data.db.PhotoFrameRow
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
+import ru.kolco24.kolco24.data.marks.CheckMethod
 import ru.kolco24.kolco24.data.marks.encodePhotoPaths
 import ru.kolco24.kolco24.data.marks.frameIdOf
 import ru.kolco24.kolco24.data.marks.isCounted
@@ -132,6 +133,9 @@ class MarkRepository(
      * keep the raw wall ([TimeSample.wallMs]), `trustedTakenAt` gets the monotonic-anchored trusted time
      * ([TimeSample.trustedMs], NULL when no clock sync has happened), and `elapsedRealtimeAt`/`bootCount`
      * record the monotonic mark plus its boot session for forensic Δelapsed reconciliation.
+     *
+     * [checkMethod] is snapshotted onto the row (`marks.checkMethod`), so a later legend change never
+     * re-rules an old take. Photo takes ([createPhotoMark]) keep the entity default `"offline"`.
      */
     suspend fun startKpTake(
         raceId: Int,
@@ -144,6 +148,7 @@ class MarkRepository(
         expectedCount: Int,
         bufferedMembers: Collection<MarkMemberSnapshot>,
         sample: TimeSample,
+        checkMethod: CheckMethod = CheckMethod.Offline,
     ): String {
         val id = UUID.randomUUID().toString()
         // Both present (scoring truth) and presentDetails (upload snapshots) come from one distinct pass.
@@ -170,6 +175,7 @@ class MarkRepository(
                 trustedTakenAt = sample.trustedMs,
                 elapsedRealtimeAt = sample.elapsedMs,
                 bootCount = sample.bootCount,
+                checkMethod = checkMethod.wire,
             ),
         )
         return id

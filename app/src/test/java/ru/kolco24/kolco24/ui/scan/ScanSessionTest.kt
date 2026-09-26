@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.kolco24.kolco24.data.marks.CheckMethod
 
 class ScanSessionTest {
 
@@ -21,6 +22,21 @@ class ScanSessionTest {
         assertEquals("DEADBEEF", s.cpCode)
         assertTrue(s.present.isEmpty())
         assertEquals(1_000L, s.lastScanAt)
+    }
+
+    @Test
+    fun kp_setsSessionCheckMethod() {
+        assertEquals(CheckMethod.Offline, ScanSession.empty(0L).checkMethod)
+        assertEquals(CheckMethod.Offline, reduce(null, kp(), now = 0L)!!.checkMethod)
+        val cloud = kp().copy(checkMethod = CheckMethod.Cloud)
+        var s = reduce(null, ScanEvent.Member(1), now = 0L)
+        s = reduce(s, cloud, now = 100L)
+        assertEquals(CheckMethod.Cloud, s!!.checkMethod)
+        // A member scan keeps the method; switching to a local КП replaces it.
+        s = reduce(s, ScanEvent.Member(2), now = 200L)
+        assertEquals(CheckMethod.Cloud, s!!.checkMethod)
+        val local = ScanEvent.Kp(99, 12, 80, "04BB", "CAFE", checkMethod = CheckMethod.Local)
+        assertEquals(CheckMethod.Local, reduce(s, local, now = 300L)!!.checkMethod)
     }
 
     @Test
