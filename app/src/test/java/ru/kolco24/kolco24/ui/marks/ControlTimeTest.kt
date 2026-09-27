@@ -282,20 +282,31 @@ class ControlTimeTest {
 
     @Test
     fun `msUntilNextChange ticks on the minute from start`() {
-        assertEquals(1L, msUntilNextChange(ControlTimeState.Running(60_000)))
-        assertEquals(30_001L, msUntilNextChange(ControlTimeState.Running(90_000)))
-        assertEquals(59_999L, msUntilNextChange(ControlTimeState.Running(59_999)))
-        assertEquals(1L, msUntilNextChange(ControlTimeState.Running(1)))
-        assertEquals(60_000L, msUntilNextChange(ControlTimeState.Overtime(0)))
-        assertEquals(59_000L, msUntilNextChange(ControlTimeState.Overtime(61_000)))
+        assertEquals(1L, msUntilNextChange(ControlTimeState.Running(60_000), MINUTE_STEP_MS))
+        assertEquals(30_001L, msUntilNextChange(ControlTimeState.Running(90_000), MINUTE_STEP_MS))
+        assertEquals(59_999L, msUntilNextChange(ControlTimeState.Running(59_999), MINUTE_STEP_MS))
+        assertEquals(1L, msUntilNextChange(ControlTimeState.Running(1), MINUTE_STEP_MS))
+        assertEquals(60_000L, msUntilNextChange(ControlTimeState.Overtime(0), MINUTE_STEP_MS))
+        assertEquals(59_000L, msUntilNextChange(ControlTimeState.Overtime(61_000), MINUTE_STEP_MS))
+    }
+
+    @Test
+    fun `msUntilNextChange ticks on the second from start`() {
+        assertEquals(1L, msUntilNextChange(ControlTimeState.Running(60_000), SECOND_STEP_MS))
+        assertEquals(501L, msUntilNextChange(ControlTimeState.Running(90_500), SECOND_STEP_MS))
+        assertEquals(999L, msUntilNextChange(ControlTimeState.Running(999), SECOND_STEP_MS))
+        assertEquals(1_000L, msUntilNextChange(ControlTimeState.Overtime(0), SECOND_STEP_MS))
+        assertEquals(750L, msUntilNextChange(ControlTimeState.Overtime(61_250), SECOND_STEP_MS))
     }
 
     @Test
     fun `msUntilNextChange is null for static states`() {
-        assertNull(msUntilNextChange(ControlTimeState.Unknown))
-        assertNull(msUntilNextChange(ControlTimeState.NotStarted(8 * hour)))
-        assertNull(msUntilNextChange(ControlTimeState.Finished(hour, false)))
-        assertNull(msUntilNextChange(ControlTimeState.Finished(9 * hour, true)))
+        for (step in listOf(SECOND_STEP_MS, MINUTE_STEP_MS)) {
+            assertNull(msUntilNextChange(ControlTimeState.Unknown, step))
+            assertNull(msUntilNextChange(ControlTimeState.NotStarted(8 * hour), step))
+            assertNull(msUntilNextChange(ControlTimeState.Finished(hour, false), step))
+            assertNull(msUntilNextChange(ControlTimeState.Finished(9 * hour, true), step))
+        }
     }
 
     @Test
@@ -303,16 +314,32 @@ class ControlTimeTest {
         val start = listOf(mark("s", 1, base))
         val offsets = listOf(
             0L, 1L, 30_000L, 59_999L, 60_000L, hour + 12_345L,
-            8 * hour - 60_001L, 8 * hour - 60_000L, 8 * hour - 59_999L, 8 * hour - 1,
-            8 * hour, 8 * hour + 1, 8 * hour + 61_000L,
+            8 * hour - 60_001L, 8 * hour - 60_000L, 8 * hour - 59_999L, 8 * hour - 1_001L, 8 * hour - 1,
+            8 * hour, 8 * hour + 1, 8 * hour + 61_000L, 8 * hour + 61_250L,
         )
-        for (offset in offsets) {
-            val now = base + offset
-            val kv = state(start, nowMs = now)
-            val d = msUntilNextChange(kv)!!
-            assertEquals("offset $offset", controlTimeLabel(kv), controlTimeLabel(state(start, nowMs = now + d - 1)))
-            assertNotEquals("offset $offset", controlTimeLabel(kv), controlTimeLabel(state(start, nowMs = now + d)))
+        fun minuteView(kv: ControlTimeState) = controlTimeLabel(kv)
+        fun secondView(kv: ControlTimeState) = controlTimeLabel(kv) to controlTimeSeconds(kv)
+        for ((step, view) in listOf(MINUTE_STEP_MS to ::minuteView, SECOND_STEP_MS to ::secondView)) {
+            for (offset in offsets) {
+                val now = base + offset
+                val kv = state(start, nowMs = now)
+                val d = msUntilNextChange(kv, step)!!
+                assertEquals("step $step offset $offset", view(kv), view(state(start, nowMs = now + d - 1)))
+                assertNotEquals("step $step offset $offset", view(kv), view(state(start, nowMs = now + d)))
+            }
         }
+    }
+
+    // --- controlTimeSeconds ---
+
+    @Test
+    fun `controlTimeSeconds floors within the minute and is null when static`() {
+        assertEquals(59, controlTimeSeconds(ControlTimeState.Running(3 * hour + 27 * min + 59_999)))
+        assertEquals(0, controlTimeSeconds(ControlTimeState.Running(60_000)))
+        assertEquals(12, controlTimeSeconds(ControlTimeState.Overtime(min + 12_345)))
+        assertNull(controlTimeSeconds(ControlTimeState.Unknown))
+        assertNull(controlTimeSeconds(ControlTimeState.NotStarted(8 * hour)))
+        assertNull(controlTimeSeconds(ControlTimeState.Finished(hour, true)))
     }
 
     // --- controlTimeLabel ---

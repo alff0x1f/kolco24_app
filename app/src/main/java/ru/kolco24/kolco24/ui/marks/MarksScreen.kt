@@ -7,6 +7,13 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -94,6 +101,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.runtime.key
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -105,9 +114,8 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
-import androidx.compose.ui.MotionDurationScale
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
@@ -423,7 +431,7 @@ fun MarksScreen(
     controlMinutes: Int = 0,
     markTime: (MarkEntity) -> Long,
     nowMs: () -> Long,
-    // The pager keeps the neighbour page composed; the КВ colon blinks only on the settled Отметки page.
+    // The pager keeps the neighbour page composed; the КВ cell ticks every second only on the settled Отметки page.
     isActive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
@@ -957,7 +965,8 @@ private fun UnconfirmedNotice(tokens: List<String>, modifier: Modifier = Modifie
  * changes identity (the host re-keys it on the trusted-clock status: a new anchor re-anchors monotonic
  * takes via `markTime`), on every tick, and on
  * `ON_START` — `delay` runs on `uptimeMillis`, which stops while the phone sleeps. The next tick lands
- * exactly on the minute boundary counted from the start ([msUntilNextChange]).
+ * exactly on the boundary counted from the start ([msUntilNextChange]): every second while the page is
+ * settled and started (the `:SS` tail is visible), every minute otherwise.
  */
 @Composable
 private fun ControlTimeMetrics(
@@ -977,11 +986,14 @@ private fun ControlTimeMetrics(
         tick++
         onStopOrDispose {}
     }
-    val now = remember(tick, marks, checkpointTypes, controlMinutes, nowMs) { nowMs() }
+    val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value
+        .isAtLeast(Lifecycle.State.STARTED)
+    val stepMs = if (isActive && started) SECOND_STEP_MS else MINUTE_STEP_MS
+    val now = remember(tick, marks, checkpointTypes, controlMinutes, nowMs, stepMs) { nowMs() }
     val kv = controlTimeState(marks, checkpointTypes, controlMinutes, now, markTime)
     // Keyed on `tick` too: a re-sample that yields an equal `kv` (anchor stepped back) must still re-arm.
-    LaunchedEffect(kv, tick) {
-        msUntilNextChange(kv)?.let {
+    LaunchedEffect(kv, tick, stepMs) {
+        msUntilNextChange(kv, stepMs)?.let {
             delay(it)
             tick++
         }
@@ -992,7 +1004,8 @@ private fun ControlTimeMetrics(
         takenScore = takenScore,
         totalCost = totalCost,
         controlTime = controlTimeLabel(kv),
-        controlTimeTicking = isActive && (kv is ControlTimeState.Running || kv is ControlTimeState.Overtime),
+        controlTimeSeconds = controlTimeSeconds(kv),
+        controlTimeCountsDown = kv is ControlTimeState.Running,
     )
 }
 
@@ -1003,7 +1016,8 @@ private fun MetricsCard(
     takenScore: Int,
     totalCost: Int,
     controlTime: ControlTimeLabel,
-    controlTimeTicking: Boolean,
+    controlTimeSeconds: Int?,
+    controlTimeCountsDown: Boolean,
 ) {
     Surface(
         modifier = Modifier
@@ -1043,8 +1057,10 @@ private fun MetricsCard(
                 value = controlTime.value,
                 mono = true,
                 isError = controlTime.isError,
-                blinkColon = controlTimeTicking,
-                modifier = Modifier.weight(1f),
+                seconds = controlTimeSeconds,
+                rollDown = controlTimeCountsDown,
+                // Wider than the counters: «+0:12» plus the «:SS» tail must fit a 360dp screen.
+                modifier = Modifier.weight(1.2f),
             )
         }
     }
@@ -1055,8 +1071,6 @@ private fun MetricsCard(
  * «/total» denominator (e.g. «8/15») mirrors the Легенда's score progress so взято/сумма read as
  * fractions of the race total rather than bare counts. [total] is null until the legend has loaded.
  */
-private const val COLON_BLINK_MS = 1_000L
-
 @Composable
 private fun MetricItem(
     label: String,
@@ -1064,27 +1078,12 @@ private fun MetricItem(
     total: String? = null,
     mono: Boolean = false,
     isError: Boolean = false,
-    blinkColon: Boolean = false,
+    // Ticking `:SS` tail after the value; `null` for a static value. A non-null tail also makes the
+    // value roll digit-by-digit on change (down while [rollDown], up otherwise), like iOS numericText.
+    seconds: Int? = null,
+    rollDown: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    var colonVisible by remember { mutableStateOf(true) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(blinkColon, lifecycle) {
-        colonVisible = true
-        if (!blinkColon) return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            try {
-                while (true) {
-                    delay(COLON_BLINK_MS)
-                    // Re-read each tick: the system "remove animations" setting can change at runtime.
-                    val animationsOn = (coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) > 0f
-                    colonVisible = !colonVisible || !animationsOn
-                }
-            } finally {
-                colonVisible = true
-            }
-        }
-    }
     Column(modifier = modifier.padding(vertical = 10.dp)) {
         Text(
             text = label,
@@ -1096,17 +1095,28 @@ private fun MetricItem(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(
-                // The hidden colon is drawn transparent, not removed, so the digits don't shift.
-                text = if (colonVisible) AnnotatedString(value) else buildAnnotatedString {
-                    value.forEach { c ->
-                        if (c == ':') withStyle(SpanStyle(color = Color.Transparent)) { append(c) } else append(c)
-                    }
-                },
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium),
-                fontFamily = if (mono) RobotoMono else null,
+            val valueStyle = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.Medium,
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
+            ).let { if (mono) it.copy(fontFamily = RobotoMono) else it }
+            if (seconds != null) {
+                RollingText(text = value, style = valueStyle, rollDown = rollDown)
+                Text(
+                    text = ":" + seconds.toString().padStart(2, '0'),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = RobotoMono,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isError) {
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    // Cancels the row spacing so the tail hugs the minutes.
+                    modifier = Modifier.offset(x = (-2).dp).padding(bottom = 3.dp),
+                )
+            } else {
+                Text(text = value, style = valueStyle)
+            }
             if (total != null) {
                 Text(
                     text = "/$total",
@@ -1114,6 +1124,33 @@ private fun MetricItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * [text] where each changed character rolls vertically — a port of SwiftUI's `numericText` transition.
+ * Characters are keyed by their position from the **end**, so «10:00» → «9:59» rolls the digits in
+ * place and only drops the leading one. With system animations off the swap is instant.
+ */
+@Composable
+private fun RollingText(text: String, style: TextStyle, rollDown: Boolean) {
+    Row {
+        text.forEachIndexed { i, c ->
+            key(text.length - i) {
+                AnimatedContent(
+                    targetState = c,
+                    transitionSpec = {
+                        val dir = if (rollDown) -1 else 1
+                        (slideInVertically { h -> dir * h } + fadeIn()) togetherWith
+                            (slideOutVertically { h -> -dir * h } + fadeOut()) using
+                            SizeTransform(clip = true)
+                    },
+                    label = "rolling-char",
+                ) { ch ->
+                    Text(text = ch.toString(), style = style)
+                }
             }
         }
     }
