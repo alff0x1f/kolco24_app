@@ -20,7 +20,7 @@ sealed interface ControlTimeState {
     /**
      * Started, КВ not yet reached — countdown. Deliberately not clamped to the КВ: when `now` precedes
      * the start (mixed trusted/wall scales, skew) [remainingMs] exceeds the КВ. Clamping would freeze
-     * the minute-tick schedule of [msUntilNextChange] (1 ms re-ticks until `now` reaches the start).
+     * the tick schedule of [msUntilNextChange] (1 ms re-ticks until `now` reaches the start).
      */
     data class Running(val remainingMs: Long) : ControlTimeState
 
@@ -87,15 +87,29 @@ fun formatHoursMinutes(ms: Long): String {
     return "${totalMinutes / 60}:${(totalMinutes % 60).toString().padStart(2, '0')}"
 }
 
+const val SECOND_STEP_MS = 1_000L
+const val MINUTE_STEP_MS = MINUTE_MS
+
 /**
- * Delay until the displayed minute of [state] changes — exactly on the minute boundary counted from
- * the start (not the wall-clock minute). `null` for the static states (no ticking needed).
+ * Delay until the displayed [stepMs] unit of [state] changes — the `:SS` tail ([SECOND_STEP_MS]) or
+ * the `Ч:ММ` value ([MINUTE_STEP_MS]) — exactly on the boundary counted from the start (not the wall
+ * clock). `null` for the static states (no ticking needed).
  */
-fun msUntilNextChange(state: ControlTimeState): Long? = when (state) {
-    // The last minute hands off to Overtime exactly at the КВ (remaining 0), not 1 ms past it.
+fun msUntilNextChange(state: ControlTimeState, stepMs: Long): Long? = when (state) {
+    // The last step hands off to Overtime exactly at the КВ (remaining 0), not 1 ms past it.
     is ControlTimeState.Running ->
-        if (state.remainingMs < MINUTE_MS) state.remainingMs else state.remainingMs % MINUTE_MS + 1
-    is ControlTimeState.Overtime -> MINUTE_MS - state.overMs % MINUTE_MS
+        if (state.remainingMs < stepMs) state.remainingMs else state.remainingMs % stepMs + 1
+    is ControlTimeState.Overtime -> stepMs - state.overMs % stepMs
+    else -> null
+}
+
+/**
+ * Seconds within the current minute of the ticking value — the `:SS` tail after `Ч:ММ`, floored like
+ * the minutes (remaining `3:27:59` → «3:27» + «:59»). `null` when the value doesn't tick.
+ */
+fun controlTimeSeconds(state: ControlTimeState): Int? = when (state) {
+    is ControlTimeState.Running -> (state.remainingMs % MINUTE_MS / 1_000).toInt()
+    is ControlTimeState.Overtime -> (state.overMs % MINUTE_MS / 1_000).toInt()
     else -> null
 }
 
