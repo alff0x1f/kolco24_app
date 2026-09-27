@@ -101,8 +101,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.key
-import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -1059,7 +1059,7 @@ private fun MetricsCard(
                 isError = controlTime.isError,
                 seconds = controlTimeSeconds,
                 rollDown = controlTimeCountsDown,
-                // Wider than the counters: «+0:12» plus the «:SS» tail must fit a 360dp screen.
+                // Wider than the counters: the «:SS» tail needs the room; TickingValue shrinks what still doesn't fit.
                 modifier = Modifier.weight(1.2f),
             )
         }
@@ -1100,20 +1100,7 @@ private fun MetricItem(
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             ).let { if (mono) it.copy(fontFamily = RobotoMono) else it }
             if (seconds != null) {
-                RollingText(text = value, style = valueStyle, rollDown = rollDown)
-                Text(
-                    text = ":" + seconds.toString().padStart(2, '0'),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = RobotoMono,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isError) {
-                        MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    // Cancels the row spacing so the tail hugs the minutes.
-                    modifier = Modifier.offset(x = (-2).dp).padding(bottom = 3.dp),
-                )
+                TickingValue(value = value, seconds = seconds, valueStyle = valueStyle, isError = isError, rollDown = rollDown)
             } else {
                 Text(text = value, style = valueStyle)
             }
@@ -1128,6 +1115,50 @@ private fun MetricItem(
         }
     }
 }
+
+/**
+ * `Ч:ММ` value plus the `:SS` tail on one line. When the pair doesn't fit the cell (narrow screen,
+ * large font scale, «+10:00»), both shrink by one factor instead of wrapping the tail. The width is
+ * measured with «:00» — RobotoMono, so every tail has the same width — and re-measured only when
+ * [value] or the cell width changes.
+ */
+@Composable
+private fun TickingValue(value: String, seconds: Int, valueStyle: TextStyle, isError: Boolean, rollDown: Boolean) {
+    val secondsStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = RobotoMono,
+        fontWeight = FontWeight.SemiBold,
+        color = if (isError) {
+            MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints {
+        val maxPx = constraints.maxWidth
+        val scale = remember(value, maxPx, valueStyle, secondsStyle, measurer) {
+            val need = measurer.measure(value, valueStyle, softWrap = false, maxLines = 1).size.width +
+                measurer.measure(":00", secondsStyle, softWrap = false, maxLines = 1).size.width
+            if (need <= maxPx) 1f else (maxPx.toFloat() / need).coerceAtLeast(MIN_TICKING_SCALE)
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            RollingText(
+                text = value,
+                style = valueStyle.copy(fontSize = valueStyle.fontSize * scale),
+                rollDown = rollDown,
+            )
+            Text(
+                text = ":" + seconds.toString().padStart(2, '0'),
+                style = secondsStyle.copy(fontSize = secondsStyle.fontSize * scale),
+                softWrap = false,
+                maxLines = 1,
+                modifier = Modifier.padding(bottom = 3.dp * scale),
+            )
+        }
+    }
+}
+
+private const val MIN_TICKING_SCALE = 0.6f
 
 /**
  * [text] where each changed character rolls vertically — a port of SwiftUI's `numericText` transition.
@@ -1149,7 +1180,7 @@ private fun RollingText(text: String, style: TextStyle, rollDown: Boolean) {
                     },
                     label = "rolling-char",
                 ) { ch ->
-                    Text(text = ch.toString(), style = style)
+                    Text(text = ch.toString(), style = style, softWrap = false, maxLines = 1)
                 }
             }
         }
