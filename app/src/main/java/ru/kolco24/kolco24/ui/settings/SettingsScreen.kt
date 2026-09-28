@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -80,6 +81,8 @@ fun SettingsScreen(
     onEconomyModeChange: (Boolean) -> Unit = {},
     showAllTrackPoints: Boolean = false,
     onShowAllTrackPointsChange: (Boolean) -> Unit = {},
+    colorTrackBySpeed: Boolean = true,
+    onColorTrackBySpeedChange: (Boolean) -> Unit = {},
     trackPointCount: Int = 0,
     trackClearEnabled: Boolean = false,
     onClearTrack: () -> Unit = {},
@@ -175,6 +178,11 @@ fun SettingsScreen(
         ) {
             Column {
                 EconomyModeRow(checked = economyMode, onCheckedChange = onEconomyModeChange)
+                ColorTrackBySpeedRow(
+                    checked = colorTrackBySpeed,
+                    enabled = !showAllTrackPoints,
+                    onCheckedChange = onColorTrackBySpeedChange,
+                )
                 ShowAllTrackPointsRow(
                     checked = showAllTrackPoints,
                     onCheckedChange = onShowAllTrackPointsChange,
@@ -511,6 +519,50 @@ private fun EconomyModeRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit)
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * «Цвет трека по скорости» row — copy of [ShowAllTrackPointsRow] (duplicate, don't couple). On = the
+ * map track is colored by speed and stops of 5+ min are labeled. Disabled (with its own subtitle)
+ * while «Все точки» is on — the coloring only runs over the filtered track.
+ */
+@Composable
+private fun ColorTrackBySpeedRow(checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(neutralAvatarContainerColor(), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Speed,
+                contentDescription = null,
+                tint = neutralAvatarContentColor(),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Цвет трека по скорости",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (enabled) "Стоянки от 5 мин — отметкой на карте" else "Недоступно при показе всех точек",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

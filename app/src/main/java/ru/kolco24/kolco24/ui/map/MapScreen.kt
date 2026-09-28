@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,10 +42,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import ru.kolco24.kolco24.data.track.SpeedBand
+import ru.kolco24.kolco24.data.track.SpeedTrack
 import ru.kolco24.kolco24.data.track.TrackPointLike
+import ru.kolco24.kolco24.data.track.speedBandLegendLabel
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.theme.RobotoMono
+import ru.kolco24.kolco24.ui.theme.speedBandColor
 import java.util.TimeZone
 
 /**
@@ -63,6 +72,9 @@ import java.util.TimeZone
  *   (then [hiddenCount] is 0 and no count is shown). Toggling does not re-frame the camera — except,
  *   without file bounds and pins, when the filter hid **every** point (the lines go empty ↔ non-empty,
  *   which [TrackMapView] treats as data arriving).
+ * - [speedTrack] non-null (speed coloring on, «Все точки» off): the track is colored by speed, a
+ *   legend sits under the chip (only while there is a run to color), and a tapped stop shows a
+ *   «Стоянка 12 мин · 14:05–14:17» card. Pin and stop selection are exclusive.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +85,7 @@ fun MapScreen(
     availability: MapAvailability?,
     base: MapStyleSource?,
     trackLines: List<List<TrackPointLike>>,
+    speedTrack: SpeedTrack?,
     pins: List<MapPin>,
     frameKey: Any?,
     locationPermitted: Boolean,
@@ -104,14 +117,22 @@ fun MapScreen(
             var selectedPinId by rememberSaveable { mutableStateOf<Int?>(null) }
             // A pin that vanished (team switch, mark deleted) hides its card.
             val selectedPin = selectedPinId?.let { id -> pins.firstOrNull { it.checkpointId == id } }
+            var selectedStopStartMs by rememberSaveable { mutableStateOf<Long?>(null) }
+            // A stop that vanished (coloring off, team switch) hides its card. A stop still in
+            // progress keeps its startMs as it grows, so its card follows the new duration.
+            val selectedStop = selectedStopStartMs?.let { start ->
+                speedTrack?.stops?.firstOrNull { it.startMs == start }
+            }
 
             TrackMapView(
                 styleSource = base,
                 trackLines = trackLines,
+                speedTrack = speedTrack,
                 pins = pins,
                 frameKey = frameKey,
                 locationPermitted = locationPermitted,
-                onPinClick = { selectedPinId = it },
+                onPinClick = { selectedPinId = it; selectedStopStartMs = null },
+                onStopClick = { selectedStopStartMs = it; selectedPinId = null },
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -139,6 +160,9 @@ fun MapScreen(
                         onClick = onToggleShowAll,
                     )
                 }
+                if (speedTrack != null && speedTrack.runs.isNotEmpty()) {
+                    SpeedLegend()
+                }
             }
 
             Column(
@@ -151,6 +175,12 @@ fun MapScreen(
             ) {
                 if (selectedPin != null) {
                     PinCard(caption = pinCaption(selectedPin, TimeZone.getDefault()))
+                }
+                if (selectedStop != null) {
+                    PinCard(
+                        caption = stopCaption(selectedStop, TimeZone.getDefault()),
+                        icon = Icons.Filled.Schedule,
+                    )
                 }
                 when (availability) {
                     MapAvailability.NotDownloaded -> DownloadCard(enabled = true, onDownload = onDownload)
@@ -224,8 +254,50 @@ private fun ShowAllPointsChip(
     )
 }
 
+/**
+ * Speed-color legend: a swatch + range per band, then «км/ч». Semi-transparent over the map, like
+ * the «Все точки» chip.
+ */
 @Composable
-private fun PinCard(caption: String) {
+private fun SpeedLegend() {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+                .semantics(mergeDescendants = true) { contentDescription = "Цвет трека по скорости" },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SpeedBand.entries.forEach { band ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 12.dp, height = 4.dp)
+                            .background(speedBandColor(band), RoundedCornerShape(2.dp)),
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        text = speedBandLegendLabel(band),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = RobotoMono,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            Text(
+                text = "км/ч",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PinCard(caption: String, icon: ImageVector = Icons.Filled.Place) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -235,7 +307,7 @@ private fun PinCard(caption: String) {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Place, contentDescription = null, tint = OrangeCta, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = OrangeCta, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Text(
                 text = caption,

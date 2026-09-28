@@ -11,7 +11,11 @@ import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.map.Bounds
 import ru.kolco24.kolco24.data.map.MbtilesMetadata
 import ru.kolco24.kolco24.data.pluralRu
+import ru.kolco24.kolco24.data.track.SpeedRun
+import ru.kolco24.kolco24.data.track.SpeedStroke
 import ru.kolco24.kolco24.data.track.TrackPointLike
+import ru.kolco24.kolco24.data.track.TrackStop
+import ru.kolco24.kolco24.data.track.formatStopDuration
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -109,6 +113,80 @@ private fun StringBuilder.appendLonLat(p: TrackPointLike) {
 }
 
 private const val EMPTY_FEATURE_COLLECTION = """{"type":"FeatureCollection","features":[]}"""
+
+/** Property on each speed-run feature: the stroke name ([speedStrokeKey]); the map view styles by it. */
+const val SPEED_STROKE_PROPERTY = "stroke"
+
+/** [SPEED_STROKE_PROPERTY] value of a gap run (dashed grey, no casing). */
+const val SPEED_GAP_KEY = "gap"
+
+/** [SPEED_STROKE_PROPERTY] value: the band's lowercase name, or [SPEED_GAP_KEY]. */
+fun speedStrokeKey(stroke: SpeedStroke): String = when (stroke) {
+    is SpeedStroke.Band -> stroke.band.name.lowercase(Locale.US)
+    SpeedStroke.Gap -> SPEED_GAP_KEY
+}
+
+/**
+ * GeoJSON `FeatureCollection` of speed [runs]: one `LineString` feature per run (coordinates
+ * `[lon, lat]`) with [SPEED_STROKE_PROPERTY]. Runs with fewer than 2 points are skipped; nothing →
+ * an empty collection. [StringBuilder] like [trackGeoJson] — rebuilt on every GPS fix.
+ */
+fun speedRunsGeoJson(runs: List<SpeedRun>): String {
+    val drawn = runs.filter { it.points.size >= 2 }
+    if (drawn.isEmpty()) return EMPTY_FEATURE_COLLECTION
+    val sb = StringBuilder(drawn.sumOf { it.points.size } * 40 + drawn.size * 96 + 64)
+    sb.append("""{"type":"FeatureCollection","features":[""")
+    drawn.forEachIndexed { ri, run ->
+        if (ri > 0) sb.append(',')
+        sb.append("""{"type":"Feature","properties":{"$SPEED_STROKE_PROPERTY":"""")
+        sb.append(speedStrokeKey(run.stroke))
+        sb.append(""""},"geometry":{"type":"LineString","coordinates":[""")
+        run.points.forEachIndexed { i, p ->
+            if (i > 0) sb.append(',')
+            sb.appendLonLat(p)
+        }
+        sb.append("]}}")
+    }
+    sb.append("]}")
+    return sb.toString()
+}
+
+/** Style-image name of a stop label icon (registered by the map view per distinct label). */
+fun stopIconName(label: String): String = "stop-$label"
+
+/**
+ * GeoJSON `FeatureCollection` of [stops]: one `Point` feature each at the centroid, properties
+ * `start` (= [TrackStop.startMs], the tap id) and `icon` (= [stopIconName] of [formatStopDuration]).
+ */
+fun stopsGeoJson(stops: List<TrackStop>): String =
+    buildJsonObject {
+        put("type", "FeatureCollection")
+        putJsonArray("features") {
+            stops.forEach { stop ->
+                addJsonObject {
+                    put("type", "Feature")
+                    putJsonObject("properties") {
+                        put("start", stop.startMs)
+                        put("icon", stopIconName(formatStopDuration(stop.endMs - stop.startMs)))
+                    }
+                    putJsonObject("geometry") {
+                        put("type", "Point")
+                        putJsonArray("coordinates") {
+                            add(stop.lon)
+                            add(stop.lat)
+                        }
+                    }
+                }
+            }
+        }
+    }.toString()
+
+/** «Стоянка 12 мин · 14:05–14:17» — times rendered in [timeZone] (device TZ in prod). */
+fun stopCaption(stop: TrackStop, timeZone: TimeZone): String {
+    val fmt = SimpleDateFormat("HH:mm", Locale.US).apply { this.timeZone = timeZone }
+    val duration = formatStopDuration(stop.endMs - stop.startMs)
+    return "Стоянка $duration · ${fmt.format(Date(stop.startMs))}–${fmt.format(Date(stop.endMs))}"
+}
 
 /** Style-image name of a pin's icon (registered by the map view per checkpoint number). */
 fun pinIconName(number: Int): String = "kp-$number"

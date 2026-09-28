@@ -48,3 +48,42 @@ fun pinBitmap(context: Context, number: Int): Bitmap {
     canvas.drawText(label, center, baseline, text)
     return bitmap
 }
+
+private const val STOP_TEXT_DP = 11f
+private const val STOP_PAD_H_DP = 5f
+private const val STOP_PAD_V_DP = 2f
+
+/**
+ * Stop label icon («12 мин»): a translucent dark capsule with a 1 dp white outline and white
+ * `RobotoMono` bold text — a bitmap for the same no-glyphs reason as [pinBitmap]. Registered under
+ * [stopIconName]. Main-thread only.
+ */
+fun stopBitmap(context: Context, label: String): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        typeface = ResourcesCompat.getFont(context, R.font.roboto_mono_bold)
+            ?: Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+        textSize = STOP_TEXT_DP * density
+    }
+    val width = (text.measureText(label) + 2 * STOP_PAD_H_DP * density).toInt().coerceAtLeast(1)
+    val height = (text.descent() - text.ascent() + 2 * STOP_PAD_V_DP * density).toInt().coerceAtLeast(1)
+    val bitmap = createBitmap(width, height)
+    val canvas = Canvas(bitmap)
+    val half = density / 2f
+    val radius = height / 2f - half
+
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.argb(0xD9, 0x1A, 0x1A, 0x1A) }
+    canvas.drawRoundRect(half, half, width - half, height - half, radius, radius, fill)
+    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = density
+    }
+    canvas.drawRoundRect(half, half, width - half, height - half, radius, radius, stroke)
+
+    val baseline = height / 2f - (text.descent() + text.ascent()) / 2f
+    canvas.drawText(label, width / 2f, baseline, text)
+    return bitmap
+}
