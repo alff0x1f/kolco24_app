@@ -45,13 +45,13 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -1769,7 +1769,7 @@ private fun Kolco24AppRoot(
                         onClick = { switchToTab(PAGE_LEGEND) },
                         icon = {
                             Icon(
-                                if (activePage == PAGE_LEGEND) Icons.Filled.Map else Icons.Outlined.Map,
+                                if (activePage == PAGE_LEGEND) Icons.Filled.FormatListNumbered else Icons.Outlined.FormatListNumbered,
                                 contentDescription = null,
                             )
                         },
@@ -1781,7 +1781,7 @@ private fun Kolco24AppRoot(
                         onClick = { switchToTab(PAGE_MAP) },
                         icon = {
                             Icon(
-                                if (activePage == PAGE_MAP) Icons.Filled.Place else Icons.Outlined.Place,
+                                if (activePage == PAGE_MAP) Icons.Filled.Map else Icons.Outlined.Map,
                                 contentDescription = null,
                             )
                         },
