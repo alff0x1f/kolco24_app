@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import ru.kolco24.kolco24.data.track.SpeedBand
 
 // Light scheme — seeded from brand red #B3261E
 val BrandRed            = Color(0xFFB3261E)
@@ -42,6 +43,23 @@ val CpColorRed    = Color(0xFFE53935)
 val CpColorBlue   = Color(0xFF1E88E5)
 val CpColorYellow = Color(0xFFF4B400)
 val CpColorPurple = Color(0xFF8E44AD)
+
+// Track speed colors (plasma-like, port of iOS `speedStop…speedFast`, `speedGap`). Same in light &
+// dark: contrast is set by the map background, not the app theme.
+val SpeedStop  = Color(0xFF3B0F70)
+val SpeedSlow  = Color(0xFF8C2981)
+val SpeedWalk  = Color(0xFFDE4968)
+val SpeedBrisk = Color(0xFFFE9F6D)
+val SpeedFast  = Color(0xFFF0F921)
+val SpeedGap   = Color(0xFF8E8E93)
+
+fun speedBandColor(band: SpeedBand): Color = when (band) {
+    SpeedBand.Stop -> SpeedStop
+    SpeedBand.Slow -> SpeedSlow
+    SpeedBand.Walk -> SpeedWalk
+    SpeedBand.Brisk -> SpeedBrisk
+    SpeedBand.Fast -> SpeedFast
+}
 
 val ErrorLight      = Color(0xFFBA1A1A)
 val OnErrorLight    = Color(0xFFFFFFFF)

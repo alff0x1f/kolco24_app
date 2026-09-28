@@ -123,6 +123,7 @@ import ru.kolco24.kolco24.data.db.TrackPointEntity
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.db.UploadCounts
 import ru.kolco24.kolco24.data.track.PendingTrackStart
+import ru.kolco24.kolco24.data.track.SpeedTrack
 import ru.kolco24.kolco24.data.track.TargetUploadOutcome
 import ru.kolco24.kolco24.data.track.TrackAutoAction
 import ru.kolco24.kolco24.data.track.TrackProfile
@@ -402,6 +403,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             val mode by container.themePreference.mode.collectAsState()
             val trackProfile by container.trackProfilePreference.profile.collectAsState()
             val showAllTrackPoints by container.trackFilterPreference.showAllPoints.collectAsState()
+            val colorTrackBySpeed by container.trackColorPreference.colorBySpeed.collectAsState()
             Kolco24Theme(darkTheme = mode.isDark(isSystemInDarkTheme())) {
                 Kolco24AppRoot(
                     themeMode = mode,
@@ -414,6 +416,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                     },
                     showAllTrackPoints = showAllTrackPoints,
                     onShowAllTrackPointsChange = { container.trackFilterPreference.setShowAllPoints(it) },
+                    colorTrackBySpeed = colorTrackBySpeed,
+                    onColorTrackBySpeedChange = { container.trackColorPreference.setColorBySpeed(it) },
                 )
             }
         }
@@ -646,6 +650,8 @@ private fun Kolco24AppRoot(
     onEconomyModeChange: (Boolean) -> Unit,
     showAllTrackPoints: Boolean,
     onShowAllTrackPointsChange: (Boolean) -> Unit,
+    colorTrackBySpeed: Boolean,
+    onColorTrackBySpeedChange: (Boolean) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
     val scope = rememberCoroutineScope()
@@ -1635,6 +1641,22 @@ private fun Kolco24AppRoot(
     }
     // The MapView lives only on the settled «Карта» page (never off-screen / mid-animation).
     val mapActive = pagerState.settledPage == PAGE_MAP
+    // Speed coloring (runs + stops) over the filtered lines, only while the map is shown; never under
+    // «Все точки» (raw spikes give fake speeds). Tagged with the exact lines it was computed from, so
+    // a result for the previous lines (other team, older fix) is never shown against new ones — until
+    // it lands the map draws the plain track.
+    val speedActive = mapActive && colorTrackBySpeed && !showAllTrackPoints
+    val speedTrackState by produceState<Pair<List<List<TrackPointEntity>>, SpeedTrack>?>(
+        null, trackLinesNow, speedActive,
+    ) {
+        if (!speedActive) {
+            value = null
+            return@produceState
+        }
+        val lines = trackLinesNow
+        value = lines to withContext(Dispatchers.Default) { SpeedTrack.of(lines) }
+    }
+    val speedTrackNow = speedTrackState?.takeIf { speedActive && it.first === trackLinesNow }?.second
     val mapPinsNow = remember(safeMarks, checkpointCosts, mapActive) {
         if (mapActive) mapPins(safeMarks, checkpointCosts) else emptyList()
     }
@@ -1842,6 +1864,7 @@ private fun Kolco24AppRoot(
                         base = mapBase,
                         // The track GeoJSON is built off-main inside the map view, only while it is shown.
                         trackLines = trackLinesNow,
+                        speedTrack = speedTrackNow,
                         pins = mapPinsNow,
                         frameKey = selectedTeamId,
                         locationPermitted = activity?.locationGranted ?: false,
@@ -2115,6 +2138,8 @@ private fun Kolco24AppRoot(
                 onEconomyModeChange = onEconomyModeChange,
                 showAllTrackPoints = showAllTrackPoints,
                 onShowAllTrackPointsChange = onShowAllTrackPointsChange,
+                colorTrackBySpeed = colorTrackBySpeed,
+                onColorTrackBySpeedChange = onColorTrackBySpeedChange,
                 trackPointCount = safeTrack.size,
                 // Clearing is allowed only when a track exists and is NOT recording for this team
                 // (same Recording-for-this-team check the TeamScreen TrackCard uses). The confirm

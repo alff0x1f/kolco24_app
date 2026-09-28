@@ -48,12 +48,24 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import ru.kolco24.kolco24.BuildConfig
 import ru.kolco24.kolco24.data.map.Bounds
 import ru.kolco24.kolco24.data.map.MbtilesMetadata
+import ru.kolco24.kolco24.data.track.SpeedBand
+import ru.kolco24.kolco24.data.track.SpeedStroke
+import ru.kolco24.kolco24.data.track.SpeedTrack
 import ru.kolco24.kolco24.data.track.TrackPointLike
+import ru.kolco24.kolco24.data.track.formatStopDuration
 import ru.kolco24.kolco24.ui.theme.OrangeCta
+import ru.kolco24.kolco24.ui.theme.SpeedGap
+import ru.kolco24.kolco24.ui.theme.speedBandColor
 
 private const val TRACK_SOURCE = "track"
 private const val TRACK_LAYER = "track-layer"
 private const val TRACK_DOT_LAYER = "track-dot-layer"
+private const val SPEED_SOURCE = "speed"
+private const val SPEED_CASING_LAYER = "speed-casing-layer"
+private const val SPEED_GAP_LAYER = "speed-gap-layer"
+private const val SPEED_LAYER = "speed-layer"
+private const val STOPS_SOURCE = "stops"
+private const val STOPS_LAYER = "stops-layer"
 private const val PINS_SOURCE = "pins"
 private const val PINS_LAYER = "pins-layer"
 private const val FIT_PADDING_DP = 48
@@ -62,6 +74,11 @@ private const val SINGLE_POINT_ZOOM = 15.0
 private const val TRACK_LINE_WIDTH_DP = 3f
 /** A lone kept fix (1-point line) — a touch bigger than the line's half-width so it stays visible. */
 private const val TRACK_DOT_RADIUS_DP = 3f
+/** Dark casing under the speed colors so the light bands stay visible on any basemap. */
+private const val SPEED_CASING_WIDTH_DP = 5f
+private const val SPEED_CASING_ALPHA = 0.55f
+/** Gap dash in line widths (≈ iOS `[4, 6]` pt at width 3). */
+private val SPEED_GAP_DASH = arrayOf(1.4f, 2f)
 
 /** Nothing to frame at all: Ufa region at a regional zoom. */
 private val DEFAULT_CENTER = LatLng(54.74, 55.96)
@@ -93,7 +110,11 @@ private object MapLibreInit {
 
 /**
  * MapLibre map with the team's [trackLines] (one drawn part per line; a 1-point line is drawn as a dot
- * by a circle layer on the same source) and taken-КП [pins] over [styleSource]. Must only be composed
+ * by a circle layer on the same source) and taken-КП [pins] over [styleSource]. With [speedTrack]
+ * (speed coloring on) the lines are drawn from its runs instead — a dark casing under the band runs
+ * (not under gaps, or the dash would read as a solid line), dashed grey gaps, one color per band —
+ * and its stops get «12 мин» label icons (tap → [onStopClick] with the stop's `startMs`); 1-point
+ * lines stay orange dots. Must only be composed
  * while the map tab is the settled pager page — each composition owns a native `MapView`
  * (+ a GPS client via the location component when [locationPermitted]).
  *
@@ -103,16 +124,18 @@ private object MapLibreInit {
  * GPS fix). The camera is (re)framed ([cameraFrame]) on every style load, when [frameKey] (the
  * selected team) changes, and — without file bounds — when the data goes from empty to non-empty.
  *
- * [onPinClick] gets the tapped pin's `checkpointId`, or `null` for a tap that missed every pin.
+ * [onPinClick] gets the tapped pin's `checkpointId`, or `null` for a tap that missed every pin and stop.
  */
 @Composable
 fun TrackMapView(
     styleSource: MapStyleSource,
     trackLines: List<List<TrackPointLike>>,
+    speedTrack: SpeedTrack?,
     pins: List<MapPin>,
     frameKey: Any?,
     locationPermitted: Boolean,
     onPinClick: (Int?) -> Unit,
+    onStopClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -125,19 +148,33 @@ fun TrackMapView(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
 
-    val trackJson by produceState(trackGeoJson(emptyList()), trackLines) {
-        value = withContext(Dispatchers.Default) { trackGeoJson(trackLines) }
+    // In speed mode the track source keeps only the 1-point dots; the lines come from the speed source.
+    val speedMode = speedTrack != null
+    val trackJson by produceState(trackGeoJson(emptyList()), trackLines, speedMode) {
+        value = withContext(Dispatchers.Default) {
+            trackGeoJson(if (speedMode) trackLines.filter { it.size == 1 } else trackLines)
+        }
     }
+    val speedJson by produceState(speedRunsGeoJson(emptyList()), speedTrack) {
+        value = withContext(Dispatchers.Default) { speedRunsGeoJson(speedTrack?.runs.orEmpty()) }
+    }
+    val stops = speedTrack?.stops.orEmpty()
+    val stopsJson = remember(stops) { stopsGeoJson(stops) }
+    val stopLabels = remember(stops) { stops.mapTo(HashSet()) { formatStopDuration(it.endMs - it.startMs) } }
     val pinsJson = remember(pins) { pinsGeoJson(pins) }
     val pinNumbers = remember(pins) { pins.mapTo(HashSet()) { it.number } }
 
     val latestTrackLines by rememberUpdatedState(trackLines)
     val latestPins by rememberUpdatedState(pins)
     val latestTrackGeoJson by rememberUpdatedState(trackJson)
+    val latestSpeedGeoJson by rememberUpdatedState(speedJson)
+    val latestStopsGeoJson by rememberUpdatedState(stopsJson)
+    val latestStopLabels by rememberUpdatedState(stopLabels)
     val latestPinsGeoJson by rememberUpdatedState(pinsJson)
     val latestPinNumbers by rememberUpdatedState(pinNumbers)
     val latestLocationPermitted by rememberUpdatedState(locationPermitted)
     val latestOnPinClick by rememberUpdatedState(onPinClick)
+    val latestOnStopClick by rememberUpdatedState(onStopClick)
 
     // Lifecycle: forward the host lifecycle to the MapView, tracking what was actually dispatched
     // so onDispose unwinds exactly those calls before onDestroy.
@@ -172,8 +209,15 @@ fun TrackMapView(
                 val id = m.queryRenderedFeatures(point, PINS_LAYER).firstNotNullOfOrNull { feature ->
                     runCatching { feature.getNumberProperty("id")?.toInt() }.getOrNull()
                 }
-                latestOnPinClick(id)
-                id != null
+                val stopStart = if (id != null) {
+                    null
+                } else {
+                    m.queryRenderedFeatures(point, STOPS_LAYER).firstNotNullOfOrNull { feature ->
+                        runCatching { feature.getNumberProperty("start")?.toLong() }.getOrNull()
+                    }
+                }
+                if (stopStart != null) latestOnStopClick(stopStart) else latestOnPinClick(id)
+                id != null || stopStart != null
             }
             map = m
         }
@@ -195,7 +239,9 @@ fun TrackMapView(
         loadedStyle = null
         m.setStyle(Style.Builder().fromJson(styleJson(styleSource))) { style ->
             latestPinNumbers.forEach { addPinImage(context, style, it) }
+            latestStopLabels.forEach { addStopImage(context, style, it) }
             style.addSource(GeoJsonSource(TRACK_SOURCE, latestTrackGeoJson))
+            style.addSource(GeoJsonSource(SPEED_SOURCE, latestSpeedGeoJson))
             style.addLayer(
                 LineLayer(TRACK_LAYER, TRACK_SOURCE).withProperties(
                     PropertyFactory.lineColor(OrangeCta.toArgb()),
@@ -204,6 +250,7 @@ fun TrackMapView(
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 ),
             )
+            addSpeedLayers(style)
             // 1-point lines (trackGeoJson's dot feature): same colour as the line. Filtered to the dot
             // feature — a circle layer would otherwise also draw a circle at every line vertex.
             style.addLayer(
@@ -213,6 +260,15 @@ fun TrackMapView(
                         PropertyFactory.circleColor(OrangeCta.toArgb()),
                         PropertyFactory.circleRadius(TRACK_DOT_RADIUS_DP),
                     ),
+            )
+            // Stops sit below the КП pins (a stop is often at a КП).
+            style.addSource(GeoJsonSource(STOPS_SOURCE, latestStopsGeoJson))
+            style.addLayer(
+                SymbolLayer(STOPS_LAYER, STOPS_SOURCE).withProperties(
+                    PropertyFactory.iconImage(Expression.get("icon")),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                ),
             )
             style.addSource(GeoJsonSource(PINS_SOURCE, latestPinsGeoJson))
             style.addLayer(
@@ -232,6 +288,17 @@ fun TrackMapView(
     LaunchedEffect(loadedStyle, trackJson) {
         val style = loadedStyle ?: return@LaunchedEffect
         style.getSourceAs<GeoJsonSource>(TRACK_SOURCE)?.setGeoJson(trackJson)
+    }
+
+    LaunchedEffect(loadedStyle, speedJson) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        style.getSourceAs<GeoJsonSource>(SPEED_SOURCE)?.setGeoJson(speedJson)
+    }
+
+    LaunchedEffect(loadedStyle, stopLabels, stopsJson) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        stopLabels.forEach { addStopImage(context, style, it) }
+        style.getSourceAs<GeoJsonSource>(STOPS_SOURCE)?.setGeoJson(stopsJson)
     }
 
     LaunchedEffect(loadedStyle, pinNumbers, pinsJson) {
@@ -266,6 +333,55 @@ fun TrackMapView(
 private fun addPinImage(context: Context, style: Style, number: Int) {
     val name = pinIconName(number)
     if (style.getImage(name) == null) style.addImage(name, pinBitmap(context, number))
+}
+
+private fun addStopImage(context: Context, style: Style, label: String) {
+    val name = stopIconName(label)
+    if (style.getImage(name) == null) style.addImage(name, stopBitmap(context, label))
+}
+
+/** Speed-run layers, bottom to top: casing under band runs, dashed grey gaps, band colors. */
+private fun addSpeedLayers(style: Style) {
+    val stroke = Expression.get(SPEED_STROKE_PROPERTY)
+    val isGap = Expression.eq(stroke, Expression.literal(SPEED_GAP_KEY))
+    val notGap = Expression.neq(stroke, Expression.literal(SPEED_GAP_KEY))
+    style.addLayer(
+        LineLayer(SPEED_CASING_LAYER, SPEED_SOURCE)
+            .withFilter(notGap)
+            .withProperties(
+                PropertyFactory.lineColor(android.graphics.Color.BLACK),
+                PropertyFactory.lineOpacity(SPEED_CASING_ALPHA),
+                PropertyFactory.lineWidth(SPEED_CASING_WIDTH_DP),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+    )
+    style.addLayer(
+        LineLayer(SPEED_GAP_LAYER, SPEED_SOURCE)
+            .withFilter(isGap)
+            .withProperties(
+                PropertyFactory.lineColor(SpeedGap.toArgb()),
+                PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
+                PropertyFactory.lineDasharray(SPEED_GAP_DASH),
+                PropertyFactory.lineCap(Property.LINE_CAP_BUTT),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+    )
+    val bandColors = SpeedBand.entries.map { band ->
+        Expression.stop(speedStrokeKey(SpeedStroke.Band(band)), Expression.color(speedBandColor(band).toArgb()))
+    }
+    style.addLayer(
+        LineLayer(SPEED_LAYER, SPEED_SOURCE)
+            .withFilter(notGap)
+            .withProperties(
+                PropertyFactory.lineColor(
+                    Expression.match(stroke, Expression.color(OrangeCta.toArgb()), *bandColors.toTypedArray()),
+                ),
+                PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+    )
 }
 
 // Deliberately re-checks what the host's `locationPermitted` already says: it is the guard lint's

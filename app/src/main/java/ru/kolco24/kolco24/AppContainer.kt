@@ -31,6 +31,7 @@ import ru.kolco24.kolco24.data.RaceRepository
 import ru.kolco24.kolco24.data.ScanFeedbackPlayer
 import ru.kolco24.kolco24.data.TeamRepository
 import ru.kolco24.kolco24.data.ThemePreference
+import ru.kolco24.kolco24.data.TrackColorPreference
 import ru.kolco24.kolco24.data.TrackFilterPreference
 import ru.kolco24.kolco24.data.TrackProfilePreference
 import ru.kolco24.kolco24.data.api.ApiClient
@@ -487,6 +488,11 @@ class AppContainer(private val context: Context) {
     /** User «Все точки» toggle (show raw track, no spike filter), persisted in SharedPreferences. */
     val trackFilterPreference: TrackFilterPreference by lazy {
         TrackFilterPreference.fromSharedPreferences(context)
+    }
+
+    /** User «Цвет трека по скорости» toggle (default on), persisted in SharedPreferences. */
+    val trackColorPreference: TrackColorPreference by lazy {
+        TrackColorPreference.fromSharedPreferences(context)
     }
 
     /** Persisted race-admin session store (token/email/expiry) backing [adminAuthRepository]. */

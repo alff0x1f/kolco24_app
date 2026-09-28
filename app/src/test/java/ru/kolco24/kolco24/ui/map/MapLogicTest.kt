@@ -7,13 +7,18 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kolco24.kolco24.data.db.MarkEntity
 import ru.kolco24.kolco24.data.map.Bounds
+import ru.kolco24.kolco24.data.track.SpeedBand
+import ru.kolco24.kolco24.data.track.SpeedRun
+import ru.kolco24.kolco24.data.track.SpeedStroke
 import ru.kolco24.kolco24.data.track.TrackPointLike
+import ru.kolco24.kolco24.data.track.TrackStop
 import java.util.TimeZone
 
 class MapLogicTest {
@@ -263,6 +268,58 @@ class MapLogicTest {
         val json = Json.parseToJsonElement(pinsGeoJson(emptyList())).jsonObject
         assertEquals("FeatureCollection", json["type"]!!.jsonPrimitive.content)
         assertTrue(json["features"]!!.jsonArray.isEmpty())
+    }
+
+    @Test
+    fun speedRunsGeoJsonIsOneLineStringPerRunWithStrokeKey() {
+        val runs = listOf(
+            SpeedRun(SpeedStroke.Band(SpeedBand.Walk), listOf(Pt(55.0, 37.0), Pt(55.1, 37.1))),
+            SpeedRun(SpeedStroke.Gap, listOf(Pt(55.1, 37.1), Pt(55.2, 37.2), Pt(55.3, 37.3))),
+            SpeedRun(SpeedStroke.Band(SpeedBand.Fast), listOf(Pt(56.0, 38.0))),
+        )
+        val features = Json.parseToJsonElement(speedRunsGeoJson(runs)).jsonObject["features"]!!.jsonArray
+        assertEquals(2, features.size)
+        val walk = features[0].jsonObject
+        assertEquals("walk", walk["properties"]!!.jsonObject[SPEED_STROKE_PROPERTY]!!.jsonPrimitive.content)
+        val geometry = walk["geometry"]!!.jsonObject
+        assertEquals("LineString", geometry["type"]!!.jsonPrimitive.content)
+        val coords = geometry["coordinates"]!!.jsonArray
+        assertEquals(37.0, coords[0].jsonArray[0].jsonPrimitive.double, 0.0)
+        assertEquals(55.0, coords[0].jsonArray[1].jsonPrimitive.double, 0.0)
+        val gap = features[1].jsonObject
+        assertEquals(SPEED_GAP_KEY, gap["properties"]!!.jsonObject[SPEED_STROKE_PROPERTY]!!.jsonPrimitive.content)
+        assertEquals(3, gap["geometry"]!!.jsonObject["coordinates"]!!.jsonArray.size)
+    }
+
+    @Test
+    fun speedRunsGeoJsonWithoutRunsIsEmptyCollection() {
+        val json = Json.parseToJsonElement(speedRunsGeoJson(emptyList())).jsonObject
+        assertTrue(json["features"]!!.jsonArray.isEmpty())
+    }
+
+    @Test
+    fun speedStrokeKeysAreDistinct() {
+        val keys = SpeedBand.entries.map { speedStrokeKey(SpeedStroke.Band(it)) } + speedStrokeKey(SpeedStroke.Gap)
+        assertEquals(listOf("stop", "slow", "walk", "brisk", "fast", "gap"), keys)
+    }
+
+    @Test
+    fun stopsGeoJsonHasPointWithStartAndDurationIcon() {
+        val stop = TrackStop(lat = 55.5, lon = 37.5, startMs = 1_000_000L, endMs = 1_000_000L + 12 * 60_000L)
+        val f = Json.parseToJsonElement(stopsGeoJson(listOf(stop))).jsonObject["features"]!!.jsonArray.single().jsonObject
+        val props = f["properties"]!!.jsonObject
+        assertEquals(1_000_000L, props["start"]!!.jsonPrimitive.long)
+        assertEquals("stop-12 мин", props["icon"]!!.jsonPrimitive.content)
+        val coords = f["geometry"]!!.jsonObject["coordinates"]!!.jsonArray
+        assertEquals(37.5, coords[0].jsonPrimitive.double, 0.0)
+        assertEquals(55.5, coords[1].jsonPrimitive.double, 0.0)
+    }
+
+    @Test
+    fun stopCaptionShowsDurationAndTimeRangeInGivenTimeZone() {
+        val stop = TrackStop(0.0, 0.0, startMs = t, endMs = t + 12 * 60_000L)
+        assertEquals("Стоянка 12 мин · 11:07–11:19", stopCaption(stop, TimeZone.getTimeZone("UTC")))
+        assertEquals("Стоянка 12 мин · 14:07–14:19", stopCaption(stop, TimeZone.getTimeZone("Europe/Moscow")))
     }
 
     // ---- pinCaption ----
