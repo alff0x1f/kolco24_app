@@ -636,6 +636,9 @@ private sealed interface SelectedTeamState {
 /** Spike-filtered track lines plus how many raw points the filter hid (see `trackFiltered`). */
 private data class FilteredTrack(val lines: List<List<TrackPointEntity>>, val hiddenCount: Int)
 
+/** A [SpeedTrack] with the exact lines it was computed from (see `speedTrackState`). */
+private class SpeedLines(val lines: List<List<TrackPointEntity>>, val speedTrack: SpeedTrack)
+
 private data class PickerTeamsState(
     val raceId: Int? = null,
     val teams: List<TeamEntity> = emptyList(),
@@ -1642,21 +1645,26 @@ private fun Kolco24AppRoot(
     // The MapView lives only on the settled «Карта» page (never off-screen / mid-animation).
     val mapActive = pagerState.settledPage == PAGE_MAP
     // Speed coloring (runs + stops) over the filtered lines, only while the map is shown; never under
-    // «Все точки» (raw spikes give fake speeds). Tagged with the exact lines it was computed from, so
-    // a result for the previous lines (other team, older fix) is never shown against new ones — until
-    // it lands the map draws the plain track.
+    // «Все точки» (raw spikes give fake speeds). The result carries the lines it was computed from and
+    // the map draws those lines with it, so colors and geometry always match: while the next fix is
+    // being colored the map keeps the previous colored version (no flip to the plain track). Tagged
+    // with the team, so another team's result never shows; until the first one lands the map draws
+    // the plain track.
     val speedActive = mapActive && colorTrackBySpeed && !showAllTrackPoints
-    val speedTrackState by produceState<Pair<List<List<TrackPointEntity>>, SpeedTrack>?>(
-        null, trackLinesNow, speedActive,
+    val speedTrackState by produceState<Pair<Int, SpeedLines>?>(
+        null, trackLinesNow, speedActive, selectedTeamId,
     ) {
-        if (!speedActive) {
+        val tid = selectedTeamId
+        if (!speedActive || tid == null) {
             value = null
             return@produceState
         }
         val lines = trackLinesNow
-        value = lines to withContext(Dispatchers.Default) { SpeedTrack.of(lines) }
+        value = tid to SpeedLines(lines, withContext(Dispatchers.Default) { SpeedTrack.of(lines) })
     }
-    val speedTrackNow = speedTrackState?.takeIf { speedActive && it.first === trackLinesNow }?.second
+    val speedLinesNow = if (speedActive) valueForKey(speedTrackState, selectedTeamId) else null
+    val mapTrackLines = speedLinesNow?.lines ?: trackLinesNow
+    val speedTrackNow = speedLinesNow?.speedTrack
     val mapPinsNow = remember(safeMarks, checkpointCosts, mapActive) {
         if (mapActive) mapPins(safeMarks, checkpointCosts) else emptyList()
     }
@@ -1863,7 +1871,7 @@ private fun Kolco24AppRoot(
                         availability = mapAvailabilityNow,
                         base = mapBase,
                         // The track GeoJSON is built off-main inside the map view, only while it is shown.
-                        trackLines = trackLinesNow,
+                        trackLines = mapTrackLines,
                         speedTrack = speedTrackNow,
                         pins = mapPinsNow,
                         frameKey = selectedTeamId,

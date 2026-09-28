@@ -51,6 +51,7 @@ import ru.kolco24.kolco24.data.map.MbtilesMetadata
 import ru.kolco24.kolco24.data.track.SpeedBand
 import ru.kolco24.kolco24.data.track.SpeedStroke
 import ru.kolco24.kolco24.data.track.SpeedTrack
+import ru.kolco24.kolco24.data.track.TrackStop
 import ru.kolco24.kolco24.data.track.TrackPointLike
 import ru.kolco24.kolco24.data.track.formatStopDuration
 import ru.kolco24.kolco24.ui.theme.OrangeCta
@@ -148,17 +149,19 @@ fun TrackMapView(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
 
-    // In speed mode the track source keeps only the 1-point dots; the lines come from the speed source.
-    val speedMode = speedTrack != null
-    val trackJson by produceState(trackGeoJson(emptyList()), trackLines, speedMode) {
+    // Track, speed runs and stops are built together from one (trackLines, speedTrack) pair and applied
+    // together, so a mode switch never shows the plain line and the colored runs out of step. In speed
+    // mode the track source keeps only the 1-point dots; the lines come from the speed source.
+    val sources by produceState(TrackSources.Empty, trackLines, speedTrack) {
         value = withContext(Dispatchers.Default) {
-            trackGeoJson(if (speedMode) trackLines.filter { it.size == 1 } else trackLines)
+            TrackSources(
+                trackJson = trackGeoJson(if (speedTrack != null) trackLines.filter { it.size == 1 } else trackLines),
+                speedJson = speedRunsGeoJson(speedTrack?.runs.orEmpty()),
+                stops = speedTrack?.stops.orEmpty(),
+            )
         }
     }
-    val speedJson by produceState(speedRunsGeoJson(emptyList()), speedTrack) {
-        value = withContext(Dispatchers.Default) { speedRunsGeoJson(speedTrack?.runs.orEmpty()) }
-    }
-    val stops = speedTrack?.stops.orEmpty()
+    val stops = sources.stops
     val stopsJson = remember(stops) { stopsGeoJson(stops) }
     val stopLabels = remember(stops) { stops.mapTo(HashSet()) { formatStopDuration(it.endMs - it.startMs) } }
     val pinsJson = remember(pins) { pinsGeoJson(pins) }
@@ -166,8 +169,7 @@ fun TrackMapView(
 
     val latestTrackLines by rememberUpdatedState(trackLines)
     val latestPins by rememberUpdatedState(pins)
-    val latestTrackGeoJson by rememberUpdatedState(trackJson)
-    val latestSpeedGeoJson by rememberUpdatedState(speedJson)
+    val latestSources by rememberUpdatedState(sources)
     val latestStopsGeoJson by rememberUpdatedState(stopsJson)
     val latestStopLabels by rememberUpdatedState(stopLabels)
     val latestPinsGeoJson by rememberUpdatedState(pinsJson)
@@ -240,8 +242,8 @@ fun TrackMapView(
         m.setStyle(Style.Builder().fromJson(styleJson(styleSource))) { style ->
             latestPinNumbers.forEach { addPinImage(context, style, it) }
             latestStopLabels.forEach { addStopImage(context, style, it) }
-            style.addSource(GeoJsonSource(TRACK_SOURCE, latestTrackGeoJson))
-            style.addSource(GeoJsonSource(SPEED_SOURCE, latestSpeedGeoJson))
+            style.addSource(GeoJsonSource(TRACK_SOURCE, latestSources.trackJson))
+            style.addSource(GeoJsonSource(SPEED_SOURCE, latestSources.speedJson))
             style.addLayer(
                 LineLayer(TRACK_LAYER, TRACK_SOURCE).withProperties(
                     PropertyFactory.lineColor(OrangeCta.toArgb()),
@@ -285,19 +287,11 @@ fun TrackMapView(
 
     // `loadedStyle` is only set from the style-loaded callback (and cleared before every setStyle /
     // on dispose), so a non-null value is always a fully loaded style.
-    LaunchedEffect(loadedStyle, trackJson) {
-        val style = loadedStyle ?: return@LaunchedEffect
-        style.getSourceAs<GeoJsonSource>(TRACK_SOURCE)?.setGeoJson(trackJson)
-    }
-
-    LaunchedEffect(loadedStyle, speedJson) {
-        val style = loadedStyle ?: return@LaunchedEffect
-        style.getSourceAs<GeoJsonSource>(SPEED_SOURCE)?.setGeoJson(speedJson)
-    }
-
-    LaunchedEffect(loadedStyle, stopLabels, stopsJson) {
+    LaunchedEffect(loadedStyle, sources) {
         val style = loadedStyle ?: return@LaunchedEffect
         stopLabels.forEach { addStopImage(context, style, it) }
+        style.getSourceAs<GeoJsonSource>(TRACK_SOURCE)?.setGeoJson(sources.trackJson)
+        style.getSourceAs<GeoJsonSource>(SPEED_SOURCE)?.setGeoJson(sources.speedJson)
         style.getSourceAs<GeoJsonSource>(STOPS_SOURCE)?.setGeoJson(stopsJson)
     }
 
@@ -328,6 +322,12 @@ fun TrackMapView(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
+}
+
+private class TrackSources(val trackJson: String, val speedJson: String, val stops: List<TrackStop>) {
+    companion object {
+        val Empty = TrackSources(trackGeoJson(emptyList()), speedRunsGeoJson(emptyList()), emptyList())
+    }
 }
 
 private fun addPinImage(context: Context, style: Style, number: Int) {
