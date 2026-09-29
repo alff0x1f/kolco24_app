@@ -38,6 +38,10 @@ Room changes require a registered migration, an exported schema JSON, and migrat
 
 ## Commit & Pull Request Guidelines
 
+**Never commit directly to `main`.** Before every commit, run `git branch --show-current`.
+If on `main`, create and switch to a task branch (e.g. `git switch -c docs/api-contracts`)
+without asking for confirmation. A generic request to "commit" does not authorize a commit to `main`.
+
 Follow history with short messages such as `feat: add member provisioning`, `fix: correct
 upload routing`, or `docs: update server path`. Describe the problem, resulting behavior,
 and validation in PRs. Link relevant issues and include screenshots for visible UI changes.
