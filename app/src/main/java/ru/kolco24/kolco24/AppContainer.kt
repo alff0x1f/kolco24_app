@@ -112,7 +112,8 @@ class AppContainer(private val context: Context) {
      * HMAC signing interceptor factory: the cloud [apiClient] and the LAN [localApiClient] are signed
      * identically (same key id / secret / 6 `X-App-*`/`X-Install-Id` headers; only the trusted-time
      * re-anchor differs — see [localApiClient]), but each gets its **own** instance so its bearer comes
-     * only from its own admin session — a cloud token never reaches the cleartext LAN host.
+     * only from its own admin session — a cloud token never reaches the cleartext LAN host. The bearer
+     * is attached only to requests tagged `RequiresAdminAuth` (`logout`, `bindTag`).
      */
     private fun signingInterceptor(tokenProvider: () -> String?): AppSignatureInterceptor =
         AppSignatureInterceptor(
@@ -135,8 +136,11 @@ class AppContainer(private val context: Context) {
         signingInterceptor { cloudAdminAuth.token() }
     }
 
+    // The LAN bearer is released only while local mode is on: the LAN host is cleartext, and outside
+    // a lease 192.168.1.5 may be any network's device (a logout then goes without it; the local
+    // session is cleared anyway).
     private val localSignatureInterceptor: AppSignatureInterceptor by lazy {
-        signingInterceptor { localAdminAuth.token() }
+        signingInterceptor { localAdminAuth.token()?.takeIf { isLanActive() } }
     }
 
     /**

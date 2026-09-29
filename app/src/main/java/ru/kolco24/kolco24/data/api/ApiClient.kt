@@ -210,7 +210,7 @@ class ApiClient(
      * `200` with no payload maps to [PostResult.Success] of [Unit].
      */
     suspend fun logout(): PostResult<Unit> =
-        post("$baseUrl/app/logout/", ByteArray(0)) { }
+        post("$baseUrl/app/logout/", ByteArray(0), adminAuth = true) { }
 
     /**
      * `POST /app/race/<raceId>/tags/` — bind the chip [nfcUid] to checkpoint [checkpointId]. `201`
@@ -224,7 +224,7 @@ class ApiClient(
         nfcUid: String,
     ): PostResult<TagBindResponse> {
         val bytes = json.encodeToString(TagBindRequest(checkpointId, nfcUid)).toByteArray()
-        return post("$baseUrl/app/race/$raceId/tags/", bytes) {
+        return post("$baseUrl/app/race/$raceId/tags/", bytes, adminAuth = true) {
             json.decodeFromString<TagBindResponse>(it)
         }
     }
@@ -322,11 +322,13 @@ class ApiClient(
         url: String,
         bodyBytes: ByteArray,
         mediaType: MediaType = JSON_MEDIA_TYPE,
+        adminAuth: Boolean = false,
         parse: (String) -> T,
     ): PostResult<T> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .post(bodyBytes.toRequestBody(mediaType))
+            .apply { if (adminAuth) tag(RequiresAdminAuth::class.java, RequiresAdminAuth) }
             .build()
         try {
             okHttpClient.newCall(request).execute().use { response ->

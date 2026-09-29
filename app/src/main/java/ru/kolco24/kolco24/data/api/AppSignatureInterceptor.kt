@@ -37,7 +37,15 @@ fun sign(secret: String, canonical: String): String {
 }
 
 /**
- * Signs every outgoing request with the six `X-App-*` headers required by the API.
+ * OkHttp request tag marking a call that needs the admin bearer (`logout`, `bindTag`). Only tagged
+ * requests get `Authorization`; the HMAC-only rest (syncs, uploads) never carry the token — the LAN
+ * client uploads over cleartext even outside local mode, so an untagged bearer would leak there.
+ */
+object RequiresAdminAuth
+
+/**
+ * Signs every outgoing request with the six `X-App-*` headers required by the API, and adds the
+ * admin bearer from [tokenProvider] only to requests tagged [RequiresAdminAuth].
  *
  * `ts` is read fresh on each invocation (including retries), so the signature is always
  * recomputed against the current time — the ±300 s window stays satisfied on retries.
@@ -102,7 +110,9 @@ class AppSignatureInterceptor(
             .header("X-Install-Id", installIdProvider())
             .header("X-App-Platform", "android")
             .header("X-App-Version", appVersion)
-        tokenProvider()?.let { builder.header("Authorization", "Bearer $it") }
+        if (request.tag(RequiresAdminAuth::class.java) != null) {
+            tokenProvider()?.let { builder.header("Authorization", "Bearer $it") }
+        }
         return builder.build()
     }
 

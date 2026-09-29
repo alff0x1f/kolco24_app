@@ -88,9 +88,10 @@ class SigningTest {
     }
 
     @Test
-    fun interceptor_addsBearerWhenTokenProviderNonNull() {
+    fun interceptor_addsBearerToTaggedRequestWhenTokenProviderNonNull() {
         val captured = captureSignedRequest(token = "tok-123") {
-            Request.Builder().url("https://example.test/app/races/").get().build()
+            Request.Builder().url("https://example.test/app/logout/")
+                .tag(RequiresAdminAuth::class.java, RequiresAdminAuth).get().build()
         }
         assertEquals("Bearer tok-123", captured.header("Authorization"))
     }
@@ -98,6 +99,17 @@ class SigningTest {
     @Test
     fun interceptor_noBearerWhenTokenNull() {
         val captured = captureSignedRequest(token = null) {
+            Request.Builder().url("https://example.test/app/logout/")
+                .tag(RequiresAdminAuth::class.java, RequiresAdminAuth).get().build()
+        }
+        assertNull(captured.header("Authorization"))
+    }
+
+    @Test
+    fun interceptor_noBearerOnUntaggedRequestEvenWithToken() {
+        // HMAC-only calls (syncs, uploads) must never carry the admin token — the LAN client sends
+        // them over cleartext even outside local mode.
+        val captured = captureSignedRequest(token = "tok-123") {
             Request.Builder().url("https://example.test/app/races/").get().build()
         }
         assertNull(captured.header("Authorization"))
