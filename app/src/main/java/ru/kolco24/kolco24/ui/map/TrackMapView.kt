@@ -137,6 +137,7 @@ fun TrackMapView(
     locationPermitted: Boolean,
     onPinClick: (Int?) -> Unit,
     onStopClick: (Long) -> Unit,
+    onOsmVisibleChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -177,6 +178,8 @@ fun TrackMapView(
     val latestLocationPermitted by rememberUpdatedState(locationPermitted)
     val latestOnPinClick by rememberUpdatedState(onPinClick)
     val latestOnStopClick by rememberUpdatedState(onStopClick)
+    val latestStyleSource by rememberUpdatedState(styleSource)
+    val latestOnOsmVisibleChange by rememberUpdatedState(onOsmVisibleChange)
 
     // Lifecycle: forward the host lifecycle to the MapView, tracking what was actually dispatched
     // so onDispose unwinds exactly those calls before onDestroy.
@@ -221,6 +224,7 @@ fun TrackMapView(
                 if (stopStart != null) latestOnStopClick(stopStart) else latestOnPinClick(id)
                 id != null || stopStart != null
             }
+            m.addOnCameraIdleListener { updateOsmLayer(m, latestStyleSource, latestOnOsmVisibleChange) }
             map = m
         }
         onDispose {
@@ -319,6 +323,7 @@ fun TrackMapView(
         val m = map ?: return@LaunchedEffect
         if (loadedStyle == null) return@LaunchedEffect
         applyCamera(context, m, metadata, dataBounds(latestTrackLines.flatten(), latestPins))
+        updateOsmLayer(m, styleSource, onOsmVisibleChange)
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
@@ -425,8 +430,33 @@ private fun applyLocation(
 }
 
 /**
- * Frames the camera per [cameraFrame]. Zoom preferences follow MBTiles `minzoom`/`maxzoom` (else
- * MapLibre's limits); file bounds also clamp the camera target (0 padding), a data fit uses 48 dp.
+ * Shows the OSM layer only while [osmVisible] needs it: a hidden layer fetches no tiles, while a visible
+ * one would fetch them even under the opaque race file. Runs on every camera idle and after each
+ * framing; a gesture may still fetch a few edge tiles before the idle event.
+ */
+private fun updateOsmLayer(map: MapLibreMap, source: MapStyleSource, onChange: (Boolean) -> Unit) {
+    val style = map.style?.takeIf { it.isFullyLoaded } ?: return
+    val region = map.projection.visibleRegion.latLngBounds
+    val visible = osmVisible(
+        source,
+        map.cameraPosition.zoom,
+        Bounds(
+            west = region.longitudeWest,
+            south = region.latitudeSouth,
+            east = region.longitudeEast,
+            north = region.latitudeNorth,
+        ),
+    )
+    style.getLayer(OSM_LAYER)?.setProperties(
+        PropertyFactory.visibility(if (visible) Property.VISIBLE else Property.NONE),
+    )
+    onChange(visible)
+}
+
+/**
+ * Frames the camera per [cameraFrame]: file bounds edge to edge (0 padding), a data fit with 48 dp.
+ * Zoom out and panning are free — OSM lies under the race file — and the max zoom follows MBTiles
+ * `maxzoom` (else MapLibre's limit), past which the file would only be upscaled.
  */
 private fun applyCamera(
     context: Context,
@@ -434,17 +464,13 @@ private fun applyCamera(
     metadata: MbtilesMetadata?,
     dataBounds: Bounds?,
 ) {
-    // Native setMinZoom/setMaxZoom silently ignore a value past the *current* opposite limit (10–13 →
-    // 15–18 would keep min 10), and the effective min zoom is constrained by the target bounds — so
-    // clear the bounds and widen to MapLibre's full range first, then apply the new pair min → max.
-    map.setLatLngBoundsForCameraTarget(null)
+    // Native setMaxZoom silently ignores a value below the *current* min — widen to MapLibre's full
+    // range first, then apply the file's max.
     map.setMinZoomPreference(MapLibreConstants.MINIMUM_ZOOM.toDouble())
     map.setMaxZoomPreference(MapLibreConstants.MAXIMUM_ZOOM.toDouble())
-    metadata?.minZoom?.let { map.setMinZoomPreference(it.toDouble()) }
     metadata?.maxZoom?.let { map.setMaxZoomPreference(it.toDouble()) }
 
     val frame = cameraFrame(metadata?.bounds, dataBounds)
-    map.setLatLngBoundsForCameraTarget((frame as? CameraFrame.FileBounds)?.bounds?.toLatLngBounds())
     when (frame) {
         is CameraFrame.FileBounds ->
             map.moveCamera(CameraUpdateFactory.newLatLngBounds(frame.bounds.toLatLngBounds(), 0))

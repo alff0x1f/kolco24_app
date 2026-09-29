@@ -37,6 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -124,6 +125,9 @@ fun MapScreen(
                 speedTrack?.stops?.firstOrNull { it.startMs == start }
             }
 
+            // Offline the OSM layer starts hidden until the first camera framing decides.
+            var osmShown by remember(base) { mutableStateOf(base is MapStyleSource.Online) }
+
             TrackMapView(
                 styleSource = base,
                 trackLines = trackLines,
@@ -133,6 +137,7 @@ fun MapScreen(
                 locationPermitted = locationPermitted,
                 onPinClick = { selectedPinId = it; selectedStopStartMs = null },
                 onStopClick = { selectedStopStartMs = it; selectedPinId = null },
+                onOsmVisibleChange = { osmShown = it },
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -189,8 +194,8 @@ fun MapScreen(
                         DownloadingCard(progress = availability.progress, onCancel = onCancelDownload)
                     MapAvailability.NoMapForRace, MapAvailability.Ready -> Unit
                 }
-                // Visible attribution whenever the online OSM base is on screen (not just MapLibre's (i)).
-                if (base is MapStyleSource.Online) {
+                // Visible attribution while the OSM layer is shown (not just MapLibre's (i)).
+                if (osmShown) {
                     Text(
                         text = OSM_ATTRIBUTION,
                         style = MaterialTheme.typography.labelSmall,

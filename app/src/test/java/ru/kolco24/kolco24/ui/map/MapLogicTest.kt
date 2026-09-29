@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.map
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
@@ -9,6 +10,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
+import ru.kolco24.kolco24.data.map.MbtilesMetadata
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -398,33 +401,89 @@ class MapLogicTest {
 
     // ---- styleJson ----
 
-    private fun baseSource(source: MapStyleSource) =
-        Json.parseToJsonElement(styleJson(source)).jsonObject["sources"]!!.jsonObject["base"]!!.jsonObject
+    private fun style(source: MapStyleSource) = Json.parseToJsonElement(styleJson(source)).jsonObject
 
-    @Test
-    fun styleJsonOfflineUsesMbtilesUrlWithAbsolutePath() {
-        val json = Json.parseToJsonElement(styleJson(MapStyleSource.Offline("/data/maps/8.mbtiles", null))).jsonObject
-        assertEquals(8, json["version"]!!.jsonPrimitive.int)
-        val base = baseSource(MapStyleSource.Offline("/data/maps/8.mbtiles", null))
-        assertEquals("raster", base["type"]!!.jsonPrimitive.content)
-        assertEquals("mbtiles:///data/maps/8.mbtiles", base["url"]!!.jsonPrimitive.content)
-        assertEquals(256, base["tileSize"]!!.jsonPrimitive.int)
-        assertNull(base["tiles"])
-        val layer = json["layers"]!!.jsonArray.single().jsonObject
-        assertEquals("raster", layer["type"]!!.jsonPrimitive.content)
-        assertEquals("base", layer["source"]!!.jsonPrimitive.content)
+    private fun assertOsmSource(osm: JsonObject) {
+        assertEquals("raster", osm["type"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            osm["tiles"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(19, osm["maxzoom"]!!.jsonPrimitive.int)
+        assertEquals("© OpenStreetMap contributors", osm["attribution"]!!.jsonPrimitive.content)
+        assertEquals(256, osm["tileSize"]!!.jsonPrimitive.int)
     }
 
     @Test
-    fun styleJsonOnlineUsesOsmTilesWithAttribution() {
-        val base = baseSource(MapStyleSource.Online)
-        assertEquals(
-            listOf("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-            base["tiles"]!!.jsonArray.map { it.jsonPrimitive.content },
-        )
-        assertEquals(19, base["maxzoom"]!!.jsonPrimitive.int)
-        assertEquals("© OpenStreetMap contributors", base["attribution"]!!.jsonPrimitive.content)
-        assertEquals(256, base["tileSize"]!!.jsonPrimitive.int)
-        assertNull(base["url"])
+    fun styleJsonOfflineDrawsMbtilesOverOsm() {
+        val json = style(MapStyleSource.Offline("/data/maps/8.mbtiles", null))
+        assertEquals(8, json["version"]!!.jsonPrimitive.int)
+        val sources = json["sources"]!!.jsonObject
+        assertOsmSource(sources["osm"]!!.jsonObject)
+        val race = sources["race"]!!.jsonObject
+        assertEquals("raster", race["type"]!!.jsonPrimitive.content)
+        assertEquals("mbtiles:///data/maps/8.mbtiles", race["url"]!!.jsonPrimitive.content)
+        assertEquals(256, race["tileSize"]!!.jsonPrimitive.int)
+        assertNull(race["tiles"])
+        val layers = json["layers"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("osm", "race"), layers.map { it["source"]!!.jsonPrimitive.content })
+        layers.forEach { assertEquals("raster", it["type"]!!.jsonPrimitive.content) }
+    }
+
+    @Test
+    fun styleJsonOfflineStartsWithOsmHidden() {
+        val osm = style(MapStyleSource.Offline("/data/maps/8.mbtiles", null))["layers"]!!.jsonArray.first().jsonObject
+        assertEquals("osm", osm["id"]!!.jsonPrimitive.content)
+        assertEquals("none", osm["layout"]!!.jsonObject["visibility"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun styleJsonOnlineIsOsmOnly() {
+        val json = style(MapStyleSource.Online)
+        val sources = json["sources"]!!.jsonObject
+        assertEquals(setOf("osm"), sources.keys)
+        assertOsmSource(sources["osm"]!!.jsonObject)
+        val osm = json["layers"]!!.jsonArray.single().jsonObject
+        assertEquals("osm", osm["source"]!!.jsonPrimitive.content)
+        assertNull(osm["layout"])
+    }
+
+    // ---- osmVisible ----
+
+    private val fileBounds = Bounds(west = 55.0, south = 54.0, east = 56.0, north = 55.0)
+    private val inside = Bounds(west = 55.2, south = 54.2, east = 55.8, north = 54.8)
+    private fun offline(bounds: Bounds? = fileBounds, minZoom: Int? = 10) =
+        MapStyleSource.Offline("/data/maps/8.mbtiles", MbtilesMetadata(bounds, minZoom, 16))
+
+    @Test
+    fun osmHiddenWhenViewInsideFileAtOrAboveMinZoom() {
+        assertFalse(osmVisible(offline(), 10.0, inside))
+        assertFalse(osmVisible(offline(), 14.5, inside))
+        assertFalse(osmVisible(offline(), 12.0, fileBounds))
+    }
+
+    @Test
+    fun osmShownBelowMinZoom() {
+        assertTrue(osmVisible(offline(), 9.9, inside))
+    }
+
+    @Test
+    fun osmShownWhenViewCrossesAnyFileEdge() {
+        assertTrue(osmVisible(offline(), 12.0, inside.copy(west = 54.9)))
+        assertTrue(osmVisible(offline(), 12.0, inside.copy(east = 56.1)))
+        assertTrue(osmVisible(offline(), 12.0, inside.copy(south = 53.9)))
+        assertTrue(osmVisible(offline(), 12.0, inside.copy(north = 55.1)))
+    }
+
+    @Test
+    fun osmShownWhenCoverageUnknown() {
+        assertTrue(osmVisible(offline(bounds = null), 12.0, inside))
+        assertTrue(osmVisible(offline(minZoom = null), 12.0, inside))
+        assertTrue(osmVisible(MapStyleSource.Offline("/data/maps/8.mbtiles", null), 12.0, inside))
+    }
+
+    @Test
+    fun osmAlwaysShownOnline() {
+        assertTrue(osmVisible(MapStyleSource.Online, 12.0, inside))
     }
 }

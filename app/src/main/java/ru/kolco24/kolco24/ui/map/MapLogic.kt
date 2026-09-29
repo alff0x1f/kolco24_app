@@ -265,49 +265,83 @@ fun cameraFrame(fileBounds: Bounds?, dataBounds: Bounds?): CameraFrame = when {
     else -> CameraFrame.FitData(dataBounds)
 }
 
-/** Base layer of the map: the race's downloaded MBTiles file (+ its metadata), or online OSM tiles. */
+/** Base of the map: online OSM tiles, with the race's downloaded MBTiles file (+ its metadata) on top. */
 sealed interface MapStyleSource {
     /** Absolute [path] of a downloaded `<raceId>-<generation>.mbtiles`; [metadata] read off-main by the host. */
     data class Offline(val path: String, val metadata: MbtilesMetadata?) : MapStyleSource
     data object Online : MapStyleSource
 }
 
-private const val BASE_SOURCE = "base"
+private const val OSM_SOURCE = "osm"
+
+/** Id of the OSM raster layer; its visibility is toggled by the host per [osmVisible]. */
+const val OSM_LAYER = OSM_SOURCE
+private const val RACE_SOURCE = "race"
 private const val OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 private const val OSM_MAX_ZOOM = 19
 private const val TILE_SIZE_PX = 256
 const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
 
 /**
- * Style JSON with a single raster base layer (see «Итоги spike (Task 1)» in the map-tab plan):
- * offline → `mbtiles://<absolute path>` (MapLibre's MBTiles source handles the TMS y-flip itself);
- * online → the OSM tile template, `maxzoom` 19 and the attribution. Both set `tileSize` 256 explicitly —
- * MapLibre's raster default is 512 and both OSM and our MBTiles are 256 px tiles.
+ * Style JSON with raster layers only (see «Итоги spike (Task 1)» in the map-tab plan). The OSM tile
+ * template (`maxzoom` 19, attribution) is always the bottom layer; offline adds the race file on top as
+ * `mbtiles://<absolute path>` (MapLibre's MBTiles source handles the TMS y-flip itself and takes its
+ * zoom range from the file), so OSM shows around the file's extent and below its `minzoom` — and
+ * without a network only the file is drawn. MapLibre loads a visible layer's tiles even under an opaque
+ * layer, so offline the OSM layer starts hidden and the host shows it only while [osmVisible] says so. Both set `tileSize` 256 explicitly — MapLibre's raster
+ * default is 512 and both OSM and our MBTiles are 256 px tiles.
  */
 fun styleJson(source: MapStyleSource): String = buildJsonObject {
     put("version", 8)
     putJsonObject("sources") {
-        putJsonObject(BASE_SOURCE) {
+        putJsonObject(OSM_SOURCE) {
             put("type", "raster")
-            when (source) {
-                is MapStyleSource.Offline -> put("url", "mbtiles://" + source.path)
-                MapStyleSource.Online -> {
-                    putJsonArray("tiles") { add(OSM_TILES) }
-                    put("maxzoom", OSM_MAX_ZOOM)
-                    put("attribution", OSM_ATTRIBUTION)
-                }
-            }
+            putJsonArray("tiles") { add(OSM_TILES) }
+            put("maxzoom", OSM_MAX_ZOOM)
+            put("attribution", OSM_ATTRIBUTION)
             put("tileSize", TILE_SIZE_PX)
+        }
+        if (source is MapStyleSource.Offline) {
+            putJsonObject(RACE_SOURCE) {
+                put("type", "raster")
+                put("url", "mbtiles://" + source.path)
+                put("tileSize", TILE_SIZE_PX)
+            }
         }
     }
     putJsonArray("layers") {
         addJsonObject {
-            put("id", BASE_SOURCE)
+            put("id", OSM_LAYER)
             put("type", "raster")
-            put("source", BASE_SOURCE)
+            put("source", OSM_SOURCE)
+            if (source is MapStyleSource.Offline) {
+                putJsonObject("layout") { put("visibility", "none") }
+            }
+        }
+        if (source is MapStyleSource.Offline) {
+            addJsonObject {
+                put("id", RACE_SOURCE)
+                put("type", "raster")
+                put("source", RACE_SOURCE)
+            }
         }
     }
 }.toString()
+
+/**
+ * `true` when some of the [visible] area at camera [zoom] is not covered by the race file, so the OSM
+ * layer under it must be shown (and its tiles fetched). [MapStyleSource.Online] always needs OSM.
+ * Offline, OSM can be hidden only when the file's `bounds` and `minzoom` are both known, [zoom] is at
+ * or above `minzoom`, and [visible] lies inside `bounds`. Conservative at the edges: a fractional zoom just below `minzoom` keeps OSM on.
+ */
+fun osmVisible(source: MapStyleSource, zoom: Double, visible: Bounds): Boolean {
+    val metadata = (source as? MapStyleSource.Offline)?.metadata ?: return true
+    val bounds = metadata.bounds ?: return true
+    val minZoom = metadata.minZoom ?: return true
+    if (zoom < minZoom) return true
+    return visible.west < bounds.west || visible.east > bounds.east ||
+        visible.south < bounds.south || visible.north > bounds.north
+}
 
 /** «КП 32 · 4 балла · 14:07» — the take time rendered in [timeZone] (device TZ in prod). */
 fun pinCaption(pin: MapPin, timeZone: TimeZone): String {
