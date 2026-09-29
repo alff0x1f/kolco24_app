@@ -8,6 +8,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -42,8 +43,9 @@ class MapDownloader(
      */
     suspend fun download(url: String, raceId: Int, onProgress: (Long, Long) -> Unit) =
         withContext(Dispatchers.IO) {
+            val httpUrl = url.toHttpUrlOrNull() ?: throw MapDownloadException("Некорректная ссылка на карту")
             val part = storage.partFile(raceId)
-            val call = client.newCall(Request.Builder().url(url).get().build())
+            val call = client.newCall(Request.Builder().url(httpUrl).get().build())
             // Cancellation must abort a blocking connect/read stuck on a stalled socket: a sibling
             // watcher calls call.cancel() the moment this scope starts cancelling (ensureActive() in
             // the loop alone would wait for the next chunk — up to the 60 s read timeout).

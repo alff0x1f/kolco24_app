@@ -111,6 +111,40 @@ class RaceRepositoryTest {
         assertEquals("https://kolco24.ru/media/maps/8.mbtiles", stored[0].mapUrl)
     }
 
+    private fun racesJsonWithMapUrl(mapUrl: String) = racesJson(8, "Кольцо24").replace(
+        "\"reg_status\": \"open\",",
+        "\"reg_status\": \"open\",\n\"map_url\": \"$mapUrl\",",
+    )
+
+    @Test
+    fun success_resolvesRootRelativeMapUrlAgainstCloudOrigin() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(racesJsonWithMapUrl("/media/maps/8.mbtiles")))
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        assertEquals(server.url("/media/maps/8.mbtiles").toString(), repository.races.first()[0].mapUrl)
+    }
+
+    @Test
+    fun localSuccess_resolvesRootRelativeMapUrlAgainstLocalOrigin() = runTest {
+        localServer.enqueue(
+            MockResponse().setResponseCode(200).setBody(racesJsonWithMapUrl("/media/maps/8.mbtiles")),
+        )
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces(SyncSource.Local))
+
+        assertEquals(localServer.url("/media/maps/8.mbtiles").toString(), repository.races.first()[0].mapUrl)
+    }
+
+    @Test
+    fun success_protocolRelativeMapUrl_persistsNull() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(racesJsonWithMapUrl("//evil.com/8.mbtiles")))
+
+        assertEquals(RefreshResult.Updated, repository.refreshRaces())
+
+        assertNull(repository.races.first()[0].mapUrl)
+    }
+
     @Test
     fun success_withoutMapUrl_persistsNull() = runTest {
         server.enqueue(

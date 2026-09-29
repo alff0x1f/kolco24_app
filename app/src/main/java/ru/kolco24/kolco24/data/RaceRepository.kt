@@ -8,6 +8,7 @@ import ru.kolco24.kolco24.data.db.RaceDao
 import ru.kolco24.kolco24.data.db.RaceEntity
 import ru.kolco24.kolco24.data.db.SyncMetaDao
 import ru.kolco24.kolco24.data.db.SyncMetaEntity
+import ru.kolco24.kolco24.data.map.resolveMapUrl
 
 /** Resource name for races in `sync_meta` (see [SyncMetaEntity]). */
 private const val RESOURCE_RACES = "races"
@@ -72,7 +73,7 @@ class RaceRepository(
                     SyncSource.Local -> origin
                 }
                 syncMetaDao.deleteEtag(otherOriginKey, RESOURCE_RACES)
-                raceDao.replaceAll(result.data.map { it.toEntity() })
+                raceDao.replaceAll(result.data.map { it.toEntity(baseUrl = originKey) })
                 if (result.etag != null) {
                     syncMetaDao.upsert(SyncMetaEntity(originKey, RESOURCE_RACES, result.etag))
                 }
@@ -86,8 +87,11 @@ class RaceRepository(
     }
 }
 
-/** Maps a network DTO to the persisted entity (the entity is also the app model). */
-private fun RaceDto.toEntity(): RaceEntity = RaceEntity(
+/**
+ * Maps a network DTO to the persisted entity (the entity is also the app model). A root-relative
+ * `map_url` is resolved against [baseUrl], the origin that served it, so the stored URL is absolute.
+ */
+private fun RaceDto.toEntity(baseUrl: String): RaceEntity = RaceEntity(
     id = id,
     name = name,
     slug = slug,
@@ -95,5 +99,5 @@ private fun RaceDto.toEntity(): RaceEntity = RaceEntity(
     dateEnd = dateEnd,
     place = place,
     regStatus = regStatus,
-    mapUrl = mapUrl,
+    mapUrl = resolveMapUrl(mapUrl, baseUrl),
 )
