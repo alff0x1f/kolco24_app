@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.data.db.CategoryEntity
 import ru.kolco24.kolco24.data.db.MemberChipBindingEntity
@@ -56,6 +58,8 @@ import ru.kolco24.kolco24.data.db.TeamMemberItem
 import ru.kolco24.kolco24.data.track.TrackState
 import ru.kolco24.kolco24.ui.common.RefreshableList
 import ru.kolco24.kolco24.ui.track.TrackCard
+import ru.kolco24.kolco24.ui.upload.UploadSummary
+import ru.kolco24.kolco24.ui.upload.UploadSummaryState
 import ru.kolco24.kolco24.ui.teampicker.TeamEmptyContent
 import ru.kolco24.kolco24.ui.teampicker.displayTeamName
 import ru.kolco24.kolco24.ui.teampicker.peopleLine
@@ -83,6 +87,7 @@ fun TeamScreen(
     onChooseTeam: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenUpload: () -> Unit,
+    uploadSummary: UploadSummary,
     trackPointCount: Int,
     trackShownPointCount: Int,
     modifier: Modifier = Modifier,
@@ -110,7 +115,7 @@ fun TeamScreen(
                 TeamEmptyContent(
                     onChooseTeam = onChooseTeam,
                     missing = teamMissing,
-                    footer = { MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload) },
+                    footer = { MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload, uploadSummary = uploadSummary) },
                 )
             }
         }
@@ -168,7 +173,7 @@ fun TeamScreen(
                 )
             }
             item("misc") {
-                MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload)
+                MiscSection(onOpenSettings = onOpenSettings, onOpenUpload = onOpenUpload, uploadSummary = uploadSummary)
             }
         }
         }
@@ -176,10 +181,26 @@ fun TeamScreen(
 }
 
 @Composable
-private fun MiscSection(onOpenSettings: () -> Unit, onOpenUpload: () -> Unit) {
+private fun MiscSection(onOpenSettings: () -> Unit, onOpenUpload: () -> Unit, uploadSummary: UploadSummary) {
     SectionCard(title = "Прочее") {
-        MiscRow(icon = Icons.Filled.Settings, label = "Настройки", subtitle = "Сменить команду", isLast = false, onClick = onOpenSettings)
-        MiscRow(icon = Icons.Outlined.CloudUpload, label = "Загрузка данных", subtitle = "Отметки, фото, трек", isLast = true, onClick = onOpenUpload)
+        MiscRow(
+            icon = if (uploadSummary.state == UploadSummaryState.AllSent) Icons.Outlined.CloudDone else Icons.Outlined.CloudUpload,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            label = "Загрузка данных",
+            subtitle = uploadSummary.label,
+            isLast = false,
+            onClick = onOpenUpload,
+        )
+        MiscRow(
+            icon = Icons.Filled.Settings,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            label = "Настройки",
+            subtitle = "Команда, тема, трек, локальный сервер",
+            isLast = true,
+            onClick = onOpenSettings,
+        )
     }
 }
 
@@ -434,7 +455,15 @@ private fun StatusAvatar(bound: Boolean) {
 }
 
 @Composable
-private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: Boolean, onClick: (() -> Unit)? = null) {
+private fun MiscRow(
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    label: String,
+    subtitle: String,
+    isLast: Boolean,
+    onClick: (() -> Unit)? = null,
+) {
     Column {
         Row(
             modifier = Modifier
@@ -447,19 +476,25 @@ private fun MiscRow(icon: ImageVector, label: String, subtitle: String, isLast: 
             Surface(
                 modifier = Modifier.size(40.dp),
                 shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = containerColor,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = contentColor,
                     )
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
