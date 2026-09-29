@@ -1,5 +1,7 @@
 package ru.kolco24.kolco24.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -13,6 +15,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 
@@ -100,6 +103,67 @@ class AdminAuthRepositoryTest {
         )
         assertEquals("Нет соединения с сервером", adminErrorMessage(LoginOutcome.Offline))
         assertEquals("Не удалось войти. Попробуйте ещё раз", adminErrorMessage(LoginOutcome.Error))
+    }
+
+    @Test
+    fun combinedLoginOutcome_emptyIsError() {
+        assertEquals(LoginOutcome.Error, combinedLoginOutcome(emptyList()))
+    }
+
+    @Test
+    fun combinedLoginOutcome_singlePassesThrough() {
+        assertEquals(LoginOutcome.Offline, combinedLoginOutcome(listOf(LoginOutcome.Offline)))
+        assertEquals(LoginOutcome.RateLimited, combinedLoginOutcome(listOf(LoginOutcome.RateLimited)))
+    }
+
+    @Test
+    fun combinedLoginOutcome_anySuccessWins() {
+        assertEquals(
+            LoginOutcome.Success,
+            combinedLoginOutcome(listOf(LoginOutcome.InvalidCredentials, LoginOutcome.Success)),
+        )
+        assertEquals(
+            LoginOutcome.Success,
+            combinedLoginOutcome(listOf(LoginOutcome.Success, LoginOutcome.Offline)),
+        )
+    }
+
+    @Test
+    fun combinedLoginOutcome_realAnswerBeatsOffline() {
+        assertEquals(
+            LoginOutcome.InvalidCredentials,
+            combinedLoginOutcome(listOf(LoginOutcome.Offline, LoginOutcome.InvalidCredentials)),
+        )
+        assertEquals(
+            LoginOutcome.RateLimited,
+            combinedLoginOutcome(listOf(LoginOutcome.Offline, LoginOutcome.RateLimited)),
+        )
+        assertEquals(
+            LoginOutcome.Error,
+            combinedLoginOutcome(listOf(LoginOutcome.Error, LoginOutcome.Offline)),
+        )
+        assertEquals(
+            LoginOutcome.Offline,
+            combinedLoginOutcome(listOf(LoginOutcome.Offline, LoginOutcome.Offline)),
+        )
+    }
+
+    @Test
+    fun combinedLoginOutcome_invalidCredentialsBeatsRateLimited() {
+        assertEquals(
+            LoginOutcome.InvalidCredentials,
+            combinedLoginOutcome(listOf(LoginOutcome.RateLimited, LoginOutcome.InvalidCredentials)),
+        )
+    }
+
+    @Test
+    fun adminRowSubtitle_eachCombination() {
+        val cloud = AdminSession.LoggedIn("c@x.ru", "t1", "2099-01-01T00:00:00Z")
+        val lan = AdminSession.LoggedIn("l@x.ru", "t2", "2099-01-01T00:00:00Z")
+        assertEquals("c@x.ru", adminRowSubtitle(cloud, lan))
+        assertEquals("c@x.ru · только Cloud", adminRowSubtitle(cloud, AdminSession.LoggedOut))
+        assertEquals("l@x.ru · только LAN", adminRowSubtitle(AdminSession.LoggedOut, lan))
+        assertEquals("Войти", adminRowSubtitle(AdminSession.LoggedOut, AdminSession.LoggedOut))
     }
 
     @Test
@@ -263,5 +327,35 @@ class AdminAuthRepositoryTest {
         assertEquals(AdminSession.LoggedOut, repo.session.value)
         assertNull(repo.token())
         assertNull(fake.map["admin_token"])
+    }
+
+    @Test
+    fun login_inFlightDuringLogout_doesNotResurrectSession() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"token":"late-tok","expires_at":"2099-07-21T14:03:00Z"}""")
+                .setBodyDelay(500, TimeUnit.MILLISECONDS),
+        )
+        val fake = FakeStore()
+        val repo = repo(fake.store())
+
+        val login = async(Dispatchers.IO) { repo.login("admin@kolco24.ru", "s3cret") }
+        server.takeRequest() // login request reached the server; response still delayed
+        repo.logout()
+
+        assertEquals(LoginOutcome.Error, login.await())
+        assertEquals(AdminSession.LoggedOut, repo.session.value)
+        assertNull(fake.map["admin_token"])
+    }
+
+    @Test
+    fun logout_whenLoggedOut_makesNoRequest() = runTest {
+        val repo = repo(FakeStore().store())
+
+        repo.logout()
+
+        assertEquals(0, server.requestCount)
+        assertEquals(AdminSession.LoggedOut, repo.session.value)
     }
 }

@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.admin
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,6 +28,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.SportsScore
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,12 +39,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,27 +60,38 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.LoginOutcome
 import ru.kolco24.kolco24.data.adminErrorMessage
+import ru.kolco24.kolco24.data.combinedLoginOutcome
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Which server a login targets; `rememberSaveable`-friendly (plain enum). */
+private enum class AdminServer { Cloud, Lan }
+
 /**
  * Race-admin overlay (full-screen, hosted via the `showAdmin` flag in `MainActivity`, same overlay
- * pattern as Settings/scan/team-picker). Branches on [session]: [AdminSession.LoggedOut] renders the
- * login form, [AdminSession.LoggedIn] renders the admin home (email + «Привязать чип к КП» +
- * «Выйти»). Login/logout route through `AdminAuthRepository` on `applicationScope`; the session
- * `StateFlow` then flips this overlay between the two branches reactively. [onClose] dismisses the
- * overlay; [onOpenProvisioning] opens the bulk chip-provisioning pager (host flag, Task 12).
+ * pattern as Settings/scan/team-picker). There are two independent sessions — [cloudSession] (cloud
+ * site) and [localSession] (LAN race server, which issues its own tokens). With both logged out it
+ * renders the login form (logs into cloud, plus LAN while local mode is on); with either logged in it
+ * renders the admin home. From home, «Войти» on a server's status row opens the form for just that
+ * server (`reLoginTarget`; back or success returns home). Login/logout route through the container's
+ * `AdminAuthRepository`s on `applicationScope`; the session flows then flip this overlay reactively.
+ * [onClose] dismisses the overlay; [onOpenProvisioning] opens the bulk chip-provisioning pager.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminScreen(
-    session: AdminSession,
+    cloudSession: AdminSession,
+    localSession: AdminSession,
     onClose: () -> Unit,
     onOpenProvisioning: () -> Unit = {},
     onOpenCheckChip: () -> Unit = {},
@@ -79,6 +99,31 @@ fun AdminScreen(
     onOpenJudgeScan: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val container = remember { (context.applicationContext as Kolco24App).container }
+    // Read to recompose on lease changes; isLanActive() also checks expiry against trusted time.
+    val lease by container.raceLease.collectAsState()
+    val lanActive = lease != null && container.isLanActive()
+
+    var reLoginTarget by rememberSaveable { mutableStateOf<AdminServer?>(null) }
+    val anyLoggedIn = cloudSession is AdminSession.LoggedIn || localSession is AdminSession.LoggedIn
+    // The re-login form closes when its server's session appears — from this form or from an older,
+    // still in-flight attempt — rather than via a success callback a stale attempt could also fire.
+    LaunchedEffect(reLoginTarget, cloudSession, localSession) {
+        val targetSession = when (reLoginTarget) {
+            AdminServer.Cloud -> cloudSession
+            AdminServer.Lan -> localSession
+            null -> null
+        }
+        // Also drop it once both sessions are gone: the full form takes over, and a stale target
+        // must not resurface as a single-server form after the next login.
+        if (targetSession is AdminSession.LoggedIn || !anyLoggedIn) reLoginTarget = null
+    }
+    val showForm = !anyLoggedIn || reLoginTarget != null
+
+    // Registered after MainActivity's admin BackHandler, so it wins while the re-login form is up.
+    BackHandler(enabled = reLoginTarget != null && anyLoggedIn) { reLoginTarget = null }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -89,7 +134,7 @@ fun AdminScreen(
         TopAppBar(
             title = { Text("Администратор") },
             navigationIcon = {
-                IconButton(onClick = onClose) {
+                IconButton(onClick = { if (reLoginTarget != null && anyLoggedIn) reLoginTarget = null else onClose() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Назад",
@@ -100,10 +145,20 @@ fun AdminScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
             ),
         )
-        when (session) {
-            AdminSession.LoggedOut -> LoginForm()
-            is AdminSession.LoggedIn -> AdminHome(
-                session = session,
+        if (showForm) {
+            val target = reLoginTarget.takeIf { anyLoggedIn }
+            LoginForm(
+                target = target,
+                initialEmail = (cloudSession as? AdminSession.LoggedIn)?.email
+                    ?: (localSession as? AdminSession.LoggedIn)?.email
+                    ?: "",
+            )
+        } else {
+            AdminHome(
+                cloudSession = cloudSession,
+                localSession = localSession,
+                lanActive = lanActive,
+                onLogin = { reLoginTarget = it },
                 onOpenProvisioning = onOpenProvisioning,
                 onOpenCheckChip = onOpenCheckChip,
                 onOpenCheckMemberChip = onOpenCheckMemberChip,
@@ -121,32 +176,51 @@ private sealed interface AdminLoginState {
 }
 
 /**
- * Email + password fields and a «Войти» button. On submit calls `AdminAuthRepository.login` on the
- * container's `applicationScope`; a non-success outcome is mapped through [adminErrorMessage] into an
- * inline error. Success needs no local handling — the session flow flips the overlay to [AdminHome].
+ * Email + password fields and a «Войти» button. [target] `null` = first login: cloud, plus LAN only
+ * while local mode is on (the LAN host is cleartext — the password must not go there on a random
+ * network). Otherwise logs into just that server. Servers are tried in parallel on `applicationScope`;
+ * when none succeeds, [combinedLoginOutcome] picks the error to show (a real answer beats «нет сети»).
+ * Success needs no local handling — the session flows flip the overlay to [AdminHome].
  */
 @Composable
-private fun LoginForm() {
+private fun LoginForm(target: AdminServer?, initialEmail: String) {
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(initialEmail) }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf<AdminLoginState>(AdminLoginState.Idle) }
     val submitting = state is AdminLoginState.Submitting
 
     fun submit() {
         if (email.isBlank() || password.isBlank() || submitting) return
         keyboard?.hide()
+        // Lease re-checked at submit time: it may have expired while the form was open.
+        val lanActive = container.isLanActive()
+        val repos = when (target) {
+            AdminServer.Cloud -> listOf(container.cloudAdminAuth)
+            AdminServer.Lan -> listOfNotNull(container.localAdminAuth.takeIf { lanActive })
+            null -> listOfNotNull(
+                container.cloudAdminAuth,
+                container.localAdminAuth.takeIf { lanActive },
+            )
+        }
+        if (repos.isEmpty()) {
+            state = AdminLoginState.Error("Включите локальный режим гонки")
+            return
+        }
         state = AdminLoginState.Submitting
         container.applicationScope.launch {
-            val outcome = container.adminAuthRepository.login(email.trim(), password)
+            val outcome = coroutineScope {
+                combinedLoginOutcome(repos.map { async { it.login(email.trim(), password) } }.awaitAll())
+            }
             withContext(Dispatchers.Main) {
-                state = if (outcome == LoginOutcome.Success) {
-                    AdminLoginState.Idle
+                if (outcome == LoginOutcome.Success) {
+                    state = AdminLoginState.Idle
                 } else {
-                    AdminLoginState.Error(adminErrorMessage(outcome))
+                    state = AdminLoginState.Error(adminErrorMessage(outcome))
                 }
             }
         }
@@ -154,7 +228,11 @@ private fun LoginForm() {
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text(
-            text = "Вход для администратора гонки",
+            text = when (target) {
+                AdminServer.Cloud -> "Вход на cloud-сервер"
+                AdminServer.Lan -> "Вход на LAN-сервер гонки"
+                null -> "Вход для администратора гонки"
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -186,7 +264,19 @@ private fun LoginForm() {
             singleLine = true,
             enabled = !submitting,
             isError = state is AdminLoginState.Error,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = if (passwordVisible) "Скрыть пароль" else "Показать пароль",
+                    )
+                }
+            },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done,
@@ -223,14 +313,18 @@ private fun LoginForm() {
 }
 
 /**
- * Admin home shown while logged in: the admin [AdminSession.email], a «Привязать чип к КП» row that
- * opens the provisioning pager, and a «Выйти» row that calls `logout()` on the container's
- * `applicationScope` (best-effort server revoke + local clear; the session flow then flips back to
- * the login form).
+ * Admin home shown while either session is logged in: a status row per server (email, or «нет входа»
+ * with a «Войти» that opens the form for that server — LAN only while local mode is on), the admin
+ * action rows, and «Выйти», which calls `logout()` on both servers, each in its own `applicationScope`
+ * job so a LAN logout never waits on a cloud timeout (on a logged-out server it only cancels an
+ * in-flight login, no request).
  */
 @Composable
 private fun AdminHome(
-    session: AdminSession.LoggedIn,
+    cloudSession: AdminSession,
+    localSession: AdminSession,
+    lanActive: Boolean,
+    onLogin: (AdminServer) -> Unit,
     onOpenProvisioning: () -> Unit,
     onOpenCheckChip: () -> Unit,
     onOpenCheckMemberChip: () -> Unit,
@@ -240,19 +334,18 @@ private fun AdminHome(
     val container = remember { (context.applicationContext as Kolco24App).container }
 
     Column(modifier = Modifier.padding(top = 8.dp)) {
-        Text(
-            text = "Вы вошли как",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ServerStatusRow(
+            label = "Cloud",
+            session = cloudSession,
+            loggedOutText = "нет входа",
+            onLogin = { onLogin(AdminServer.Cloud) },
         )
-        Text(
-            text = session.email,
-            modifier = Modifier.padding(horizontal = 16.dp),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+        ServerStatusRow(
+            label = "LAN",
+            session = localSession,
+            loggedOutText = if (lanActive) "нет входа" else "включите локальный режим гонки",
+            onLogin = if (lanActive) ({ onLogin(AdminServer.Lan) }) else null,
         )
-
         Spacer(Modifier.height(16.dp))
         Surface(
             modifier = Modifier
@@ -345,8 +438,48 @@ private fun AdminHome(
                 icon = Icons.AutoMirrored.Filled.Logout,
                 title = "Выйти",
                 subtitle = "Завершить сессию администратора",
-                onClick = { container.applicationScope.launch { container.adminAuthRepository.logout() } },
+                onClick = {
+                    listOf(container.cloudAdminAuth, container.localAdminAuth)
+                        .forEach { repo -> container.applicationScope.launch { repo.logout() } }
+                },
             )
+        }
+    }
+}
+
+/** One server's session line: «Cloud · email», or «Cloud · нет входа» with an optional «Войти». */
+@Composable
+private fun ServerStatusRow(
+    label: String,
+    session: AdminSession,
+    loggedOutText: String,
+    onLogin: (() -> Unit)?,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp)
+            .heightIn(min = 40.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(56.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = (session as? AdminSession.LoggedIn)?.email ?: loggedOutText,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (session is AdminSession.LoggedIn) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        if (session is AdminSession.LoggedOut && onLogin != null) {
+            TextButton(onClick = onLogin) { Text("Войти") }
         }
     }
 }

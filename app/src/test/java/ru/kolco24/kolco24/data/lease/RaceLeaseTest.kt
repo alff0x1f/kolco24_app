@@ -68,6 +68,23 @@ class RaceLeaseTest {
         assertFalse(isPinned(lease, raceId = 1, nowMs = 200_000L))
     }
 
+    @Test
+    fun isLeaseActive_falseForNull() {
+        assertFalse(isLeaseActive(null, nowMs = 0L))
+    }
+
+    @Test
+    fun isLeaseActive_trueBeforeExpiry_anyRace() {
+        assertTrue(isLeaseActive(RaceLease(raceId = 7, expiresAtMs = 10_000L), nowMs = 9_999L))
+    }
+
+    @Test
+    fun isLeaseActive_falseAtBoundaryAndPast() {
+        val lease = RaceLease(raceId = 1, expiresAtMs = 10_000L)
+        assertFalse(isLeaseActive(lease, nowMs = 10_000L))
+        assertFalse(isLeaseActive(lease, nowMs = 10_001L))
+    }
+
     // endregion
 
     // region applySyncResponse

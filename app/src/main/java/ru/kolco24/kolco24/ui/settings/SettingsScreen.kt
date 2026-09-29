@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import ru.kolco24.kolco24.data.AdminSession
+import ru.kolco24.kolco24.data.adminRowSubtitle
 import ru.kolco24.kolco24.data.track.pointsLabel
 import ru.kolco24.kolco24.ui.map.formatMapSize
 import ru.kolco24.kolco24.ui.theme.ThemeMode
@@ -93,7 +94,8 @@ fun SettingsScreen(
     localModeBusy: Boolean = false,
     localModeExpiresAtMs: Long? = null,
     onLocalModeChange: (Boolean) -> Unit = {},
-    session: AdminSession,
+    cloudAdminSession: AdminSession,
+    localAdminSession: AdminSession,
     onOpenAdmin: () -> Unit,
     onResetTeam: (() -> Unit)? = null,
     onClearDatabase: (() -> Unit)? = null,
@@ -236,7 +238,7 @@ fun SettingsScreen(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
-            AdminRow(session = session, onClick = onOpenAdmin)
+            AdminRow(subtitle = adminRowSubtitle(cloudAdminSession, localAdminSession), onClick = onOpenAdmin)
         }
 
         // Hidden until unlocked: debug actions are always wired by MainActivity now, but the section
@@ -875,15 +877,12 @@ private fun DebugRow(
 }
 
 /**
- * «Администратор» row — admin-panel avatar, subtitle = «Войти» when [AdminSession.LoggedOut] else the
- * logged-in admin email; tap → [onClick] (opens the admin overlay). Mirrors [ChangeTeamRow] styling.
+ * «Администратор» row — admin-panel avatar, [subtitle] from `adminRowSubtitle` («Войти», the email, or
+ * the email + which single server is logged in); tap → [onClick] (opens the admin overlay). Mirrors
+ * [ChangeTeamRow] styling.
  */
 @Composable
-private fun AdminRow(session: AdminSession, onClick: () -> Unit) {
-    val subtitle = when (session) {
-        AdminSession.LoggedOut -> "Войти"
-        is AdminSession.LoggedIn -> session.email
-    }
+private fun AdminRow(subtitle: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -100,8 +100,10 @@ import ru.kolco24.kolco24.ui.theme.Tertiary
  *
  * No client-side type filter: the server is authoritative on which checkpoints are bindable, so a tap
  * on a non-bindable КП surfaces inline (404/400) in the scan zone rather than being hidden from the pager.
- * A `401` clears the admin session ([AdminAuthRepository.onUnauthorized]) and closes the overlay,
- * dropping back to the login form.
+ * Each tap binds on the LAN server while [raceId] is pinned to it (local mode), else on cloud, using
+ * that server's admin session; with no session there the tap fails inline («Нет входа на …») without
+ * a request. A `401` clears only that session ([AdminAuthRepository.onUnauthorized]) and closes the
+ * overlay — back to admin home (the other server still logged in) or the login form.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -224,6 +226,12 @@ fun ProvisioningScreen(
                     isBusy.set(false)
                     return@onTag
                 }
+                // Route per tap, like data sync: a race pinned to the LAN server binds there with the
+                // LAN session, otherwise on cloud. Re-evaluated every tap, so a lease change mid-session
+                // is picked up.
+                val pinned = container.isRacePinned(raceId)
+                val client = if (pinned) container.localApiClient else container.apiClient
+                val auth = if (pinned) container.localAdminAuth else container.cloudAdminAuth
                 val uid = normalizeNfcUid(tag.id)
                 // Record which page and race are active before starting: lets close/reopen and
                 // rotation restore the pager to the correct checkpoint (see rememberPagerState
@@ -238,7 +246,16 @@ fun ProvisioningScreen(
                 // the user navigates away after the server bind but before the chip write finishes.
                 container.applicationScope.launch {
                     try {
-                        when (val result = container.apiClient.bindTag(raceId, cp.id, uid)) {
+                        // No session on the routed server: fail without a request. Checked inside the
+                        // try so the finally below still runs the isBusy / pending-cleanup protocol.
+                        if (auth.token() == null) {
+                            container.provisioningState.value = ProvisionState.Failed(
+                                if (pinned) "Нет входа на LAN-сервер" else "Нет входа на cloud-сервер",
+                            )
+                            container.scanFeedback.failure()
+                            return@launch
+                        }
+                        when (val result = client.bindTag(raceId, cp.id, uid)) {
                             is PostResult.Success -> {
                                 container.provisioningState.value = ProvisionState.Writing
                                 val hexCode = result.data.code
@@ -279,9 +296,9 @@ fun ProvisioningScreen(
                                     container.scanFeedback.failure()
                                 }
                             }
-                            // 401: token revoked/expired server-side — clear the session and drop to login.
+                            // 401: token revoked/expired server-side — clear that server's session only.
                             PostResult.Unauthorized -> {
-                                container.adminAuthRepository.onUnauthorized()
+                                auth.onUnauthorized()
                                 withContext(Dispatchers.Main) { onClose() }
                             }
                             else -> {
