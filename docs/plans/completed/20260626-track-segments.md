@@ -1,5 +1,10 @@
 # Track Recording in Segments (start→stop = one segment)
 
+> Серверная сверка 2026-09-30: `~/src/kolco24/server` (`e4d4126`).
+> Исторический контекст и выполненные шаги ниже описывают момент реализации.
+> Актуальные API, ограничения батчей и повторных отправок — в
+> [API.md](../../design/API.md) и [UPLOAD.md](../../design/UPLOAD.md).
+
 ## Overview
 
 Today every GPS fix for a `(raceId, teamId)` lands in one flat `track_points`
@@ -259,9 +264,9 @@ val s = segmentId ?: UUID.randomUUID().toString().also { segmentId = it } // def
   unchanged across the soft engine restart.
 
 **External system updates (out of scope here):**
-- The `POST /app/race/<race_id>/track/` endpoint is still not implemented
-  server-side; points stay `uploaded* = 0` until it lands. The server must group
-  by `(race_id, team_id, source_install_id, segment_id)` per `docs/design/UPLOAD.md`.
-- Per-batch `source_install_id` on `TrackUploadRequest` — specified in the wire
-  contract but absent from the DTO; a separate future task, not part of this plan.
+- `POST /app/race/<race_id>/track/` is implemented. It stores `segment_id` per
+  point and `install_id` from `X-Install-Id`, so devices/sessions remain separable.
+  Repeated point ids are acknowledged without updating the stored row.
+- `source_install_id` is not required in `TrackUploadRequest`: both the current
+  Android DTO and server use header-based track provenance. See `docs/design/UPLOAD.md`.
 - No per-segment UI breakdown in `TrackCard` (YAGNI).

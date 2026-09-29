@@ -1,5 +1,10 @@
 # Marks Upload — выгрузка взятых КП на сервер
 
+> Серверная сверка 2026-09-30: `~/src/kolco24/server` (`e4d4126`).
+> Исторический контекст и выполненные шаги ниже описывают момент реализации.
+> Актуальные API, ограничения батчей и повторных отправок — в
+> [API.md](../../design/API.md) и [UPLOAD.md](../../design/UPLOAD.md).
+
 ## Overview
 
 Клиентская отправка отметок взятий КП (`marks`) на бэкенд — зеркало уже
@@ -20,11 +25,11 @@ upload-запросов и репозиторного цикла выгрузк�
 `UploadResultKind`/`TargetUploadOutcome`, и точь-в-точь повторяет цикл выгрузки
 `TrackRepository`.
 
-> ⚠️ **Backend НЕ готов.** Эндпоинта `/marks/` на сервере пока нет. Клиент строится
-> как трек: пишем локально, флаги остаются 0, оппортунистически досылаем — само
-> починится, когда эндпоинт появится. Живого интеграционного теста нет, только
-> MockWebServer-юниты. **Перечитать `docs/design/UPLOAD.md` перед реализацией** —
-> тело запроса, поля `present[]`, коды ответов и краевые случаи там зафиксированы.
+> **Текущий сервер:** `/marks/` реализован, включая фото-метаданные, `present[]`
+> и `location`. Валидный батч подтверждается целиком; невалидная строка даёт `400`
+> всего запроса. Повторный `id` обновляет скалярные поля, дополняет состав.
+> Гарантия fill-if-null отсутствует; живой cloud/LAN-прогон не подтверждён.
+> Актуальный контракт — в `docs/design/UPLOAD.md`.
 
 ## Context (from discovery)
 
@@ -167,8 +172,8 @@ data class MarkMemberSnapshot(
 
 Координата пишется асинхронно (`attachLocation`, `MainActivity.kt:1137`), поэтому к
 моменту выгрузки может быть `null` — это валидно, сервер принимает `location: null`.
-**Решение по форме контракта:** вложенный объект — наш выбор (backend ещё нет, контракт
-наш); если бэкенд предпочтёт плоскую форму — переименовать без структурных изменений.
+**Форма контракта:** сервер реализовал вложенный `location`, nullable и
+необязательный; имена и ограничения полей — в `docs/design/UPLOAD.md`.
 
 **⚠️ Имена полей `MarkEntity` ≠ имена на проводе — НЕ маппить «1:1» вслепую** (ревью
 подтвердило риск):
@@ -333,7 +338,7 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 
 ### Task 12: [Final] Документация
 
-- [x] обновить `docs/design/UPLOAD.md`: снять статус «эндпоинтов на бэкенде пока нет / marks local-only» → «клиент реализован, ждёт backend»; зафиксировать `present[]` из снимка + слияние с `present` при NULL; **пометить `marks[].elapsed_at` как nullable** (сейчас отмечены только `trusted_ms`/`boot_count`, но `MarkEntity.elapsedRealtimeAt` — `Long?`); **добавить в контракт `marks[].location` (nullable вложенный объект)** — античит-координата места взятия (`lat`/`lon`/`accuracy`/`altitude`/`vertical_accuracy`/`gps_time_ms`/`elapsed_at`), `null` при отсутствии фикса; описать назначение полей (`accuracy` и «возраст фикса» = `mark.elapsed_at − location.elapsed_at` как ключевые сигналы), и **замечание про cleartext-LAN** (координата идёт открытым текстом на `192.168.1.5` — приемлемо, LAN доверенный)
+- [x] На момент выполнения обновить `docs/design/UPLOAD.md`: снять статус «эндпоинтов на бэкенде пока нет / marks local-only» → «клиент реализован, ждёт backend»; зафиксировать `present[]` из снимка + слияние с `present` при NULL; **пометить `marks[].elapsed_at` как nullable** (сейчас отмечены только `trusted_ms`/`boot_count`, но `MarkEntity.elapsedRealtimeAt` — `Long?`); **добавить в контракт `marks[].location` (nullable вложенный объект)** — античит-координата места взятия (`lat`/`lon`/`accuracy`/`altitude`/`vertical_accuracy`/`gps_time_ms`/`elapsed_at`), `null` при отсутствии фикса; описать назначение полей (`accuracy` и «возраст фикса» = `mark.elapsed_at − location.elapsed_at` как ключевые сигналы), и **замечание про cleartext-LAN** (координата идёт открытым текстом на `192.168.1.5` — приемлемо, LAN доверенный)
 - [x] обновить `CLAUDE.md`: `MarkEntity.presentDetails` + `MarkMemberSnapshot`; upload-запросы `MarkDao`; upload-цикл `MarkRepository` + `MarkUploader`; `MarkDtos.kt`; `ApiClient.uploadMarks`; `markUploadOutcomes`; 3 триггера; статус-строка в `MarksScreen`; **факт первой реальной миграции (v1→v2) и подключения `.addMigrations`**
 - [x] обновить memory `room-released-with-migrations.md`: зафиксировать, что миграция 1→2 заведена (первая реальная)
 - [x] переместить план в `docs/plans/completed/`
@@ -343,15 +348,14 @@ scoring-порядок в `observeForTeam`, но ASC для стабильной
 *Требуют внешних систем — без чекбоксов, информационно.*
 
 **External system updates:**
-- **Backend:** поднять `POST /app/race/<race_id>/marks/` по контракту `UPLOAD.md`
-  (idempotent upsert по `id`, `accepted[]` в ответе, серверный `verified` =
-  `sha256(cp_code)[:16] == bid`, дедуп `DISTINCT checkpoint_id` среди `verified`,
-  пересчёт полноты из `present[]` против ростера, разбор «чужой команды»).
+- **Backend:** `/marks/`, проверка `verified` и скоринг протокола реализованы.
+  Остаются различия с первоначальным проектом: нет partial-accept, fill-if-null
+  и автоматического резолвинга/переатрибуции участников. См. `UPLOAD.md`.
 - **Local LAN server** (`192.168.1.5`): тот же эндпоинт с той же подписью/`key_id`/
-  `secret` (или отключённой проверкой времени), иначе local-upload → `403` и
+  `secret` и обязательной проверкой времени, иначе local-upload → `403` и
   `uploadedLocal` молча останется 0.
 
-**Manual verification** (когда backend поднимут):
+**Manual verification** (на актуальных развёрнутых cloud/LAN-серверах):
 - живой прогон: взять КП всей командой → отметка улетает в cloud + local, флаги → 1;
 - офлайн-сценарий: отметка в офлайне → флаги 0 → дослыка на старте/при записи трека;
 - два телефона одной команды: обе отметки сохранены, счёт не задвоен;

@@ -1,5 +1,10 @@
 # Live GPS Track Upload During Recording
 
+> Серверная сверка 2026-09-30: `~/src/kolco24/server` (`e4d4126`).
+> Исторический контекст и выполненные шаги ниже описывают момент реализации.
+> Актуальные API, ограничения батчей и повторных отправок — в
+> [API.md](../../design/API.md) и [UPLOAD.md](../../design/UPLOAD.md).
+
 ## Overview
 - Flush the local GPS track to the server **periodically while a recording is active**, ~once per 10 minutes, so race organizers see teams move in near-real-time during a multi-hour race.
 - Today the upload transport is fully built and tested, but uploads fire **only on stop** (`TrackRecordingService.finishTeardown` → `uploadPending`) and **on team switch** (`Kolco24App` → `uploadAllPending`). The missing piece is a trigger that fires *during* an active recording.
@@ -16,7 +21,9 @@
   - Monotonic `SystemClock.elapsedRealtime()` is the app-wide time source for intervals/windows (scan window, `TrustedClock` anchor).
 - **Dependencies identified:**
   - `TrackRepository.uploadPending` — already mutex-guarded (`tryLock`), dual-target (cloud + LAN), idempotent (client-id upsert), offline-tolerant (breaks cleanly), partial-accept aware (`uploadLoop`). No changes needed.
-  - **Backend precondition (non-blocking):** `POST /app/race/<id>/track/` may not be live yet (code comment "until the backend endpoint lands"). Safe to ship regardless — a 404/error maps to `PostResult.Error` and breaks cleanly; points stay pending, no crash, no data loss.
+  - **Backend status (2026-09-30):** `POST /app/race/<id>/track/` is implemented.
+    A `404` means a missing/unpublished race or a team outside that race; errors
+    leave points pending. Deployment versions still require a live integration check.
 
 ## Development Approach
 - **Testing approach:** Regular (code first, then tests) — but the only new *logic* is one pure function, which gets a dedicated test; the service wiring stays untested per repo convention (Android adapter).
