@@ -162,11 +162,14 @@ fun CheckMemberChipScreen(
                             uid = uid,
                             memberTag = memberTag,
                             hasKpCode = codes?.code != null,
-                            hasMemberCode = codes?.memberCode != null,
+                            hasMemberCode = codes?.let { it.memberCode != null },
                         )
                         container.scanFeedback.play(
-                            if (result is MemberChipCheckResult.Ok) ScanFeedbackKind.Success
-                            else ScanFeedbackKind.Failure,
+                            when {
+                                result !is MemberChipCheckResult.Ok -> ScanFeedbackKind.Failure
+                                result.hasCode == null -> ScanFeedbackKind.Neutral
+                                else -> ScanFeedbackKind.Success
+                            },
                         )
                         lastResult = result
                         recent.add(0, result)
@@ -353,9 +356,18 @@ private fun MemberOkHero(result: MemberChipCheckResult.Ok, previousUid: String?)
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            text = if (result.hasCode) "код записан" else "без кода",
+            text = when (result.hasCode) {
+                true -> "код записан"
+                false -> "без кода"
+                null -> "Не удалось прочитать код, приложите снова"
+            },
             style = MaterialTheme.typography.bodyMedium,
-            color = if (result.hasCode) Tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = when (result.hasCode) {
+                true -> Tertiary
+                false -> MaterialTheme.colorScheme.onSurfaceVariant
+                null -> OrangeCta
+            },
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
         UidDiff(uid = result.uid, previousUid = previousUid, fontSize = 18.sp)
@@ -408,7 +420,11 @@ private fun RecentMemberCheckRow(result: MemberChipCheckResult, previousUid: Str
     val iconTint: Color
     when (result) {
         is MemberChipCheckResult.Ok -> {
-            label = "№${result.number} · ${if (result.hasCode) "код" else "без кода"}"
+            label = "№${result.number} · " + when (result.hasCode) {
+                true -> "код"
+                false -> "без кода"
+                null -> "код ?"
+            }
             icon = Icons.Filled.Check
             iconTint = Tertiary
         }

@@ -230,9 +230,12 @@ fun MemberProvisioningScreen(
         DisposableEffect(raceId) {
             val host = activity
             host?.onTagForProvision = onTag@{ tag ->
+                val uid = normalizeNfcUid(tag.id)
+                // Rediscovery of the retained bracelet (re-presented while typing its number, or during
+                // a bind) makes the old handle out of date — keep the fresh one even if the tap is ignored.
+                if (lastTag?.let { normalizeNfcUid(it.id) } == uid) lastTag = tag
                 if (job != null) return@onTag
                 val currentPool = poolLatest.value ?: return@onTag
-                val uid = normalizeNfcUid(tag.id)
                 when (val route = routeMemberTap(state, uid)) {
                     MemberTapRoute.Ignore -> Unit
                     is MemberTapRoute.Hint -> {

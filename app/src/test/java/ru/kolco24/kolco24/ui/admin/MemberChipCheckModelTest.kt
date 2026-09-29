@@ -72,4 +72,27 @@ class MemberChipCheckModelTest {
         )
         assertEquals(MemberChipCheckResult.Unknown("DEADBEEF"), result)
     }
+
+    @Test
+    fun classify_uidInPool_readFailed_hasUnknownCode() {
+        // A brief tap: the UID came through but the pages didn't — code presence must not read as "без кода".
+        val result = classifyMemberChipCheck(
+            uid = "0411223344AABB",
+            memberTag = memberTag("0411223344AABB", number = 9),
+            hasKpCode = false,
+            hasMemberCode = null,
+        )
+        assertEquals(MemberChipCheckResult.Ok(uid = "0411223344AABB", number = 9, hasCode = null), result)
+    }
+
+    @Test
+    fun classify_uidInPool_readBlank_hasNoCode() {
+        val result = classifyMemberChipCheck(
+            uid = "0411223344AABB",
+            memberTag = memberTag("0411223344AABB", number = 9),
+            hasKpCode = false,
+            hasMemberCode = false,
+        )
+        assertEquals(MemberChipCheckResult.Ok(uid = "0411223344AABB", number = 9, hasCode = false), result)
+    }
 }

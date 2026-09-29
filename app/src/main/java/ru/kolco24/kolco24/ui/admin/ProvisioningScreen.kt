@@ -257,10 +257,15 @@ fun ProvisioningScreen(
                             return@launch
                         }
                         // A participant bracelet must not be bound to a КП server-side (the write guard
-                        // would refuse it only after the bind). A failed read proceeds — the guard
-                        // re-reads before writing.
-                        if (withContext(Dispatchers.IO) { readChipCodes(tag) }?.memberCode != null) {
-                            container.provisioningState.value = ProvisionState.Failed("Это браслет участника")
+                        // would refuse it only after the bind), so an unreadable chip sends no request.
+                        val codes = withContext(Dispatchers.IO) { readChipCodes(tag) }
+                        val refusal = when {
+                            codes == null -> "Не удалось прочитать чип, приложите снова"
+                            codes.memberCode != null -> "Это браслет участника"
+                            else -> null
+                        }
+                        if (refusal != null) {
+                            container.provisioningState.value = ProvisionState.Failed(refusal)
                             container.scanFeedback.failure()
                             return@launch
                         }

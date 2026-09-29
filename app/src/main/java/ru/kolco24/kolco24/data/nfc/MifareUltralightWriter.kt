@@ -128,17 +128,20 @@ sealed interface ChipWriteGuard {
 
 /**
  * Decide whether [record] may overwrite the chip whose current pages are [currentPages] (`null` = the
- * read failed). [writeRecord] zeroes the header first, so without this check a bracelet write would
- * silently destroy a КП chip (and vice versa). Pure.
+ * read failed). Anything with the `K24` magic that is not a same-type record of the supported version
+ * is refused — including an unknown version. [writeRecord] zeroes the header first, so without this
+ * check a bracelet write would silently destroy a КП chip (and vice versa). Pure.
  */
 fun writeGuardDecision(currentPages: ByteArray?, record: ByteArray): ChipWriteGuard {
     require(record.size == CHIP_RECORD_BYTES) { "record must be $CHIP_RECORD_BYTES bytes" }
     if (currentPages == null) return ChipWriteGuard.ReadFailed
-    val pendingType = record[MAGIC.size].toInt() and 0x0F
-    val onChip = chipRecordType(currentPages)
-    if (onChip != null && onChip != pendingType) {
-        return ChipWriteGuard.WrongType(wrongChipTypeMessage(onChip))
+    if (currentPages.size < PAGE_SIZE || MAGIC.indices.any { currentPages[it] != MAGIC[it] }) {
+        return ChipWriteGuard.Allow
     }
+    // A K24 header of a version this build can't parse may still be a live chip of another type.
+    val onChip = chipRecordType(currentPages) ?: return ChipWriteGuard.WrongType("Чип записан в другом формате")
+    val pendingType = record[MAGIC.size].toInt() and 0x0F
+    if (onChip != pendingType) return ChipWriteGuard.WrongType(wrongChipTypeMessage(onChip))
     return ChipWriteGuard.Allow
 }
 
@@ -199,11 +202,23 @@ fun readChipVersion(tag: Tag): ByteArray? {
         if (resp.size < 8) null else resp
     } catch (_: IOException) {
         null
+    } catch (_: SecurityException) {
+        null
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
+    }
+}
+
+/**
+ * Close [nfcA], swallowing errors. Android throws [SecurityException] («Tag … is out of date») from
+ * connect/transceive/close on a [Tag] handle from an earlier discovery — a retained handle, so the
+ * adapters treat it like an I/O failure.
+ */
+private fun closeQuietly(nfcA: NfcA) {
+    try {
+        nfcA.close()
+    } catch (_: IOException) {
+    } catch (_: SecurityException) {
     }
 }
 
@@ -325,7 +340,8 @@ internal fun readRecord(t: NfcTransport): ByteArray? = readRecordPages(t)?.let {
 
 /**
  * Write [code] (exactly [CHIP_CODE_BYTES] bytes) onto an Ultralight/NTAG tag as the raw header
- * record (magic `K24` + packed version/[type] byte + 16-byte code) over **NfcA** raw commands. We talk NfcA directly rather than via `MifareUltralight.get()` because Android omits the
+ * record (magic `K24` + packed version/[type] byte + 16-byte code) over **NfcA** raw commands. We
+ * talk NfcA directly rather than via `MifareUltralight.get()` because Android omits the
  * MifareUltralight tech for many NTAG/Ultralight chips (exposing only NfcA + Ndef), which would
  * otherwise be misread as "not an Ultralight tag". A chip carrying a `K24` record of another type is
  * refused ([writeRecordGuarded]). The write is header-last (commit marker) and is verified by a
@@ -341,11 +357,10 @@ fun writeChipCode(tag: Tag, code: ByteArray, type: Int = CHIP_TYPE_KP): ChipWrit
         writeRecordGuarded({ frame -> nfcA.transceive(frame) }, record)
     } catch (e: IOException) {
         ChipWriteResult.Failed(e.message ?: "Ошибка записи")
+    } catch (_: SecurityException) {
+        ChipWriteResult.Failed("Чип убран, приложите снова")
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
     }
 }
 
@@ -370,11 +385,10 @@ fun readChipCode(tag: Tag): ByteArray? {
         readRecord { frame -> nfcA.transceive(frame) }
     } catch (_: IOException) {
         null
+    } catch (_: SecurityException) {
+        null
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
     }
 }
 
@@ -389,10 +403,9 @@ fun readChipCodes(tag: Tag): ChipCodes? {
         readRecordPages { frame -> nfcA.transceive(frame) }?.let(::decodeChipPages)
     } catch (_: IOException) {
         null
+    } catch (_: SecurityException) {
+        null
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
     }
 }

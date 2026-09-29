@@ -493,4 +493,28 @@ class MifareUltralightWriterTest {
         val t = FakeTransport { frame -> if (frame[0] == FAST_READ) record + ByteArray(4) else NAK }
         assertArrayEquals(record, readRecordPages(t))
     }
+
+    @Test
+    fun writeGuardDecision_unsupportedVersionK24_refused() {
+        // K24 magic, version 2, КП type: not parseable by this build, but must not be overwritten.
+        val futureKp = byteArrayOf(0x4B, 0x32, 0x34, 0x21) + sampleCode
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        assertTrue(writeGuardDecision(futureKp, record) is ChipWriteGuard.WrongType)
+    }
+
+    @Test
+    fun writeRecordGuarded_unsupportedVersionK24_writesNothing() {
+        val futureKp = byteArrayOf(0x4B, 0x32, 0x34, 0x21) + sampleCode
+        val t = FakeTransport { frame -> if (frame[0] == FAST_READ) futureKp else ACK }
+        val result = writeRecordGuarded(t, buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode))
+        assertTrue(result is ChipWriteResult.WrongType)
+        assertTrue(t.frames.none { it[0] == WRITE })
+    }
+
+    @Test
+    fun writeGuardDecision_partialMagic_allows() {
+        // Only the first two magic bytes match — a foreign chip, not a K24 record.
+        val foreign = byteArrayOf(0x4B, 0x32, 0x00, 0x11) + sampleCode
+        assertEquals(ChipWriteGuard.Allow, writeGuardDecision(foreign, buildChipRecord(CHIP_TYPE_KP, sampleCode)))
+    }
 }
