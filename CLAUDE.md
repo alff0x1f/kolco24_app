@@ -63,5 +63,4 @@ the relevant notes before modifying an area; update them when behavior changes.
 ## Docs
 
 `docs/API.md` (HMAC signing, ETag, 403 checklist) · `docs/design/API.md` (legend crypto) · `docs/design/UPLOAD.md`
-(upload contracts) · `docs/mobile-admin-auth-and-tags.md` · `docs/IOS-PARITY.md` (iOS features not yet ported; remove an
-item when it ships).
+(upload contracts) · `docs/mobile-admin-auth-and-tags.md`.
