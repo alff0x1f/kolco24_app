@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.SportsScore
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +60,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.data.AdminSession
@@ -187,6 +190,7 @@ private fun LoginForm(target: AdminServer?, initialEmail: String) {
 
     var email by remember { mutableStateOf(initialEmail) }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf<AdminLoginState>(AdminLoginState.Idle) }
     val submitting = state is AdminLoginState.Submitting
 
@@ -260,7 +264,19 @@ private fun LoginForm(target: AdminServer?, initialEmail: String) {
             singleLine = true,
             enabled = !submitting,
             isError = state is AdminLoginState.Error,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = if (passwordVisible) "Скрыть пароль" else "Показать пароль",
+                    )
+                }
+            },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done,
