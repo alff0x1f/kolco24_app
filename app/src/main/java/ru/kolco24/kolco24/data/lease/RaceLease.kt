@@ -26,6 +26,10 @@ fun renewedLease(raceId: Int, serverTtlSec: Long?, serverLeaseExpiresAtSec: Long
 fun isPinned(lease: RaceLease?, raceId: Int, nowMs: Long): Boolean =
     lease != null && lease.raceId == raceId && nowMs < lease.expiresAtMs
 
+/** `true` when [lease] (for any race) has not yet expired at [nowMs] — i.e. local mode is on. */
+fun isLeaseActive(lease: RaceLease?, nowMs: Long): Boolean =
+    lease != null && nowMs < lease.expiresAtMs
+
 /** What a sync-manifest probe should do to the stored lease. */
 sealed interface LeaseAction {
     /** Manifest says `local` for the probed race — renew the pin. */

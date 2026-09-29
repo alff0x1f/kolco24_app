@@ -47,14 +47,20 @@ class AdminTokenStore(
         // Separate file from "kolco24.settings" (which holds ThemePreference) so the backup
         // exclusion rule can exclude only the admin token, not the user's theme preference.
         private const val PREFS_NAME = "kolco24.admin"
+
+        /** Prefs file for the LAN race-server session; also excluded from backups. */
+        const val LOCAL_PREFS_NAME = "kolco24.admin.local"
         private const val KEY_TOKEN = "admin_token"
         private const val KEY_EMAIL = "admin_email"
         private const val KEY_EXPIRES_AT = "admin_token_expires_at"
 
-        /** Production adapter: backs the store with `SharedPreferences`. A `null` value removes the key. */
-        fun fromSharedPreferences(context: Context): AdminTokenStore {
+        /**
+         * Production adapter: backs the store with `SharedPreferences` file [prefsName] (cloud session by
+         * default, [LOCAL_PREFS_NAME] for the LAN server). A `null` value removes the key.
+         */
+        fun fromSharedPreferences(context: Context, prefsName: String = PREFS_NAME): AdminTokenStore {
             val prefs = context.applicationContext
-                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             return AdminTokenStore(
                 load = { key -> prefs.getString(key, null) },
                 save = { key, value ->

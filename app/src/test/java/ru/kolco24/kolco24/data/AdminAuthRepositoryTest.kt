@@ -103,6 +103,67 @@ class AdminAuthRepositoryTest {
     }
 
     @Test
+    fun combinedLoginOutcome_emptyIsError() {
+        assertEquals(LoginOutcome.Error, combinedLoginOutcome(emptyList()))
+    }
+
+    @Test
+    fun combinedLoginOutcome_singlePassesThrough() {
+        assertEquals(LoginOutcome.Offline, combinedLoginOutcome(listOf(LoginOutcome.Offline)))
+        assertEquals(LoginOutcome.RateLimited, combinedLoginOutcome(listOf(LoginOutcome.RateLimited)))
+    }
+
+    @Test
+    fun combinedLoginOutcome_anySuccessWins() {
+        assertEquals(
+            LoginOutcome.Success,
+            combinedLoginOutcome(listOf(LoginOutcome.InvalidCredentials, LoginOutcome.Success)),
+        )
+        assertEquals(
+            LoginOutcome.Success,
+            combinedLoginOutcome(listOf(LoginOutcome.Success, LoginOutcome.Offline)),
+        )
+    }
+
+    @Test
+    fun combinedLoginOutcome_realAnswerBeatsOffline() {
+        assertEquals(
+            LoginOutcome.InvalidCredentials,
+            combinedLoginOutcome(listOf(LoginOutcome.Offline, LoginOutcome.InvalidCredentials)),
+        )
+        assertEquals(
+            LoginOutcome.RateLimited,
+            combinedLoginOutcome(listOf(LoginOutcome.Offline, LoginOutcome.RateLimited)),
+        )
+        assertEquals(
+            LoginOutcome.Error,
+            combinedLoginOutcome(listOf(LoginOutcome.Error, LoginOutcome.Offline)),
+        )
+        assertEquals(
+            LoginOutcome.Offline,
+            combinedLoginOutcome(listOf(LoginOutcome.Offline, LoginOutcome.Offline)),
+        )
+    }
+
+    @Test
+    fun combinedLoginOutcome_invalidCredentialsBeatsRateLimited() {
+        assertEquals(
+            LoginOutcome.InvalidCredentials,
+            combinedLoginOutcome(listOf(LoginOutcome.RateLimited, LoginOutcome.InvalidCredentials)),
+        )
+    }
+
+    @Test
+    fun adminRowSubtitle_eachCombination() {
+        val cloud = AdminSession.LoggedIn("c@x.ru", "t1", "2099-01-01T00:00:00Z")
+        val lan = AdminSession.LoggedIn("l@x.ru", "t2", "2099-01-01T00:00:00Z")
+        assertEquals("c@x.ru", adminRowSubtitle(cloud, lan))
+        assertEquals("c@x.ru · только Cloud", adminRowSubtitle(cloud, AdminSession.LoggedOut))
+        assertEquals("l@x.ru · только LAN", adminRowSubtitle(AdminSession.LoggedOut, lan))
+        assertEquals("Войти", adminRowSubtitle(AdminSession.LoggedOut, AdminSession.LoggedOut))
+    }
+
+    @Test
     fun isExpired_pastIsTrue_futureIsFalse_boundaryIsExpired() {
         val now = "2026-06-21T12:00:00Z"
         assertTrue(isExpired("2026-06-21T11:59:59Z", now)) // expiry before now → expired

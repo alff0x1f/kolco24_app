@@ -122,6 +122,34 @@ fun loginOutcome(result: PostResult<*>): LoginOutcome = when (result) {
     is PostResult.Error -> LoginOutcome.Error
 }
 
+/**
+ * Folds the per-server outcomes of one parallel cloud + LAN login into the single outcome the form shows.
+ * A server's real answer beats "unreachable": in the forest cloud is almost always [LoginOutcome.Offline],
+ * which must not hide a LAN «неверный пароль». Rank: Success > InvalidCredentials > RateLimited > Error >
+ * Offline. An empty list (nothing attempted) is [LoginOutcome.Error].
+ */
+fun combinedLoginOutcome(outcomes: List<LoginOutcome>): LoginOutcome =
+    outcomes.maxByOrNull { LOGIN_OUTCOME_RANK.indexOf(it) } ?: LoginOutcome.Error
+
+private val LOGIN_OUTCOME_RANK = listOf(
+    LoginOutcome.Offline,
+    LoginOutcome.Error,
+    LoginOutcome.RateLimited,
+    LoginOutcome.InvalidCredentials,
+    LoginOutcome.Success,
+)
+
+/**
+ * Subtitle of the Settings «Администратор» row: «Войти» with no session, the email when both servers are
+ * logged in (cloud's), and the email plus which single server is active otherwise.
+ */
+fun adminRowSubtitle(cloud: AdminSession, local: AdminSession): String = when {
+    cloud is AdminSession.LoggedIn && local is AdminSession.LoggedIn -> cloud.email
+    cloud is AdminSession.LoggedIn -> "${cloud.email} · только Cloud"
+    local is AdminSession.LoggedIn -> "${local.email} · только LAN"
+    else -> "Войти"
+}
+
 /** User-facing RU message for a failed login [outcome] (empty for [LoginOutcome.Success]). */
 fun adminErrorMessage(outcome: LoginOutcome): String = when (outcome) {
     LoginOutcome.Success -> ""

@@ -720,8 +720,10 @@ private fun Kolco24AppRoot(
     // never on "selected race present" (a race missing from the catalog would hold it shut forever).
     val racesOrNull by raceRepo.races.collectAsState(initial = null)
     val races = racesOrNull.orEmpty()
-    // Reactive race-admin session (source of truth for the admin overlay + the Settings «Администратор» row).
-    val adminSession by container.adminAuthRepository.session.collectAsState()
+    // Reactive race-admin sessions, cloud + LAN (source of truth for the admin overlay + the Settings
+    // «Администратор» row).
+    val cloudAdminSession by container.cloudAdminAuth.session.collectAsState()
+    val localAdminSession by container.localAdminAuth.session.collectAsState()
     // Trusted-clock status: drives the global skew banner (under each tab's TopAppBar) and the scan
     // notice. A local 5 s tick recomputes it so a wall-clock change with no network event still surfaces
     // within ~5 s; equal values are deduped by the StateFlow, so no spurious recompositions.
@@ -2162,7 +2164,8 @@ private fun Kolco24AppRoot(
                 localModeBusy = localModeBusy,
                 localModeExpiresAtMs = localModeExpiresAtMs,
                 onLocalModeChange = onLocalModeChange,
-                session = adminSession,
+                cloudAdminSession = cloudAdminSession,
+                localAdminSession = localAdminSession,
                 // Opening admin closes Settings so the two overlays never co-render (Admin draws above).
                 onOpenAdmin = { showSettings = false; chipInfoArmed = false; chipInfoModel = null; showAdmin = true },
                 // The debug actions are always wired now; the «Отладка» section is hidden in release
@@ -2274,7 +2277,8 @@ private fun Kolco24AppRoot(
         ) { showAdmin = false }
         if (showAdmin) {
             AdminScreen(
-                session = adminSession,
+                cloudSession = cloudAdminSession,
+                localSession = localAdminSession,
                 onClose = { showAdmin = false; showProvisioning = false; showCheckChip = false; showCheckMemberChip = false; showJudgeScan = null },
                 onOpenProvisioning = { showCheckChip = false; showCheckMemberChip = false; showJudgeScan = null; showProvisioning = true },
                 onOpenCheckChip = { showProvisioning = false; showCheckMemberChip = false; showJudgeScan = null; showCheckChip = true },

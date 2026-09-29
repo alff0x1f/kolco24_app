@@ -42,6 +42,7 @@ import ru.kolco24.kolco24.data.db.AppDatabase
 import ru.kolco24.kolco24.data.db.TrackScope
 import ru.kolco24.kolco24.data.lease.RaceLease
 import ru.kolco24.kolco24.data.lease.RaceLeaseStore
+import ru.kolco24.kolco24.data.lease.isLeaseActive
 import ru.kolco24.kolco24.data.lease.isPinned
 import ru.kolco24.kolco24.data.map.MapDownloader
 import ru.kolco24.kolco24.data.map.MapFileStorage
@@ -108,12 +109,12 @@ class AppContainer(private val context: Context) {
     }
 
     /**
-     * HMAC signing interceptor shared by both the cloud [apiClient] and the LAN [localApiClient]:
-     * the local race server validates the same 6 `X-App-*`/`X-Install-Id` headers with the same key
-     * id / secret, so it must be signed identically (only the trusted-time re-anchor differs — see
-     * [localApiClient]).
+     * HMAC signing interceptor factory: the cloud [apiClient] and the LAN [localApiClient] are signed
+     * identically (same key id / secret / 6 `X-App-*`/`X-Install-Id` headers; only the trusted-time
+     * re-anchor differs — see [localApiClient]), but each gets its **own** instance so its bearer comes
+     * only from its own admin session — a cloud token never reaches the cleartext LAN host.
      */
-    private val signatureInterceptor: AppSignatureInterceptor by lazy {
+    private fun signingInterceptor(tokenProvider: () -> String?): AppSignatureInterceptor =
         AppSignatureInterceptor(
             keyId = BuildConfig.APP_KEY_ID,
             secret = BuildConfig.APP_SECRET,
@@ -124,15 +125,22 @@ class AppContainer(private val context: Context) {
             // wall before the first anchor). Lambda fires at request time, so no construction cycle —
             // `trustedClock` doesn't touch `apiClient`.
             nowSeconds = { trustedClock.signingSeconds() },
-            // Deferred to request time: invoked only after both `by lazy` blocks have initialized.
-            // `token()` is a synchronous StateFlow.value read, so no init-time recursion and no
-            // blocking on the interceptor thread. Bearer is never part of the canonical string.
-            tokenProvider = { adminAuthRepository.token() },
+            tokenProvider = tokenProvider,
         )
+
+    // tokenProvider lambdas are deferred to request time: invoked only after the `by lazy` blocks have
+    // initialized. `token()` is a synchronous StateFlow.value read, so no init-time recursion and no
+    // blocking on the interceptor thread. Bearer is never part of the canonical string.
+    private val cloudSignatureInterceptor: AppSignatureInterceptor by lazy {
+        signingInterceptor { cloudAdminAuth.token() }
+    }
+
+    private val localSignatureInterceptor: AppSignatureInterceptor by lazy {
+        signingInterceptor { localAdminAuth.token() }
     }
 
     /**
-     * Shared signed `/app/` client. Exposed (not private) so the admin provisioning flow can issue
+     * Cloud signed `/app/` client. Exposed (not private) so the admin provisioning flow can issue
      * `bindTag` POSTs directly — there is no provisioning repository (the bind response isn't
      * persisted; the next legend refresh delivers the new tag via the existing `tags[]` array).
      */
@@ -147,7 +155,7 @@ class AppContainer(private val context: Context) {
         )
         ApiClient(
             baseUrl = baseUrl,
-            okHttpClient = ApiClient.defaultOkHttpClient(signatureInterceptor, serverTimeInterceptor),
+            okHttpClient = ApiClient.defaultOkHttpClient(cloudSignatureInterceptor, serverTimeInterceptor),
             json = json,
         )
     }
@@ -158,13 +166,13 @@ class AppContainer(private val context: Context) {
      * (a) no [ServerTimeInterceptor] — we never anchor trusted time off a LAN server, and this keeps
      * `ServerTimeInterceptor`'s single-host assumption intact; (b) short 3 s connect/read timeouts so
      * an upload fails fast (→ `Offline`) when the phone is off the event's Wi-Fi, instead of hanging
-     * ~10 s. It shares the [signatureInterceptor] (same key id / secret / 6 headers as cloud).
+     * ~10 s. Its [localSignatureInterceptor] signs like cloud but carries only the [localAdminAuth] bearer.
      */
     val localApiClient: ApiClient by lazy {
         ApiClient(
             baseUrl = BuildConfig.LOCAL_API_BASE_URL,
             okHttpClient = ApiClient.defaultOkHttpClient(
-                signatureInterceptor,
+                localSignatureInterceptor,
                 connectTimeoutMs = 3_000,
                 readTimeoutMs = 3_000,
             ),
@@ -228,7 +236,13 @@ class AppContainer(private val context: Context) {
     private val nowMs: () -> Long = { trustedClock.trusted() ?: System.currentTimeMillis() }
 
     /** `true` when [raceId] is currently pinned to the LAN data source. Read-at-call-time lambda. */
-    private val isRacePinned: (raceId: Int) -> Boolean = { raceId -> isPinned(raceLease.value, raceId, nowMs()) }
+    val isRacePinned: (raceId: Int) -> Boolean = { raceId -> isPinned(raceLease.value, raceId, nowMs()) }
+
+    /**
+     * `true` while any race lease is active (local mode on, the race server recently confirmed itself).
+     * Gates LAN admin login: the password goes to the cleartext LAN host only in this state.
+     */
+    fun isLanActive(): Boolean = isLeaseActive(raceLease.value, nowMs())
 
     val raceRepository: RaceRepository by lazy {
         RaceRepository(
@@ -495,16 +509,25 @@ class AppContainer(private val context: Context) {
         TrackColorPreference.fromSharedPreferences(context)
     }
 
-    /** Persisted race-admin session store (token/email/expiry) backing [adminAuthRepository]. */
-    private val adminTokenStore: AdminTokenStore by lazy {
-        AdminTokenStore.fromSharedPreferences(context)
-    }
-
-    /** Reactive race-admin session; its [AdminAuthRepository.token] feeds the interceptor's bearer. */
-    val adminAuthRepository: AdminAuthRepository by lazy {
+    /**
+     * Cloud race-admin session; its [AdminAuthRepository.token] feeds only [cloudSignatureInterceptor].
+     * Keeps the original `kolco24.admin` prefs file, so sessions from older builds survive.
+     */
+    val cloudAdminAuth: AdminAuthRepository by lazy {
         AdminAuthRepository(
             apiClient = apiClient,
-            store = adminTokenStore,
+            store = AdminTokenStore.fromSharedPreferences(context),
+        )
+    }
+
+    /**
+     * LAN race-server admin session (the LAN server issues its own tokens via its own `/app/login/`);
+     * its token feeds only [localSignatureInterceptor].
+     */
+    val localAdminAuth: AdminAuthRepository by lazy {
+        AdminAuthRepository(
+            apiClient = localApiClient,
+            store = AdminTokenStore.fromSharedPreferences(context, AdminTokenStore.LOCAL_PREFS_NAME),
         )
     }
 
@@ -594,7 +617,7 @@ class AppContainer(private val context: Context) {
 
     /**
      * Race-map download + «which races have a map» state. The downloader uses its own plain OkHttp
-     * client — no [signatureInterceptor] / [ServerTimeInterceptor]: `map_url` is a static file,
+     * client — no signing interceptor / [ServerTimeInterceptor]: `map_url` is a static file,
      * possibly on another host, and must never anchor trusted time. Long read timeout for a
      * multi-MB body on a slow link. Downloads run on [applicationScope] (outlive the Map tab).
      * Lazy only to skip building the client in processes that never show the UI; construction does no

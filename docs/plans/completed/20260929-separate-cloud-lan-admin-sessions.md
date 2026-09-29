@@ -118,11 +118,11 @@
 - Modify: `app/src/main/res/xml/backup_rules.xml`
 - Modify: `app/src/main/res/xml/data_extraction_rules.xml`
 
-- [ ] add `prefsName` param (default = existing `kolco24.admin`) to `fromSharedPreferences`; add `LOCAL_PREFS_NAME`
-- [ ] exclude `kolco24.admin.local.xml` in `backup_rules.xml` and in both `cloud-backup` and `device-transfer`
+- [x] add `prefsName` param (default = existing `kolco24.admin`) to `fromSharedPreferences`; add `LOCAL_PREFS_NAME`
+- [x] exclude `kolco24.admin.local.xml` in `backup_rules.xml` and in both `cloud-backup` and `device-transfer`
       blocks of `data_extraction_rules.xml`
-- [ ] confirm `AdminTokenStoreTest` still passes unchanged (pure store; adapter untested by convention)
-- [ ] run tests - must pass before next task
+- [x] confirm `AdminTokenStoreTest` still passes unchanged (pure store; adapter untested by convention)
+- [x] run tests - must pass before next task
 
 ### Task 2: Add pure helpers: `combinedLoginOutcome`, `adminRowSubtitle`, `isLeaseActive`
 
@@ -132,29 +132,29 @@
 - Modify: `app/src/test/java/ru/kolco24/kolco24/data/AdminAuthRepositoryTest.kt`
 - Modify: lease unit test file (next to existing `isPinned` tests)
 
-- [ ] implement `combinedLoginOutcome` with the rank from Technical Details (empty list → `Error`)
-- [ ] implement `adminRowSubtitle(cloud, local)` (move the current logged-out text into it)
-- [ ] implement `isLeaseActive(lease, nowMs)`
-- [ ] write tests for `combinedLoginOutcome`: empty, single, any `Success` wins, `Offline + InvalidCredentials`
+- [x] implement `combinedLoginOutcome` with the rank from Technical Details (empty list → `Error`)
+- [x] implement `adminRowSubtitle(cloud, local)` (move the current logged-out text into it)
+- [x] implement `isLeaseActive(lease, nowMs)`
+- [x] write tests for `combinedLoginOutcome`: empty, single, any `Success` wins, `Offline + InvalidCredentials`
       → `InvalidCredentials`, `Offline + RateLimited` → `RateLimited`, `Offline + Error` → `Error`, both `Offline`
-- [ ] write tests for `adminRowSubtitle`: both / cloud only / LAN only / none
-- [ ] write tests for `isLeaseActive`: null, active, exact expiry boundary, expired
-- [ ] run tests - must pass before next task
+- [x] write tests for `adminRowSubtitle`: both / cloud only / LAN only / none
+- [x] write tests for `isLeaseActive`: null, active, exact expiry boundary, expired
+- [x] run tests - must pass before next task
 
 ### Task 3: Split the admin session and signing interceptor per server in `AppContainer`
 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/AppContainer.kt`
 
-- [ ] add private `signingInterceptor(tokenProvider: () -> String?)` factory; build `cloudSignatureInterceptor`
+- [x] add private `signingInterceptor(tokenProvider: () -> String?)` factory; build `cloudSignatureInterceptor`
       and `localSignatureInterceptor` from it, each bound by lambda to its own repo (keeps the lazy-init cycle broken)
-- [ ] replace `adminAuthRepository` with `cloudAdminAuth` (store `kolco24.admin`) and `localAdminAuth`
+- [x] replace `adminAuthRepository` with `cloudAdminAuth` (store `kolco24.admin`) and `localAdminAuth`
       (store `LOCAL_PREFS_NAME`, `localApiClient`)
-- [ ] make `isRacePinned` public; add `isLanActive()`
-- [ ] update all `adminAuthRepository` references so the project compiles (temporarily point UI at `cloudAdminAuth`;
+- [x] make `isRacePinned` public; add `isLanActive()`
+- [x] update all `adminAuthRepository` references so the project compiles (temporarily point UI at `cloudAdminAuth`;
       real UI changes in Tasks 4-6)
-- [ ] update KDocs that describe a shared interceptor / single repo: `AppContainer.kt` ~l.108-113, 161, 498, 503
-- [ ] no new tests (wiring untested by convention; `tokenProvider` absent/present already covered by `SigningTest`);
+- [x] update KDocs that describe a shared interceptor / single repo: `AppContainer.kt` ~l.108-113, 161, 498, 503
+- [x] no new tests (wiring untested by convention; `tokenProvider` absent/present already covered by `SigningTest`);
       run tests
 
 ### Task 4: Login form, admin home and logout for both servers
@@ -163,15 +163,15 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/admin/AdminScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `MainActivity`: collect `cloudAdminSession` and `localAdminSession`; pass both to `AdminScreen`
-- [ ] `AdminScreen`: add `loginTargets` `rememberSaveable` state and gating per Technical Details; `BackHandler`
+- [x] `MainActivity`: collect `cloudAdminSession` and `localAdminSession`; pass both to `AdminScreen`
+- [x] `AdminScreen`: add `loginTargets` `rememberSaveable` state and gating per Technical Details; `BackHandler`
       cancels a re-login form back to home
-- [ ] login: parallel `async` per target on `applicationScope` (LAN only when `isLanActive()`); error via
+- [x] login: parallel `async` per target on `applicationScope` (LAN only when `isLanActive()`); error via
       `adminErrorMessage(combinedLoginOutcome(...))`; success clears `loginTargets`
-- [ ] `AdminHome`: per-server status rows with own email; «Войти на Cloud» / «Войти на LAN» buttons
-- [ ] logout: one `applicationScope.launch` per `LoggedIn` repo
-- [ ] update KDocs `AdminScreen.kt` ~l.63-70, 124
-- [ ] no new tests (Compose UI untested by convention; logic covered in Task 2); run tests
+- [x] `AdminHome`: per-server status rows with own email; «Войти на Cloud» / «Войти на LAN» buttons
+- [x] logout: one `applicationScope.launch` per `LoggedIn` repo
+- [x] update KDocs `AdminScreen.kt` ~l.63-70, 124
+- [x] no new tests (Compose UI untested by convention; logic covered in Task 2); run tests
 
 ### Task 5: Settings row subtitle
 
@@ -179,37 +179,37 @@
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/settings/SettingsScreen.kt`
 - Modify: `app/src/main/java/ru/kolco24/kolco24/MainActivity.kt`
 
-- [ ] `SettingsScreen` / `AdminRow` take both sessions; subtitle from `adminRowSubtitle`
-- [ ] no new tests (helper tested in Task 2); run tests
+- [x] `SettingsScreen` / `AdminRow` take both sessions; subtitle from `adminRowSubtitle`
+- [x] no new tests (helper tested in Task 2); run tests
 
 ### Task 6: Route `bindTag` by race lease in provisioning
 
 **Files:**
 - Modify: `app/src/main/java/ru/kolco24/kolco24/ui/admin/ProvisioningScreen.kt`
 
-- [ ] in `onTag`, per tap: pick `(client, auth)` via `container.isRacePinned(raceId)`
-- [ ] chosen `auth` is `LoggedOut` → `ProvisionState.Failed(...)` + failure beep, skip POST, release `isBusy`
-- [ ] capture `(client, auth)` in the launched coroutine; `401` → `auth.onUnauthorized()` only
-- [ ] update KDoc `ProvisioningScreen.kt` ~l.103
-- [ ] no new tests (`isPinned` already tested; UI untested by convention); run tests
+- [x] in `onTag`, per tap: pick `(client, auth)` via `container.isRacePinned(raceId)`
+- [x] chosen `auth` is `LoggedOut` → `ProvisionState.Failed(...)` + failure beep, skip POST, release `isBusy`
+- [x] capture `(client, auth)` in the launched coroutine; `401` → `auth.onUnauthorized()` only
+- [x] update KDoc `ProvisioningScreen.kt` ~l.103
+- [x] no new tests (`isPinned` already tested; UI untested by convention); run tests
 
 ### Task 7: Verify acceptance criteria
-- [ ] cloud bearer is never attached to `localApiClient` requests (and vice versa)
-- [ ] no LAN login request without an active lease
-- [ ] existing cloud session survives upgrade (same prefs file)
-- [ ] run full test suite: `./gradlew testDebugUnitTest`
-- [ ] run lint: `./gradlew lintDebug`
-- [ ] build: `./gradlew assembleDebug`
+- [x] cloud bearer is never attached to `localApiClient` requests (and vice versa)
+- [x] no LAN login request without an active lease
+- [x] existing cloud session survives upgrade (same prefs file)
+- [x] run full test suite: `./gradlew testDebugUnitTest`
+- [x] run lint: `./gradlew lintDebug`
+- [x] build: `./gradlew assembleDebug`
 
 ### Task 8: [Final] Update documentation
-- [ ] `docs/design/DATA-NOTES.md`: two admin sessions, two interceptors, two prefs files, backup exclusion,
+- [x] `docs/design/DATA-NOTES.md`: two admin sessions, two interceptors, two prefs files, backup exclusion,
       LAN login gated by lease (fix the line quoting `tokenProvider = { adminAuthRepository.token() }`)
-- [ ] `docs/design/UI-NOTES.md`: admin home status rows, `loginTargets` re-login flow, Settings subtitle,
+- [x] `docs/design/UI-NOTES.md`: admin home status rows, `loginTargets` re-login flow, Settings subtitle,
       provisioning routing and per-tap no-session failure
-- [ ] `docs/mobile-admin-auth-and-tags.md`: LAN section — own `/app/login/`, same `expires_at` format, tokens not
+- [x] `docs/mobile-admin-auth-and-tags.md`: LAN section — own `/app/login/`, same `expires_at` format, tokens not
       interchangeable, password sent only in local mode, `bindTag` goes to LAN while race is pinned
-- [ ] `CLAUDE.md` if a new convention emerged
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `CLAUDE.md` if a new convention emerged
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
