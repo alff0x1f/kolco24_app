@@ -14,6 +14,12 @@ sealed interface ChipWriteResult {
 
     /** I/O error or NAK mid-write (tag moved away, write-protected, wrong chip, etc.). */
     data class Failed(val message: String) : ChipWriteResult
+
+    /**
+     * The chip already carries a `K24` record of **another** type (a КП chip under a bracelet write or
+     * vice versa) — nothing written. [reason] is the user-facing RU message. Retrying is pointless.
+     */
+    data class WrongType(val reason: String) : ChipWriteResult
 }
 
 /** Bytes per MifareUltralight page. */
@@ -31,10 +37,10 @@ const val CHIP_CODE_BYTES = PAGE_SIZE * 4
 /** 24-bit magic 'K' '2' '4' (Kolco24 brand) — the "this is our chip" sentinel in page 4 bytes 0..2. */
 private val MAGIC = byteArrayOf(0x4B, 0x32, 0x34)
 
-/** Low-nibble chip type: КП (checkpoint) — the only value written by this effort. */
+/** Low-nibble chip type: КП (checkpoint). */
 const val CHIP_TYPE_KP = 0x1
 
-/** Low-nibble chip type: participant — reserved/unused (future effort). */
+/** Low-nibble chip type: participant bracelet (server-issued secret code, written by admin). */
 const val CHIP_TYPE_PARTICIPANT = 0x2
 
 /** High-nibble format version. */
@@ -61,22 +67,82 @@ fun buildChipRecord(type: Int, code: ByteArray): ByteArray {
 }
 
 /**
- * Parse a raw chip record read from pages 4.. Returns the 16-byte КП code, or null when [pages] is
- * too short, the magic mismatches, the version nibble is not [CHIP_FORMAT_VERSION] (forward-incompat
- * guard), or the type nibble is not [CHIP_TYPE_KP] (КП-only reader). Trailing padding is tolerated.
- * Pure — no Android.
+ * Type nibble of a valid `K24` record in [pages] (magic + [CHIP_FORMAT_VERSION]), or null when
+ * [pages] is too short, the magic mismatches, or the version is unknown. Pure.
  */
-fun parseChipRecord(pages: ByteArray): ByteArray? {
+private fun chipRecordType(pages: ByteArray): Int? {
     if (pages.size < CHIP_RECORD_BYTES) return null
     for (i in MAGIC.indices) {
         if (pages[i] != MAGIC[i]) return null
     }
     val packed = pages[MAGIC.size].toInt() and 0xFF
-    val version = (packed ushr 4) and 0x0F
-    val type = packed and 0x0F
-    if (version != CHIP_FORMAT_VERSION) return null
-    if (type != CHIP_TYPE_KP) return null
+    if ((packed ushr 4) and 0x0F != CHIP_FORMAT_VERSION) return null
+    return packed and 0x0F
+}
+
+/**
+ * Parse a raw chip record read from pages 4.. Returns the 16-byte code, or null when [pages] is too
+ * short, the magic mismatches, the version nibble is not [CHIP_FORMAT_VERSION] (forward-incompat
+ * guard), or the type nibble is not [type]. Trailing padding is tolerated. Pure — no Android.
+ */
+fun parseChipRecord(pages: ByteArray, type: Int): ByteArray? {
+    if (chipRecordType(pages) != type) return null
     return pages.copyOfRange(PAGE_SIZE, PAGE_SIZE + CHIP_CODE_BYTES)
+}
+
+/** КП reader: [parseChipRecord] with [CHIP_TYPE_KP] — a participant record (type `0x2`) is rejected. */
+fun parseChipRecord(pages: ByteArray): ByteArray? = parseChipRecord(pages, CHIP_TYPE_KP)
+
+/**
+ * Both record types decoded from one read of pages 4..8. The types share one nibble, so at most one
+ * of [code] (КП) / [memberCode] (participant bracelet) is non-null; a blank or foreign chip has both
+ * null.
+ */
+class ChipCodes(val code: ByteArray?, val memberCode: ByteArray?)
+
+/** Decode raw [pages] (see [readRecordPages]) into [ChipCodes]. Pure. */
+fun decodeChipPages(pages: ByteArray): ChipCodes =
+    ChipCodes(
+        code = parseChipRecord(pages, CHIP_TYPE_KP),
+        memberCode = parseChipRecord(pages, CHIP_TYPE_PARTICIPANT),
+    )
+
+/** RU message for a chip that already carries a `K24` record of [type] (a wrong-type write target). */
+fun wrongChipTypeMessage(type: Int): String = when (type) {
+    CHIP_TYPE_KP -> "Это чип КП, а не браслет"
+    CHIP_TYPE_PARTICIPANT -> "Это браслет участника"
+    else -> "Чип другого типа"
+}
+
+/** Pre-write guard decision, see [writeGuardDecision]. */
+sealed interface ChipWriteGuard {
+    /** Blank/foreign chip, or a `K24` record of the same type (a rewrite). */
+    data object Allow : ChipWriteGuard
+
+    /** The current pages could not be read — don't write blind. */
+    data object ReadFailed : ChipWriteGuard
+
+    /** The chip carries a `K24` record of another type. */
+    data class WrongType(val reason: String) : ChipWriteGuard
+}
+
+/**
+ * Decide whether [record] may overwrite the chip whose current pages are [currentPages] (`null` = the
+ * read failed). Anything with the `K24` magic that is not a same-type record of the supported version
+ * is refused — including an unknown version. [writeRecord] zeroes the header first, so without this
+ * check a bracelet write would silently destroy a КП chip (and vice versa). Pure.
+ */
+fun writeGuardDecision(currentPages: ByteArray?, record: ByteArray): ChipWriteGuard {
+    require(record.size == CHIP_RECORD_BYTES) { "record must be $CHIP_RECORD_BYTES bytes" }
+    if (currentPages == null) return ChipWriteGuard.ReadFailed
+    if (currentPages.size < PAGE_SIZE || MAGIC.indices.any { currentPages[it] != MAGIC[it] }) {
+        return ChipWriteGuard.Allow
+    }
+    // A K24 header of a version this build can't parse may still be a live chip of another type.
+    val onChip = chipRecordType(currentPages) ?: return ChipWriteGuard.WrongType("Чип записан в другом формате")
+    val pendingType = record[MAGIC.size].toInt() and 0x0F
+    if (onChip != pendingType) return ChipWriteGuard.WrongType(wrongChipTypeMessage(onChip))
+    return ChipWriteGuard.Allow
 }
 
 /** Uppercase hex of [code] (no separators) — for display/recording. */
@@ -136,11 +202,23 @@ fun readChipVersion(tag: Tag): ByteArray? {
         if (resp.size < 8) null else resp
     } catch (_: IOException) {
         null
+    } catch (_: SecurityException) {
+        null
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
+    }
+}
+
+/**
+ * Close [nfcA], swallowing errors. Android throws [SecurityException] («Tag … is out of date») from
+ * connect/transceive/close on a [Tag] handle from an earlier discovery — a retained handle, so the
+ * adapters treat it like an I/O failure.
+ */
+private fun closeQuietly(nfcA: NfcA) {
+    try {
+        nfcA.close()
+    } catch (_: IOException) {
+    } catch (_: SecurityException) {
     }
 }
 
@@ -201,9 +279,10 @@ internal fun writeRecord(t: NfcTransport, record: ByteArray): ChipWriteResult {
         }
         // 3. valid header last (commit marker).
         writePage(t, HEADER_PAGE, record, 0)?.let { return it }
-        // Read back over the same open connection and verify the code round-trips.
+        // Read back over the same open connection and verify the code round-trips as the same type.
         val expected = record.copyOfRange(PAGE_SIZE, CHIP_RECORD_BYTES)
-        val readBack = readRecord(t)
+        val type = record[MAGIC.size].toInt() and 0x0F
+        val readBack = readRecordPages(t)?.let { parseChipRecord(it, type) }
         if (readBack == null || !readBack.contentEquals(expected)) {
             return ChipWriteResult.Failed("Чтение после записи не совпало")
         }
@@ -214,21 +293,33 @@ internal fun writeRecord(t: NfcTransport, record: ByteArray): ChipWriteResult {
 }
 
 /**
- * Read the 20-byte record (pages 4..8) over [t] and parse it. Tries **FAST_READ** (`0x3A 04 08`) in
+ * [writeRecord] behind [writeGuardDecision]: reads the current pages over the same connection first
+ * and refuses a chip that carries a `K24` record of another type ([ChipWriteResult.WrongType]) or
+ * whose pages can't be read ([ChipWriteResult.Failed] — retap). Never throws.
+ */
+internal fun writeRecordGuarded(t: NfcTransport, record: ByteArray): ChipWriteResult =
+    when (val guard = writeGuardDecision(readRecordPages(t), record)) {
+        ChipWriteGuard.Allow -> writeRecord(t, record)
+        ChipWriteGuard.ReadFailed -> ChipWriteResult.Failed("Не удалось прочитать чип")
+        is ChipWriteGuard.WrongType -> ChipWriteResult.WrongType(guard.reason)
+    }
+
+/**
+ * Read the raw 20-byte record (pages 4..8) over [t], unparsed. Tries **FAST_READ** (`0x3A 04 08`) in
  * one transceive; treats an [IOException] **or** any response shorter than [CHIP_RECORD_BYTES] (a tag
  * may answer an unsupported command with a 1-byte NAK instead of throwing) as failure and falls back
  * to two plain **READ**s — page 4 (bytes 0..15) + page 8 (first 4 bytes = record bytes 16..19). Each
  * READ must return at least [READ_BLOCK] bytes; a short/NAK response or an [IOException] on either
- * READ → null. Returns the КП code via [parseChipRecord], or null. Never throws.
+ * READ → null. Never throws.
  */
-internal fun readRecord(t: NfcTransport): ByteArray? {
+internal fun readRecordPages(t: NfcTransport): ByteArray? {
     val fast = try {
         t.transceive(byteArrayOf(CMD_FAST_READ, HEADER_PAGE.toByte(), (HEADER_PAGE + 4).toByte()))
     } catch (_: IOException) {
         null
     }
     if (fast != null && fast.size >= CHIP_RECORD_BYTES) {
-        return parseChipRecord(fast)
+        return fast.copyOf(CHIP_RECORD_BYTES)
     }
     return try {
         val head = t.transceive(byteArrayOf(CMD_READ, HEADER_PAGE.toByte()))
@@ -238,35 +329,38 @@ internal fun readRecord(t: NfcTransport): ByteArray? {
         val combined = ByteArray(CHIP_RECORD_BYTES)
         head.copyInto(combined, 0, 0, READ_BLOCK)
         tail.copyInto(combined, READ_BLOCK, 0, CHIP_RECORD_BYTES - READ_BLOCK)
-        parseChipRecord(combined)
+        combined
     } catch (_: IOException) {
         null
     }
 }
 
+/** [readRecordPages] parsed as a КП record: the 16-byte КП code, or null. Never throws. */
+internal fun readRecord(t: NfcTransport): ByteArray? = readRecordPages(t)?.let { parseChipRecord(it) }
+
 /**
  * Write [code] (exactly [CHIP_CODE_BYTES] bytes) onto an Ultralight/NTAG tag as the raw header
- * record (magic `K24` + packed version/type byte with type=КП + 16-byte code) over **NfcA** raw
- * commands. We talk NfcA directly rather than via `MifareUltralight.get()` because Android omits the
+ * record (magic `K24` + packed version/[type] byte + 16-byte code) over **NfcA** raw commands. We
+ * talk NfcA directly rather than via `MifareUltralight.get()` because Android omits the
  * MifareUltralight tech for many NTAG/Ultralight chips (exposing only NfcA + Ndef), which would
- * otherwise be misread as "not an Ultralight tag". The write is header-last (commit marker) and is
- * verified by a read-back over the **same open connection** (see [writeRecord]). Blocking I/O — call
- * off the main thread. Never throws; returns a [ChipWriteResult].
+ * otherwise be misread as "not an Ultralight tag". A chip carrying a `K24` record of another type is
+ * refused ([writeRecordGuarded]). The write is header-last (commit marker) and is verified by a
+ * read-back over the **same open connection** (see [writeRecord]). Blocking I/O — call off the main
+ * thread. Never throws; returns a [ChipWriteResult].
  */
-fun writeChipCode(tag: Tag, code: ByteArray): ChipWriteResult {
+fun writeChipCode(tag: Tag, code: ByteArray, type: Int = CHIP_TYPE_KP): ChipWriteResult {
     require(code.size == CHIP_CODE_BYTES) { "code must be $CHIP_CODE_BYTES bytes" }
-    val record = buildChipRecord(CHIP_TYPE_KP, code)
+    val record = buildChipRecord(type, code)
     val nfcA = NfcA.get(tag) ?: return ChipWriteResult.Unsupported
     return try {
         nfcA.connect()
-        writeRecord({ frame -> nfcA.transceive(frame) }, record)
+        writeRecordGuarded({ frame -> nfcA.transceive(frame) }, record)
     } catch (e: IOException) {
         ChipWriteResult.Failed(e.message ?: "Ошибка записи")
+    } catch (_: SecurityException) {
+        ChipWriteResult.Failed("Чип убран, приложите снова")
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
     }
 }
 
@@ -291,10 +385,27 @@ fun readChipCode(tag: Tag): ByteArray? {
         readRecord { frame -> nfcA.transceive(frame) }
     } catch (_: IOException) {
         null
+    } catch (_: SecurityException) {
+        null
     } finally {
-        try {
-            nfcA.close()
-        } catch (_: IOException) {
-        }
+        closeQuietly(nfcA)
+    }
+}
+
+/**
+ * Read pages 4..8 once and decode both record types ([decodeChipPages]). Returns null when the tag
+ * exposes no NfcA tech or the read fails. Blocking I/O — call off the main thread; never throws.
+ */
+fun readChipCodes(tag: Tag): ChipCodes? {
+    val nfcA = NfcA.get(tag) ?: return null
+    return try {
+        nfcA.connect()
+        readRecordPages { frame -> nfcA.transceive(frame) }?.let(::decodeChipPages)
+    } catch (_: IOException) {
+        null
+    } catch (_: SecurityException) {
+        null
+    } finally {
+        closeQuietly(nfcA)
     }
 }

@@ -19,6 +19,8 @@ import ru.kolco24.kolco24.data.api.dto.LoginResponse
 import ru.kolco24.kolco24.data.api.dto.MarkDto
 import ru.kolco24.kolco24.data.api.dto.MarkUploadRequest
 import ru.kolco24.kolco24.data.api.dto.MarkUploadResponse
+import ru.kolco24.kolco24.data.api.dto.MemberTagBindRequest
+import ru.kolco24.kolco24.data.api.dto.MemberTagBindResponse
 import ru.kolco24.kolco24.data.api.dto.MemberTagsResponse
 import ru.kolco24.kolco24.data.api.dto.RaceDto
 import ru.kolco24.kolco24.data.api.dto.RacesResponse
@@ -226,6 +228,24 @@ class ApiClient(
         val bytes = json.encodeToString(TagBindRequest(checkpointId, nfcUid)).toByteArray()
         return post("$baseUrl/app/race/$raceId/tags/", bytes, adminAuth = true) {
             json.decodeFromString<TagBindResponse>(it)
+        }
+    }
+
+    /**
+     * `POST /app/race/<raceId>/member_tags/bind/` — get the secret code for bracelet [nfcUid]. A
+     * `null` [number] asks for an already-pooled bracelet; a number binds a new one. `201`/`200` →
+     * [PostResult.Success] with the hex `code` to write; `404` → [PostResult.Error] (unknown UID with
+     * `null` number); `409` → [PostResult.Conflict] (the UID is bound to another participant); other
+     * statuses map per [post]. No retry, like [bindTag].
+     */
+    suspend fun bindMemberTag(
+        raceId: Int,
+        nfcUid: String,
+        number: Int?,
+    ): PostResult<MemberTagBindResponse> {
+        val bytes = json.encodeToString(MemberTagBindRequest(nfcUid, number)).toByteArray()
+        return post("$baseUrl/app/race/$raceId/member_tags/bind/", bytes, adminAuth = true) {
+            json.decodeFromString<MemberTagBindResponse>(it)
         }
     }
 

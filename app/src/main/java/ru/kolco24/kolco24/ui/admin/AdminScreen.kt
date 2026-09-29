@@ -16,23 +16,27 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.FactCheck
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,12 +65,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.data.AdminSession
 import ru.kolco24.kolco24.data.LoginOutcome
 import ru.kolco24.kolco24.data.adminErrorMessage
 import ru.kolco24.kolco24.data.combinedLoginOutcome
+import ru.kolco24.kolco24.ui.theme.BrandRed
+import ru.kolco24.kolco24.ui.theme.OnBrandRed
+import ru.kolco24.kolco24.ui.theme.OnTertiary
+import ru.kolco24.kolco24.ui.theme.Tertiary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -94,6 +103,7 @@ fun AdminScreen(
     localSession: AdminSession,
     onClose: () -> Unit,
     onOpenProvisioning: () -> Unit = {},
+    onOpenMemberProvisioning: () -> Unit = {},
     onOpenCheckChip: () -> Unit = {},
     onOpenCheckMemberChip: () -> Unit = {},
     onOpenJudgeScan: (String) -> Unit = {},
@@ -160,6 +170,7 @@ fun AdminScreen(
                 lanActive = lanActive,
                 onLogin = { reLoginTarget = it },
                 onOpenProvisioning = onOpenProvisioning,
+                onOpenMemberProvisioning = onOpenMemberProvisioning,
                 onOpenCheckChip = onOpenCheckChip,
                 onOpenCheckMemberChip = onOpenCheckMemberChip,
                 onOpenJudgeScan = onOpenJudgeScan,
@@ -326,6 +337,7 @@ private fun AdminHome(
     lanActive: Boolean,
     onLogin: (AdminServer) -> Unit,
     onOpenProvisioning: () -> Unit,
+    onOpenMemberProvisioning: () -> Unit,
     onOpenCheckChip: () -> Unit,
     onOpenCheckMemberChip: () -> Unit,
     onOpenJudgeScan: (String) -> Unit,
@@ -333,121 +345,143 @@ private fun AdminHome(
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
 
-    Column(modifier = Modifier.padding(top = 8.dp)) {
-        ServerStatusRow(
-            label = "Cloud",
-            session = cloudSession,
-            loggedOutText = "нет входа",
-            onLogin = { onLogin(AdminServer.Cloud) },
-        )
-        ServerStatusRow(
-            label = "LAN",
-            session = localSession,
-            loggedOutText = if (lanActive) "нет входа" else "включите локальный режим гонки",
-            onLogin = if (lanActive) ({ onLogin(AdminServer.Lan) }) else null,
-        )
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            AdminActionRow(
-                icon = Icons.Filled.Nfc,
-                title = "Привязать чип к КП",
-                subtitle = "Записать NFC-метки на контрольные пункты",
-                onClick = onOpenProvisioning,
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
+        AdminSectionHeader("Вход")
+        AdminCard {
+            ServerStatusRow(
+                label = "Cloud",
+                session = cloudSession,
+                loggedOutText = "нет входа",
+                onLogin = { onLogin(AdminServer.Cloud) },
+            )
+            AdminRowDivider(startIndent = 16.dp)
+            ServerStatusRow(
+                label = "LAN",
+                session = localSession,
+                loggedOutText = if (lanActive) "нет входа" else "включите локальный режим гонки",
+                onLogin = if (lanActive) ({ onLogin(AdminServer.Lan) }) else null,
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
+        AdminSectionHeader("Чипы КП")
+        AdminCard {
+            AdminActionRow(
+                icon = Icons.Filled.Nfc,
+                title = "Привязать чип к КП",
+                subtitle = "Запись кода на чип",
+                onClick = onOpenProvisioning,
+            )
+            AdminRowDivider()
             AdminActionRow(
                 icon = Icons.AutoMirrored.Filled.FactCheck,
                 title = "Проверить чип КП",
-                subtitle = "Узнать, к какому КП привязан чип",
+                subtitle = "Оффлайн-проверка привязки",
                 onClick = onOpenCheckChip,
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
+        AdminSectionHeader("Браслеты участников")
+        AdminCard {
+            AdminActionRow(
+                icon = Icons.Filled.Watch,
+                title = "Записать браслет",
+                subtitle = "Запись кода на браслет",
+                onClick = onOpenMemberProvisioning,
+            )
+            AdminRowDivider()
             AdminActionRow(
                 icon = Icons.Filled.PersonSearch,
-                title = "Проверить чип участника",
-                subtitle = "Узнать, чей это браслет",
+                title = "Проверить браслет",
+                subtitle = "Оффлайн-проверка браслета",
                 onClick = onOpenCheckMemberChip,
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
+        AdminSectionHeader("Судейские отметки")
+        AdminCard {
             AdminActionRow(
-                icon = Icons.AutoMirrored.Filled.DirectionsRun,
+                icon = Icons.Filled.Flag,
                 title = "Отметка старта",
                 subtitle = "Пикать браслеты участников на старте",
                 onClick = { onOpenJudgeScan("start") },
+                tileColor = Tertiary,
+                tileContentColor = OnTertiary,
             )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
+            AdminRowDivider()
             AdminActionRow(
                 icon = Icons.Filled.SportsScore,
                 title = "Отметка финиша",
                 subtitle = "Пикать браслеты участников на финише",
                 onClick = { onOpenJudgeScan("finish") },
+                tileColor = BrandRed,
+                tileContentColor = OnBrandRed,
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            AdminActionRow(
-                icon = Icons.AutoMirrored.Filled.Logout,
-                title = "Выйти",
-                subtitle = "Завершить сессию администратора",
-                onClick = {
-                    listOf(container.cloudAdminAuth, container.localAdminAuth)
-                        .forEach { repo -> container.applicationScope.launch { repo.logout() } }
-                },
-            )
+        Spacer(Modifier.height(24.dp))
+        AdminCard {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        listOf(container.cloudAdminAuth, container.localAdminAuth)
+                            .forEach { repo -> container.applicationScope.launch { repo.logout() } }
+                    }
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Выйти",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
 
-/** One server's session line: «Cloud · email», or «Cloud · нет входа» with an optional «Войти». */
+/** Muted group label above an [AdminCard] (iOS inset-grouped section header). */
+@Composable
+private fun AdminSectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp),
+    )
+}
+
+/** One rounded card holding a group of rows. */
+@Composable
+private fun AdminCard(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column { content() }
+    }
+}
+
+/** Hairline between rows of one card; the default indent aligns it with the row text, past the tile. */
+@Composable
+private fun AdminRowDivider(startIndent: Dp = 66.dp) {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = startIndent),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+/**
+ * One server's session line: status dot (green = logged in), «Cloud · email», or «Cloud · нет входа»
+ * with an optional «Войти».
+ */
 @Composable
 private fun ServerStatusRow(
     label: String,
@@ -459,9 +493,18 @@ private fun ServerStatusRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 8.dp)
-            .heightIn(min = 40.dp),
+            .heightIn(min = 52.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(
+                    if (session is AdminSession.LoggedIn) Tertiary else MaterialTheme.colorScheme.outlineVariant,
+                    CircleShape,
+                ),
+        )
+        Spacer(Modifier.width(10.dp))
         Text(
             text = label,
             modifier = Modifier.width(56.dp),
@@ -485,9 +528,9 @@ private fun ServerStatusRow(
 }
 
 /**
- * Admin-home action row — neutral avatar, title + subtitle, chevron; mirrors the Settings rows.
- * The avatar is a charcoal circle in light theme and a subtle elevated grey in dark (rather than a
- * jarring inverse-bright circle) — see [neutralAvatarContainerColor].
+ * Admin-home action row — icon tile, title + subtitle, chevron. The tile defaults to the neutral
+ * charcoal (light) / subtle elevated grey (dark) of the Settings avatars — see
+ * [neutralAvatarContainerColor]; judge rows tint it green/red like iOS.
  */
 @Composable
 private fun AdminActionRow(
@@ -495,6 +538,8 @@ private fun AdminActionRow(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
+    tileColor: Color = neutralAvatarContainerColor(),
+    tileContentColor: Color = neutralAvatarContentColor(),
 ) {
     Row(
         modifier = Modifier
@@ -506,14 +551,14 @@ private fun AdminActionRow(
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .background(neutralAvatarContainerColor(), CircleShape),
+                .size(36.dp)
+                .background(tileColor, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = neutralAvatarContentColor(),
+                tint = tileContentColor,
                 modifier = Modifier.size(20.dp),
             )
         }

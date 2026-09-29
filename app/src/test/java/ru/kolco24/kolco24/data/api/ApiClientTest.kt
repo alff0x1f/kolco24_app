@@ -13,6 +13,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import ru.kolco24.kolco24.data.api.dto.MemberTagBindResponse
 
 class ApiClientTest {
 
@@ -601,6 +602,62 @@ class ApiClientTest {
         server.enqueue(MockResponse().setResponseCode(404))
 
         assertEquals(PostResult.Error(404), apiClient.bindTag(8, 999, "04A2B3"))
+    }
+
+    // --- bindMemberTag ---
+
+    @Test
+    fun bindMemberTag_201_parsesCode_andPostsNumber() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody("""{"number":101,"nfc_uid":"04A1B2","code":"DEADBEEF","extra":1}"""),
+        )
+
+        val result = apiClient.bindMemberTag(8, "04A1B2", 101)
+
+        assertEquals(
+            PostResult.Success(MemberTagBindResponse(number = 101, nfcUid = "04A1B2", code = "DEADBEEF")),
+            result,
+        )
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/app/race/8/member_tags/bind/", recorded.path)
+        assertEquals("""{"nfc_uid":"04A1B2","number":101}""", recorded.body.readUtf8())
+    }
+
+    @Test
+    fun bindMemberTag_nullNumber_isSentAsExplicitNull() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("""{"number":7,"nfc_uid":"04A1B2","code":"AB"}"""),
+        )
+
+        val result = apiClient.bindMemberTag(8, "04A1B2", null)
+
+        assertEquals(7, (result as PostResult.Success).data.number)
+        assertEquals("""{"nfc_uid":"04A1B2","number":null}""", server.takeRequest().body.readUtf8())
+    }
+
+    @Test
+    fun bindMemberTag_404_returnsErrorWith404() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertEquals(PostResult.Error(404), apiClient.bindMemberTag(8, "04A1B2", null))
+    }
+
+    @Test
+    fun bindMemberTag_409_returnsConflict() = runTest {
+        server.enqueue(MockResponse().setResponseCode(409))
+
+        assertEquals(PostResult.Conflict, apiClient.bindMemberTag(8, "04A1B2", 5))
+    }
+
+    @Test
+    fun bindMemberTag_403_isNotRetried() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        assertEquals(PostResult.Forbidden, apiClient.bindMemberTag(8, "04A1B2", 5))
+        assertEquals(1, server.requestCount)
     }
 
     // --- fetchSync (SyncManifestDto) ---
