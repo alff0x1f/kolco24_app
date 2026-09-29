@@ -1002,26 +1002,33 @@ private fun Kolco24AppRoot(
     // sections. Counts are durable+reactive (Room flags); outcomes are the transient in-memory
     // per-target result. See rememberUploadStatus below for the scoped-pair race guard.
     val uploadOutcomes by container.trackUploadOutcomes.collectAsState()
-    val trackUploadStatus = rememberUploadStatus(selectedTeamId, selectedRaceId, uploadOutcomes, trackRepo::uploadCounts)
+    val trackUpload = rememberUploadStatus(selectedTeamId, selectedRaceId, uploadOutcomes, trackRepo::uploadCounts)
+    val trackUploadStatus = trackUpload.status
 
     val markUploadOutcomes by container.markUploadOutcomes.collectAsState()
 
     // Отметки section — metadata-only (does not require photo frames).
-    val marksMetadataUploadStatus =
+    val marksMetadataUpload =
         rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::uploadCountsMetadata)
+    val marksMetadataUploadStatus = marksMetadataUpload.status
 
     // Фото section — frame-granular, folded via MarkRepository.photoFrameCounts. Joined with the
     // same markUploadOutcomes map as Отметки (outcomes are per-target/scope, not per-metric).
-    val photoUploadStatus =
+    val photoUpload =
         rememberUploadStatus(selectedTeamId, selectedRaceId, markUploadOutcomes, markRepo::photoFrameCounts)
+    val photoUploadStatus = photoUpload.status
 
     // Судейские отметки section — race-only scope (a judge station covers every team), so it uses
     // rememberJudgeUploadStatus rather than the team+race rememberUploadStatus above.
     val judgeScanUploadOutcomes by container.judgeScanUploadOutcomes.collectAsState()
-    val judgeUploadStatus =
+    val judgeUpload =
         rememberJudgeUploadStatus(selectedRaceId, judgeScanUploadOutcomes, container.judgeScanRepository::uploadCounts)
-    val teamUploadSummary = remember(marksMetadataUploadStatus, photoUploadStatus, trackUploadStatus, judgeUploadStatus) {
-        uploadSummary(marksMetadataUploadStatus, photoUploadStatus, trackUploadStatus, judgeUploadStatus)
+    val judgeUploadStatus = judgeUpload.status
+    // Until every counter has emitted for the current scope, a null status means "unknown", not
+    // "nothing to upload" — the summary must not claim «Всё отправлено» on a half-loaded scope.
+    val uploadCountsReady = trackUpload.ready && marksMetadataUpload.ready && photoUpload.ready && judgeUpload.ready
+    val teamUploadSummary = remember(marksMetadataUploadStatus, photoUploadStatus, trackUploadStatus, judgeUploadStatus, uploadCountsReady) {
+        uploadSummary(marksMetadataUploadStatus, photoUploadStatus, trackUploadStatus, judgeUploadStatus, uploadCountsReady)
     }
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
@@ -2955,7 +2962,7 @@ private fun rememberUploadStatus(
     raceId: Int?,
     outcomes: Map<Pair<TrackScope, UploadTarget>, TargetUploadOutcome>,
     counts: (teamId: Int, raceId: Int) -> Flow<UploadCounts>,
-): TrackUploadStatus? {
+): ScopedUploadStatus {
     val scoped by produceState<Pair<TrackScope, UploadCounts>?>(null, teamId, raceId) {
         value = null
         if (teamId != null && raceId != null) {
@@ -2963,14 +2970,17 @@ private fun rememberUploadStatus(
             counts(teamId, raceId).collect { value = scope to it }
         }
     }
-    val sc = scoped ?: return null
-    if (teamId == null || raceId == null) return null
-    val (countScope, c) = sc
-    if (countScope.teamId != teamId || countScope.raceId != raceId || c.total == 0) return null
-    return TrackUploadStatus(
-        total = c.total,
-        local = TargetLine(c.local, outcomes[countScope to UploadTarget.Local]),
-        cloud = TargetLine(c.cloud, outcomes[countScope to UploadTarget.Cloud]),
+    if (teamId == null || raceId == null) return ScopedUploadStatus(null, ready = true)
+    val (countScope, c) = scoped ?: return ScopedUploadStatus(null, ready = false)
+    if (countScope.teamId != teamId || countScope.raceId != raceId) return ScopedUploadStatus(null, ready = false)
+    if (c.total == 0) return ScopedUploadStatus(null, ready = true)
+    return ScopedUploadStatus(
+        TrackUploadStatus(
+            total = c.total,
+            local = TargetLine(c.local, outcomes[countScope to UploadTarget.Local]),
+            cloud = TargetLine(c.cloud, outcomes[countScope to UploadTarget.Cloud]),
+        ),
+        ready = true,
     )
 }
 
@@ -2981,20 +2991,26 @@ private fun rememberJudgeUploadStatus(
     raceId: Int?,
     outcomes: Map<Pair<Int, UploadTarget>, TargetUploadOutcome>,
     counts: (raceId: Int) -> Flow<UploadCounts>,
-): TrackUploadStatus? {
+): ScopedUploadStatus {
     val scoped by produceState<Pair<Int, UploadCounts>?>(null, raceId) {
         value = null
         if (raceId != null) {
             counts(raceId).collect { value = raceId to it }
         }
     }
-    val sc = scoped ?: return null
-    if (raceId == null) return null
-    val (countRaceId, c) = sc
-    if (countRaceId != raceId || c.total == 0) return null
-    return TrackUploadStatus(
-        total = c.total,
-        local = TargetLine(c.local, outcomes[countRaceId to UploadTarget.Local]),
-        cloud = TargetLine(c.cloud, outcomes[countRaceId to UploadTarget.Cloud]),
+    if (raceId == null) return ScopedUploadStatus(null, ready = true)
+    val (countRaceId, c) = scoped ?: return ScopedUploadStatus(null, ready = false)
+    if (countRaceId != raceId) return ScopedUploadStatus(null, ready = false)
+    if (c.total == 0) return ScopedUploadStatus(null, ready = true)
+    return ScopedUploadStatus(
+        TrackUploadStatus(
+            total = c.total,
+            local = TargetLine(c.local, outcomes[countRaceId to UploadTarget.Local]),
+            cloud = TargetLine(c.cloud, outcomes[countRaceId to UploadTarget.Cloud]),
+        ),
+        ready = true,
     )
 }
+
+/** [status] is null both when there is nothing recorded and while loading; [ready] tells them apart. */
+private data class ScopedUploadStatus(val status: TrackUploadStatus?, val ready: Boolean)

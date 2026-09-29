@@ -50,12 +50,51 @@ class UploadSummaryTest {
     @Test
     fun declension() {
         fun label(n: Int) = uploadSummary(status(n, 0), null, null, null).label
-        assertEquals("Не отправлено: 1 отметка", label(1))
-        assertEquals("Не отправлено: 2 отметки", label(2))
-        assertEquals("Не отправлено: 5 отметок", label(5))
-        assertEquals("Не отправлено: 11 отметок", label(11))
-        assertEquals("Не отправлено: 21 отметка", label(21))
-        assertEquals("Не отправлено: 112 отметок", label(112))
+        val expected = mapOf(
+            1 to "1 отметка", 2 to "2 отметки", 4 to "4 отметки", 5 to "5 отметок",
+            10 to "10 отметок", 11 to "11 отметок", 14 to "14 отметок", 19 to "19 отметок",
+            20 to "20 отметок", 21 to "21 отметка", 22 to "22 отметки", 101 to "101 отметка",
+            111 to "111 отметок", 112 to "112 отметок", 114 to "114 отметок", 121 to "121 отметка",
+        )
+        expected.forEach { (n, words) -> assertEquals("Не отправлено: $words", label(n)) }
+    }
+
+    @Test
+    fun judgeDeclension() {
+        fun label(n: Int) = uploadSummary(null, null, null, status(n, 0)).label
+        assertEquals("Не отправлено: 1 суд. отметка", label(1))
+        assertEquals("Не отправлено: 3 суд. отметки", label(3))
+        assertEquals("Не отправлено: 12 суд. отметок", label(12))
+    }
+
+    @Test
+    fun judgeOnly_pending() {
+        val s = uploadSummary(null, null, null, status(4, 1))
+        assertEquals(UploadSummary("Не отправлено: 3 суд. отметки", UploadSummaryState.Pending), s)
+    }
+
+    @Test
+    fun photoOnly_pending() {
+        val s = uploadSummary(status(2, 2), status(6, 1), null, null)
+        assertEquals(UploadSummary("Не отправлено: 5 фото", UploadSummaryState.Pending), s)
+    }
+
+    @Test
+    fun notReady_isLoading_evenWhenLoadedScopesAreSent() {
+        // Team switch within a race: judge counter already loaded and fully sent, team counters not yet.
+        val s = uploadSummary(null, null, null, status(3, 3), ready = false)
+        assertEquals(UploadSummary("Проверяем…", UploadSummaryState.Loading), s)
+    }
+
+    @Test
+    fun notReady_allNull_isLoading_notEmpty() {
+        assertEquals(UploadSummaryState.Loading, uploadSummary(null, null, null, null, ready = false).state)
+    }
+
+    @Test
+    fun readyAfterLoading_revealsPending() {
+        val s = uploadSummary(status(2, 0), null, null, status(3, 3), ready = true)
+        assertEquals(UploadSummary("Не отправлено: 2 отметки", UploadSummaryState.Pending), s)
     }
 
     @Test

@@ -19,21 +19,23 @@ data class TrackUploadStatus(val total: Int, val local: TargetLine, val cloud: T
     val fullyUploaded: Boolean get() = total > 0 && local.uploaded == total && cloud.uploaded == total
 }
 
-enum class UploadSummaryState { Empty, Pending, AllSent }
+enum class UploadSummaryState { Loading, Empty, Pending, AllSent }
 
 data class UploadSummary(val label: String, val state: UploadSummaryState)
 
 /**
  * The one-line «Загрузка данных» row subtitle on the Команда tab. Only the cloud target counts as
  * «sent» (iOS parity). Track shows as a bare «трек» — its point count would dwarf the marks and read
- * as a scary number.
+ * as a scary number. While ![ready] a null status is unknown rather than empty, so no verdict is given.
  */
 fun uploadSummary(
     marks: TrackUploadStatus?,
     photos: TrackUploadStatus?,
     track: TrackUploadStatus?,
     judge: TrackUploadStatus?,
+    ready: Boolean = true,
 ): UploadSummary {
+    if (!ready) return UploadSummary("Проверяем…", UploadSummaryState.Loading)
     val all = listOf(marks, photos, track, judge)
     if (all.all { (it?.total ?: 0) <= 0 }) return UploadSummary("Пока нечего загружать", UploadSummaryState.Empty)
     fun pending(s: TrackUploadStatus?) = if (s == null) 0 else maxOf(0, s.total - s.cloud.uploaded)
