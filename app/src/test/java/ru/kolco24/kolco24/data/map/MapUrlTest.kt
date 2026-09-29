@@ -49,6 +49,13 @@ class MapUrlTest {
         assertNull(resolveMapUrl("/\t/evil.com/8.mbtiles", base))
         assertNull(resolveMapUrl("/\n/evil.com/8.mbtiles", base))
         assertNull(resolveMapUrl("/media/maps/a b.mbtiles", base))
+        assertNull(resolveMapUrl("/media/maps/\u0000.mbtiles", base))
+    }
+
+    @Test
+    fun encodedSlashesStayOnBaseHost() {
+        assertEquals("https://kolco24.ru/%2F%2Fevil.com/8.mbtiles", resolveMapUrl("/%2F%2Fevil.com/8.mbtiles", base))
+        assertEquals("https://kolco24.ru/%5Cevil.com/8.mbtiles", resolveMapUrl("/%5Cevil.com/8.mbtiles", base))
     }
 
     @Test
