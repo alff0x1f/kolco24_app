@@ -380,7 +380,7 @@ private fun AdminHome(
             AdminActionRow(
                 icon = Icons.AutoMirrored.Filled.FactCheck,
                 title = "Проверить чип КП",
-                subtitle = "Узнать, к какому КП привязан чип",
+                subtitle = "Оффлайн-проверка привязки",
                 onClick = onOpenCheckChip,
             )
         }
@@ -397,7 +397,7 @@ private fun AdminHome(
             AdminActionRow(
                 icon = Icons.Filled.PersonSearch,
                 title = "Проверить браслет",
-                subtitle = "Узнать, чей это браслет",
+                subtitle = "Оффлайн-проверка браслета",
                 onClick = onOpenCheckMemberChip,
             )
         }
