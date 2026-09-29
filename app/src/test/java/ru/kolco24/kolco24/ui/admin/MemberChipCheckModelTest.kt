@@ -49,4 +49,27 @@ class MemberChipCheckModelTest {
         )
         assertEquals(MemberChipCheckResult.Unknown("DEADBEEF"), result)
     }
+
+    @Test
+    fun classify_uidInPool_withMemberCode_isOkWithCode() {
+        val result = classifyMemberChipCheck(
+            uid = "0411223344AABB",
+            memberTag = memberTag("0411223344AABB", number = 9),
+            hasKpCode = false,
+            hasMemberCode = true,
+        )
+        assertEquals(MemberChipCheckResult.Ok(uid = "0411223344AABB", number = 9, hasCode = true), result)
+    }
+
+    @Test
+    fun classify_notInPool_withMemberCode_isUnknown() {
+        // A bracelet written this session but not yet in the synced pool is still unknown here.
+        val result = classifyMemberChipCheck(
+            uid = "DEADBEEF",
+            memberTag = null,
+            hasKpCode = false,
+            hasMemberCode = true,
+        )
+        assertEquals(MemberChipCheckResult.Unknown("DEADBEEF"), result)
+    }
 }

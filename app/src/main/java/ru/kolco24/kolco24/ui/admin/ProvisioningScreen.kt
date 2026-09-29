@@ -66,6 +66,7 @@ import ru.kolco24.kolco24.data.api.PostResult
 import ru.kolco24.kolco24.data.nfc.CHIP_CODE_BYTES
 import ru.kolco24.kolco24.data.nfc.ChipWriteResult
 import ru.kolco24.kolco24.data.nfc.chipCodeFromHex
+import ru.kolco24.kolco24.data.nfc.readChipCodes
 import ru.kolco24.kolco24.data.nfc.writeChipCode
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.pluralRu
@@ -255,6 +256,14 @@ fun ProvisioningScreen(
                             container.scanFeedback.failure()
                             return@launch
                         }
+                        // A participant bracelet must not be bound to a КП server-side (the write guard
+                        // would refuse it only after the bind). A failed read proceeds — the guard
+                        // re-reads before writing.
+                        if (withContext(Dispatchers.IO) { readChipCodes(tag) }?.memberCode != null) {
+                            container.provisioningState.value = ProvisionState.Failed("Это браслет участника")
+                            container.scanFeedback.failure()
+                            return@launch
+                        }
                         when (val result = client.bindTag(raceId, cp.id, uid)) {
                             is PostResult.Success -> {
                                 container.provisioningState.value = ProvisionState.Writing
@@ -291,8 +300,10 @@ fun ProvisioningScreen(
                                         ProvisionState.Success(result.data.number)
                                     container.scanFeedback.success()
                                 } else {
-                                    container.provisioningState.value =
-                                        ProvisionState.Failed("Не удалось записать, приложите снова")
+                                    container.provisioningState.value = ProvisionState.Failed(
+                                        (written as? ChipWriteResult.WrongType)?.reason
+                                            ?: "Не удалось записать, приложите снова",
+                                    )
                                     container.scanFeedback.failure()
                                 }
                             }

@@ -358,4 +358,139 @@ class MifareUltralightWriterTest {
         }
         assertEquals(null, readRecord(t))
     }
+
+    // --- Typed records, guard, participant write ------------------------------
+
+    @Test
+    fun parseChipRecord_participantType_withParticipantFilter_returnsCode() {
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        assertArrayEquals(sampleCode, parseChipRecord(record, CHIP_TYPE_PARTICIPANT))
+    }
+
+    @Test
+    fun parseChipRecord_participantType_withKpFilter_returnsNull() {
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        assertEquals(null, parseChipRecord(record, CHIP_TYPE_KP))
+    }
+
+    @Test
+    fun decodeChipPages_splitsByType() {
+        val kp = decodeChipPages(buildChipRecord(CHIP_TYPE_KP, sampleCode))
+        assertArrayEquals(sampleCode, kp.code)
+        assertEquals(null, kp.memberCode)
+        val member = decodeChipPages(buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode))
+        assertEquals(null, member.code)
+        assertArrayEquals(sampleCode, member.memberCode)
+        val blank = decodeChipPages(ByteArray(20))
+        assertEquals(null, blank.code)
+        assertEquals(null, blank.memberCode)
+    }
+
+    @Test
+    fun writeGuardDecision_blankOrSameType_allows() {
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        assertEquals(ChipWriteGuard.Allow, writeGuardDecision(ByteArray(20), record))
+        assertEquals(ChipWriteGuard.Allow, writeGuardDecision(record, record))
+    }
+
+    @Test
+    fun writeGuardDecision_otherType_refusesWithMessage() {
+        val member = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        val kp = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        assertEquals(ChipWriteGuard.WrongType("Это чип КП, а не браслет"), writeGuardDecision(kp, member))
+        assertEquals(ChipWriteGuard.WrongType("Это браслет участника"), writeGuardDecision(member, kp))
+    }
+
+    @Test
+    fun writeGuardDecision_readFailed() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        assertEquals(ChipWriteGuard.ReadFailed, writeGuardDecision(null, record))
+    }
+
+    @Test
+    fun writeRecord_participantRecord_readBackSucceeds() {
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                WRITE -> ACK
+                FAST_READ -> record
+                else -> NAK
+            }
+        }
+        assertEquals(ChipWriteResult.Success, writeRecord(t, record))
+    }
+
+    @Test
+    fun writeRecord_readBackTypeMismatch_returnsFailed() {
+        // Same code bytes, but the chip reads back as a КП record — not the participant record written.
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                WRITE -> ACK
+                FAST_READ -> buildChipRecord(CHIP_TYPE_KP, sampleCode)
+                else -> NAK
+            }
+        }
+        assertTrue(writeRecord(t, record) is ChipWriteResult.Failed)
+    }
+
+    @Test
+    fun writeRecordGuarded_kpChipUnderBraceletWrite_writesNothing() {
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                FAST_READ -> buildChipRecord(CHIP_TYPE_KP, sampleCode)
+                else -> ACK
+            }
+        }
+        val result = writeRecordGuarded(t, buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode))
+        assertEquals(ChipWriteResult.WrongType("Это чип КП, а не браслет"), result)
+        assertTrue(t.frames.none { it[0] == WRITE })
+    }
+
+    @Test
+    fun writeRecordGuarded_unreadableChip_failsWithoutWriting() {
+        val t = FakeTransport { frame -> if (frame[0] == WRITE) ACK else NAK }
+        val result = writeRecordGuarded(t, buildChipRecord(CHIP_TYPE_KP, sampleCode))
+        assertTrue(result is ChipWriteResult.Failed)
+        assertTrue(t.frames.none { it[0] == WRITE })
+    }
+
+    @Test
+    fun writeRecordGuarded_blankChip_writesAndVerifies() {
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        var written = false
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                WRITE -> {
+                    written = true
+                    ACK
+                }
+                FAST_READ -> if (written) record else ByteArray(20)
+                else -> NAK
+            }
+        }
+        assertEquals(ChipWriteResult.Success, writeRecordGuarded(t, record))
+    }
+
+    @Test
+    fun readRecordPages_fallback_returnsRawRecord() {
+        val record = buildChipRecord(CHIP_TYPE_PARTICIPANT, sampleCode)
+        val t = FakeTransport { frame ->
+            when (frame[0]) {
+                FAST_READ -> NAK
+                READ -> fallbackRead(record, frame)
+                else -> NAK
+            }
+        }
+        assertArrayEquals(record, readRecordPages(t))
+        // The КП reader over the same pages still rejects a participant record.
+        assertEquals(null, readRecord(t))
+    }
+
+    @Test
+    fun readRecordPages_longFastRead_isTrimmedTo20Bytes() {
+        val record = buildChipRecord(CHIP_TYPE_KP, sampleCode)
+        val t = FakeTransport { frame -> if (frame[0] == FAST_READ) record + ByteArray(4) else NAK }
+        assertArrayEquals(record, readRecordPages(t))
+    }
 }

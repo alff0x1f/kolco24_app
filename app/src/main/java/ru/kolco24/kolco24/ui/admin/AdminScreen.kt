@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,6 +97,7 @@ fun AdminScreen(
     localSession: AdminSession,
     onClose: () -> Unit,
     onOpenProvisioning: () -> Unit = {},
+    onOpenMemberProvisioning: () -> Unit = {},
     onOpenCheckChip: () -> Unit = {},
     onOpenCheckMemberChip: () -> Unit = {},
     onOpenJudgeScan: (String) -> Unit = {},
@@ -160,6 +164,7 @@ fun AdminScreen(
                 lanActive = lanActive,
                 onLogin = { reLoginTarget = it },
                 onOpenProvisioning = onOpenProvisioning,
+                onOpenMemberProvisioning = onOpenMemberProvisioning,
                 onOpenCheckChip = onOpenCheckChip,
                 onOpenCheckMemberChip = onOpenCheckMemberChip,
                 onOpenJudgeScan = onOpenJudgeScan,
@@ -326,6 +331,7 @@ private fun AdminHome(
     lanActive: Boolean,
     onLogin: (AdminServer) -> Unit,
     onOpenProvisioning: () -> Unit,
+    onOpenMemberProvisioning: () -> Unit,
     onOpenCheckChip: () -> Unit,
     onOpenCheckMemberChip: () -> Unit,
     onOpenJudgeScan: (String) -> Unit,
@@ -333,7 +339,7 @@ private fun AdminHome(
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
 
-    Column(modifier = Modifier.padding(top = 8.dp)) {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 16.dp)) {
         ServerStatusRow(
             label = "Cloud",
             session = cloudSession,
@@ -359,6 +365,22 @@ private fun AdminHome(
                 title = "Привязать чип к КП",
                 subtitle = "Записать NFC-метки на контрольные пункты",
                 onClick = onOpenProvisioning,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            AdminActionRow(
+                icon = Icons.Filled.Watch,
+                title = "Записать браслет участника",
+                subtitle = "Запись кода на браслет",
+                onClick = onOpenMemberProvisioning,
             )
         }
 

@@ -63,7 +63,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.kolco24.kolco24.Kolco24App
 import ru.kolco24.kolco24.MainActivity
-import ru.kolco24.kolco24.data.nfc.readChipCode
+import ru.kolco24.kolco24.data.nfc.readChipCodes
 import ru.kolco24.kolco24.data.normalizeNfcUid
 import ru.kolco24.kolco24.data.pluralRu
 import ru.kolco24.kolco24.ui.scan.ScanFeedbackKind
@@ -77,8 +77,8 @@ import ru.kolco24.kolco24.ui.theme.Tertiary
  * **already collected** member-tag pool for [raceId], rendering the [MemberChipCheckResult] (see the
  * pure model in `MemberChipCheckModel.kt`). Identity-only and fully offline — the pool is the
  * server-synced `member_tags` table; local member↔chip bindings are per-device and deliberately not
- * consulted. Only when the UID is **not** in the pool does the host read the on-chip code, purely to
- * tell a mis-tapped КП chip apart from an unknown bracelet.
+ * consulted. Every tap reads the on-chip record once: a pooled bracelet shows whether its participant
+ * code is written; a not-in-pool chip is told apart as a mis-tapped КП chip or an unknown bracelet.
  *
  * Mirrors `CheckChipScreen`'s scaffold verbatim: tap-swallowing `Column`, a `DisposableEffect(raceId)`
  * arming [MainActivity.onTagForVerify] (the two verify overlays are mutually exclusive, so sharing
@@ -145,7 +145,7 @@ fun CheckMemberChipScreen(
         DisposableEffect(raceId) {
             val host = activity
             // The hook fires on the main thread (mainHandler.post in onTagDiscovered) and the scope
-            // is Main-confined, so only readChipCode needs withContext(IO); the state writes after it
+            // is Main-confined, so only readChipCodes needs withContext(IO); the state writes after it
             // resumes are already on Main. The Mutex serializes overlapping binder-thread taps.
             host?.onTagForVerify = { tag ->
                 scope.launch {
@@ -157,11 +157,13 @@ fun CheckMemberChipScreen(
                         }
                         val uid = normalizeNfcUid(tag.id)
                         val memberTag = poolLatest.value.firstOrNull { it.nfcUid == uid }
-                        // The code read is a diagnostic for the not-in-pool branch only; a pooled UID
-                        // is Ok regardless, so the happy path skips the (slow) NfcA transceive.
-                        val hasKpCode = memberTag == null &&
-                            withContext(Dispatchers.IO) { readChipCode(tag) } != null
-                        val result = classifyMemberChipCheck(uid, memberTag, hasKpCode)
+                        val codes = withContext(Dispatchers.IO) { readChipCodes(tag) }
+                        val result = classifyMemberChipCheck(
+                            uid = uid,
+                            memberTag = memberTag,
+                            hasKpCode = codes?.code != null,
+                            hasMemberCode = codes?.memberCode != null,
+                        )
                         container.scanFeedback.play(
                             if (result is MemberChipCheckResult.Ok) ScanFeedbackKind.Success
                             else ScanFeedbackKind.Failure,
@@ -349,6 +351,12 @@ private fun MemberOkHero(result: MemberChipCheckResult.Ok, previousUid: String?)
                 fontWeight = FontWeight.Bold,
             )
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = if (result.hasCode) "код записан" else "без кода",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (result.hasCode) Tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(12.dp))
         UidDiff(uid = result.uid, previousUid = previousUid, fontSize = 18.sp)
     }
@@ -400,7 +408,7 @@ private fun RecentMemberCheckRow(result: MemberChipCheckResult, previousUid: Str
     val iconTint: Color
     when (result) {
         is MemberChipCheckResult.Ok -> {
-            label = "№${result.number}"
+            label = "№${result.number} · ${if (result.hasCode) "код" else "без кода"}"
             icon = Icons.Filled.Check
             iconTint = Tertiary
         }
