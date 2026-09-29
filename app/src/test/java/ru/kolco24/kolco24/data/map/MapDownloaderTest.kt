@@ -117,6 +117,14 @@ class MapDownloaderTest {
     }
 
     @Test
+    fun relativeUrlThrowsWithoutRequest() {
+        val e = expectIOException { downloader().download("/media/maps/7.mbtiles", 7) { _, _ -> } }
+        assertEquals("Некорректная ссылка на карту", e.message)
+        assertEquals(0, server.requestCount)
+        assertFalse(storage.partFile(7).exists())
+    }
+
+    @Test
     fun disconnectMidBodyDeletesPartAndKeepsOldMap() {
         storage.ensureRoot()
         seedMap("old map")
