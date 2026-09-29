@@ -1,5 +1,10 @@
 # Photo-Mark Upload (Phase 2)
 
+> Серверная сверка 2026-09-30: `~/src/kolco24/server` (`e4d4126`).
+> Исторический контекст и выполненные шаги ниже описывают момент реализации.
+> Актуальные API, ограничения батчей и повторных отправок — в
+> [API.md](../../design/API.md) и [UPLOAD.md](../../design/UPLOAD.md).
+
 ## Overview
 
 Phase 1 shipped photo-as-fallback КП marking: a take can be confirmed by photo when NFC is
@@ -13,10 +18,11 @@ Phase 2 gets photo marks to the server. Two things travel:
    `method != 'photo'` filter). The server gets the mark **row** that frames attach to.
 2. **Binary frames** — a **new** endpoint, one request per frame, raw JPEG body.
 
-The server photo endpoint 404s until the backend lands. That is a feature: `404` maps to
-`PostResult.Error`, the upload flag stays `0`, and the drain self-heals on the next trigger —
-identical to the existing marks/track "client-ready, backend-pending" pattern. This plan delivers
-the client implementation **and** the documented wire contract.
+The server photo endpoint is implemented (`MarkPhotoUploadView`): raw-body upload,
+`201` on first insert, `200` on repeat. A missing parent mark/race returns `404`,
+leaving the frame pending for a later trigger. The current server accepts valid
+photo metadata but rejects a JSON batch containing any malformed row; the original
+partial-accept requirement below was not implemented. See `docs/design/UPLOAD.md`.
 
 ## Context (from discovery)
 
@@ -91,7 +97,7 @@ the client implementation **and** the documented wire contract.
 | Code | Meaning | Client | Drain scope |
 |------|---------|--------|-------------|
 | `200`/`201` | frame accepted (upsert) | mark's flag flips once all its frames accepted | continue |
-| `404` | endpoint not deployed yet / mark row not landed | **self-heal** — leave `photosUploadedX=0`, retry next trigger | **stop target** (transient) |
+| `404` | race/parent mark not found or URL mismatch | **self-heal** — leave `photosUploadedX=0`, retry next trigger | **stop target** (transient) |
 | `403` | signature / time window | not auto-retried (POST); self-heal next trigger | **stop target** (transient) |
 | `429` | rate limit | backoff, retry later | **stop target** (transient) |
 | `5xx`/`Offline` | server / network | retry next trigger | **stop target** (transient) |
@@ -180,7 +186,7 @@ Documented, not engineered around.
 - Modify: `app/src/main/java/ru/kolco24/kolco24/data/db/MarkDao.kt`
 - Modify: `app/src/androidTest/java/ru/kolco24/kolco24/data/db/MarkDaoTest.kt`
 
-- [x] Remove `AND method != 'photo'` from `unuploadedLocal`, `unuploadedCloud`, and `pendingUploadScopes` — ⚠️ this puts photo rows (empty `cpUid`/`cpCode`/`present`) into the **shared** `/marks/` batch, so it depends on the server partial-accepting (returning `accepted[]` minus rejected rows, never a whole-batch `400` — else `uploadLoop` strands the batch's valid NFC marks too, per MarkDao.kt:128-131). Interim-safe because `/marks/` 404s until the backend lands; the contract requirement is pinned in Task 9 + Post-Completion. If the backend can't guarantee partial-accept, land this filter-drop **with** the backend rather than ahead of it.
+- [x] Remove `AND method != 'photo'` from `unuploadedLocal`, `unuploadedCloud`, and `pendingUploadScopes`. The original plan required partial-accept before shipping; the current server accepts valid photo rows with empty chip fields/present, but still rejects an entire malformed batch (see `UPLOAD.md`).
 - [x] Rewrite `uploadCounts` so a photo mark counts as uploaded for a target only when metadata AND frames done: `uploadedX AND (photoPath IS NULL OR photosUploadedX)` (keep no `method` filter)
 - [x] Widen `pendingUploadScopes` to also return scopes with pending frames: `(uploadedLocal=0 OR uploadedCloud=0) OR (photoPath IS NOT NULL AND (photosUploadedLocal=0 OR photosUploadedCloud=0))`
 - [x] Add `framePendingLocal(raceId, teamId, limit)` / `framePendingCloud(...)`: `… uploadedX=1 AND photosUploadedX=0 AND photoPath IS NOT NULL ORDER BY COALESCE(trustedTakenAt, takenAt), id LIMIT :limit`
@@ -264,14 +270,14 @@ Documented, not engineered around.
 - [x] Replace the "сам файл фото — отдельной задачей (multipart-эндпоинт)" stub with a full frame-endpoint section: endpoint shape, `image/jpeg` body, signing note (body hash = `sha256(jpeg)`), idempotency by `(race, mark_id, frame_id)`
 - [x] Add a response-code table row for the frame endpoint incl. the `404 → self-heal` semantics
 - [x] Note that `method="photo"` metadata now flows through `/marks/` (filter dropped; `verified=false` on empty `cp_code`)
-- [x] **Pin the `/marks/` partial-accept requirement**: the endpoint MUST return `accepted[]` excluding any rejected rows and MUST NOT whole-batch `400` on a photo row (a photo row now shares the batch with valid NFC marks; a whole-request `400` would strand them). State the interim-safety reasoning (filter-drop is a no-op while `/marks/` 404s)
+- [x] **Historical `/marks/` partial-accept requirement:** the plan asked for per-row rejection. The 2026-09-30 server audit found whole-batch validation instead; valid photo metadata is accepted. Current behavior is recorded in `docs/design/UPLOAD.md`.
 - [x] No tests (docs only)
 
 ### Task 10: Verify acceptance criteria
 
 - [x] Verify all Overview requirements: metadata via `/marks/` (filter dropped), frames via the new endpoint, per-mark dual-target flags, metadata-first ordering, `attachPhotos` re-queue, 404 self-heal — confirmed in code: `MarkDao.kt:130` drops the Phase-1 filter; `ApiClient.uploadMarkPhoto` (`ApiClient.kt:232`) posts to the frame endpoint with `404 → Error(404)` self-heal; `photosUploadedLocal/Cloud` columns + `framePendingLocal/Cloud` + `setPhotosUploaded*IfUnchanged` (`MarkDao.kt:160-217`) back per-mark dual-target flags; `MarkRepository.flushScope` runs `uploadLoop` before `frameDrainLoop` per target (metadata-first, `MarkRepository.kt:297-329`); `updatePhotoPath` resets `photosUploaded*` to 0 on `attachPhotos`
 - [x] Verify edge cases: missing-file keeps mark pending, mid-mark failure retry, poison-frame stays visibly pending, combined outcome (frame `Ok` can't mask metadata `Error`), NFC-with-attached-photos frames also upload — confirmed via `MarkRepositoryUploadTest` coverage (missing-file/null-read pending, hard-failure skip-and-continue, transient-failure target stop, `combineOutcome` 16-combination precedence test) and `frameDrainLoop`/`isHardFrameFailure`/`combineOutcome` (`MarkRepository.kt:415-505`); the frame drain is method-agnostic (keys on `photoPath IS NOT NULL`, not `method='photo'`), so NFC-with-attached-photos marks drain identically
-- [x] **Backend-contract gate before the filter-drop ships**: the `method != 'photo'` removal (Task 2) puts photo rows into the shared `/marks/` batch, so do **not** merge/release it until the `/marks/` backend is verified to **partial-accept** (returns `accepted[]` minus rejected rows, never a whole-batch `400` on a photo row — else valid NFC marks in the same batch strand). While `/marks/` still 404s the drop is inert, but the gate is: confirm the deployed contract before shipping. If the backend can't guarantee partial-accept, split Task 2's filter-drop into a follow-up that lands with the backend. — this is an external backend-verification gate, not a client-code action; pinned in `docs/design/UPLOAD.md` (Task 9) and in Post-Completion below. No backend exists yet to verify against, so this stays a documented, not-yet-satisfiable gate — not automatable from this repo.
+- [x] **Historical backend-contract gate:** the original release condition requested partial-accept. The endpoint now exists and accepts valid photo metadata, but partial-accept remains unimplemented; this checked step records the original requirement, not a verified current server guarantee.
 - [x] Run full JVM suite: `./gradlew testDebugUnitTest` — passes
 - [x] Run instrumented suite: `./gradlew connectedDebugAndroidTest` — skipped, no emulator/device available in this environment (consistent with Tasks 2/3)
 - [x] Run `./gradlew lintDebug` — passes
@@ -291,19 +297,15 @@ Documented, not engineered around.
 
 *Items requiring manual intervention or external systems — informational only.*
 
-**Backend (external, blocks true end-to-end):**
-- Stand up `POST /app/race/<race_id>/mark/<mark_id>/photo/<frame_id>` (raw `image/jpeg` body,
-  signature validated identically to `/marks/`, upsert by `(race, mark_id, frame_id)`, `200/201` on
-  accept). Until then the client leaves `photosUploaded*=0` and self-heals — no client change needed
-  when it lands.
-- Ensure `/marks/` accepts `method="photo"` rows (empty `cp_code` → `verified=false`, empty `present`)
-  and persists the row so frames can attach. **Must partial-accept** — return `accepted[]` minus any
-  rejected rows, never a whole-batch `400`: photo rows now share the batch with valid NFC marks, and a
-  whole-request `400` would strand them (the client marks nothing unless the response is `Success`).
-- Decide LAN-server photo handling (same endpoint on `192.168.1.5`) or leave it 404 — the client's
-  LAN frame flag simply stays `0` until it answers.
+**Backend status (2026-09-30):**
+- The JPEG endpoint is implemented for photo and NFC parent marks, with HMAC,
+  safe ids, a 10 MiB view limit, and insert-once `(mark_id, frame_id)` storage.
+- `/marks/` accepts valid photo metadata. An invalid row still rejects the
+  whole batch (`400`); partial-accept is an unimplemented original requirement.
+- Cloud/LAN deployment versions, storage, and signing configuration need a live
+  check; the same server code provides the endpoint for either target.
 
-**Manual verification (once backend is live):**
+**Manual verification (against current cloud/LAN deployments):**
 - On-device: capture a photo mark offline, go online, confirm metadata then frames upload to both
   targets and the status row reads "uploaded".
 - Confirm an NFC take with attached photos uploads its frames.

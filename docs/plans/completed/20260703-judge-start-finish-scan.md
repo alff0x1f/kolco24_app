@@ -1,5 +1,10 @@
 # Судейская отметка старта/финиша (judge start/finish scan)
 
+> Серверная сверка 2026-09-30: `~/src/kolco24/server` (`e4d4126`).
+> Исторический контекст и выполненные шаги ниже описывают момент реализации.
+> Актуальные API, ограничения батчей и повторных отправок — в
+> [API.md](../../design/API.md) и [UPLOAD.md](../../design/UPLOAD.md).
+
 ## Overview
 
 A new admin-panel feature: a judge at a start (or finish) checkpoint pikes participants' NFC
@@ -7,8 +12,10 @@ bracelets to record their start/finish times — an alternative source of timing
 participants don't self-mark at the start/finish КП. Two separate admin sub-overlay pages
 («Старт» / «Финиш»), each fixed to its event type. The feature works fully offline (Room is the
 source of truth) and uploads asynchronously every 60 seconds to **both** the cloud and LAN targets,
-idempotently by client UUID. The server endpoint is **not yet implemented** — this plan documents
-the contract it must satisfy.
+idempotently by client UUID. The server endpoint is **implemented** with HMAC,
+admin bearer, and race-admin permission. Current server validation/idempotency
+differs from the original plan: whole-batch validation, insert-once ids, no
+participant-level timing resolution; see `docs/design/UPLOAD.md`.
 
 Key benefits:
 - Judge-driven timing fallback when self-marking fails or isn't used.
@@ -371,10 +378,11 @@ else `UnknownChip`. Only `Recorded` writes a row.
 *Items requiring manual intervention or external systems — informational only.*
 
 **External system updates:**
-- **Server endpoint** `POST /app/race/<raceId>/judge_scans/` is **not yet implemented**. Until it
-  exists both targets return non-Success and rows stay pending (correct, self-healing). The endpoint
-  must: verify the app signature + admin Bearer, upsert idempotently by `id`, apply partial-accept
-  (return `accepted[]`, never whole-batch 400), and dedupe repeat piks server-side.
+- **Server endpoint** `POST /app/race/<raceId>/judge_scans/` is implemented. It
+  verifies HMAC + admin bearer + race permission, validates up to 500 scans,
+  and acknowledges all ids of a valid batch. Repeated ids are not updated.
+  Partial-accept, trusted-time fill-if-null, and participant-level dedup/timing
+  resolution remain unimplemented; verify deployed versions separately.
 
 **Manual verification (on device):**
 - Airplane-mode capture, then restore network and confirm the 60 s tick drains to **both** LAN and
