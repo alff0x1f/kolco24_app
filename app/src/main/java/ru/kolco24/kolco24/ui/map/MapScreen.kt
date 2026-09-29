@@ -1,5 +1,6 @@
 package ru.kolco24.kolco24.ui.map
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -26,7 +29,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -44,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -125,8 +131,9 @@ fun MapScreen(
                 speedTrack?.stops?.firstOrNull { it.startMs == start }
             }
 
-            // Offline the OSM layer starts hidden until the first camera framing decides.
-            var osmShown by remember(base) { mutableStateOf(base is MapStyleSource.Online) }
+            var cameraCommand by remember { mutableStateOf<MapCameraCommand?>(null) }
+            val context = LocalContext.current
+            val canShowRaceMap = (base as? MapStyleSource.Offline)?.metadata?.bounds != null
 
             TrackMapView(
                 styleSource = base,
@@ -137,7 +144,13 @@ fun MapScreen(
                 locationPermitted = locationPermitted,
                 onPinClick = { selectedPinId = it; selectedStopStartMs = null },
                 onStopClick = { selectedStopStartMs = it; selectedPinId = null },
-                onOsmVisibleChange = { osmShown = it },
+                cameraCommand = cameraCommand,
+                onCameraCommandDone = { moved ->
+                    if (!moved && cameraCommand == MapCameraCommand.MyLocation) {
+                        Toast.makeText(context, "Местоположение ещё не определено", Toast.LENGTH_SHORT).show()
+                    }
+                    cameraCommand = null
+                },
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -178,6 +191,14 @@ fun MapScreen(
                     .padding(bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (canShowRaceMap || locationPermitted) {
+                    CameraControls(
+                        showRaceMap = canShowRaceMap,
+                        showMyLocation = locationPermitted,
+                        onCommand = { cameraCommand = it },
+                        modifier = Modifier.align(Alignment.End),
+                    )
+                }
                 if (selectedPin != null) {
                     PinCard(caption = pinCaption(selectedPin, TimeZone.getDefault()))
                 }
@@ -194,16 +215,60 @@ fun MapScreen(
                         DownloadingCard(progress = availability.progress, onCancel = onCancelDownload)
                     MapAvailability.NoMapForRace, MapAvailability.Ready -> Unit
                 }
-                // Visible attribution while the OSM layer is shown (not just MapLibre's (i)).
-                if (osmShown) {
-                    Text(
-                        text = OSM_ATTRIBUTION,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF333333),
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .background(Color.White.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                // Visible attribution: OSM is always under the map (not just MapLibre's (i)).
+                Text(
+                    text = OSM_ATTRIBUTION,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF333333),
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .background(Color.White.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Camera shortcuts as one vertical rail (like map zoom controls): «Карта гонки» frames the downloaded
+ * file, «Моё местоположение» centers on the GPS fix. Semi-transparent over the map, like the chips.
+ */
+@Composable
+private fun CameraControls(
+    showRaceMap: Boolean,
+    showMyLocation: Boolean,
+    onCommand: (MapCameraCommand) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        shadowElevation = 2.dp,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (showRaceMap) {
+                IconButton(onClick = { onCommand(MapCameraCommand.RaceMap) }, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        Icons.Outlined.Map,
+                        contentDescription = "Показать карту гонки",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            if (showRaceMap && showMyLocation) {
+                HorizontalDivider(
+                    modifier = Modifier.width(24.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
+            if (showMyLocation) {
+                IconButton(onClick = { onCommand(MapCameraCommand.MyLocation) }, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        Icons.Filled.MyLocation,
+                        contentDescription = "Моё местоположение",
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }

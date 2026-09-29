@@ -265,6 +265,15 @@ fun cameraFrame(fileBounds: Bounds?, dataBounds: Bounds?): CameraFrame = when {
     else -> CameraFrame.FitData(dataBounds)
 }
 
+/** A one-shot camera move requested by a map control button. */
+enum class MapCameraCommand {
+    /** Frame the downloaded race map's `bounds`. */
+    RaceMap,
+
+    /** Center on the last known device location. */
+    MyLocation,
+}
+
 /** Base of the map: online OSM tiles, with the race's downloaded MBTiles file (+ its metadata) on top. */
 sealed interface MapStyleSource {
     /** Absolute [path] of a downloaded `<raceId>-<generation>.mbtiles`; [metadata] read off-main by the host. */
@@ -273,13 +282,27 @@ sealed interface MapStyleSource {
 }
 
 private const val OSM_SOURCE = "osm"
-
-/** Id of the OSM raster layer; its visibility is toggled by the host per [osmVisible]. */
-const val OSM_LAYER = OSM_SOURCE
 private const val RACE_SOURCE = "race"
 private const val OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 private const val OSM_MAX_ZOOM = 19
 private const val TILE_SIZE_PX = 256
+
+/**
+ * MapLibre's camera zoom is in 512 px tiles, so a 256 px raster source shows its tile level `z` from
+ * camera zoom `z - 1` (native `coveringZoomLevel` adds `log2(512 / tileSize)`, then rounds for raster).
+ */
+private const val RASTER_ZOOM_OFFSET = 1.0
+
+/** The lowest camera zoom at which a file with MBTiles [minZoom] is drawn (see [RASTER_ZOOM_OFFSET]). */
+fun fileMinCameraZoom(minZoom: Int): Double = minZoom - RASTER_ZOOM_OFFSET
+
+/**
+ * Camera zoom that frames the race file: the bounds-fit [fitZoom], raised to [fileMinCameraZoom] so
+ * a large file whose fit falls below its `minzoom` is still drawn (then only its center part fits).
+ */
+fun raceMapZoom(fitZoom: Double, minZoom: Int?): Double =
+    if (minZoom == null) fitZoom else maxOf(fitZoom, fileMinCameraZoom(minZoom))
+
 const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
 
 /**
@@ -287,8 +310,8 @@ const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
  * template (`maxzoom` 19, attribution) is always the bottom layer; offline adds the race file on top as
  * `mbtiles://<absolute path>` (MapLibre's MBTiles source handles the TMS y-flip itself and takes its
  * zoom range from the file), so OSM shows around the file's extent and below its `minzoom` — and
- * without a network only the file is drawn. MapLibre loads a visible layer's tiles even under an opaque
- * layer, so offline the OSM layer starts hidden and the host shows it only while [osmVisible] says so. Both set `tileSize` 256 explicitly — MapLibre's raster
+ * without a network only the file is drawn. OSM tiles under the file are still fetched (MapLibre does
+ * not cull an occluded layer) — accepted. Both set `tileSize` 256 explicitly — MapLibre's raster
  * default is 512 and both OSM and our MBTiles are 256 px tiles.
  */
 fun styleJson(source: MapStyleSource): String = buildJsonObject {
@@ -311,12 +334,9 @@ fun styleJson(source: MapStyleSource): String = buildJsonObject {
     }
     putJsonArray("layers") {
         addJsonObject {
-            put("id", OSM_LAYER)
+            put("id", OSM_SOURCE)
             put("type", "raster")
             put("source", OSM_SOURCE)
-            if (source is MapStyleSource.Offline) {
-                putJsonObject("layout") { put("visibility", "none") }
-            }
         }
         if (source is MapStyleSource.Offline) {
             addJsonObject {
@@ -327,21 +347,6 @@ fun styleJson(source: MapStyleSource): String = buildJsonObject {
         }
     }
 }.toString()
-
-/**
- * `true` when some of the [visible] area at camera [zoom] is not covered by the race file, so the OSM
- * layer under it must be shown (and its tiles fetched). [MapStyleSource.Online] always needs OSM.
- * Offline, OSM can be hidden only when the file's `bounds` and `minzoom` are both known, [zoom] is at
- * or above `minzoom`, and [visible] lies inside `bounds`. Conservative at the edges: a fractional zoom just below `minzoom` keeps OSM on.
- */
-fun osmVisible(source: MapStyleSource, zoom: Double, visible: Bounds): Boolean {
-    val metadata = (source as? MapStyleSource.Offline)?.metadata ?: return true
-    val bounds = metadata.bounds ?: return true
-    val minZoom = metadata.minZoom ?: return true
-    if (zoom < minZoom) return true
-    return visible.west < bounds.west || visible.east > bounds.east ||
-        visible.south < bounds.south || visible.north > bounds.north
-}
 
 /** «КП 32 · 4 балла · 14:07» — the take time rendered in [timeZone] (device TZ in prod). */
 fun pinCaption(pin: MapPin, timeZone: TimeZone): String {

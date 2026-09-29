@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraUpdate
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.constants.MapLibreConstants
 import org.maplibre.android.geometry.LatLng
@@ -126,6 +127,9 @@ private object MapLibreInit {
  * selected team) changes, and — without file bounds — when the data goes from empty to non-empty.
  *
  * [onPinClick] gets the tapped pin's `checkpointId`, or `null` for a tap that missed every pin and stop.
+ *
+ * [cameraCommand] runs once the style is loaded, then [onCameraCommandDone] reports whether it could
+ * move (`false`: no file bounds, or no location fix yet); the host clears the command there.
  */
 @Composable
 fun TrackMapView(
@@ -137,7 +141,8 @@ fun TrackMapView(
     locationPermitted: Boolean,
     onPinClick: (Int?) -> Unit,
     onStopClick: (Long) -> Unit,
-    onOsmVisibleChange: (Boolean) -> Unit,
+    cameraCommand: MapCameraCommand?,
+    onCameraCommandDone: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -178,8 +183,6 @@ fun TrackMapView(
     val latestLocationPermitted by rememberUpdatedState(locationPermitted)
     val latestOnPinClick by rememberUpdatedState(onPinClick)
     val latestOnStopClick by rememberUpdatedState(onStopClick)
-    val latestStyleSource by rememberUpdatedState(styleSource)
-    val latestOnOsmVisibleChange by rememberUpdatedState(onOsmVisibleChange)
 
     // Lifecycle: forward the host lifecycle to the MapView, tracking what was actually dispatched
     // so onDispose unwinds exactly those calls before onDestroy.
@@ -224,7 +227,6 @@ fun TrackMapView(
                 if (stopStart != null) latestOnStopClick(stopStart) else latestOnPinClick(id)
                 id != null || stopStart != null
             }
-            m.addOnCameraIdleListener { updateOsmLayer(m, latestStyleSource, latestOnOsmVisibleChange) }
             map = m
         }
         onDispose {
@@ -323,7 +325,13 @@ fun TrackMapView(
         val m = map ?: return@LaunchedEffect
         if (loadedStyle == null) return@LaunchedEffect
         applyCamera(context, m, metadata, dataBounds(latestTrackLines.flatten(), latestPins))
-        updateOsmLayer(m, styleSource, onOsmVisibleChange)
+    }
+
+    LaunchedEffect(loadedStyle, cameraCommand) {
+        val m = map ?: return@LaunchedEffect
+        val command = cameraCommand ?: return@LaunchedEffect
+        if (loadedStyle == null) return@LaunchedEffect
+        onCameraCommandDone(runCameraCommand(m, command, metadata))
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
@@ -429,28 +437,33 @@ private fun applyLocation(
     }
 }
 
-/**
- * Shows the OSM layer only while [osmVisible] needs it: a hidden layer fetches no tiles, while a visible
- * one would fetch them even under the opaque race file. Runs on every camera idle and after each
- * framing; a gesture may still fetch a few edge tiles before the idle event.
- */
-private fun updateOsmLayer(map: MapLibreMap, source: MapStyleSource, onChange: (Boolean) -> Unit) {
-    val style = map.style?.takeIf { it.isFullyLoaded } ?: return
-    val region = map.projection.visibleRegion.latLngBounds
-    val visible = osmVisible(
-        source,
-        map.cameraPosition.zoom,
-        Bounds(
-            west = region.longitudeWest,
-            south = region.latitudeSouth,
-            east = region.longitudeEast,
-            north = region.latitudeNorth,
-        ),
-    )
-    style.getLayer(OSM_LAYER)?.setProperties(
-        PropertyFactory.visibility(if (visible) Property.VISIBLE else Property.NONE),
-    )
-    onChange(visible)
+/** File [bounds] fitted edge to edge, but never below the zoom where the file is drawn ([raceMapZoom]). */
+private fun raceMapCamera(map: MapLibreMap, bounds: Bounds, minZoom: Int?): CameraUpdate {
+    val latLngBounds = bounds.toLatLngBounds()
+    val fit = map.getCameraForLatLngBounds(latLngBounds, intArrayOf(0, 0, 0, 0))
+        ?: return CameraUpdateFactory.newLatLngBounds(latLngBounds, 0)
+    return CameraUpdateFactory.newLatLngZoom(fit.target ?: latLngBounds.center, raceMapZoom(fit.zoom, minZoom))
+}
+
+/** Animates the camera per [command]; `false` when there is nothing to move to. */
+private fun runCameraCommand(map: MapLibreMap, command: MapCameraCommand, metadata: MbtilesMetadata?): Boolean {
+    val update = when (command) {
+        MapCameraCommand.RaceMap -> {
+            val bounds = metadata?.bounds ?: return false
+            raceMapCamera(map, bounds, metadata.minZoom)
+        }
+        MapCameraCommand.MyLocation -> {
+            val last = runCatching {
+                map.locationComponent
+                    .takeIf { it.isLocationComponentActivated && it.isLocationComponentEnabled }
+                    ?.lastKnownLocation
+            }.getOrNull() ?: return false
+            val zoom = maxOf(map.cameraPosition.zoom, SINGLE_POINT_ZOOM)
+            CameraUpdateFactory.newLatLngZoom(LatLng(last.latitude, last.longitude), zoom)
+        }
+    }
+    map.animateCamera(update)
+    return true
 }
 
 /**
@@ -473,7 +486,7 @@ private fun applyCamera(
     val frame = cameraFrame(metadata?.bounds, dataBounds)
     when (frame) {
         is CameraFrame.FileBounds ->
-            map.moveCamera(CameraUpdateFactory.newLatLngBounds(frame.bounds.toLatLngBounds(), 0))
+            map.moveCamera(raceMapCamera(map, frame.bounds, metadata?.minZoom))
         is CameraFrame.SinglePoint ->
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(frame.lat, frame.lon), SINGLE_POINT_ZOOM))
         is CameraFrame.FitData -> {

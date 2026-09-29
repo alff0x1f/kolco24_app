@@ -10,8 +10,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
-import ru.kolco24.kolco24.data.map.MbtilesMetadata
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -431,13 +429,6 @@ class MapLogicTest {
     }
 
     @Test
-    fun styleJsonOfflineStartsWithOsmHidden() {
-        val osm = style(MapStyleSource.Offline("/data/maps/8.mbtiles", null))["layers"]!!.jsonArray.first().jsonObject
-        assertEquals("osm", osm["id"]!!.jsonPrimitive.content)
-        assertEquals("none", osm["layout"]!!.jsonObject["visibility"]!!.jsonPrimitive.content)
-    }
-
-    @Test
     fun styleJsonOnlineIsOsmOnly() {
         val json = style(MapStyleSource.Online)
         val sources = json["sources"]!!.jsonObject
@@ -445,45 +436,23 @@ class MapLogicTest {
         assertOsmSource(sources["osm"]!!.jsonObject)
         val osm = json["layers"]!!.jsonArray.single().jsonObject
         assertEquals("osm", osm["source"]!!.jsonPrimitive.content)
-        assertNull(osm["layout"])
     }
 
-    // ---- osmVisible ----
-
-    private val fileBounds = Bounds(west = 55.0, south = 54.0, east = 56.0, north = 55.0)
-    private val inside = Bounds(west = 55.2, south = 54.2, east = 55.8, north = 54.8)
-    private fun offline(bounds: Bounds? = fileBounds, minZoom: Int? = 10) =
-        MapStyleSource.Offline("/data/maps/8.mbtiles", MbtilesMetadata(bounds, minZoom, 16))
+    // ---- raceMapZoom ----
 
     @Test
-    fun osmHiddenWhenViewInsideFileAtOrAboveMinZoom() {
-        assertFalse(osmVisible(offline(), 10.0, inside))
-        assertFalse(osmVisible(offline(), 14.5, inside))
-        assertFalse(osmVisible(offline(), 12.0, fileBounds))
+    fun fileMinCameraZoomIsOneBelowTileZoom() {
+        assertEquals(11.0, fileMinCameraZoom(12), 0.0)
     }
 
     @Test
-    fun osmShownBelowMinZoom() {
-        assertTrue(osmVisible(offline(), 9.9, inside))
+    fun raceMapZoomRaisesFitBelowFileMinZoom() {
+        assertEquals(11.0, raceMapZoom(fitZoom = 8.3, minZoom = 12), 0.0)
     }
 
     @Test
-    fun osmShownWhenViewCrossesAnyFileEdge() {
-        assertTrue(osmVisible(offline(), 12.0, inside.copy(west = 54.9)))
-        assertTrue(osmVisible(offline(), 12.0, inside.copy(east = 56.1)))
-        assertTrue(osmVisible(offline(), 12.0, inside.copy(south = 53.9)))
-        assertTrue(osmVisible(offline(), 12.0, inside.copy(north = 55.1)))
-    }
-
-    @Test
-    fun osmShownWhenCoverageUnknown() {
-        assertTrue(osmVisible(offline(bounds = null), 12.0, inside))
-        assertTrue(osmVisible(offline(minZoom = null), 12.0, inside))
-        assertTrue(osmVisible(MapStyleSource.Offline("/data/maps/8.mbtiles", null), 12.0, inside))
-    }
-
-    @Test
-    fun osmAlwaysShownOnline() {
-        assertTrue(osmVisible(MapStyleSource.Online, 12.0, inside))
+    fun raceMapZoomKeepsFitAtOrAboveFileMinZoom() {
+        assertEquals(13.4, raceMapZoom(fitZoom = 13.4, minZoom = 12), 0.0)
+        assertEquals(8.3, raceMapZoom(fitZoom = 8.3, minZoom = null), 0.0)
     }
 }
