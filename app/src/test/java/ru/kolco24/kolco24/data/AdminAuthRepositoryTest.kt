@@ -1,5 +1,7 @@
 package ru.kolco24.kolco24.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -13,6 +15,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 import ru.kolco24.kolco24.data.api.ApiClient
 import ru.kolco24.kolco24.data.api.AppSignatureInterceptor
 
@@ -324,5 +327,35 @@ class AdminAuthRepositoryTest {
         assertEquals(AdminSession.LoggedOut, repo.session.value)
         assertNull(repo.token())
         assertNull(fake.map["admin_token"])
+    }
+
+    @Test
+    fun login_inFlightDuringLogout_doesNotResurrectSession() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"token":"late-tok","expires_at":"2099-07-21T14:03:00Z"}""")
+                .setBodyDelay(500, TimeUnit.MILLISECONDS),
+        )
+        val fake = FakeStore()
+        val repo = repo(fake.store())
+
+        val login = async(Dispatchers.IO) { repo.login("admin@kolco24.ru", "s3cret") }
+        server.takeRequest() // login request reached the server; response still delayed
+        repo.logout()
+
+        assertEquals(LoginOutcome.Error, login.await())
+        assertEquals(AdminSession.LoggedOut, repo.session.value)
+        assertNull(fake.map["admin_token"])
+    }
+
+    @Test
+    fun logout_whenLoggedOut_makesNoRequest() = runTest {
+        val repo = repo(FakeStore().store())
+
+        repo.logout()
+
+        assertEquals(0, server.requestCount)
+        assertEquals(AdminSession.LoggedOut, repo.session.value)
     }
 }

@@ -49,6 +49,14 @@ class AdminAuthRepository(
 ) {
     private val _session = MutableStateFlow(seedSession())
 
+    /**
+     * Bumped by [logout]; a [login] started before a logout must not resurrect the session when its
+     * response lands afterwards (parallel cloud + LAN login: one answers, the admin taps «Выйти», the
+     * other answers late). Check-and-persist and bump-and-clear hold [lock] so neither interleaves.
+     */
+    private var generation = 0
+    private val lock = Any()
+
     /** The current admin session; emits on every login/logout/expiry transition. */
     val session: StateFlow<AdminSession> = _session.asStateFlow()
 
@@ -61,13 +69,18 @@ class AdminAuthRepository(
     /**
      * Attempts a login. On [PostResult.Success] the token/email/expiry are persisted and the flow
      * transitions to [AdminSession.LoggedIn]; failures leave the session untouched. The status is
-     * mapped to a [LoginOutcome] for the UI via the pure [loginOutcome].
+     * mapped to a [LoginOutcome] for the UI via the pure [loginOutcome]. A success that lands after a
+     * [logout] issued during the request is dropped and reported as [LoginOutcome.Error].
      */
     suspend fun login(email: String, password: String): LoginOutcome {
+        val startedAt = synchronized(lock) { generation }
         val result = apiClient.login(email, password)
         if (result is PostResult.Success) {
-            store.write(result.data.token, email, result.data.expiresAt)
-            _session.value = AdminSession.LoggedIn(email, result.data.token, result.data.expiresAt)
+            synchronized(lock) {
+                if (generation != startedAt) return LoginOutcome.Error
+                store.write(result.data.token, email, result.data.expiresAt)
+                _session.value = AdminSession.LoggedIn(email, result.data.token, result.data.expiresAt)
+            }
         }
         return loginOutcome(result)
     }
@@ -75,14 +88,19 @@ class AdminAuthRepository(
     /**
      * Logs out: fires `POST /app/logout/` best-effort (the server revokes the token) and **always**
      * clears the local store and drops to [AdminSession.LoggedOut] afterwards — even when the network
-     * call fails offline, so the local session can never be stuck logged-in.
+     * call fails offline, so the local session can never be stuck logged-in. Also cancels any in-flight
+     * [login]; when already logged out it does only that (no network call).
      */
     suspend fun logout() {
+        synchronized(lock) { generation++ }
+        if (_session.value is AdminSession.LoggedOut) return
         try {
             apiClient.logout()
         } finally {
-            store.clear()
-            _session.value = AdminSession.LoggedOut
+            synchronized(lock) {
+                store.clear()
+                _session.value = AdminSession.LoggedOut
+            }
         }
     }
 

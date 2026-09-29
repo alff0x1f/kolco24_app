@@ -232,14 +232,6 @@ fun ProvisioningScreen(
                 val pinned = container.isRacePinned(raceId)
                 val client = if (pinned) container.localApiClient else container.apiClient
                 val auth = if (pinned) container.localAdminAuth else container.cloudAdminAuth
-                if (auth.token() == null) {
-                    container.provisioningState.value = ProvisionState.Failed(
-                        if (pinned) "Нет входа на LAN-сервер" else "Нет входа на cloud-сервер",
-                    )
-                    container.scanFeedback.failure()
-                    isBusy.set(false)
-                    return@onTag
-                }
                 val uid = normalizeNfcUid(tag.id)
                 // Record which page and race are active before starting: lets close/reopen and
                 // rotation restore the pager to the correct checkpoint (see rememberPagerState
@@ -254,6 +246,15 @@ fun ProvisioningScreen(
                 // the user navigates away after the server bind but before the chip write finishes.
                 container.applicationScope.launch {
                     try {
+                        // No session on the routed server: fail without a request. Checked inside the
+                        // try so the finally below still runs the isBusy / pending-cleanup protocol.
+                        if (auth.token() == null) {
+                            container.provisioningState.value = ProvisionState.Failed(
+                                if (pinned) "Нет входа на LAN-сервер" else "Нет входа на cloud-сервер",
+                            )
+                            container.scanFeedback.failure()
+                            return@launch
+                        }
                         when (val result = client.bindTag(raceId, cp.id, uid)) {
                             is PostResult.Success -> {
                                 container.provisioningState.value = ProvisionState.Writing

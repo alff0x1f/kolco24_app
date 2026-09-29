@@ -41,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +104,18 @@ fun AdminScreen(
 
     var reLoginTarget by rememberSaveable { mutableStateOf<AdminServer?>(null) }
     val anyLoggedIn = cloudSession is AdminSession.LoggedIn || localSession is AdminSession.LoggedIn
+    // The re-login form closes when its server's session appears — from this form or from an older,
+    // still in-flight attempt — rather than via a success callback a stale attempt could also fire.
+    LaunchedEffect(reLoginTarget, cloudSession, localSession) {
+        val targetSession = when (reLoginTarget) {
+            AdminServer.Cloud -> cloudSession
+            AdminServer.Lan -> localSession
+            null -> null
+        }
+        // Also drop it once both sessions are gone: the full form takes over, and a stale target
+        // must not resurface as a single-server form after the next login.
+        if (targetSession is AdminSession.LoggedIn || !anyLoggedIn) reLoginTarget = null
+    }
     val showForm = !anyLoggedIn || reLoginTarget != null
 
     // Registered after MainActivity's admin BackHandler, so it wins while the re-login form is up.
@@ -136,7 +149,6 @@ fun AdminScreen(
                 initialEmail = (cloudSession as? AdminSession.LoggedIn)?.email
                     ?: (localSession as? AdminSession.LoggedIn)?.email
                     ?: "",
-                onSuccess = { reLoginTarget = null },
             )
         } else {
             AdminHome(
@@ -165,10 +177,10 @@ private sealed interface AdminLoginState {
  * while local mode is on (the LAN host is cleartext — the password must not go there on a random
  * network). Otherwise logs into just that server. Servers are tried in parallel on `applicationScope`;
  * when none succeeds, [combinedLoginOutcome] picks the error to show (a real answer beats «нет сети»).
- * On success [onSuccess] runs; the session flows flip the overlay to [AdminHome].
+ * Success needs no local handling — the session flows flip the overlay to [AdminHome].
  */
 @Composable
-private fun LoginForm(target: AdminServer?, initialEmail: String, onSuccess: () -> Unit) {
+private fun LoginForm(target: AdminServer?, initialEmail: String) {
     val context = LocalContext.current
     val container = remember { (context.applicationContext as Kolco24App).container }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -181,15 +193,21 @@ private fun LoginForm(target: AdminServer?, initialEmail: String, onSuccess: () 
     fun submit() {
         if (email.isBlank() || password.isBlank() || submitting) return
         keyboard?.hide()
-        state = AdminLoginState.Submitting
+        // Lease re-checked at submit time: it may have expired while the form was open.
+        val lanActive = container.isLanActive()
         val repos = when (target) {
             AdminServer.Cloud -> listOf(container.cloudAdminAuth)
-            AdminServer.Lan -> listOf(container.localAdminAuth)
+            AdminServer.Lan -> listOfNotNull(container.localAdminAuth.takeIf { lanActive })
             null -> listOfNotNull(
                 container.cloudAdminAuth,
-                container.localAdminAuth.takeIf { container.isLanActive() },
+                container.localAdminAuth.takeIf { lanActive },
             )
         }
+        if (repos.isEmpty()) {
+            state = AdminLoginState.Error("Включите локальный режим гонки")
+            return
+        }
+        state = AdminLoginState.Submitting
         container.applicationScope.launch {
             val outcome = coroutineScope {
                 combinedLoginOutcome(repos.map { async { it.login(email.trim(), password) } }.awaitAll())
@@ -197,7 +215,6 @@ private fun LoginForm(target: AdminServer?, initialEmail: String, onSuccess: () 
             withContext(Dispatchers.Main) {
                 if (outcome == LoginOutcome.Success) {
                     state = AdminLoginState.Idle
-                    onSuccess()
                 } else {
                     state = AdminLoginState.Error(adminErrorMessage(outcome))
                 }
@@ -282,8 +299,9 @@ private fun LoginForm(target: AdminServer?, initialEmail: String, onSuccess: () 
 /**
  * Admin home shown while either session is logged in: a status row per server (email, or «нет входа»
  * with a «Войти» that opens the form for that server — LAN only while local mode is on), the admin
- * action rows, and «Выйти», which logs out of every logged-in server, each in its own
- * `applicationScope` job so a LAN logout never waits on a cloud timeout.
+ * action rows, and «Выйти», which calls `logout()` on both servers, each in its own `applicationScope`
+ * job so a LAN logout never waits on a cloud timeout (on a logged-out server it only cancels an
+ * in-flight login, no request).
  */
 @Composable
 private fun AdminHome(
@@ -406,7 +424,6 @@ private fun AdminHome(
                 subtitle = "Завершить сессию администратора",
                 onClick = {
                     listOf(container.cloudAdminAuth, container.localAdminAuth)
-                        .filter { it.session.value is AdminSession.LoggedIn }
                         .forEach { repo -> container.applicationScope.launch { repo.logout() } }
                 },
             )
