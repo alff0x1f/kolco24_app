@@ -18,3 +18,42 @@ data class TargetLine(val uploaded: Int, val outcome: TargetUploadOutcome?)
 data class TrackUploadStatus(val total: Int, val local: TargetLine, val cloud: TargetLine) {
     val fullyUploaded: Boolean get() = total > 0 && local.uploaded == total && cloud.uploaded == total
 }
+
+enum class UploadSummaryState { Empty, Pending, AllSent }
+
+data class UploadSummary(val label: String, val state: UploadSummaryState)
+
+/**
+ * The one-line «Загрузка данных» row subtitle on the Команда tab. Only the cloud target counts as
+ * «sent» (iOS parity). Track shows as a bare «трек» — its point count would dwarf the marks and read
+ * as a scary number.
+ */
+fun uploadSummary(
+    marks: TrackUploadStatus?,
+    photos: TrackUploadStatus?,
+    track: TrackUploadStatus?,
+    judge: TrackUploadStatus?,
+): UploadSummary {
+    val all = listOf(marks, photos, track, judge)
+    if (all.all { (it?.total ?: 0) <= 0 }) return UploadSummary("Пока нечего загружать", UploadSummaryState.Empty)
+    fun pending(s: TrackUploadStatus?) = if (s == null) 0 else maxOf(0, s.total - s.cloud.uploaded)
+    val parts = listOfNotNull(
+        pending(marks).takeIf { it > 0 }?.let { "$it ${marksWord(it)}" },
+        pending(photos).takeIf { it > 0 }?.let { "$it фото" },
+        "трек".takeIf { pending(track) > 0 },
+        pending(judge).takeIf { it > 0 }?.let { "$it суд. ${marksWord(it)}" },
+    )
+    if (parts.isEmpty()) return UploadSummary("Всё отправлено", UploadSummaryState.AllSent)
+    return UploadSummary("Не отправлено: " + parts.joinToString(", "), UploadSummaryState.Pending)
+}
+
+private fun marksWord(n: Int): String {
+    val rem100 = n % 100
+    val rem10 = n % 10
+    return when {
+        rem100 in 11..19 -> "отметок"
+        rem10 == 1 -> "отметка"
+        rem10 in 2..4 -> "отметки"
+        else -> "отметок"
+    }
+}

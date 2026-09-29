@@ -191,6 +191,7 @@ import ru.kolco24.kolco24.ui.team.TeamScreen
 import ru.kolco24.kolco24.ui.upload.TargetLine
 import ru.kolco24.kolco24.ui.upload.TrackUploadStatus
 import ru.kolco24.kolco24.ui.upload.UploadScreen
+import ru.kolco24.kolco24.ui.upload.uploadSummary
 import ru.kolco24.kolco24.ui.teampicker.CompPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamPickerScreen
 import ru.kolco24.kolco24.ui.teampicker.TeamSwitchSheet
@@ -1019,6 +1020,9 @@ private fun Kolco24AppRoot(
     val judgeScanUploadOutcomes by container.judgeScanUploadOutcomes.collectAsState()
     val judgeUploadStatus =
         rememberJudgeUploadStatus(selectedRaceId, judgeScanUploadOutcomes, container.judgeScanRepository::uploadCounts)
+    val teamUploadSummary = remember(marksMetadataUploadStatus, photoUploadStatus, trackUploadStatus, judgeUploadStatus) {
+        uploadSummary(marksMetadataUploadStatus, photoUploadStatus, trackUploadStatus, judgeUploadStatus)
+    }
 
     // Scan-overlay inputs: the roster, the uid→slot binding map, and a CP-id index for unlock resolve.
     // Guard: collectAsState does not reset its value when the flow key changes (the mutableStateOf is
@@ -1900,6 +1904,7 @@ private fun Kolco24AppRoot(
                         onChooseTeam = { pickerRaceId = selectedRaceId; teamFlowStep = TeamFlowStep.CompPicker },
                         onOpenSettings = { showSettings = true },
                         onOpenUpload = { showUpload = true },
+                        uploadSummary = teamUploadSummary,
                         teamMissing = teamMissing,
                         teamLoading = teamState is SelectedTeamState.Loading,
                         bindings = bindings,
