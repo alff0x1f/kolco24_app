@@ -9,9 +9,11 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import ru.kolco24.kolco24.data.api.dto.JudgeScanDto
 import ru.kolco24.kolco24.data.api.dto.MarkDto
 import ru.kolco24.kolco24.data.api.dto.PresentMemberDto
 import ru.kolco24.kolco24.data.api.dto.TakeLocationDto
@@ -216,5 +218,48 @@ class ApiClientMarksTest {
             PostResult.RateLimited,
             apiClient.uploadMarkPhoto(8, "mark-1", "frame-uuid", ByteArray(0)),
         )
+    }
+
+    private fun clientWithToken(token: String): ApiClient {
+        val interceptor = AppSignatureInterceptor(
+            keyId = "android-v1",
+            secret = "test-secret-123",
+            installIdProvider = { "install-abc" },
+            appVersion = "2.0.1",
+            nowSeconds = { 1718200000L },
+            tokenProvider = { token },
+        )
+        val client = OkHttpClient.Builder().addInterceptor(interceptor).build()
+        return ApiClient(server.url("/").toString(), client, json)
+    }
+
+    @Test
+    fun uploadJudgeScans_carriesAdminBearer() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"accepted":["scan-1"]}"""))
+        val scan = JudgeScanDto(
+            id = "scan-1",
+            eventType = "start",
+            participantNumber = 101,
+            nfcUid = "04F1E2",
+            wallMs = 1_718_900_000_000L,
+            trustedMs = null,
+            elapsedAt = 9_876_543L,
+            bootCount = 7,
+        )
+
+        clientWithToken("tok-123").uploadJudgeScans(8, "install-abc", listOf(scan))
+
+        val recorded = server.takeRequest()
+        assertEquals("/app/race/8/judge_scans/", recorded.path)
+        assertEquals("Bearer tok-123", recorded.getHeader("Authorization"))
+    }
+
+    @Test
+    fun uploadMarks_neverCarriesAdminBearer() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"accepted":[]}"""))
+
+        clientWithToken("tok-123").uploadMarks(8, 42, "install-abc", listOf(markDto()))
+
+        assertNull(server.takeRequest().getHeader("Authorization"))
     }
 }

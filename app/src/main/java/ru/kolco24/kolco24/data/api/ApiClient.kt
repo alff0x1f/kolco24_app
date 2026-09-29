@@ -273,7 +273,9 @@ class ApiClient(
      * race (all teams; no `teamId` param, unlike [uploadMarks]). `200`/`201` → [PostResult.Success]
      * with the parsed [JudgeScanUploadResponse] (the accepted client `id`s for idempotent upsert);
      * other statuses map per [post]. The same method serves both upload targets (cloud / local LAN) —
-     * the target is selected by the `ApiClient` instance, not a per-call URL. The server endpoint is
+     * the target is selected by the `ApiClient` instance, not a per-call URL. Carries the admin
+     * bearer (the server requires a race-admin login); with no session for that target the server
+     * answers `401` and rows stay pending until the judge logs in. The server endpoint is
      * not yet implemented (see the plan's Post-Completion section); until then every call returns a
      * non-success `PostResult` and rows stay pending.
      */
@@ -283,7 +285,7 @@ class ApiClient(
         scans: List<JudgeScanDto>,
     ): PostResult<JudgeScanUploadResponse> {
         val bytes = json.encodeToString(JudgeScanUploadRequest(sourceInstallId, scans)).toByteArray()
-        return post("$baseUrl/app/race/$raceId/judge_scans/", bytes) {
+        return post("$baseUrl/app/race/$raceId/judge_scans/", bytes, adminAuth = true) {
             json.decodeFromString<JudgeScanUploadResponse>(it)
         }
     }

@@ -37,9 +37,10 @@ fun sign(secret: String, canonical: String): String {
 }
 
 /**
- * OkHttp request tag marking a call that needs the admin bearer (`logout`, `bindTag`). Only tagged
- * requests get `Authorization`; the HMAC-only rest (syncs, uploads) never carry the token — the LAN
- * client uploads over cleartext even outside local mode, so an untagged bearer would leak there.
+ * OkHttp request tag marking a call that needs the admin bearer (`logout`, `bindTag`,
+ * `uploadJudgeScans`). Only tagged requests get `Authorization`; the HMAC-only rest (syncs, team
+ * uploads) never carry the token — the LAN client uploads over cleartext even outside local mode,
+ * so an untagged bearer would leak there.
  */
 object RequiresAdminAuth
 
