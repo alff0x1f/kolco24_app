@@ -251,12 +251,16 @@ fun TrackMapView(
             style.addSource(GeoJsonSource(TRACK_SOURCE, latestSources.trackJson))
             style.addSource(GeoJsonSource(SPEED_SOURCE, latestSources.speedJson))
             style.addLayer(
-                LineLayer(TRACK_LAYER, TRACK_SOURCE).withProperties(
-                    PropertyFactory.lineColor(OrangeCta.toArgb()),
-                    PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
-                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                ),
+                // The source also contains MultiPoint dots; keep them out of the line layer so
+                // isolated fixes (e.g. while driving) cannot be connected into an orange line.
+                LineLayer(TRACK_LAYER, TRACK_SOURCE)
+                    .withFilter(Expression.not(Expression.has(TRACK_DOT_PROPERTY)))
+                    .withProperties(
+                        PropertyFactory.lineColor(OrangeCta.toArgb()),
+                        PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    ),
             )
             addSpeedLayers(style)
             // 1-point lines (trackGeoJson's dot feature): same colour as the line. Filtered to the dot
