@@ -7,6 +7,7 @@
 ./gradlew lintDebug                  # run lint (must pass before merging)
 ./gradlew testDebugUnitTest          # run unit tests
 ./gradlew connectedDebugAndroidTest  # instrumented tests (emulator/device): DAO queries + all Room migrations
+./gradlew bundleRelease              # Play .aab; signed only if kolco24.signing.* is set (docs/RELEASE.md)
 ```
 
 ## Architecture
@@ -63,4 +64,4 @@ the relevant notes before modifying an area; update them when behavior changes.
 ## Docs
 
 `docs/design/API.md` (HMAC signing, ETag, 403 checklist, legend crypto) · `docs/design/UPLOAD.md`
-(upload contracts) · `docs/mobile-admin-auth-and-tags.md`.
+(upload contracts) · `docs/RELEASE.md` (Google Play release steps) · `docs/mobile-admin-auth-and-tags.md`.
