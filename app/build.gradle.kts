@@ -74,7 +74,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ru.kolco24.kolco24"
+        applicationId = "org.kolco24.app"
         minSdk = 24
         targetSdk = 36
         versionCode = 20
