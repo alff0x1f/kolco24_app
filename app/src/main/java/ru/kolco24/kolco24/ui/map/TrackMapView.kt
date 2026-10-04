@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraUpdate
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.constants.MapLibreConstants
 import org.maplibre.android.geometry.LatLng
@@ -126,6 +127,9 @@ private object MapLibreInit {
  * selected team) changes, and — without file bounds — when the data goes from empty to non-empty.
  *
  * [onPinClick] gets the tapped pin's `checkpointId`, or `null` for a tap that missed every pin and stop.
+ *
+ * [cameraCommand] runs once the style is loaded, then [onCameraCommandDone] reports whether it could
+ * move (`false`: no file bounds, or no location fix yet); the host clears the command there.
  */
 @Composable
 fun TrackMapView(
@@ -137,6 +141,8 @@ fun TrackMapView(
     locationPermitted: Boolean,
     onPinClick: (Int?) -> Unit,
     onStopClick: (Long) -> Unit,
+    cameraCommand: MapCameraCommand?,
+    onCameraCommandDone: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -245,12 +251,16 @@ fun TrackMapView(
             style.addSource(GeoJsonSource(TRACK_SOURCE, latestSources.trackJson))
             style.addSource(GeoJsonSource(SPEED_SOURCE, latestSources.speedJson))
             style.addLayer(
-                LineLayer(TRACK_LAYER, TRACK_SOURCE).withProperties(
-                    PropertyFactory.lineColor(OrangeCta.toArgb()),
-                    PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
-                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                ),
+                // The source also contains MultiPoint dots; keep them out of the line layer so
+                // isolated fixes (e.g. while driving) cannot be connected into an orange line.
+                LineLayer(TRACK_LAYER, TRACK_SOURCE)
+                    .withFilter(Expression.not(Expression.has(TRACK_DOT_PROPERTY)))
+                    .withProperties(
+                        PropertyFactory.lineColor(OrangeCta.toArgb()),
+                        PropertyFactory.lineWidth(TRACK_LINE_WIDTH_DP),
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    ),
             )
             addSpeedLayers(style)
             // 1-point lines (trackGeoJson's dot feature): same colour as the line. Filtered to the dot
@@ -319,6 +329,13 @@ fun TrackMapView(
         val m = map ?: return@LaunchedEffect
         if (loadedStyle == null) return@LaunchedEffect
         applyCamera(context, m, metadata, dataBounds(latestTrackLines.flatten(), latestPins))
+    }
+
+    LaunchedEffect(loadedStyle, cameraCommand) {
+        val m = map ?: return@LaunchedEffect
+        val command = cameraCommand ?: return@LaunchedEffect
+        if (loadedStyle == null) return@LaunchedEffect
+        onCameraCommandDone(runCameraCommand(m, command, metadata))
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
@@ -424,9 +441,39 @@ private fun applyLocation(
     }
 }
 
+/** File [bounds] fitted edge to edge, but never below the zoom where the file is drawn ([raceMapZoom]). */
+private fun raceMapCamera(map: MapLibreMap, bounds: Bounds, minZoom: Int?): CameraUpdate {
+    val latLngBounds = bounds.toLatLngBounds()
+    val fit = map.getCameraForLatLngBounds(latLngBounds, intArrayOf(0, 0, 0, 0))
+        ?: return CameraUpdateFactory.newLatLngBounds(latLngBounds, 0)
+    return CameraUpdateFactory.newLatLngZoom(fit.target ?: latLngBounds.center, raceMapZoom(fit.zoom, minZoom))
+}
+
+/** Animates the camera per [command]; `false` when there is nothing to move to. */
+private fun runCameraCommand(map: MapLibreMap, command: MapCameraCommand, metadata: MbtilesMetadata?): Boolean {
+    val update = when (command) {
+        MapCameraCommand.RaceMap -> {
+            val bounds = metadata?.bounds ?: return false
+            raceMapCamera(map, bounds, metadata.minZoom)
+        }
+        MapCameraCommand.MyLocation -> {
+            val last = runCatching {
+                map.locationComponent
+                    .takeIf { it.isLocationComponentActivated && it.isLocationComponentEnabled }
+                    ?.lastKnownLocation
+            }.getOrNull() ?: return false
+            val zoom = maxOf(map.cameraPosition.zoom, SINGLE_POINT_ZOOM)
+            CameraUpdateFactory.newLatLngZoom(LatLng(last.latitude, last.longitude), zoom)
+        }
+    }
+    map.animateCamera(update)
+    return true
+}
+
 /**
- * Frames the camera per [cameraFrame]. Zoom preferences follow MBTiles `minzoom`/`maxzoom` (else
- * MapLibre's limits); file bounds also clamp the camera target (0 padding), a data fit uses 48 dp.
+ * Frames the camera per [cameraFrame]: file bounds edge to edge (0 padding), a data fit with 48 dp.
+ * Zoom out and panning are free — OSM lies under the race file — and the max zoom follows MBTiles
+ * `maxzoom` (else MapLibre's limit), past which the file would only be upscaled.
  */
 private fun applyCamera(
     context: Context,
@@ -434,20 +481,16 @@ private fun applyCamera(
     metadata: MbtilesMetadata?,
     dataBounds: Bounds?,
 ) {
-    // Native setMinZoom/setMaxZoom silently ignore a value past the *current* opposite limit (10–13 →
-    // 15–18 would keep min 10), and the effective min zoom is constrained by the target bounds — so
-    // clear the bounds and widen to MapLibre's full range first, then apply the new pair min → max.
-    map.setLatLngBoundsForCameraTarget(null)
+    // Native setMaxZoom silently ignores a value below the *current* min — widen to MapLibre's full
+    // range first, then apply the file's max.
     map.setMinZoomPreference(MapLibreConstants.MINIMUM_ZOOM.toDouble())
     map.setMaxZoomPreference(MapLibreConstants.MAXIMUM_ZOOM.toDouble())
-    metadata?.minZoom?.let { map.setMinZoomPreference(it.toDouble()) }
     metadata?.maxZoom?.let { map.setMaxZoomPreference(it.toDouble()) }
 
     val frame = cameraFrame(metadata?.bounds, dataBounds)
-    map.setLatLngBoundsForCameraTarget((frame as? CameraFrame.FileBounds)?.bounds?.toLatLngBounds())
     when (frame) {
         is CameraFrame.FileBounds ->
-            map.moveCamera(CameraUpdateFactory.newLatLngBounds(frame.bounds.toLatLngBounds(), 0))
+            map.moveCamera(raceMapCamera(map, frame.bounds, metadata?.minZoom))
         is CameraFrame.SinglePoint ->
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(frame.lat, frame.lon), SINGLE_POINT_ZOOM))
         is CameraFrame.FitData -> {

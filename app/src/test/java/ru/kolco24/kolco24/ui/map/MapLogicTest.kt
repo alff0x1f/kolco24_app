@@ -1,6 +1,7 @@
 package ru.kolco24.kolco24.ui.map
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
@@ -398,33 +399,60 @@ class MapLogicTest {
 
     // ---- styleJson ----
 
-    private fun baseSource(source: MapStyleSource) =
-        Json.parseToJsonElement(styleJson(source)).jsonObject["sources"]!!.jsonObject["base"]!!.jsonObject
+    private fun style(source: MapStyleSource) = Json.parseToJsonElement(styleJson(source)).jsonObject
 
-    @Test
-    fun styleJsonOfflineUsesMbtilesUrlWithAbsolutePath() {
-        val json = Json.parseToJsonElement(styleJson(MapStyleSource.Offline("/data/maps/8.mbtiles", null))).jsonObject
-        assertEquals(8, json["version"]!!.jsonPrimitive.int)
-        val base = baseSource(MapStyleSource.Offline("/data/maps/8.mbtiles", null))
-        assertEquals("raster", base["type"]!!.jsonPrimitive.content)
-        assertEquals("mbtiles:///data/maps/8.mbtiles", base["url"]!!.jsonPrimitive.content)
-        assertEquals(256, base["tileSize"]!!.jsonPrimitive.int)
-        assertNull(base["tiles"])
-        val layer = json["layers"]!!.jsonArray.single().jsonObject
-        assertEquals("raster", layer["type"]!!.jsonPrimitive.content)
-        assertEquals("base", layer["source"]!!.jsonPrimitive.content)
+    private fun assertOsmSource(osm: JsonObject) {
+        assertEquals("raster", osm["type"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            osm["tiles"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(19, osm["maxzoom"]!!.jsonPrimitive.int)
+        assertEquals("© OpenStreetMap contributors", osm["attribution"]!!.jsonPrimitive.content)
+        assertEquals(256, osm["tileSize"]!!.jsonPrimitive.int)
     }
 
     @Test
-    fun styleJsonOnlineUsesOsmTilesWithAttribution() {
-        val base = baseSource(MapStyleSource.Online)
-        assertEquals(
-            listOf("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-            base["tiles"]!!.jsonArray.map { it.jsonPrimitive.content },
-        )
-        assertEquals(19, base["maxzoom"]!!.jsonPrimitive.int)
-        assertEquals("© OpenStreetMap contributors", base["attribution"]!!.jsonPrimitive.content)
-        assertEquals(256, base["tileSize"]!!.jsonPrimitive.int)
-        assertNull(base["url"])
+    fun styleJsonOfflineDrawsMbtilesOverOsm() {
+        val json = style(MapStyleSource.Offline("/data/maps/8.mbtiles", null))
+        assertEquals(8, json["version"]!!.jsonPrimitive.int)
+        val sources = json["sources"]!!.jsonObject
+        assertOsmSource(sources["osm"]!!.jsonObject)
+        val race = sources["race"]!!.jsonObject
+        assertEquals("raster", race["type"]!!.jsonPrimitive.content)
+        assertEquals("mbtiles:///data/maps/8.mbtiles", race["url"]!!.jsonPrimitive.content)
+        assertEquals(256, race["tileSize"]!!.jsonPrimitive.int)
+        assertNull(race["tiles"])
+        val layers = json["layers"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("osm", "race"), layers.map { it["source"]!!.jsonPrimitive.content })
+        layers.forEach { assertEquals("raster", it["type"]!!.jsonPrimitive.content) }
+    }
+
+    @Test
+    fun styleJsonOnlineIsOsmOnly() {
+        val json = style(MapStyleSource.Online)
+        val sources = json["sources"]!!.jsonObject
+        assertEquals(setOf("osm"), sources.keys)
+        assertOsmSource(sources["osm"]!!.jsonObject)
+        val osm = json["layers"]!!.jsonArray.single().jsonObject
+        assertEquals("osm", osm["source"]!!.jsonPrimitive.content)
+    }
+
+    // ---- raceMapZoom ----
+
+    @Test
+    fun fileMinCameraZoomIsOneBelowTileZoom() {
+        assertEquals(11.0, fileMinCameraZoom(12), 0.0)
+    }
+
+    @Test
+    fun raceMapZoomRaisesFitBelowFileMinZoom() {
+        assertEquals(11.0, raceMapZoom(fitZoom = 8.3, minZoom = 12), 0.0)
+    }
+
+    @Test
+    fun raceMapZoomKeepsFitAtOrAboveFileMinZoom() {
+        assertEquals(13.4, raceMapZoom(fitZoom = 13.4, minZoom = 12), 0.0)
+        assertEquals(8.3, raceMapZoom(fitZoom = 8.3, minZoom = null), 0.0)
     }
 }
