@@ -123,6 +123,8 @@ fun TeamScreen(
     }
 
     val members = team.members
+    val boundCount = members.count { bindings.containsKey(it.numberInTeam) }
+    val allBound = team.ucount > 0 && boundCount >= team.ucount
 
     Column(modifier = modifier.fillMaxSize()) {
         TeamTopBar()
@@ -137,13 +139,13 @@ fun TeamScreen(
                     team = team,
                     category = category,
                     totalCount = team.ucount,
-                    boundCount = members.count { bindings.containsKey(it.numberInTeam) },
+                    boundCount = boundCount,
                 )
             }
             item("members") {
                 SectionCard(
                     title = "Состав · ${members.size}",
-                    supporting = "Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.",
+                    supporting = if (allBound) null else "Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.",
                 ) {
                     members.forEachIndexed { index, member ->
                         MemberRow(
