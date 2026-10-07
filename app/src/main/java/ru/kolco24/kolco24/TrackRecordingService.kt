@@ -419,7 +419,7 @@ class TrackRecordingService : Service() {
         private const val CHANNEL_ID = "track_recording"
         private const val NOTIF_ID = 1001
         private const val FLUSH_TIMEOUT_MS = 4_000L
-        private const val ACTION_STOP = "ru.kolco24.kolco24.action.STOP_TRACK"
+        private const val ACTION_STOP = "org.kolco24.app.action.STOP_TRACK"
         private const val EXTRA_RACE_ID = "race_id"
         private const val EXTRA_TEAM_ID = "team_id"
 

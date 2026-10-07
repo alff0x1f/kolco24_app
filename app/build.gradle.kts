@@ -50,6 +50,13 @@ val appSecret = secret("kolco24.appSecret", "KOLCO24_APP_SECRET")
 val localApiBaseUrl = secret("kolco24.localApiBaseUrl", "KOLCO24_LOCAL_API_BASE_URL")
     ?: "http://192.168.1.5/"
 
+// Release (upload key) signing. Optional: without a keystore the release build stays unsigned, so
+// lintDebug/testDebugUnitTest keep working in CI. See docs/RELEASE.md.
+val signingStoreFile = secret("kolco24.signing.storeFile", "KOLCO24_SIGNING_STORE_FILE")
+val signingStorePassword = secret("kolco24.signing.storePassword", "KOLCO24_SIGNING_STORE_PASSWORD")
+val signingKeyAlias = secret("kolco24.signing.keyAlias", "KOLCO24_SIGNING_KEY_ALIAS")
+val signingKeyPassword = secret("kolco24.signing.keyPassword", "KOLCO24_SIGNING_KEY_PASSWORD")
+
 run {
     val missing = buildList {
         if (apiBaseUrl == null) add("kolco24.apiBaseUrl / KOLCO24_API_BASE_URL")
@@ -74,7 +81,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ru.kolco24.kolco24"
+        applicationId = "org.kolco24.app"
         minSdk = 24
         targetSdk = 36
         versionCode = 20
@@ -88,8 +95,20 @@ android {
         buildConfigField("String", "LOCAL_API_BASE_URL", "\"${localApiBaseUrl.escapeJavaLiteral()}\"")
     }
 
+    signingConfigs {
+        if (signingStoreFile != null) {
+            create("release") {
+                storeFile = file(signingStoreFile)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
